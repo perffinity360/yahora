@@ -1,0 +1,473 @@
+/* ============================================================
+   Yahora — ProductCard.module.css
+   File: frontend/src/components/ProductCard/ProductCard.module.css
+   
+   Matches the Figma design exactly:
+   - Large image with rounded top corners
+   - Condition badge (cyan pill) + location text + price right-aligned
+   - Bold title
+   - Stats row: eye · heart · comment · bookmark · share  |  avatar "by Name"
+   - Time-ago line below stats
+   ============================================================ */
+
+/* ── Card Shell ── */
+.card {
+  background: #ffffff;
+  border-radius: 1.5rem; /* ~24px, matches Figma */
+  overflow: hidden;
+  border: 1px solid #eaeaea;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.03),
+    0 6px 24px rgba(0, 0, 0, 0.05);
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Prevents children from bleeding outside rounded corners */
+  isolation: isolate;
+  user-select: none;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.04),
+    0 16px 40px rgba(0, 0, 0, 0.1);
+}
+
+.card:focus-visible {
+  outline: 2.5px solid var(--purple, #800080);
+  outline-offset: 2px;
+}
+
+/* ──────────────────────────────────────
+   IMAGE SECTION
+────────────────────────────────────── */
+.imageWrap {
+  position: relative;
+  /* Square-ish ratio that matches the Figma: ~3:2.2 */
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: #f0f0f0;
+}
+
+/* Slide track — holds ALL images side-by-side, translates on carousel */
+.imageTrack {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.image {
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+}
+
+/* ── Carousel Buttons ── */
+.carouselBtn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(6px);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  z-index: 3;
+}
+.card:hover .carouselBtn {
+  opacity: 1;
+}
+.carouselBtn:hover {
+  transform: translateY(-50%) scale(1.08);
+}
+
+.carouselBtnLeft {
+  left: 10px;
+}
+.carouselBtnRight {
+  right: 10px;
+}
+
+/* ── Image Counter Pill ── */
+.imageCounter {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(30, 30, 30, 0.62);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  letter-spacing: 0.04em;
+  z-index: 3;
+}
+
+/* ── Overlay Heart Button (top-right of image) ── */
+.overlayHeart {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  /* Dark frosted glass — matches Figma */
+  background: rgba(20, 20, 20, 0.48);
+  backdrop-filter: blur(8px);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition:
+    background 0.22s ease,
+    transform 0.18s ease;
+  z-index: 4;
+}
+
+.overlayHeart:hover {
+  background: rgba(235, 72, 127, 0.85);
+  transform: scale(1.1);
+}
+
+.overlayHeart svg {
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.overlayHeart:hover svg,
+.overlayHeartLiked svg {
+  transform: scale(1);
+}
+
+/* Active liked state — overlay */
+.overlayHeartLiked {
+  background: rgba(235, 72, 127, 0.9);
+  color: #fff;
+}
+
+/* ── Sold Banner ── */
+.soldBanner {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Bree Serif", serif;
+  font-size: 1.8rem;
+  letter-spacing: 0.12em;
+  color: #fff;
+  z-index: 5;
+}
+
+/* ──────────────────────────────────────
+   INFO SECTION
+────────────────────────────────────── */
+.infoWrap {
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Row 1: Condition + Location + Price ── */
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.metaLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Condition badge — cyan pill from Figma */
+.conditionBadge {
+  display: inline-block;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border-radius: 999px;
+  /* Default colour set inline from JS; CSS fallback: */
+  background: var(--blue, #2bb7ff);
+  color: #fff;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Location text */
+.locationTag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #555;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-top: -5px;
+}
+
+/* Price — right side, big, purple */
+.price {
+  font-size: 1.20rem;
+  font-weight: 800;
+  color: var(--purple, #800080);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  font-family: "Bree Serif", serif;
+}
+
+/* ── Row 2: Title ── */
+.title {
+  font-family:
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--black-soft, #1a1a1a);
+  line-height: 1.3;
+  margin: 0;
+
+  /* Forces single line with an ellipsis (...) */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Row 3: Footer stats + seller ── */
+.footerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* Stats group */
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Read-only stat (views, comments) */
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #888;
+  letter-spacing: 0.01em;
+}
+
+/* Interactive stat button (like, save, share) */
+.statBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #888;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 6px;
+  transition:
+    color 0.18s ease,
+    transform 0.15s ease;
+  line-height: 1;
+}
+
+.statBtn:hover {
+  color: var(--purple, #800080);
+  transform: scale(1.1);
+}
+
+/* Liked state — footer heart */
+.statBtnLiked {
+  color: var(--pink-dark, #eb487f);
+  animation: likePoP 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Saved state — bookmark */
+.statBtnSaved {
+  color: var(--purple, #800080);
+  animation: likePoP 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Pop animation on like/save toggle */
+@keyframes likePoP {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  70% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Seller section */
+.seller {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.sellerAvatar {
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--purple-emphasis);
+  background: #f0f0f0;
+}
+
+/* Fallback initials circle */
+.sellerAvatarFallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    var(--purple, #800080),
+    var(--pink, #ff78a6)
+  );
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sellerName {
+  font-size: 0.70rem;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+
+/* ── Row 4: Time ago ── */
+.timeAgo {
+  font-size: 0.80rem;
+  color: #aaa;
+  margin: 0;
+  font-weight: 100;
+}
+
+/* ── Dashboard Specific / Owner Actions ── */
+.ownerActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cardSoldTo {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #aaa;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cardBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    filter 0.2s ease,
+    transform 0.2s ease;
+}
+
+.cardBtnChat {
+  background: var(--pink-light);
+  color: var(--pink-dark);
+}
+
+.cardBtnEdit {
+  background: #f0eaf5;
+  color: var(--purple);
+}
+
+.cardBtn:hover {
+  filter: brightness(0.95);
+  transform: scale(1.05);
+}
+
+.timeAvatar {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+/* ──────────────────────────────────────
+   RESPONSIVE
+────────────────────────────────────── */
+
+/* On very narrow screens (like mobile marketplace grid at 1 col) */
+@media (max-width: 360px) {
+  .price {
+    font-size: 1.2rem;
+  }
+  .title {
+    font-size: 0.95rem;
+  }
+  .sellerName {
+    display: none; /* hide text, keep avatar */
+  }
+}
+
+/* Tablet: tighten spacing slightly */
+@media (max-width: 768px) {
+  .infoWrap {
+    padding: 12px 14px 10px;
+    gap: 7px;
+  }
+  .stats {
+    gap: 8px;
+  }
+}

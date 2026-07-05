@@ -1,0 +1,54 @@
+/* frontend/src/styles/global.css */
+
+:root {  
+  /* Purple */
+  --purple: #800080;
+  --purple-dark: #4f014f;
+  --purple-light: #d700d7;
+  --purple-emphasis: #2a082a;
+
+  /* Pink */
+  --pink: #FF78A6;
+  --pink-dark: #EB487F;
+  --pink-light: ##f4e0e4;
+  --pink-bg: #fef4f6;
+  --pink-emphasis: #300B15; 
+
+  /* Blue */
+  --blue: #2BB7FF;
+  --blue-dark: #0B93D8;
+  --blue-light: #6FE1FF;
+
+  /* Text & background */
+  --black: #0B0B0B;
+  --black-soft: #1A1A1A;
+  --white: #FFFFFF;
+  --bg: #f2e5e1;
+}
+
+
+body {
+  background-color: var(--bg);
+  color: var(--black-soft);
+  margin: 0;
+  /* Inter for UI readability */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apply Bree Serif to all your headings and brand text */
+h1, h2, h3, h4, h5, h6, .brand-text, .brandName {
+  font-family: 'Bree Serif', serif;
+  font-weight: 400; /* Bree Serif looks best at normal weight */
+}
+
+/* Ensure all elements box-sizing is handled cleanly */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Ensure all elements box-sizing is handled cleanly */
+*, *::before, *::after {
+  box-sizing: border-box;
+}

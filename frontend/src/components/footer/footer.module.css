@@ -1,0 +1,237 @@
+/* frontend\src\components\footer\footer.module.css */
+.footer {
+  display: grid;
+  gap: 2rem;
+  padding: 4rem 2rem 2rem 2rem;
+  background-color: var(--purple-dark);
+  color: var(--bg);
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-areas:
+    "desc nav contact social"
+    "newsletter newsletter newsletter newsletter"
+    "copyright copyright copyright copyright";
+}
+
+.brandName {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--white);
+  margin-bottom: 1rem;
+  letter-spacing: -0.5px;
+}
+
+.logo {
+  max-width: 275px;
+  /* margin-bottom: 1rem; */
+  filter: brightness(0) invert(1);
+}
+
+h4 {
+  color: var(--blue-light);
+  margin-bottom: 1rem;
+  font-size: 0.1rem;
+  font-weight: 600;
+}
+
+.footer p, .footer a, .footer li {
+  color: var(--white);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  opacity: 0.9;
+}
+
+a {
+  text-decoration: none;
+  transition: all 0.2s ease-in-out;
+}
+
+a:hover {
+  color: var(--pink-light);
+  opacity: 1;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  margin-bottom: 0.6rem;
+}
+
+/* Contact & Social icons */
+.navigation a,
+.contactItem,
+.socialLink {
+  text-decoration: none;
+}
+
+.contactItem,
+.socialLink {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.contactIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--pink);
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 3px rgba(255, 120, 166, 0.35));
+  transition: color 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.contactItem:hover .contactIcon,
+.socialLink:hover .contactIcon {
+  color: var(--pink-light);
+  transform: scale(1.12);
+}
+
+/* Grid Area Assignments */
+.description { grid-area: desc; padding-right: 2rem; }
+.navigation { grid-area: nav; }
+.contactInfo { grid-area: contact; }
+.socialMedia { grid-area: social; }
+
+.newsletter { 
+  grid-area: newsletter; 
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.5);
+  padding-top: 2rem;
+  margin-top: 1rem;
+}
+
+.copyright { 
+  grid-area: copyright;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.5);
+  padding-top: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+/* Newsletter Form */
+.newsletterForm {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.newsletterInput {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--white);
+  color: var(--black);
+  width: 300px;
+  font-size: 0.85rem;
+}
+
+.newsletterInput:focus {
+  outline: 2px solid var(--blue);
+}
+
+.newsletterButton {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--purple-light);
+  color: var(--white);
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.newsletterButton:hover {
+  background-color: var(--purple);
+}
+
+.copyright p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.legalLinks {
+  margin-top: 0.5rem;
+}
+
+.legalLinks a {
+  margin: 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.legalLinks span {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Visitor Counter */
+.visitorCounter {
+  margin-top: 1rem;
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.visitorCounter p {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--blue-light);
+  letter-spacing: 0.5px;
+}
+
+/* Media Queries */
+@media (max-width: 1024px) { 
+  .footer {
+    grid-template-columns: 1fr 1fr; 
+    grid-template-areas:
+      "desc desc"
+      "nav contact"
+      "social social"
+      "newsletter newsletter"
+      "copyright copyright";
+  }
+}
+
+@media (max-width: 768px) {
+  .footer {
+    grid-template-columns: 1fr;
+    text-align: center;
+    grid-template-areas:
+      "desc"
+      "nav"
+      "contact"
+      "social"
+      "newsletter"
+      "copyright";
+  }
+  
+  .description {
+      padding-right: 0;
+  }
+
+  .contactItem,
+  .socialLink {
+    justify-content: center;
+  }
+
+  .newsletterForm {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .newsletterInput {
+    width: 100%;
+    max-width: 350px;
+  }
+  
+  .newsletterButton {
+      width: 100%;
+      max-width: 350px;
+  }
+}

@@ -1,0 +1,584 @@
+/* frontend\src\components\navbar\navbar.module.css */
+.navElements {
+   display: flex;
+   flex-direction: row;
+   justify-content: space-between;
+   align-items: center;
+   background-color: var(--white);
+   border-bottom: 1px solid #EAEAEA;
+   margin: 0px;
+   padding: 0 1rem;
+   position: relative;
+   height: 3rem;
+   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+   z-index: 9999;
+}
+
+
+.navLinks {
+ display: flex;
+ align-items: center;
+ gap: 0.75rem;
+}
+
+.navButton {
+ align-items: center;
+ appearance: none;
+ background-color: #fff;
+ border-radius: 24px;
+ border: none;
+ box-shadow:
+   rgba(0, 0, 0, 0.2) 0 3px 5px -1px,
+   rgba(0, 0, 0, 0.14) 0 6px 10px 0,
+   rgba(0, 0, 0, 0.12) 0 1px 18px 0;
+ box-sizing: border-box;
+ color: #3c4043;
+ cursor: pointer;
+ display: inline-flex;
+ justify-content: center;
+ height: 30px;
+ padding: 5px 14px;
+ text-decoration: none;
+ transition:
+   box-shadow 280ms cubic-bezier(.4, 0, .2, 1),
+   opacity 15ms linear 30ms,
+   transform 270ms cubic-bezier(0, 0, .2, 1),
+   background 200ms ease,
+   color 200ms ease;
+ user-select: none;
+ -webkit-user-select: none;
+ -webkit-tap-highlight-color: transparent;
+ touch-action: manipulation;
+ position: relative;
+ white-space: nowrap;
+ font-family: inherit;
+ outline: none;
+}
+
+.navButtonActive,
+.navButtonActive span,
+.navButtonActive:visited {
+ color: var(--white);
+}
+
+.navButton span {
+ font-family: inherit;
+ font-size: 14px;
+ font-weight: 500;
+ letter-spacing: 0.25px;
+ line-height: normal;
+}
+
+.navButton:hover,
+.navButtonActive {
+ background: var(--purple-dark);
+ color: var(--white);
+}
+
+.navButton:active,
+.navButton:focus,
+.navButton:focus-visible {
+ outline: none;
+}
+
+.navButton:disabled {
+ box-shadow:
+   rgba(60, 64, 67, .3) 0 1px 3px 0,
+   rgba(60, 64, 67, .15) 0 4px 8px 3px;
+}
+
+.navButtonActive span {
+ color: inherit;
+}
+
+.unreadBadge {
+  position: absolute;
+  top: -4px; /* Adjusted slightly up to account for the new fixed height */
+  right: -8px;
+  background: var(--pink-dark, #EB487F);
+  color: #fff;
+  font-weight: bold;
+  border: 2px solid white;
+  line-height: 1;
+
+  /* --- FIX: The Perfect Circle Properties --- */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;  /* Equal width... */
+  height: 20px; /* ...and height */
+  border-radius: 50%; /* Forces a perfect circle geometry */
+  padding: 0; /* Remove the horizontal padding */
+  font-size: 0.65rem; /* Ensure "99+" fits inside the 22px circle */
+}
+
+.navButton .unreadBadge {
+ font-size: 0.65rem;
+}
+
+.logo {
+   display: flex;
+   align-items: center;
+}
+
+.logoBtn {
+   display: flex;
+   align-items: center;
+   gap: 0.5rem;
+   background-color: transparent;
+   border: none;
+   cursor: pointer;
+}
+
+.brandText {
+   font-size: 1.5rem;
+   font-weight: 800;
+   color: var(--purple);
+   letter-spacing: -0.5px;
+}
+
+.logo img {
+   height: 3.5rem;
+}
+
+.navActions {
+   display: flex;
+   align-items: center;
+   gap: 0rem;
+}
+
+.cartButton {
+   height: 2.25rem;
+   width: 2.25rem;
+   border: 0px transparent;
+   margin: 0.25rem;
+   padding: 0px;
+   border-radius: 1rem;
+   background-color: var(--light-pink);
+   transform: translateY(-2px);
+   cursor: pointer;
+}
+
+.cart {
+   height: 1.75rem;
+   width: 1.25rem;
+   border: 0px transparent;
+   padding: 0rem;
+   border-radius: 0rem;
+}
+
+/* Hover States */
+.cartButton:hover {
+   background-color: var(--pink-dark);
+   transition-duration: 0.5s;
+}
+
+.cartButton:focus {
+   outline: none;
+}
+
+.cartButton:active {
+   background-color: var(--light-pink);
+}
+
+.cart:hover {
+   transition-duration: 0.5s;
+   filter: brightness(0) saturate(100%) invert(100%) sepia(35%) saturate(5729%) hue-rotate(177deg) brightness(111%) contrast(102%);
+}
+
+.hamburgerMenu {
+   display: none;
+   background: none;
+   border: none;
+   color: var(--black);
+   font-size: 1.8rem;
+   cursor: pointer;
+}
+
+.userActions {
+ display: flex;
+ align-items: center;
+ gap: 0.2rem;
+}
+
+.iconBtn {
+ background: transparent;
+ border: none;
+ cursor: pointer;
+ color: var(--black-soft);
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ margin-right: 0.7rem;
+ width: 35px;
+ height: 35px;
+ border-radius: 50%;
+ transition: background 0.2s ease, color 0.2s ease;
+}
+
+.iconBtn:hover {
+ background: var(--pink-light);
+ color: var(--purple);
+}
+
+/* --- MODERN CIRCULAR AVATAR --- */
+.profileBtn {
+ position: relative;
+ overflow: hidden;
+}
+
+.profileBtn.hasAvatar {
+ padding: 0;
+ border: 2.15px solid var(--purple-dark);
+ transition: border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.navAvatarImg {
+ width: 100%;
+ height: 100%;
+ object-fit: cover;
+ border-radius: 50%;
+ border: 2px solid var(--purple-emphasis);
+ display: block;
+}
+
+/* --- DROPDOWN MENU --- */
+.profileMenu {
+ position: relative;
+}
+
+.profileDropdown {
+ position: absolute;
+ top: 45px;
+ right: 0;
+ width: 160px; /* Increased from 150px to prevent text wrapping */
+ background: white;
+ border-radius: 12px;
+ box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+ display: flex;
+ flex-direction: column;
+ overflow: hidden;
+ z-index: 1000;
+ border: 1px solid #f0f0f0;
+ padding: 8px 0;
+}
+
+/* Updated Dropdown items with icons */
+.dropdownItem {
+ display: flex;
+ align-items: center;
+ gap: 12px;
+ padding: 9px 16px;
+ margin: 2px 10px;
+ border-radius: 8px; /* Square shape looks cleaner in dropdowns */
+ text-decoration: none; /* Re-enabled this to remove the ugly underline */
+ color: var(--black-soft);
+ background: transparent;
+ border: none;
+ text-align: left;
+ font-size: 0.85rem; /* Slightly larger text */
+ font-weight: 500;
+ cursor: pointer;
+ transition: all 0.2s ease;
+}
+
+.dropdownItem:hover {
+ background: rgba(128, 0, 128, 0.06);
+ color: var(--purple);
+}
+
+.dropdownIcon {
+ width: 20px;
+ height: 20px;
+ color: #777; /* Set default to grey to match your screenshot */
+ transition: color 0.2s ease;
+}
+
+.dropdownItem:hover .dropdownIcon {
+ color: var(--purple); /* Turn purple on hover */
+}
+
+.profileDropdown hr {
+ margin: 6px 0;
+ border: none;
+ border-top: 1px solid #f0f0f0;
+}
+
+/* --- THE NEW LOGOUT PILL BUTTON --- */
+.Btn.logoutBtn {
+ display: flex;
+ align-items: center;
+ justify-content: flex-start;
+ width: 35px;
+ height: 35px;
+ border: none;
+ border-radius: 50%;
+ cursor: pointer;
+ position: relative;
+ overflow: hidden;
+ transition-duration: 0.3s;
+ box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.06);
+ background-color: var(--white);
+ margin: 1px auto 10px auto;
+ border: 1px solid #f0f0f0;
+}
+
+.Btn.logoutBtn .sign {
+ width: 100%;
+ transition-duration: 0.3s;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+}
+
+.Btn.logoutBtn .sign svg {
+ width: 17px;
+}
+
+.Btn.logoutBtn .sign svg path {
+ fill: var(--pink-dark);
+ transition: fill 0.3s ease;
+}
+
+.Btn.logoutBtn .text {
+ position: absolute;
+ right: 0%;
+ width: 0%;
+ opacity: 0;
+ color: white;
+ font-size: 0.95rem;
+ font-weight: 600;
+ transition-duration: 0.3s;
+}
+
+.Btn.logoutBtn:hover {
+ background-color: var(--pink-dark);
+ width: 115px;
+ border-radius: 40px;
+ transition-duration: 0.3s;
+ border-color: var(--pink-dark);
+}
+
+.Btn.logoutBtn:hover .sign {
+ width: 30%;
+ transition-duration: 0.3s;
+ padding-left: 15px;
+}
+
+.Btn.logoutBtn:hover .sign svg path {
+ fill: white;
+}
+
+.Btn.logoutBtn:hover .text {
+ opacity: 1;
+ width: 70%;
+ transition-duration: 0.3s;
+ padding-right: 15px;
+}
+
+.Btn.logoutBtn:active {
+ transform: translate(1px, 1px);
+}
+
+/* --- THE NEW LOGIN/SIGNUP BUTTON --- */
+.loginButton {
+ --clr: var(--purple);
+ line-height: 1;
+ text-decoration: none;
+ display: inline-flex;
+ border: none;
+ cursor: pointer;
+ align-items: center;
+ gap: 0.75rem;
+ background-color: var(--clr);
+ color: #fff;
+ border-radius: 1.5rem;
+ font-weight: 500;
+ font-size: 0.85rem;
+ padding: 0.4rem 0.8rem ;
+ padding-left: 8px;
+ white-space: nowrap;
+ overflow: hidden;
+ text-overflow: ellipsis;
+ transition: background-color 0.3s, transform 0.2s;
+ box-shadow: 0 4px 12px rgba(128, 0, 128, 0.2);
+}
+
+.loginButtonIconWrapper {
+ flex-shrink: 0;
+ width: 20px;
+ height: 20px;
+ position: relative;
+ color: var(--clr);
+ background-color: #fff;
+ border-radius: 50%;
+ display: grid;
+ place-items: center;
+ overflow: hidden;
+ transition: color 0.3s ease;
+}
+
+.loginButton:hover {
+ background-color: var(--pink-dark);
+ transform: translateY(-1px);
+}
+
+.loginButton:hover .loginButtonIconWrapper {
+ color: var(--pink-dark);
+}
+
+.loginButtonIconSvgCopy {
+ position: absolute;
+ transform: translate(-150%, 150%);
+}
+
+.loginButton:hover .loginButtonIconSvg:first-child {
+ transition: transform 0.3s ease-in-out;
+ transform: translate(150%, -150%);
+}
+
+.loginButton:hover .loginButtonIconSvgCopy {
+ transition: transform 0.3s ease-in-out 0.1s;
+ transform: translate(0);
+}
+
+/* Hide Mobile Menu Header on Desktop */
+.mobileMenuHeader {
+   display: none;
+}
+
+/* ========================================================================================================== */
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+   .navElements {
+       padding: 0 1rem;
+   }
+
+   /* --- NEW: The Background Overlay for clicking outside --- */
+   .mobileOverlay {
+       position: fixed;
+       inset: 0;
+       background: rgba(0, 0, 0, 0.5);
+       backdrop-filter: blur(4px);
+       z-index: 1499; /* Just below the drawer */
+       animation: fadeIn 0.3s ease;
+   }
+   
+   @keyframes fadeIn {
+       from { opacity: 0; }
+       to { opacity: 1; }
+   }
+
+   /* --- REVAMPED: Sleek Side Drawer --- */
+   .navLinks {
+       position: fixed;
+       top: 0;
+       left: 0;
+       height: 100dvh;
+       width: 280px; /* Slightly wider for elegance */
+       background-color: var(--white);
+       padding: 1.5rem 1rem;
+       z-index: 1500;
+       display: flex;
+       flex-direction: column;
+       align-items: stretch;
+       justify-content: flex-start;
+       transform: translateX(-100%);
+       transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+       box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+       /* Smooth rounded corners on the right edge */
+       border-top-right-radius: 20px;
+       border-bottom-right-radius: 20px;
+   }
+  
+   .navLinks.active {
+       transform: translateX(0);
+   }
+
+   /* --- NEW: Mobile Menu Header (Logo & Close button) --- */
+   .mobileMenuHeader {
+       display: flex;
+       align-items: center;
+       justify-content: space-between;
+       margin-bottom: 2rem;
+       padding-bottom: 1rem;
+       border-bottom: 1px solid #eaeaea;
+   }
+   
+   .mobileLogo {
+       height: 2rem;
+   }
+   
+   .closeMenuBtn {
+       background: #f5f0f5;
+       border: none;
+       color: #666;
+       cursor: pointer;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       padding: 6px;
+       border-radius: 50%;
+       transition: all 0.2s;
+   }
+   
+   .closeMenuBtn:hover {
+       background: var(--purple);
+       color: white;
+   }
+
+   /* --- REVAMPED: Mobile Nav Links (Full width rows instead of pills) --- */
+   .navLinks .navButton {
+       width: 100%;
+       justify-content: flex-start;
+       padding: 14px 20px;
+       border-radius: 14px;
+       height: auto;
+       box-shadow: none;
+       border: 1px solid transparent;
+       margin: 0;
+   }
+
+   .navLinks span {
+       font-size: 1.05rem;
+       font-weight: 500;
+   }
+
+   .navLinks .navButton:hover {
+       background: rgba(128, 0, 128, 0.05);
+       color: var(--purple);
+   }
+
+   .navLinks .navButtonActive {
+       background: rgba(128, 0, 128, 0.08);
+       color: var(--purple);
+       border-color: rgba(128, 0, 128, 0.1);
+       box-shadow: none;
+   }
+   
+   .navLinks .navButtonActive span {
+       color: var(--purple);
+       font-weight: 700;
+   }
+
+.navLinks .unreadBadge {
+       position: static;
+       margin-left: auto;
+       width: 24px;  /* Slightly larger for mobile visibility */
+       height: 24px;
+       border-radius: 50%;
+       padding: 0;
+       font-size: 0.7rem;
+   }
+
+   .hamburgerMenu {
+       display: block;
+       z-index: 1000;
+   }
+  
+   .cartButton {
+     grid-column: 3;
+     justify-self: end;
+     margin-top: 0.5rem;
+   }
+}

@@ -1,0 +1,993 @@
+/* frontend/src/pages/dashboard/Dashboard.module.css */
+
+/* ══════════════════════════════════════════════
+   ANIMATION KEYFRAMES
+══════════════════════════════════════════════ */
+@keyframes heroItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes heroExit {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.91) translateY(-52px);
+    filter: blur(12px);
+  }
+}
+@keyframes overlayFlash {
+  0% {
+    opacity: 0;
+  }
+  38% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes sidebarIn {
+  from {
+    opacity: 0;
+    transform: translateX(-52px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes contentIn {
+  from {
+    opacity: 0;
+    transform: translateX(52px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes sidebarChildIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes gridIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fabPop {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(-180deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15) rotate(8deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   LOADING STATE
+══════════════════════════════════════════════ */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80vh;
+  gap: 16px;
+  color: var(--purple);
+  font-family: "Bree Serif", serif;
+  font-size: 1.1rem;
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--pink-light);
+  border-top-color: var(--purple);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+/* ══════════════════════════════════════════════
+   DASHBOARD ROOT & OVERLAY
+══════════════════════════════════════════════ */
+.dashboardRoot {
+  position: relative;
+  width: 100%;
+  background: var(--bg);
+}
+
+.transitionOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: linear-gradient(135deg, #fff4f7 0%, #ffffff 50%, #f8f0ff 100%);
+  animation: overlayFlash 0.48s cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+/* ══════════════════════════════════════════════
+   UI 1 — HERO VIEW
+══════════════════════════════════════════════ */
+.heroView {
+  min-height: calc(100vh - 4.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 40px 40px 60px 0px;
+}
+.heroExiting {
+  animation: heroExit 0.44s cubic-bezier(0.55, 0, 1, 0.45) forwards !important;
+  pointer-events: none;
+}
+.heroHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 55px;
+  width: 75%;
+  animation: heroItemIn 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+  position: relative;
+  z-index: 50;
+}
+.heroCards {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+  width: 80%;
+  animation: heroItemIn 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+}
+.sellBtn {
+  display: block;
+  width: 175px;
+  padding: 9px 0;
+  border-radius: 99px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--purple), var(--pink-dark));
+  color: white;
+  font-family: "Bree Serif", serif;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  box-shadow: 0 8px 30px rgba(128, 0, 128, 0.3);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+  animation: cardFadeIn 0.55s ease 0.32s both;
+}
+.sellBtn:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(128, 0, 128, 0.4);
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.heroEyebrow {
+  font-size: 0.8rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--pink-dark);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.heroGreeting {
+  font-family: "Bree Serif", serif;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  color: var(--black-soft);
+  margin-bottom: 8px;
+  line-height: 1.1;
+}
+.heroSub {
+  font-size: 1.05rem;
+  color: #666;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.heroIcons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-left: auto;
+}
+.iconBtn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition:
+    color 0.25s ease,
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.iconBtn:hover {
+  color: var(--purple);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.academicCard,
+.bioCard {
+  background: white;
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+}
+.cardTitleRow,
+.bioCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 12px;
+}
+.sectionTitle {
+  font-family: "Bree Serif", serif;
+  font-size: 1.3rem;
+  color: var(--black-soft);
+}
+.acadGrid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 24px 32px;
+}
+.acadLabel {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #aaa;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+.acadValue {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--black-soft);
+}
+.bioText {
+  font-size: 0.9rem;
+  color: #555;
+  line-height: 1.7;
+  font-style: italic;
+  margin-bottom: 16px;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 14px;
+  border-radius: 99px;
+  border: 1.5px solid #e0e0e0;
+  color: #555;
+  text-transform: uppercase;
+}
+.ui1Btn {
+  display: flex;
+  flex-direction: row; 
+  gap: 20px; 
+  flex-wrap: wrap; 
+  justify-content: center;
+}
+/* ══════════════════════════════════════════════
+   UI 2 — DASHBOARD / SPLIT VIEW
+══════════════════════════════════════════════ */
+.dashView {
+  display: flex;
+  gap: 18px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 40px 24px 80px 24px;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 25px;
+  height: max-content;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 24px;
+  animation: sidebarIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sidebarProfileCard {
+  background: white;
+  border-radius: 24px;
+  padding: 32px 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: sidebarChildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+.sidebarDetailsCard {
+  background: white;
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+  animation: sidebarChildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
+.listNewCard {
+  background: white;
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  border: 2px dashed #e8e0e8;
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease;
+  animation: sidebarChildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.28s both;
+}
+.listNewCard:hover {
+  border-color: var(--purple);
+  background: var(--pink-light);
+}
+
+.sidebarActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  animation: sidebarChildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.36s both;
+}
+.completeBtn {
+  width: 50%;
+  margin: 0 auto; 
+  padding: 12px;
+  border-radius: 99px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--purple), var(--pink-dark));
+  color: white;
+  font-family: "Bree Serif", serif;
+  font-size: 1rem;
+  box-shadow: 0 6px 20px rgba(128, 0, 128, 0.25);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+  animation: sidebarChildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
+}
+.completeBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(128, 0, 128, 0.35);
+}
+
+.sidebarName {
+  font-family: "Bree Serif", serif;
+  font-size: 1.5rem;
+  color: var(--black-soft);
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+.sidebarUni {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--purple);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.sidebarUniDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--purple);
+}
+.sidebarBio {
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  text-align: left;
+}
+
+.detailRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.detailPill {
+  background: #f8f5f7;
+  border-radius: 16px;
+  padding: 14px 18px;
+}
+.detailPillLabel {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #999;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+.detailPillValue {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--black-soft);
+}
+.yearSpecRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.listNewIcon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgb(242, 239, 239);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--purple);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: none;
+  outline: none;
+  padding: 0;
+  cursor: pointer;
+}
+.listNewTitle {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--black-soft);
+}
+.listNewSub {
+  font-size: 0.8rem;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sidebarIconBtn {
+  flex: 1;
+  height: 54px;
+  border-radius: 20px;
+  background: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #777;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+  transition:
+    color 0.25s ease,
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.sidebarIconBtn:hover {
+  color: var(--purple);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* ── Main Content ── */
+.mainContent {
+  flex: 1;
+  min-width: 0; /* ✨ THIS FIXES THE FLEXBOX OVERFLOW / CROPPING ISSUES ✨ */
+  animation: contentIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  gap: 32px;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 32px;
+  animation: sidebarChildIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+}
+.tab {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #aaa;
+  padding: 12px 0;
+  position: relative;
+  transition: color 0.25s ease;
+}
+.tabActive {
+  color: var(--black-soft);
+}
+.tabActive::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(90deg, var(--purple), var(--pink-dark));
+}
+
+/* ── Product grid ── */
+.grid {
+  display: grid;
+  /* ✨ Lowered from 250px to 210px to guarantee 3 columns form earlier on zoomed screens, 
+     preventing cards from expanding massive widths ✨ */
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+  align-items: start;
+  animation: gridIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.grid > *:nth-child(1) {
+  animation: cardFadeIn 0.45s ease 0.08s both;
+}
+.grid > *:nth-child(2) {
+  animation: cardFadeIn 0.45s ease 0.14s both;
+}
+.grid > *:nth-child(3) {
+  animation: cardFadeIn 0.45s ease 0.2s both;
+}
+.grid > *:nth-child(4) {
+  animation: cardFadeIn 0.45s ease 0.26s both;
+}
+.grid > *:nth-child(5) {
+  animation: cardFadeIn 0.45s ease 0.32s both;
+}
+.grid > *:nth-child(6) {
+  animation: cardFadeIn 0.45s ease 0.38s both;
+}
+.grid > *:nth-child(n + 7) {
+  animation: cardFadeIn 0.45s ease 0.42s both;
+}
+
+.emptyState {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 80px 0;
+  color: #bbb;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* ══════════════════════════════════════════════
+   DELETE CONFIRMATION MODAL POPUP
+══════════════════════════════════════════════ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+.modalContent {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.modalIconWrap {
+  width: 56px;
+  height: 56px;
+  background: #fee2e2;
+  color: #ef4444;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px auto;
+}
+.modalTitle {
+  font-family: "Bree Serif", serif;
+  font-size: 1.25rem;
+  color: var(--black-soft);
+  margin-bottom: 8px;
+}
+.modalText {
+  font-size: 0.95rem;
+  color: #666;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.btnCancel,
+.btnDelete {
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btnCancel {
+  background: #f0f0f0;
+  color: #555;
+}
+.btnCancel:hover {
+  background: #e4e4e4;
+}
+.btnDelete {
+  background: #ef4444;
+  color: white;
+  gap: 8px;
+}
+.btnDelete:hover {
+  background: #dc2626;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   FAB
+══════════════════════════════════════════════ */
+.fab {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--purple), var(--pink-dark));
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 8px 30px rgba(128, 0, 128, 0.35);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.fab:hover {
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 12px 40px rgba(128, 0, 128, 0.45);
+}
+
+.fabEnter {
+  animation: fabPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.45s both;
+}
+
+/* ══════════════════════════════════════════════
+   EDITABLE FIELD
+══════════════════════════════════════════════ */
+.ef {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.efLabel {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #aaa;
+  font-weight: 700;
+}
+.efDisplay {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.efValue {
+  font-size: 0.95rem;
+  color: var(--black-soft);
+  line-height: 1.5;
+}
+.efTrigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ccc;
+  margin-top: 2px;
+  transition: color 0.2s ease;
+}
+.efTrigger:hover {
+  color: var(--purple);
+}
+.efEdit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.efInput {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid var(--purple);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+}
+.efActions {
+  display: flex;
+  gap: 8px;
+}
+.efBtn {
+  height: 36px;
+  width: 36px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.efBtnSave {
+  background: var(--purple);
+  color: white;
+}
+.efBtnCancel {
+  background: #f0f0f0;
+  color: #555;
+}
+.efBtn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+/* ══════════════════════════════════════════════
+   AVATAR
+══════════════════════════════════════════════ */
+.avatarWrap {
+  position: relative;
+  width: var(--av-size);
+  height: var(--av-size);
+  flex-shrink: 0;
+  z-index: 50;
+}
+.avatarRing {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  box-shadow: 0 8px 24px rgba(128, 0, 128, 0.2);
+}
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid white;
+  background: white;
+}
+.avatarEdit {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--purple);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+.avatarEdit:hover {
+  background: var(--purple);
+  color: white;
+  transform: scale(1.1);
+}
+
+/* ══════════════════════════════════════════════
+   NEW AVATAR PLACEHOLDER & MENU
+══════════════════════════════════════════════ */
+.avatarPlaceholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: calc(var(--av-size) * 0.35);
+  border: 4px solid white;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.avatarMenu {
+  position: absolute;
+  top: calc(100% - 15px);
+  right: -30px;
+  background: rgb(220, 215, 215);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 20;
+  min-width: 140px;
+  animation: modalIn 0.2s ease;
+}
+
+.avatarMenu button {
+  background: none;
+  border: none;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  color: var(--black-soft);
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.avatarMenu button:hover {
+  background: #f3f4f6;
+}
+
+.avatarMenu button.dangerText {
+  color: #ef4444;
+}
+
+.avatarMenu button.dangerText:hover {
+  background: #fee2e2;
+}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .heroCards {
+    grid-template-columns: 1fr;
+  }
+  .dashView {
+    flex-direction: column;
+    margin: 0 0;
+  }
+  .sidebar {
+    width: 100%;
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .heroHeader {
+    flex-direction: column;
+    gap: 24px;
+  }
+  .heroIcons {
+    margin-left: 0;
+    flex-direction: row;
+  }
+  .dashView {
+    flex-direction: column;
+    margin: 0 0;
+  }
+  .heroGreeting {
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
