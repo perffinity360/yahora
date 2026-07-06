@@ -962,20 +962,166 @@
 }
 
 @media (max-width: 600px) {
+  /* ── UI 1 (Hero) compacted to fit a single mobile screen ── */
+  .heroView {
+    min-height: calc(100vh - 4.5rem);
+    justify-content: center;
+    gap: 14px;
+    padding: 14px 12px 18px 12px;
+  }
+
   .heroHeader {
     flex-direction: column;
-    gap: 24px;
+    gap: 10px;
+    width: 100%;
+  }
+  /* Shrink ONLY the hero avatar (scoped) — leaves the UI-2 sidebar
+     avatar and the full-size zoom modal avatar untouched. */
+  .heroHeader .avatarWrap {
+    --av-size: 128px !important;
+  }
+  .heroHeader .avatarEdit {
+    width: 32px;
+    height: 32px;
+    bottom: 4px;
+    right: 4px;
+  }
+
+  .heroText {
+    max-width: 100%;
+  }
+  .heroEyebrow {
+    font-size: 0.7rem;
+    margin-bottom: 2px;
+  }
+  .heroGreeting {
+    font-size: 1.6rem;
+    margin-bottom: 2px;
+  }
+  /* Hidden on mobile per request (kept on desktop) */
+  .heroSub {
+    display: none;
   }
   .heroIcons {
-    margin-left: 0;
-    flex-direction: row;
+    display: none;
+  }
+
+  /* Cards: full width, tighter padding, smaller type */
+  .heroCards {
+    width: 100%;
+    gap: 12px;
+  }
+  .academicCard,
+  .bioCard {
+    padding: 16px 18px;
+    border-radius: 18px;
+  }
+  .cardTitleRow,
+  .bioCardHead {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+  .sectionTitle {
+    font-size: 1.05rem;
+  }
+  .acadGrid {
+    gap: 12px 16px;
+  }
+  .acadLabel {
+    font-size: 0.62rem;
+    margin-bottom: 2px;
+  }
+  .acadValue {
+    font-size: 0.8rem;
+  }
+  .bioText {
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin-bottom: 10px;
+  }
+  .tag {
+    font-size: 0.6rem;
+    padding: 4px 10px;
+  }
+
+  /* Action buttons: compact pills that wrap tidily (override inline widths) */
+  .ui1Btn {
+    gap: 10px;
+    width: 100%;
+  }
+  /* Mobile-only reorder (DOM order unchanged, so desktop is unaffected):
+     View Your Public Profile → Edit Profile → Manage Your Items */
+  .ui1Btn > *:nth-child(1) { /* Manage Your Items */
+    order: 3;
+  }
+  .ui1Btn > *:nth-child(2) { /* View Your Public Profile */
+    order: 1;
+  }
+  .ui1Btn > *:nth-child(3) { /* Edit Profile */
+    order: 2;
+  }
+  .sellBtn {
+    width: auto !important;
+    padding: 8px 18px !important;
+    font-size: 0.82rem !important;
+    box-shadow: 0 6px 20px rgba(128, 0, 128, 0.25);
+  }
+
+  /* ── UI 2: one continuous scroll page on mobile ──
+     Drop the sidebar's duplicate cards but KEEP "List New Item". */
+  .sidebarProfileCard,
+  .sidebarActions,
+  .sidebarDetailsCard,
+  .completeBtn {
+    display: none;
   }
   .dashView {
     flex-direction: column;
-    margin: 0 0;
+    margin: 0;
+    padding: 8px 12px 60px 12px;
+    gap: 14px;
+  }
+  .sidebar {
+    gap: 0;
+    padding-bottom: 0;
+  }
+  /* Compact "List New Item" card on mobile — narrower and centered */
+  .listNewCard {
+    padding: 12px 16px;
+    gap: 6px;
+    border-radius: 16px;
+    max-width: 220px;
+    align-self: center;
+  }
+  .listNewIcon {
+    width: 38px;
+    height: 38px;
+  }
+  .listNewTitle {
+    font-size: 0.9rem;
+  }
+  .listNewSub {
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .heroHeader .avatarWrap {
+    --av-size: 150px !important;
   }
   .heroGreeting {
-    font-size: 2rem;
+    font-size: 1.45rem;
+  }
+  .academicCard,
+  .bioCard {
+    padding: 14px 14px;
+  }
+  .acadGrid {
+    gap: 10px 12px;
+  }
+  .sellBtn {
+    font-size: 0.78rem !important;
+    padding: 8px 14px !important;
   }
 }
 
