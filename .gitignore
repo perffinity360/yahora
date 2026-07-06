@@ -1,0 +1,86 @@
+# =========================
+# Node.js & Dependencies
+# =========================
+node_modules/
+.pnp
+.pnp.js
+
+# =========================
+# Logs
+# =========================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+metro.log
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# React (Web) Build Output
+# =========================
+dist/
+build/
+out/
+.eslintcache
+
+# =========================
+# React Native (Android)
+# =========================
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/assets/custom/
+*.apk
+*.aab
+*.ap_
+
+# =========================
+# React Native (iOS)
+# =========================
+ios/Pods/
+ios/build/
+ios/Index/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcworkspace/xcuserdata/
+ios/main.jsbundle
+*.ipa
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+
+# =========================
+# Expo (If using Expo for React Native)
+# =========================
+.expo/
+web-build/
+
+# =========================
+# Testing & Coverage
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# OS & Editor Files
+# =========================
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
