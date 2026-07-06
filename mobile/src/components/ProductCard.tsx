@@ -99,7 +99,6 @@ function ProductCardBase({
   onLike,
   onSave,
   onShare,
-  onChat,
   onEdit,
   onMarkSold,
   onMarkAvailable,
@@ -190,33 +189,24 @@ function ProductCardBase({
           </View>
 
           {showManageActions ? (
-            <View style={styles.actionRow}>
+            <View style={[styles.actionRow, styles.actionRowManage]}>
               <IconBtn
                 icon="bookmark"
                 onPress={onSave}
                 active={saved}
                 activeColor={colors.purple}
-                label={saved ? 'Saved' : 'Save'}
+                label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
               />
               <IconBtn icon="share-2" onPress={onShare} label="Share" />
               {sold ? (
-                <>
-                  <IconBtn
-                    icon="rotate-ccw"
-                    onPress={onMarkAvailable}
-                    color={colors.blueDark}
-                    label="Mark available"
-                  />
-                  <IconBtn
-                    icon="trash-2"
-                    onPress={onDelete}
-                    color={colors.errorText}
-                    label="Delete"
-                  />
-                </>
+                <IconBtn
+                  icon="rotate-ccw"
+                  onPress={onMarkAvailable}
+                  color={colors.blueDark}
+                  label="Mark available"
+                />
               ) : (
                 <>
-                  <IconBtn icon="message-square" onPress={onChat} label="Messages" />
                   <IconBtn
                     icon="check-circle"
                     onPress={onMarkSold}
@@ -224,14 +214,9 @@ function ProductCardBase({
                     label="Mark sold"
                   />
                   <IconBtn icon="edit-2" onPress={onEdit} label="Edit" />
-                  <IconBtn
-                    icon="trash-2"
-                    onPress={onDelete}
-                    color={colors.errorText}
-                    label="Delete"
-                  />
                 </>
               )}
+              <IconBtn icon="trash-2" onPress={onDelete} color={colors.errorText} label="Delete" />
             </View>
           ) : showEngagementOnly ? (
             <View style={styles.actionRow}>
@@ -240,7 +225,7 @@ function ProductCardBase({
                 onPress={onSave}
                 active={saved}
                 activeColor={colors.purple}
-                label={saved ? 'Saved' : 'Save'}
+                label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
               />
               <IconBtn icon="share-2" onPress={onShare} label="Share" />
             </View>
@@ -380,11 +365,9 @@ const styles = StyleSheet.create({
     color: colors.mutedLabel,
   },
 
-  // Owner / engagement toolbar. Wraps to a second line on narrow cards so the
-  // 2-up grid stays intact (the parent decides the card width).
+  // Engagement toolbar (2 icons) — left-aligned with a gap.
   actionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
     marginTop: 8,
@@ -392,10 +375,16 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.hairline,
   },
+  // Owner toolbar (up to 5 icons) — must stay on a single line inside the
+  // narrow 2-up dashboard card, so spread the buttons across the full width.
+  actionRowManage: {
+    justifyContent: 'space-between',
+    gap: 0,
+  },
   iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.inputBg,

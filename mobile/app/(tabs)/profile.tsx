@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -60,6 +61,7 @@ export default function ProfileScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
@@ -183,7 +185,8 @@ export default function ProfileScreen() {
                 onViewPublic={() => userId && router.push(`/profile/${userId}`)}
                 onEditProfile={() => router.push('/edit-profile')}
                 canViewPublic={!!userId}
-                onAvatarPress={() => setAvatarSheetOpen(true)}
+                onViewPhoto={() => setImageViewerOpen(true)}
+                onEditPhoto={() => setAvatarSheetOpen(true)}
                 avatarBusy={avatarBusy}
               />
               {avatarError ? <Text style={styles.avatarErrorText}>{avatarError}</Text> : null}
@@ -236,7 +239,6 @@ export default function ProfileScreen() {
                             actions.toggleSave.mutate({ id: item.id, isSaved: !!item.is_saved })
                           }
                           onShare={() => handleShare(item)}
-                          onChat={() => router.push('/(tabs)/messages')}
                           onEdit={() => router.push(`/sell?edit=${item.id}`)}
                           onMarkSold={() => confirmSold(item)}
                           onMarkAvailable={() => confirmAvailable(item)}
@@ -305,6 +307,33 @@ export default function ProfileScreen() {
           onRemovePhoto={handleRemovePhoto}
           onClose={() => setAvatarSheetOpen(false)}
         />
+
+        <Modal
+          visible={imageViewerOpen && !!profile?.avatar_url}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setImageViewerOpen(false)}
+        >
+          <Pressable
+            style={styles.viewerOverlay}
+            onPress={() => setImageViewerOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+          >
+            {profile?.avatar_url ? (
+              <Image
+                source={{ uri: profile.avatar_url }}
+                style={styles.viewerImage}
+                contentFit="contain"
+                transition={180}
+              />
+            ) : null}
+            <View style={styles.viewerClose}>
+              <Feather name="x" size={22} color={colors.white} />
+            </View>
+          </Pressable>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -317,7 +346,8 @@ function ProfileHeader({
   onViewPublic,
   onEditProfile,
   canViewPublic,
-  onAvatarPress,
+  onViewPhoto,
+  onEditPhoto,
   avatarBusy,
 }: {
   profile: DashboardProfile | undefined;
@@ -325,15 +355,18 @@ function ProfileHeader({
   onViewPublic: () => void;
   onEditProfile: () => void;
   canViewPublic: boolean;
-  onAvatarPress: () => void;
+  onViewPhoto: () => void;
+  onEditPhoto: () => void;
   avatarBusy: boolean;
 }) {
   const avatar = profile?.avatar_url;
   const initials = initialsOf(profile?.full_name);
+  // 2-column grid (wraps left→right): row 1 = Qualification | Current Year,
+  // row 2 = Course | Specialization.
   const academicFields: { label: string; value?: string | null }[] = [
     { label: 'Qualification', value: profile?.qualification },
-    { label: 'Course', value: profile?.courseName },
     { label: 'Current Year', value: profile?.year_of_study },
+    { label: 'Course', value: profile?.courseName },
     { label: 'Specialization', value: profile?.specializationName },
   ];
 
@@ -351,10 +384,10 @@ function ProfileHeader({
           style={styles.avatarRing}
         >
           <Pressable
-            onPress={onAvatarPress}
+            onPress={avatar ? onViewPhoto : onEditPhoto}
             disabled={avatarBusy}
             accessibilityRole="button"
-            accessibilityLabel="Change profile photo"
+            accessibilityLabel={avatar ? 'View profile photo' : 'Add profile photo'}
             style={({ pressed }) => [styles.avatarInner, pressed && styles.avatarInnerPressed]}
           >
             {avatar ? (
@@ -370,9 +403,16 @@ function ProfileHeader({
               </View>
             ) : null}
           </Pressable>
-          <View style={styles.avatarEditBadge}>
+          <Pressable
+            onPress={onEditPhoto}
+            disabled={avatarBusy}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+            style={({ pressed }) => [styles.avatarEditBadge, pressed && styles.avatarInnerPressed]}
+          >
             <Feather name="camera" size={12} color={colors.white} />
-          </View>
+          </Pressable>
         </LinearGradient>
 
         <Text style={styles.name} numberOfLines={1}>
@@ -1112,5 +1152,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.sm,
     width: '100%',
+  },
+
+  /* Enlarged photo viewer */
+  viewerOverlay: {
+    flex: 1,
+    backgroundColor: colors.viewerScrim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  viewerImage: {
+    width: '90%',
+    aspectRatio: 1,
+    maxHeight: '80%',
+    borderRadius: 24,
+  },
+  viewerClose: {
+    position: 'absolute',
+    top: spacing.xl * 1.5,
+    right: spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.viewerCloseBg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

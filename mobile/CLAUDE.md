@@ -113,3 +113,35 @@ When building a mobile screen, read the matching web file under
 `../frontend/src/pages/...` and its `.module.css` for design + behavior parity, and the
 matching `../backend/src/modules/...` controller for the API contract. Treat `../frontend`
 and `../backend` as read-only reference.
+
+## Design principles (read before ANY UI work)
+Aesthetic direction for this project: warm, tactile student marketplace where every
+listing feels like a keepsake — nostalgic sentiment meets modern campus energy, one
+confident accent on a soft neutral canvas.
+
+- Typography: pair one characterful display font with a clean body font.
+  Never Inter, Roboto, Arial, Space Grotesk, or system-ui.
+- Color: one dominant tone + one sharp accent, defined as CSS variables /
+  theme tokens. No purple-gradient-on-white, no timid evenly-spread palettes.
+- Motion: every screen gets entrance choreography (staggered reveals);
+  every interactive element gets hover/press feedback. 150–400ms,
+  custom easing curves, never linear.
+- Backgrounds: atmospheric (subtle gradients, grain, glow, geometry) —
+  never flat default white/gray.
+- Before coding a screen, state your aesthetic direction in one sentence,
+  then make every choice serve it.
+
+## UI stack & animation rules (Expo)
+Before ANY UI work, read DESIGN.md fully. Its tokens (src/theme/tokens.ts) are canonical.
+
+- Animation default: react-native-reanimated (springs, entering/exiting, layout transitions) +
+  react-native-gesture-handler for swipe/drag. All animation on the UI thread — never setState/JS timers.
+- Moti: simple one-off fade/slide only. Lottie: hero moments only (onboarding, success, empty states) — never on feeds.
+- Premium effects: @shopify/react-native-skia for gradients/glows/celebrations — never inside list rows.
+  expo-blur + expo-linear-gradient for glass/depth.
+- Every Pressable: scale to 0.97 spring + expo-haptics light impact (use the shared PressableScale).
+- Lists: expo-image with blurhash placeholders and fixed 4:5 ratios; skeletons over spinners;
+  no layout animations inside FlatList rows. Target 60fps on mid-range Android.
+- Safe areas + keyboard handling on every screen. Respect ReducedMotionConfig.
+- After building a screen: capture `xcrun simctl io booted screenshot /tmp/screen.png`,
+  read it, self-critique, fix, re-capture. Check light and dark mode.
