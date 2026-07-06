@@ -145,7 +145,7 @@ const Auth = () => {
           <div className={styles.authFormWrapper}>
             <div className={styles.marketingBadge}>
               <span className={styles.dot}></span>
-              Students-only marketplace — now launching
+              Keep the Story Going...
             </div>
 
             <h1 className={styles.gradientHeading}>Buy &amp; Sell on Your Campus.</h1>
@@ -228,7 +228,7 @@ const Auth = () => {
               ) : (
                 <form onSubmit={handleVerifyOtp}>
                   <p className={styles.subtitle}>
-                    Enter the 6-digit code sent to{" "}
+                    Enter the 8-digit code sent to{" "}
                     <strong style={{ color: "var(--purple-dark)" }}>
                       {email}
                     </strong>

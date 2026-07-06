@@ -405,7 +405,18 @@ export default function Dashboard() {
  });
 
  const [isDashboard, setIsDashboard] = useState(false);
- 
+
+ // Mobile shows one continuous scrollable page (no UI1↔UI2 animated
+ // switch). Desktop behavior is left completely unchanged.
+ const [isMobile, setIsMobile] = useState(
+   typeof window !== "undefined"
+     ? window.matchMedia("(max-width: 600px)").matches
+     : false,
+ );
+
+ // Ref to the dashboard/split section — used to scroll to it on mobile.
+ const dashViewRef = React.useRef(null);
+
  // Image Zoom Modal State
  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
@@ -482,8 +493,19 @@ export default function Dashboard() {
    fetchDashboard();
  }, [navigate]);
 
- /* ── Smooth Scroll Intent Logic (Desktop & Mobile) ── */
+ /* ── Track viewport: mobile vs desktop ── */
  useEffect(() => {
+   const mq = window.matchMedia("(max-width: 600px)");
+   const handler = (e) => setIsMobile(e.matches);
+   mq.addEventListener("change", handler);
+   return () => mq.removeEventListener("change", handler);
+ }, []);
+
+ /* ── Smooth Scroll Intent Logic (Desktop only) ── */
+ useEffect(() => {
+   // On mobile it's one continuous scroll page — don't hijack scrolling.
+   if (isMobile) return;
+
    let touchStartY = 0;
    let isCooldown = false;
 
@@ -532,7 +554,7 @@ export default function Dashboard() {
      window.removeEventListener("touchstart", handleTouchStart);
      window.removeEventListener("touchmove", handleTouchMove);
    };
- }, [isDashboard]);
+ }, [isDashboard, isMobile]);
 
  /* ── Profile field update ── */
  const updateField = useCallback(async (field, value) => {
@@ -993,17 +1015,23 @@ export default function Dashboard() {
      <div
        className={styles.heroView}
        style={{
-         opacity: isDashboard ? 0 : 1,
-         transform: isDashboard
-           ? "translateY(-40px) scale(0.96)"
-           : "translateY(0) scale(1)",
-         pointerEvents: isDashboard ? "none" : "all",
+         opacity: isMobile ? 1 : isDashboard ? 0 : 1,
+         transform: isMobile
+           ? "none"
+           : isDashboard
+             ? "translateY(-40px) scale(0.96)"
+             : "translateY(0) scale(1)",
+         pointerEvents: isMobile ? "all" : isDashboard ? "none" : "all",
          transition:
            "opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-         position: isDashboard ? "absolute" : "relative",
+         position: isMobile
+           ? "relative"
+           : isDashboard
+             ? "absolute"
+             : "relative",
          width: "100%",
          top: 0,
-         zIndex: isDashboard ? 0 : 10,
+         zIndex: isMobile ? "auto" : isDashboard ? 0 : 10,
        }}
      >
        <div className={styles.heroHeader}>
@@ -1091,8 +1119,12 @@ export default function Dashboard() {
          <button
            className={styles.sellBtn}
            onClick={() => {
-             setIsDashboard(true);
-             window.scrollTo({ top: 0, behavior: "smooth" });
+             if (isMobile) {
+               dashViewRef.current?.scrollIntoView({ behavior: "smooth" });
+             } else {
+               setIsDashboard(true);
+               window.scrollTo({ top: 0, behavior: "smooth" });
+             }
            }}
          >
            Manage Your Items
@@ -1127,17 +1159,26 @@ export default function Dashboard() {
         UI 2 — SPLIT / DASHBOARD VIEW
     ══════════════════════════════════════ */}
      <div
+       ref={dashViewRef}
        className={styles.dashView}
        style={{
-         opacity: isDashboard ? 1 : 0,
-         transform: isDashboard ? "translateY(0)" : "translateY(40px)",
-         pointerEvents: isDashboard ? "all" : "none",
+         opacity: isMobile ? 1 : isDashboard ? 1 : 0,
+         transform: isMobile
+           ? "none"
+           : isDashboard
+             ? "translateY(0)"
+             : "translateY(40px)",
+         pointerEvents: isMobile ? "all" : isDashboard ? "all" : "none",
          transition:
            "opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-         position: isDashboard ? "relative" : "absolute",
+         position: isMobile
+           ? "relative"
+           : isDashboard
+             ? "relative"
+             : "absolute",
          width: "100%",
-         top: -30,
-         zIndex: isDashboard ? 10 : 0,
+         top: isMobile ? 0 : -30,
+         zIndex: isMobile ? "auto" : isDashboard ? 10 : 0,
        }}
      >
        <div className={styles.sidebar}>
