@@ -243,3 +243,38 @@ Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in t
 - Do not rename existing folders/files or do broad refactors unless explicitly requested.
 - Do not claim browser behavior is verified — commit and hand off to Vishwajeet for verification.
 - Do not edit `mobile/` or `backend/` from a frontend task unless explicitly asked (this brief covers `frontend/` only).
+
+---
+
+## 15. Design principles (read before ANY UI work)
+Aesthetic direction for this project: editorial student marketplace with sentimental
+warmth — clean magazine-grade layout, one bold accent against soft neutrals, every
+listing framed like a keepsake ("Because Every Item Has a Memory.").
+
+- Typography: pair one characterful display font with a clean body font.
+  Never Inter, Roboto, Arial, Space Grotesk, or system-ui.
+- Color: one dominant tone + one sharp accent, defined as CSS variables /
+  theme tokens. No purple-gradient-on-white, no timid evenly-spread palettes.
+- Motion: every screen gets entrance choreography (staggered reveals);
+  every interactive element gets hover/press feedback. 150–400ms,
+  custom easing curves, never linear.
+- Backgrounds: atmospheric (subtle gradients, grain, glow, geometry) —
+  never flat default white/gray.
+- Before coding a screen, state your aesthetic direction in one sentence,
+  then make every choice serve it.
+
+---
+
+## 16. UI stack & animation rules
+Before ANY UI work, read DESIGN.md fully. Its tokens are canonical — never hardcode colors, radii, or durations.
+
+- Styling: CSS Modules + tokens from src/styles/tokens.css via var(--…). Do NOT introduce Tailwind.
+- Micro-interactions & entrances: `motion` (Framer Motion) — hover lifts, press scale 0.98,
+  staggered whileInView reveals (once). Don't hand-roll keyframes for things Motion does declaratively.
+- Pre-built showpieces: ReactBits, plain-CSS variants only — restyle to our tokens/fonts before shipping.
+- shadcn/ui, Aceternity UI, Magic UI are Tailwind-based: never install here. If a component from them
+  is wanted, re-implement its behavior in CSS Modules with our tokens.
+- GSAP + ScrollTrigger + Lenis: public landing/marketing pages ONLY. App surfaces use native scroll.
+- Every interactive element: hover + press + focus-visible. Every async surface: skeleton, empty, error, success.
+- Animate transform/opacity only. Respect prefers-reduced-motion.
+- After building a screen: screenshot via Playwright MCP at 1440px and 390px, self-critique, fix, re-verify.
