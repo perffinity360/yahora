@@ -15,7 +15,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Marketplace' }} />
       <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Dashboard' }} />
     </Tabs>
   );
 }

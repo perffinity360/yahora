@@ -34,6 +34,9 @@ export const colors = {
   cardSurface: '#FCF8FC',
   glassBorder: 'rgba(255,255,255,0.75)',
   scrim: 'rgba(11,11,11,0.55)',
+  // Fullscreen photo viewer: near-opaque backdrop + a translucent close chip.
+  viewerScrim: 'rgba(11,11,11,0.92)',
+  viewerCloseBg: 'rgba(255,255,255,0.18)',
 } as const;
 
 // Condition-badge palette (item-quality semantics), mirroring the web
