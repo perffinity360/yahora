@@ -537,4 +537,13 @@
   .imageGrid   { gap: 10px; }
   .previewWrap,
   .uploadBox   { width: 90px; height: 90px; }
+
+  /* Size to the text, single line — 35% was narrow enough on phone
+     screens to wrap "Post Item to Campus" onto three lines. */
+  .submitBtn {
+    width: fit-content;
+    font-size: 1rem;
+    padding: 0.85rem 1.75rem;
+    white-space: nowrap;
+  }
 }

@@ -1,6 +1,6 @@
 // frontend/src/pages/publicProfile/PublicProfile.jsx
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "../dashboard/Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
 
@@ -45,6 +45,7 @@ function DisplayAvatar({ src, name, size, onClick }) {
 export default function PublicProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // 1. Fetch the current logged-in user's ID
   const currentUserId = localStorage.getItem("yahora_user_id");
@@ -53,7 +54,15 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isDashboard, setIsDashboard] = useState(false);
-  
+
+  // Mobile shows one continuous scrollable page (no UI1↔UI2 animated
+  // switch). Desktop behavior is left completely unchanged.
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined"
+      ? window.matchMedia("(max-width: 600px)").matches
+      : false,
+  );
+
   // NEW: State for the Image Modal
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
@@ -127,8 +136,19 @@ export default function PublicProfile() {
     }
   };
 
-  /* ── Smooth Scroll Intent Logic ── */
+  /* ── Track viewport: mobile vs desktop ── */
   useEffect(() => {
+    const mq = window.matchMedia("(max-width: 600px)");
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  /* ── Smooth Scroll Intent Logic (Desktop only) ── */
+  useEffect(() => {
+    // On mobile it's one continuous scroll page — don't hijack scrolling.
+    if (isMobile) return;
+
     let touchStartY = 0;
     let isCooldown = false;
 
@@ -176,7 +196,7 @@ export default function PublicProfile() {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [isDashboard]);
+  }, [isDashboard, isMobile]);
 
   if (loading)
     return (
@@ -205,21 +225,32 @@ export default function PublicProfile() {
       <div
         className={styles.heroView}
         style={{
-          opacity: isDashboard ? 0 : 1,
-          transform: isDashboard
-            ? "translateY(-40px) scale(0.96)"
-            : "translateY(0) scale(1)",
-          pointerEvents: isDashboard ? "none" : "all",
+          opacity: isMobile ? 1 : isDashboard ? 0 : 1,
+          transform: isMobile
+            ? "none"
+            : isDashboard
+              ? "translateY(-40px) scale(0.96)"
+              : "translateY(0) scale(1)",
+          pointerEvents: isMobile ? "all" : isDashboard ? "none" : "all",
           transition:
             "opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-          position: isDashboard ? "absolute" : "relative",
+          position: isMobile ? "relative" : isDashboard ? "absolute" : "relative",
           width: "100%",
           top: 0,
-          zIndex: isDashboard ? 0 : 10,
+          zIndex: isMobile ? "auto" : isDashboard ? 0 : 10,
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            // Opened straight from an outside link (e.g. shared on
+            // WhatsApp) means there's no in-app history to pop —
+            // navigate(-1) would silently no-op, so fall back to Marketplace.
+            if (location.key === "default") {
+              navigate("/marketplace");
+            } else {
+              navigate(-1);
+            }
+          }}
           style={{
             position: "absolute",
             top: "20px",
@@ -230,7 +261,7 @@ export default function PublicProfile() {
             color: "#666",
             fontWeight: "bold",
             fontSize: "1rem",
-            zIndex: 20,
+            zIndex: 60,
           }}
         >
           ← Back
@@ -311,15 +342,18 @@ export default function PublicProfile() {
           </div>
         </div>
 
-        <button
-          className={styles.sellBtn}
-          onClick={() => {
-            setIsDashboard(true);
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-        >
-          Explore My Listings
-        </button>
+        {/* Desktop only — mobile is one continuous scroll, no jump needed */}
+        {!isMobile && (
+          <button
+            className={styles.sellBtn}
+            onClick={() => {
+              setIsDashboard(true);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            Explore My Listings
+          </button>
+        )}
       </div>
 
       {/* DASHBOARD/SPLIT VIEW */}
@@ -327,15 +361,19 @@ export default function PublicProfile() {
         className={styles.dashView}
         style={{
           gap: "20px",
-          opacity: isDashboard ? 1 : 0,
-          transform: isDashboard ? "translateY(0)" : "translateY(40px)",
-          pointerEvents: isDashboard ? "all" : "none",
+          opacity: isMobile ? 1 : isDashboard ? 1 : 0,
+          transform: isMobile
+            ? "none"
+            : isDashboard
+              ? "translateY(0)"
+              : "translateY(40px)",
+          pointerEvents: isMobile ? "all" : isDashboard ? "all" : "none",
           transition:
             "opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
-          position: isDashboard ? "relative" : "absolute",
+          position: isMobile ? "relative" : isDashboard ? "relative" : "absolute",
           width: "100%",
-          top: -30,
-          zIndex: isDashboard ? 10 : 0,
+          top: isMobile ? 0 : -30,
+          zIndex: isMobile ? "auto" : isDashboard ? 10 : 0,
         }}
       >
         <div

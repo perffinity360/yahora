@@ -1,1 +1,1 @@
-Check
+Read CLAUDE.md in /mobile and work in /mobile. Read git log and finally get the overview of the codebase needed to do the following changes.

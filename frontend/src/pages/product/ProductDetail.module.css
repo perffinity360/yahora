@@ -1028,4 +1028,14 @@
   .actionCard { padding: 16px; }
   .galleryCard { padding: 10px; }
   .mainImageWrap { height: clamp(220px, 55vw, 320px); }
+
+  /* Price/action card sits right below the description, ahead of Q&A.
+     leftCol's children are hoisted into the grid so they can be
+     interleaved with rightCol via order. */
+  .leftCol { display: contents; }
+  .galleryCard { order: 1; }
+  .foreignBanner { order: 2; }
+  .detailsCard { order: 3; }
+  .rightCol { order: 4; }
+  .qaCard { order: 5; }
 }
