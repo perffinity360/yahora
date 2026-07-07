@@ -119,6 +119,7 @@ Some pages define `API_BASE_URL` at module top; others inline `import.meta.env.V
 - **State:** local component state with hooks (`useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `memo`). Global auth state via `AuthContext` only. Cross-page shared data (like the active `university_id`) is read from **localStorage**, not a global store.
 - **Styling:** import `styles from "./Name.module.css"` and use `className={styles.foo}`. Use Bootstrap utility classes for quick layout where the codebase already does. **Always use the CSS variables** from `global.css` for colors (see §9) — never hardcode brand hex values.
 - **Icons:** import named icons from `lucide-react` (e.g. `import { Heart, Search } from "lucide-react"`).
+  - **Comments vs. Messages icons are distinct sitewide** — never reuse one for the other. **Comments / Q&A / comment counts → `MessageCircle`** (round bubble); **direct messaging / chat / inbox / "Message Seller" → `MessageSquare`** (square bubble). `ProductCard.jsx` uses inline SVGs mirroring these two shapes (`CommentIcon` = round MessageCircle path, `ChatIcon` = square MessageSquare path).
 - **Skeletons/loading:** pages use `memo`-wrapped `SkeletonCard`-style shimmer components while fetching. Follow that pattern for new loading states.
 - **Routing:** navigate with `useNavigate()`; read params with `useParams()`. Route params: product = `/product/:id`, public profile = `/user/:id`.
 - **Naming:** components/pages PascalCase; hooks/handlers camelCase (`handleLike`, `fetchProducts`); CSS module classes camelCase.
@@ -229,6 +230,8 @@ Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in t
 
 - **OTP is 8 digits** (Supabase-delivered) — size inputs/validation accordingly.
 - **`.env` trailing spaces / trailing `/api`** on `VITE_API_BASE_URL` cause broken requests. The code appends `/api` itself.
+- **`VITE_API_BASE_URL` is empty by default** (dev), so `API_BASE_URL` resolves to a **relative** `/api` that the Vite dev proxy (`vite.config.js`) forwards to the backend. Because it's relative, **never build request URLs with `new URL(...)`** — that constructor requires an absolute URL and throws `Failed to construct 'URL': Invalid URL`. Use plain string concatenation with `fetch` (and `URLSearchParams` for query strings), like the rest of the codebase. This exact bug hid the Marketplace feed once.
+- **Marketplace mobile filter drawer reuses the desktop `SidebarContent`** (`Marketplace.jsx`), so the campus switcher and all filter sections render in both. Toggle drawer-only visibility via `.mobileDrawer .<class>` overrides in `Marketplace.module.css` — don't duplicate the markup.
 - **Demo users** get a persistent orange banner (`App.jsx`) and are auto-cleaned nightly by the backend cron — don't treat demo data as real.
 - **`/feed` and `/hot` routes are placeholder stubs** (community feed + "Hot at campus" not built yet). The `posts` table exists in the DB but there is no backend `posts` module yet — flag before building against it.
 - **Realtime chat** relies on the Supabase client, not the Express backend — keep both in sync when touching messaging.

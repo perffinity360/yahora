@@ -1138,13 +1138,47 @@
   background: #ddd;
   margin: 0 auto 8px;
 }
+.mobileDrawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px 12px;
+  border-bottom: 1.5px solid #f0eaf0;
+}
+.mobileDrawerTitle {
+  font-family: "Bree Serif", serif;
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: var(--black-soft, #1a1a1a);
+}
+.mobileDrawerClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: #f3f0f3;
+  color: var(--black-soft, #1a1a1a);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.18s,
+    color 0.18s;
+}
+.mobileDrawerClose:hover {
+  background: var(--purple, #800080);
+  color: #fff;
+}
 .mobileDrawer .sidebar {
   border-radius: 0;
   box-shadow: none;
   min-height: auto;
 }
 .mobileDrawer .sidebarUni {
-  display: none;
+  display: flex;
+  padding: 0 4px 14px;
 }
 
 /* Visitor Disclaimer Card */
@@ -1239,6 +1273,15 @@
   .topBar {
     gap: 8px;
     padding: 10px 12px;
+    flex-wrap: nowrap;
+  }
+  /* Keep search + view toggle + filter on a single row: let search shrink */
+  .searchWrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .searchInput {
+    width: 100%;
   }
   .sortGroup {
     display: none;

@@ -74,7 +74,8 @@ const CommentIcon = ({ size = 16 }) => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    {/* Round chat bubble (MessageCircle) */}
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
   </svg>
 );
 const BookmarkIcon = ({ filled, size = 18 }) => (
@@ -150,6 +151,7 @@ const ChatIcon = ({ size = 16 }) => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
+    {/* Square bubble (MessageSquare) — distinct from the round CommentIcon */}
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
