@@ -7,6 +7,7 @@ import {
   Heart,
   Share2,
   MessageSquare,
+  MessageCircle,
   MapPin,
   Tag,
   Clock,
@@ -472,7 +473,7 @@ export default function ProductDetail() {
           {/* ════ Q&A / COMMENTS SECTION ════ */}
           <div className={styles.qaCard} id="comments">
             <div className={styles.qaHeader}>
-              <MessageSquare size={17} strokeWidth={2} />
+              <MessageCircle size={17} strokeWidth={2} />
               <h3>Questions & Answers</h3>
               {totalComments > 0 && (
                 <span className={styles.commentCountBadge}>
@@ -546,7 +547,7 @@ export default function ProductDetail() {
             <div className={styles.commentList}>
               {topLevelComments.length === 0 ? (
                 <div className={styles.emptyComments}>
-                  <MessageSquare size={28} strokeWidth={1.5} />
+                  <MessageCircle size={28} strokeWidth={1.5} />
                   <p>No questions yet. Be the first to ask!</p>
                 </div>
               ) : (

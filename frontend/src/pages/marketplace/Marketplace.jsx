@@ -410,11 +410,10 @@ export default function Marketplace() {
     const fetchMarketplaceFeed = async () => {
       setLoading(true);
       try {
-        const url = new URL(`${API_BASE_URL}/products`);
-        url.searchParams.append("university_id", university.id);
-        if (currentUserId) url.searchParams.append("user_id", currentUserId);
+        const params = new URLSearchParams({ university_id: university.id });
+        if (currentUserId) params.append("user_id", currentUserId);
 
-        const response = await fetch(url.toString());
+        const response = await fetch(`${API_BASE_URL}/products?${params.toString()}`);
         const data = await response.json();
 
         if (response.ok) {
@@ -872,6 +871,16 @@ export default function Marketplace() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className={styles.mobileDrawerHandle} />
+            <div className={styles.mobileDrawerHeader}>
+              <span className={styles.mobileDrawerTitle}>Filters</span>
+              <button
+                className={styles.mobileDrawerClose}
+                onClick={() => setShowMobileFilter(false)}
+                aria-label="Close filters"
+              >
+                <X size={18} strokeWidth={2.5} />
+              </button>
+            </div>
             {SidebarContent}
           </div>
         </div>
@@ -885,7 +894,7 @@ export default function Marketplace() {
             </span>
             <input
               type="search"
-              placeholder="Search marketplace…"
+              placeholder="Search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={styles.searchInput}
