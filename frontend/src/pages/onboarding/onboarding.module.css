@@ -154,8 +154,11 @@
   top: 1rem;
 }
 
-.inputWithIcon input,
-.inputWithIcon select,
+/* Direct child only: react-select (qualification/year) renders its own nested
+   <input>, and a descendant selector here would leak this border + magenta
+   focus ring onto it, drawing a pink oval around the search text. */
+.inputWithIcon > input,
+.inputWithIcon > select,
 .textareaWrapper textarea {
   width: 100%;
   padding: 0.8rem 1rem 0.8rem 2.8rem;
@@ -173,8 +176,8 @@
   padding-top: 1rem;
 }
 
-.inputWithIcon input:focus,
-.inputWithIcon select:focus,
+.inputWithIcon > input:focus,
+.inputWithIcon > select:focus,
 .textareaWrapper textarea:focus {
   outline: none;
   border-color: var(--purple-light);

@@ -5,11 +5,13 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StyleProp,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
+  ViewStyle,
 } from 'react-native';
 
 import { colors, font, radius, spacing } from '../theme';
@@ -35,6 +37,9 @@ interface Props {
   /** Show a search box at the top of the modal (default true). */
   searchable?: boolean;
   leadingIcon?: keyof typeof Feather.glyphMap;
+  /** Extra style for the outer wrapper — e.g. a raised zIndex so this field's
+   * field/modal stacks above a sibling field lower on the page. */
+  style?: StyleProp<ViewStyle>;
 }
 
 /**
@@ -52,6 +57,7 @@ export function SearchablePicker({
   required,
   searchable = true,
   leadingIcon,
+  style,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -89,7 +95,7 @@ export function SearchablePicker({
   const isDisabled = disabled || loading;
 
   return (
-    <View style={styles.group}>
+    <View style={[styles.group, style]}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
         {required ? <Text style={styles.required}> *</Text> : null}
@@ -110,6 +116,19 @@ export function SearchablePicker({
         <Text style={[styles.fieldText, !selected && styles.fieldPlaceholder]} numberOfLines={1}>
           {loading ? 'Loading…' : selected ? selected.label : placeholder}
         </Text>
+        {selected && !isDisabled ? (
+          // Clears the value without opening the modal first, so the user can
+          // start a fresh search instead of hunting for the current pick.
+          <Pressable
+            onPress={() => onChange('')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Clear ${label.toLowerCase()}`}
+            style={({ pressed }) => [styles.clearBtn, pressed && styles.clearBtnPressed]}
+          >
+            <Feather name="x" size={14} color={colors.mutedLabel} />
+          </Pressable>
+        ) : null}
         <Feather name="chevron-down" size={18} color={colors.mutedLabel} />
       </Pressable>
 
@@ -299,6 +318,17 @@ const styles = StyleSheet.create({
   fieldPlaceholder: {
     fontFamily: font.family.regular,
     color: colors.mutedPlaceholder,
+  },
+  clearBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.pinkLight,
+  },
+  clearBtnPressed: {
+    backgroundColor: colors.demoCardPurpleBg,
   },
 
   overlay: {
