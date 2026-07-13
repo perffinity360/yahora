@@ -214,22 +214,11 @@ export default function EditProfileScreen() {
 
                 <SearchablePicker
                   label="Qualification"
-                  searchable={false}
                   leadingIcon="award"
                   options={toOptions(QUALIFICATIONS)}
                   value={qualification}
                   onChange={setQualification}
-                  placeholder="Select qualification"
-                />
-
-                <SearchablePicker
-                  label="Year of Study"
-                  searchable={false}
-                  leadingIcon="calendar"
-                  options={toOptions(YEARS)}
-                  value={yearOfStudy}
-                  onChange={setYearOfStudy}
-                  placeholder="Select year"
+                  placeholder="Search qualification"
                 />
 
                 <SearchablePicker
@@ -240,6 +229,15 @@ export default function EditProfileScreen() {
                   onChange={setCourseId}
                   placeholder="Search course"
                   loading={coursesQuery.isLoading}
+                />
+
+                <SearchablePicker
+                  label="Year of Study"
+                  leadingIcon="calendar"
+                  options={toOptions(YEARS)}
+                  value={yearOfStudy}
+                  onChange={setYearOfStudy}
+                  placeholder="Search year"
                 />
 
                 <SearchablePicker

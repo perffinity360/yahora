@@ -1,5 +1,5 @@
-import React from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import React, { useLayoutEffect } from 'react';
+import { Routes, Route, useLocation, useNavigationType } from 'react-router-dom';
 import Navbar from './components/navbar/navbar';
 import Footer from './components/footer/footer';
 import Auth from './pages/auth/Auth';
@@ -14,7 +14,15 @@ import Messages from "./pages/messages/Messages";
 
 function App() {
   const location = useLocation(); // Get current route
+  const navigationType = useNavigationType();
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
+
+  // Start each forward navigation at the top of the page. Skipping POP (browser
+  // back/forward) leaves the restored scroll position intact, so returning to a
+  // feed keeps your place. Runs before paint to avoid a scroll-position flash.
+  useLayoutEffect(() => {
+    if (navigationType !== "POP") window.scrollTo(0, 0);
+  }, [location.pathname, navigationType]);
 
   return (
 

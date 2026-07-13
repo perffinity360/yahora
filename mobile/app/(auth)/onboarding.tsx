@@ -310,23 +310,11 @@ export default function OnboardingScreen() {
                 <SearchablePicker
                   label="Qualification"
                   required
-                  searchable={false}
                   leadingIcon="award"
                   options={toOptions(QUALIFICATIONS)}
                   value={qualification}
                   onChange={setQualification}
-                  placeholder="Select qualification"
-                />
-
-                <SearchablePicker
-                  label="Year of Study"
-                  required
-                  searchable={false}
-                  leadingIcon="calendar"
-                  options={toOptions(YEARS)}
-                  value={yearOfStudy}
-                  onChange={setYearOfStudy}
-                  placeholder="Select year"
+                  placeholder="Search qualification"
                 />
 
                 <SearchablePicker
@@ -338,6 +326,17 @@ export default function OnboardingScreen() {
                   onChange={setCourseId}
                   placeholder="Search course"
                   loading={coursesQuery.isLoading}
+                  style={styles.courseField}
+                />
+
+                <SearchablePicker
+                  label="Year of Study"
+                  required
+                  leadingIcon="calendar"
+                  options={toOptions(YEARS)}
+                  value={yearOfStudy}
+                  onChange={setYearOfStudy}
+                  placeholder="Search year"
                 />
 
                 <SearchablePicker
@@ -538,6 +537,9 @@ const styles = StyleSheet.create({
   },
   sectionTitleSpaced: {
     marginTop: spacing.sm,
+  },
+  courseField: {
+    zIndex: 10,
   },
 
   avatarRow: {

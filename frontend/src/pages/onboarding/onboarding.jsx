@@ -16,6 +16,80 @@ import styles from "./onboarding.module.css";
 // IMPORT YOUR FRONTEND SUPABASE CLIENT
 import { supabase } from "../../config/supabaseClient.js";
 
+// A searchable react-select wrapper with two behaviours the plain <Select>
+// lacks on this page:
+//   1. Editable selection — once a value is chosen, focusing the field drops
+//      its label into the search box (cursor at the end) so the user can
+//      backspace through it one character at a time, with the list re-filtering
+//      after every delete (instead of react-select wiping the whole selection
+//      on a single Backspace). Pre-filling the box is what makes this work on
+//      mobile too: deleting from a filled box is ordinary text editing, whereas
+//      catching the Backspace *key* on an empty box is unreliable on Android.
+//   2. Portaled menu — the dropdown renders into <body> with a high z-index so
+//      it always floats above the fields below it (the year field used to paint
+//      on top of the open course list).
+// Make search forgiving of punctuation and spacing: strip everything except
+// letters/digits from both the option label and the query before matching, so
+// "Btech", "B tech" and "B-tech" all find "B. Tech" (and vice-versa). Matching
+// against the (empty) query "" is always true, so an empty box shows every
+// option.
+const normalizeForSearch = (str) => (str ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const fuzzyFilterOption = (option, rawInput) =>
+  normalizeForSearch(option.label).includes(normalizeForSearch(rawInput));
+
+const SearchableSelect = ({ value, onChange, ...props }) => {
+  const [inputValue, setInputValue] = useState("");
+  const clearedAtRef = useRef(0);
+
+  return (
+    <Select
+      {...props}
+      value={value}
+      filterOption={fuzzyFilterOption}
+      inputValue={inputValue}
+      onFocus={(e) => {
+        if (!value) return;
+        // Tapping the ✕ focuses the field on mobile, which would otherwise
+        // re-seed the label right after it was cleared — making the removed
+        // value reappear as text. Skip the seed for a beat after a clear.
+        if (Date.now() - clearedAtRef.current < 400) return;
+        const label = value.label ?? "";
+        setInputValue(label);
+        // A programmatically-set input value leaves the caret at position 0,
+        // where Backspace has nothing to delete. Push it to the end so the
+        // first Backspace removes the last character.
+        const input = e.target;
+        requestAnimationFrame(() => {
+          const end = input.value.length;
+          input.setSelectionRange(end, end);
+        });
+      }}
+      onInputChange={(next, meta) => {
+        if (meta.action !== "input-change") {
+          // blur / select / menu-close: drop the search text so the chosen
+          // value shows as a chip again instead of leftover text.
+          setInputValue("");
+          return;
+        }
+        setInputValue(next);
+        // Emptying the box (Cut, or clearing it out) also drops the current
+        // selection, so the field ends up truly empty and ready for a fresh
+        // pick instead of the old value snapping back as a chip.
+        if (next === "" && value) onChange(null, { action: "clear", name: props.name });
+      }}
+      onBlur={() => setInputValue("")}
+      onChange={(option, meta) => {
+        setInputValue("");
+        // Record clears (✕ or programmatic) so onFocus won't re-seed the label
+        // straight after; a real pick resets it so editing works normally.
+        clearedAtRef.current = option ? 0 : Date.now();
+        onChange(option, meta);
+      }}
+      menuPortalTarget={document.body}
+    />
+  );
+};
+
 const Onboarding = () => {
  const navigate = useNavigate();
  const location = useLocation();
@@ -48,6 +122,24 @@ const Onboarding = () => {
 
  // Check if they are a demo user
  const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
+
+ // Short, fixed lists — still rendered via the searchable react-select so
+ // every academic field (qualification, course, year, specialization) has
+ // the same "type to jump to it" behavior when editing an existing profile.
+ const QUALIFICATION_OPTIONS = [
+   { value: "PhD", label: "PhD" },
+   { value: "Post Graduation", label: "Post Graduation" },
+   { value: "Graduation", label: "Graduation" },
+   { value: "Intermediate (12th)", label: "Intermediate (12th)" },
+   { value: "High School (10th)", label: "High School (10th)" },
+ ];
+ const YEAR_OPTIONS = [
+   { value: "1st year", label: "1st year" },
+   { value: "2nd year", label: "2nd year" },
+   { value: "3rd year", label: "3rd year" },
+   { value: "4th year", label: "4th year" },
+   { value: "5th year", label: "5th year" },
+ ];
 
  // 3. Fetch Courses and Specializations on Mount
  useEffect(() => {
@@ -86,9 +178,10 @@ const Onboarding = () => {
  };
 
  const handleDropdownChange = (selectedOption, actionMeta) => {
+   // selectedOption is null when the field is cleared via the "x" button.
    setFormData((prev) => ({
      ...prev,
-     [actionMeta.name]: selectedOption.value,
+     [actionMeta.name]: selectedOption ? selectedOption.value : "",
    }));
  };
 
@@ -242,6 +335,18 @@ const Onboarding = () => {
      color: "var(--black)",
      fontSize: "0.95rem",
    }),
+   // Portaled dropdown needs a high z-index to float above the fields below it.
+   menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+ };
+
+ // Same as customSelectStyles, with room on the left for the leading icon
+ // (qualification/year fields keep their icon; course/specialization don't have one).
+ const iconSelectStyles = {
+   ...customSelectStyles,
+   valueContainer: (base) => ({
+     ...base,
+     paddingLeft: "1.8rem",
+   }),
  };
 
  return (
@@ -347,26 +452,23 @@ const Onboarding = () => {
                  QUALIFICATION <span className={styles.required}>*</span>
                </label>
                <div className={styles.inputWithIcon}>
-                 <GraduationCap size={18} className={styles.inputIcon} />
-                 <select
-                   name="qualification"
-                   value={formData.qualification}
-                   onChange={handleChange}
-                   required
-                 >
-                   <option value="" disabled>
-                     Select Qualification
-                   </option>
-                   <option value="PhD">PhD</option>
-                   <option value="Post Graduation">Post Graduation</option>
-                   <option value="Graduation">Graduation</option>
-                   <option value="Intermediate (12th)">
-                     Intermediate (12th)
-                   </option>
-                   <option value="High School (10th)">
-                     High School (10th)
-                   </option>
-                 </select>
+                 <GraduationCap size={18} className={styles.inputIcon} style={{ zIndex: 1 }} />
+                 <div style={{ width: "100%" }}>
+                   <SearchableSelect
+                     name="qualification"
+                     options={QUALIFICATION_OPTIONS}
+                     onChange={handleDropdownChange}
+                     value={
+                       QUALIFICATION_OPTIONS.find(
+                         (opt) => opt.value === formData.qualification,
+                       ) || null
+                     }
+                     placeholder="Search qualification..."
+                     isSearchable={true}
+                     isClearable={true}
+                     styles={iconSelectStyles}
+                   />
+                 </div>
                </div>
              </div>
 
@@ -375,8 +477,8 @@ const Onboarding = () => {
                  COURSE (Select 'Others' if not listed){" "}
                  <span className={styles.required}>*</span>
                </label>
-               <div style={{ position: "relative", zIndex: 50 }}>
-                 <Select
+               <div>
+                 <SearchableSelect
                    name="courseId"
                    options={courseOptions}
                    onChange={handleDropdownChange}
@@ -386,6 +488,7 @@ const Onboarding = () => {
                    }
                    isDisabled={fetchingLists}
                    isSearchable={true}
+                   isClearable={true}
                    styles={customSelectStyles}
                  />
                </div>
@@ -398,22 +501,21 @@ const Onboarding = () => {
                  YEAR OF STUDY <span className={styles.required}>*</span>
                </label>
                <div className={styles.inputWithIcon}>
-                 <Calendar size={18} className={styles.inputIcon} />
-                 <select
-                   name="yearOfStudy"
-                   value={formData.yearOfStudy}
-                   onChange={handleChange}
-                   required
-                 >
-                   <option value="" disabled>
-                     Select Year
-                   </option>
-                   <option value="1st year">1st year</option>
-                   <option value="2nd year">2nd year</option>
-                   <option value="3rd year">3rd year</option>
-                   <option value="4th year">4th year</option>
-                   <option value="5th year">5th year</option>
-                 </select>
+                 <Calendar size={18} className={styles.inputIcon} style={{ zIndex: 1 }} />
+                 <div style={{ width: "100%" }}>
+                   <SearchableSelect
+                     name="yearOfStudy"
+                     options={YEAR_OPTIONS}
+                     onChange={handleDropdownChange}
+                     value={
+                       YEAR_OPTIONS.find((opt) => opt.value === formData.yearOfStudy) || null
+                     }
+                     placeholder="Search year..."
+                     isSearchable={true}
+                     isClearable={true}
+                     styles={iconSelectStyles}
+                   />
+                 </div>
                </div>
              </div>
 
@@ -422,8 +524,8 @@ const Onboarding = () => {
                  SPECIALIZATION (Select 'Others' if not listed)
                  <span className={styles.required}>*</span>
                </label>
-               <div style={{ position: "relative", zIndex: 40 }}>
-                 <Select
+               <div>
+                 <SearchableSelect
                    name="specializationId"
                    options={specializationOptions}
                    onChange={handleDropdownChange}
@@ -435,6 +537,7 @@ const Onboarding = () => {
                    }
                    isDisabled={fetchingLists}
                    isSearchable={true}
+                   isClearable={true}
                    styles={customSelectStyles}
                  />
                </div>
