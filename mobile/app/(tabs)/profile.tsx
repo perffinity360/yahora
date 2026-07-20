@@ -20,6 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AvatarSheet } from '../../src/components/AvatarSheet';
+import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { formatPrice, ProductCard } from '../../src/components/ProductCard';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -441,11 +442,7 @@ function ProfileHeader({
           ))}
         </View>
 
-        {profile?.bio ? (
-          <Text style={styles.bio} numberOfLines={4}>
-            &ldquo;{profile.bio}&rdquo;
-          </Text>
-        ) : null}
+        {profile?.bio ? <ExpandableBio text={profile.bio} /> : null}
 
         <Pressable
           onPress={onViewPublic}
@@ -462,7 +459,7 @@ function ProfileHeader({
             style={styles.publicBtnGradient}
           >
             <Feather name="external-link" size={16} color={colors.white} />
-            <Text style={styles.publicBtnText}>View my public profile</Text>
+            <Text style={styles.publicBtnText}>View Your Public Profile</Text>
           </LinearGradient>
         </Pressable>
 
@@ -843,15 +840,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
     color: colors.blackSoft,
-  },
-  bio: {
-    fontFamily: font.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.mutedText,
-    textAlign: 'center',
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
   },
   publicBtn: {
     marginTop: spacing.lg,
