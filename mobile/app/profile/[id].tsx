@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { ProductCard } from '../../src/components/ProductCard';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -65,10 +66,11 @@ export default function PublicProfileScreen() {
     }
   }, [refetch]);
 
-  const goBack = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/profile');
-  };
+  // The root layout renders a <Slot/>, which unmounts the tab navigator while a
+  // detail screen is on top — so router.back() re-mounts the tabs at their
+  // initial route (Marketplace) rather than where the user came from. This
+  // screen is only opened from the dashboard, so send them straight back there.
+  const goBack = () => router.replace('/(tabs)/profile');
 
   const handleShare = (item: PublicListing) => {
     Share.share({ message: `Check out "${item.title}" for ₹${item.price} on Yahora` }).catch(
@@ -176,19 +178,24 @@ export default function PublicProfileScreen() {
 function Header({ profile }: { profile: PublicProfile }) {
   const initials = initialsOf(profile.full_name);
   const since = memberSince(profile.created_at);
+  // Same order as the dashboard: row 1 = Qualification | Current Year,
+  // row 2 = Course | Specialization (the 2-col grid wraps left→right).
   const academicFields: { label: string; value?: string | null }[] = [
     { label: 'Qualification', value: profile.qualification },
-    { label: 'Course', value: profile.courseName },
     { label: 'Current Year', value: profile.year_of_study },
+    { label: 'Course', value: profile.courseName },
     { label: 'Specialization', value: profile.specializationName },
   ];
 
   return (
     <View style={styles.headerShadow}>
       <View style={styles.headerCard}>
-        <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.banner}>
-          <Text style={styles.bannerEyebrow}>VERIFIED CAMPUS SELLER</Text>
-        </LinearGradient>
+        <LinearGradient
+          colors={BRAND}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.banner}
+        />
 
         <LinearGradient
           colors={[colors.purple, colors.pink]}
@@ -232,11 +239,7 @@ function Header({ profile }: { profile: PublicProfile }) {
           ))}
         </View>
 
-        {profile.bio ? (
-          <Text style={styles.bio} numberOfLines={5}>
-            &ldquo;{profile.bio}&rdquo;
-          </Text>
-        ) : null}
+        {profile.bio ? <ExpandableBio text={profile.bio} /> : null}
 
         {since ? (
           <View style={styles.sinceRow}>
@@ -393,14 +396,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  bannerEyebrow: {
-    fontFamily: font.family.bold,
-    fontSize: 10,
-    letterSpacing: 2,
-    color: colors.white,
-    opacity: 0.85,
-    textAlign: 'right',
-  },
   avatarRing: {
     width: 108,
     height: 108,
@@ -493,15 +488,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
     color: colors.blackSoft,
-  },
-  bio: {
-    fontFamily: font.family.regular,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.mutedText,
-    textAlign: 'center',
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.lg,
   },
   sinceRow: {
     flexDirection: 'row',
