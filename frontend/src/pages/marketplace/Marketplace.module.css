@@ -12,7 +12,7 @@
 ────────────────────────────────────── */
 .root {
   display: flex;
-  min-height: calc(100vh - 70px); /* assumes 70px global navbar */
+  min-height: calc(100dvh - var(--app-chrome)); /* chrome measured in App.jsx */
   background: var(--bg, #f2e5e1);
   position: relative;
 }
@@ -25,8 +25,8 @@
   flex-shrink: 0;
   /* Sticky: sidebar stays in view while main scrolls */
   position: sticky;
-  top: 30px;
-  height: calc(100vh - 70px);
+  top: 0;
+  height: calc(100dvh - var(--app-chrome));
   overflow-y: auto;
   scrollbar-width: none;
   padding: 20px 0 20px 16px;
@@ -451,6 +451,71 @@
 }
 
 /* ──────────────────────────────────────
+   BACK TO TOP
+   Bottom-left, so it never collides with the bottom-right "list an item" FAB.
+────────────────────────────────────── */
+.backToTop {
+  position: fixed;
+  bottom: 32px;
+  left: 24px;
+  z-index: 100;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(128, 0, 128, 0.12);
+  background: #fff;
+  color: var(--purple, #800080);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 22px rgba(128, 0, 128, 0.18);
+
+  /* Hidden by default; kept in the DOM so it can animate both ways. */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12px);
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0.22s,
+    box-shadow 0.22s ease;
+}
+.backToTopVisible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.backToTop:hover {
+  background: var(--purple, #800080);
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(128, 0, 128, 0.32);
+}
+.backToTop:active {
+  transform: scale(0.94);
+}
+.backToTop:focus-visible {
+  outline: 2px solid var(--purple, #800080);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .backToTop {
+    transition: opacity 0.01ms, visibility 0.01ms;
+    transform: none;
+  }
+  .backToTopVisible {
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .backToTop {
+    bottom: 24px;
+    left: 16px;
+  }
+}
+
+/* ──────────────────────────────────────
    MAIN CONTENT
 ────────────────────────────────────── */
 .main {
@@ -473,13 +538,22 @@
   align-items: center;
   gap: 12px;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.04);
-  flex-wrap: wrap;
+  /* One row: search + sort + view toggle. Wrapping pushed Grid/Swipe onto a
+     second line whenever the search field got wide. */
+  flex-wrap: nowrap;
 }
 
 /* Search */
 .searchWrap {
-  flex: 1;
-  min-width: 180px;
+  /* THIS is the knob for how wide the search field is — change max-width here,
+     not on .searchInput. The clear button is positioned against this element
+     (it's the nearest positioned ancestor), so shrinking the input alone leaves
+     the ✕ stranded out to the right of the field.
+     Grows to fill the leftover space but is capped, so the sort pills and the
+     view toggle always keep their place on the same row. */
+  flex: 1 1 auto;
+  max-width: 460px;
+  min-width: 140px;
   position: relative;
   display: flex;
   align-items: center;
@@ -490,10 +564,15 @@
   color: #aaa;
   display: flex;
   pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 .searchInput {
-  width: 60%;
-  padding: 8px 32px 8px 38px;
+  /* Always fills .searchWrap — set the field's width on the wrapper instead,
+     so the clear button stays anchored to the input's right edge. */
+  width: 100%;
+  padding: 8px 34px 8px 38px;
   border-radius: 12px;
   border: 1.5px solid #eee;
   background: #fafafa;
@@ -503,11 +582,41 @@
   outline: none;
   transition:
     border-color 0.18s,
-    box-shadow 0.18s;
+    box-shadow 0.18s,
+    padding-left 0.18s ease;
   -webkit-appearance: none;
+  appearance: none;
 }
 .searchInput::placeholder {
   color: #bbb;
+}
+
+/* Suppress the browser's own clear button on type="search". Chrome/Safari draw
+   one automatically, which showed up alongside our .searchClear as a second
+   cross. type="search" is kept for the semantics and the mobile keyboard. */
+.searchInput::-webkit-search-cancel-button,
+.searchInput::-webkit-search-decoration,
+.searchInput::-webkit-search-results-button,
+.searchInput::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+.searchInput::-ms-clear,
+.searchInput::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Once there's a query the magnifier has done its job — fade it out and let the
+   text reclaim the space, so the field never looks crowded. */
+.searchWrapFilled .searchIcon {
+  opacity: 0;
+  transform: translateX(-4px);
+}
+.searchWrapFilled .searchInput {
+  padding-left: 14px;
 }
 .searchInput:focus {
   border-color: var(--purple, #800080);
@@ -529,6 +638,17 @@
 .searchClear:hover {
   color: var(--purple, #800080);
 }
+.searchClear:focus-visible {
+  outline: 2px solid var(--purple, #800080);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .searchIcon,
+  .searchInput {
+    transition: none;
+  }
+}
 
 /* Sort group */
 .sortGroup {
@@ -536,6 +656,16 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  /* Takes up the slack once the capped search field stops growing, so sort and
+     the view toggle sit together at the right instead of leaving a gap. */
+  margin-left: auto;
+}
+
+/* Narrow desktop / tablet: drop the "Sort by:" label before anything overflows. */
+@media (max-width: 1100px) {
+  .sortLabel {
+    display: none;
+  }
 }
 .sortLabel {
   font-size: 0.76rem;
@@ -668,6 +798,9 @@
 
 .gridItem {
   animation: cardIn 0.32s ease both;
+  /* Allow the item to shrink below its content's intrinsic width so a broken
+     or oversized image can never push the card past the screen edge. */
+  min-width: 0;
 }
 @keyframes cardIn {
   from {
@@ -859,7 +992,12 @@
   top: 0;
   left: 0;
   width: 100%;
-  touch-action: none; /* Prevents scroll while swiping */
+  /* pan-y, not none: the browser keeps native vertical scrolling while we
+     handle the horizontal swipe ourselves. `none` blocked scrolling entirely,
+     so the deck could not be scrolled past on a phone. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .swipeCardWrapper:nth-child(1) {
   transform: scale(0.92) translateY(30px) !important;
@@ -1114,12 +1252,20 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  /* Belt and braces with the body scroll lock: stops a scroll that starts on
+     the dimmed backdrop from reaching the feed. */
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 .mobileDrawer {
   background: #fff;
   border-radius: 28px 28px 0 0;
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
+  /* The drawer scrolls its own content; when it hits either end the scroll
+     stops there instead of chaining through to the products behind it. */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 8px 0 0;
   animation: drawerUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1279,9 +1425,11 @@
   .searchWrap {
     flex: 1 1 auto;
     min-width: 0;
+    /* Sort is hidden below this width, so let search use the full row. */
+    max-width: none;
   }
-  .searchInput {
-    width: 100%;
+  .viewToggle {
+    margin-left: auto;
   }
   .sortGroup {
     display: none;
@@ -1319,8 +1467,9 @@
     padding: 6px 9px;
   }
   .grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    /* Single full-width column on phones — one card per row */
+    grid-template-columns: 1fr;
+    gap: 14px;
   }
   .swipeDeck {
     max-width: 100%;

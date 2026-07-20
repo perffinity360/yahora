@@ -24,6 +24,13 @@
   --black-soft: #1A1A1A;
   --white: #FFFFFF;
   --bg: #f2e5e1;
+
+  /* Height of the fixed app chrome (demo banner + navbar). App.jsx measures the
+     real element and overwrites this at runtime; the fallback is the navbar
+     alone (3rem + 1px border). Full-height pages must use
+     calc(100dvh - var(--app-chrome)) — never a hardcoded offset, because the
+     demo banner changes this value. */
+  --app-chrome: 49px;
 }
 
 

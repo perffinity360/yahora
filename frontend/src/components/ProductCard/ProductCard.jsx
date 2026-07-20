@@ -5,8 +5,42 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../../config/supabaseClient";
 import styles from "./ProductCard.module.css";
+
+/**
+ * Copy text without assuming a secure context. navigator.clipboard is undefined
+ * over plain http:// (which is how the dev server is reached from a phone on
+ * the LAN), so fall back to the legacy execCommand path there.
+ */
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      /* fall through to the legacy path */
+    }
+  }
+
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 const CONDITION_CONFIG = {
   Mint: { label: "MINT CONDITION", bg: "#2BB7FF", color: "#fff" },
@@ -171,6 +205,216 @@ const TrashIcon = ({ size = 18 }) => (
   </svg>
 );
 
+const CopyIcon = ({ size = 16 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+const CheckIcon = ({ size = 16 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+const CloseIcon = ({ size = 18 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+/* Brand marks are single filled paths at 24x24. */
+const BRAND_TARGETS = [
+  {
+    id: "whatsapp",
+    label: "WhatsApp",
+    tint: "#25D366",
+    href: (url, text) =>
+      `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`,
+    path: "M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.465 3.488",
+  },
+  {
+    id: "telegram",
+    label: "Telegram",
+    tint: "#229ED9",
+    href: (url, text) =>
+      `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+    path: "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z",
+  },
+  {
+    id: "x",
+    label: "X",
+    tint: "#0B0B0B",
+    href: (url, text) =>
+      `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
+    path: "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z",
+  },
+];
+
+/**
+ * Share sheet. Portaled to <body> because the swipe deck puts the card inside a
+ * transformed ancestor, which would otherwise become the containing block for
+ * position: fixed and trap the overlay inside the card.
+ */
+function ShareSheet({ product, image, price, url, shareText, onClose }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const handleCopy = async () => {
+    const ok = await copyText(url);
+    setCopied(ok);
+    if (ok) setTimeout(() => setCopied(false), 1800);
+  };
+
+  return createPortal(
+    <div
+      className={styles.shareOverlay}
+      onClick={onClose}
+      onPointerDown={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Share ${product.title}`}
+    >
+      <div
+        className={styles.shareSheet}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={styles.shareHandle} />
+
+        <div className={styles.shareHead}>
+          <span className={styles.shareHeadTitle}>Share this find</span>
+          <button
+            className={styles.shareClose}
+            onClick={onClose}
+            aria-label="Close share sheet"
+          >
+            <CloseIcon size={16} />
+          </button>
+        </div>
+
+        <div className={styles.sharePreview}>
+          <img src={image} alt="" className={styles.sharePreviewImg} />
+          <div className={styles.sharePreviewText}>
+            <span className={styles.sharePreviewTitle}>{product.title}</span>
+            <span className={styles.sharePreviewPrice}>{price}</span>
+          </div>
+        </div>
+
+        <div className={styles.shareTargets}>
+          {BRAND_TARGETS.map((t) => (
+            <a
+              key={t.id}
+              className={styles.shareTarget}
+              href={t.href(url, shareText)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onClose}
+            >
+              <span
+                className={styles.shareTargetIcon}
+                style={{ background: t.tint }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff">
+                  <path d={t.path} />
+                </svg>
+              </span>
+              <span className={styles.shareTargetLabel}>{t.label}</span>
+            </a>
+          ))}
+
+          {typeof navigator !== "undefined" && navigator.share && (
+            <button
+              className={styles.shareTarget}
+              onClick={async () => {
+                try {
+                  await navigator.share({
+                    title: product.title,
+                    text: shareText,
+                    url,
+                  });
+                  onClose();
+                } catch {
+                  /* user dismissed the OS sheet */
+                }
+              }}
+            >
+              <span
+                className={styles.shareTargetIcon}
+                style={{ background: "var(--purple, #800080)" }}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#fff"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="5" r="1.5" />
+                  <circle cx="12" cy="12" r="1.5" />
+                  <circle cx="12" cy="19" r="1.5" />
+                </svg>
+              </span>
+              <span className={styles.shareTargetLabel}>More</span>
+            </button>
+          )}
+        </div>
+
+        <div className={styles.shareLinkRow}>
+          <span className={styles.shareLinkText}>{url}</span>
+          <button
+            className={`${styles.shareCopyBtn} ${copied ? styles.shareCopyBtnDone : ""}`}
+            onClick={handleCopy}
+          >
+            {copied ? <CheckIcon size={15} /> : <CopyIcon size={15} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 const ProductCard = memo(function ProductCard({
   product,
   currentUserId = null,
@@ -183,12 +427,17 @@ const ProductCard = memo(function ProductCard({
   onMarkAvailable = null,
   onToggleLike = null,
   onToggleSave = null,
+  /* Live preview (Sell page): renders exactly like a real card and the photo
+     carousel works, but nothing else does anything — there's no listing to
+     like, save or share yet. */
+  preview = false,
 }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [likeCount, setLikeCount] = useState(product.likes_count ?? 0);
   const [viewCount, setViewCount] = useState(product.views ?? 0);
   const [commentCount, setCommentCount] = useState(product.comments_count ?? 0);
   const [timeLabel, setTimeLabel] = useState(() => timeAgo(product.created_at));
+  const [shareOpen, setShareOpen] = useState(false);
 
   const likeThrottle = useRef(false);
   const saveThrottle = useRef(false);
@@ -280,6 +529,7 @@ const ProductCard = memo(function ProductCard({
   const handleLike = useCallback(
     (e) => {
       e.stopPropagation();
+      if (preview) return;
       if (!currentUserId) return alert("Please log in to like items!");
       if (likeThrottle.current) return;
 
@@ -289,12 +539,13 @@ const ProductCard = memo(function ProductCard({
       }, 600);
       if (onToggleLike) onToggleLike();
     },
-    [currentUserId, onToggleLike],
+    [currentUserId, onToggleLike, preview],
   );
 
   const handleSave = useCallback(
     (e) => {
       e.stopPropagation();
+      if (preview) return;
       if (!currentUserId) return alert("Please log in to save items!");
       if (saveThrottle.current) return;
 
@@ -304,31 +555,26 @@ const ProductCard = memo(function ProductCard({
       }, 600);
       if (onToggleSave) onToggleSave();
     },
-    [currentUserId, onToggleSave],
+    [currentUserId, onToggleSave, preview],
   );
 
+  /* Opens our own sheet rather than going straight to navigator.share: the
+     native API is unavailable on desktop and over plain http:// (LAN dev), and
+     the previous clipboard fallback threw in exactly those cases and was
+     swallowed by an empty catch, so the button appeared dead. */
   const handleShare = useCallback(
-    async (e) => {
+    (e) => {
       e.stopPropagation();
-      const shareData = {
-        title: product.title,
-        text: `Check out "${product.title}" on Yahora for ${displayPrice}`,
-        url: `${window.location.origin}/product/${product.id}`,
-      };
-      try {
-        if (navigator.share) await navigator.share(shareData);
-        else {
-          await navigator.clipboard.writeText(shareData.url);
-          alert("Link copied to clipboard!");
-        }
-      } catch {}
+      if (preview) return;
+      setShareOpen(true);
     },
-    [product, displayPrice],
+    [preview],
   );
 
   const handleCardClick = useCallback(() => {
+    if (preview) return;
     if (onCardClick) onCardClick(product.id);
-  }, [onCardClick, product.id]);
+  }, [onCardClick, product.id, preview]);
 
   const sellerName = product.seller?.full_name || "Unknown Seller";
   const sellerAvatar = product.seller?.avatar_url || null;
@@ -337,9 +583,9 @@ const ProductCard = memo(function ProductCard({
 
   return (
     <article
-      className={styles.card}
+      className={`${styles.card} ${preview ? styles.cardPreview : ""}`}
       onClick={onCardClick ? handleCardClick : undefined}
-      style={{ cursor: onCardClick ? "pointer" : "default" }}
+      style={{ cursor: onCardClick && !preview ? "pointer" : "default" }}
     >
       <div className={styles.imageWrap}>
         <div
@@ -354,6 +600,11 @@ const ProductCard = memo(function ProductCard({
               className={styles.image}
               loading={i === 0 ? "eager" : "lazy"}
               draggable={false}
+              onError={(e) => {
+                // Broken image: hide it so the grey placeholder shows through
+                // instead of sprawling alt text that overflows the card.
+                e.currentTarget.style.visibility = "hidden";
+              }}
             />
           ))}
         </div>
@@ -441,7 +692,12 @@ const ProductCard = memo(function ProductCard({
               <BookmarkIcon filled={product.is_saved} size={16} />
             </button>
 
-            <button className={styles.statBtn} onClick={handleShare}>
+            <button
+              className={styles.statBtn}
+              onClick={handleShare}
+              title="Share"
+              aria-label="Share this listing"
+            >
               <ShareIcon size={16} />
             </button>
           </div>
@@ -584,6 +840,17 @@ const ProductCard = memo(function ProductCard({
           )}
         </div>
       </div>
+
+      {shareOpen && (
+        <ShareSheet
+          product={product}
+          image={images[0]}
+          price={displayPrice}
+          url={`${window.location.origin}/product/${product.id}`}
+          shareText={`Check out "${product.title}" on Yahora for ${displayPrice}`}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </article>
   );
 });

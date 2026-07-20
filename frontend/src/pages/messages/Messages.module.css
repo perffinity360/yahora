@@ -61,7 +61,12 @@
   justify-content: center;
   align-items: center;
   padding: 16px;
-  height: calc(100vh - 70px);
+  /* Exactly the space left under the chrome — never taller, so the page itself
+     doesn't scroll and the chat input can't be pushed below the fold. dvh so
+     the mobile browser URL bar doesn't eat the bottom. */
+  height: calc(100dvh - var(--app-chrome));
+  min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(ellipse at top left, rgba(128,0,128,0.08) 0%, transparent 55%),
     radial-gradient(ellipse at bottom right, rgba(43,183,255,0.06) 0%, transparent 55%),
@@ -74,6 +79,7 @@
   width: 100%;
   max-width: 1120px;
   height: 100%;
+  min-height: 0;
   background: transparent;
   border-radius: 22px;
   box-shadow:
@@ -207,8 +213,10 @@
 
 /* Inbox List */
 .inboxList {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   position: relative;
   z-index: 1;
   scrollbar-width: thin;
@@ -409,6 +417,9 @@
   flex-direction: column;
   background: #fff;
   min-width: 0;
+  /* Lets the column shrink to its parent so the header/input stay pinned and
+     only .messagesContainer scrolls. */
+  min-height: 0;
 }
 
 /* ── Chat Header ── */
@@ -536,9 +547,14 @@
 
 /* ── Messages Container — Telegram Premium-like background ── */
 .messagesContainer {
-  flex: 1;
+  /* flex-basis 0 + min-height 0: without these the item can't shrink below its
+     content, so each new message grew the container and pushed the input area
+     down instead of scrolling inside it. */
+  flex: 1 1 0;
+  min-height: 0;
   padding: 16px 20px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scroll-behavior: smooth;
   display: flex;
   flex-direction: column;
@@ -996,7 +1012,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: calc(100vh - 70px);
+  height: calc(100dvh - var(--app-chrome));
   gap: 14px;
   color: #9a80b0;
   font-size: 0.88rem;
@@ -1051,7 +1067,7 @@
 @media (max-width: 768px) {
   .root {
     padding: 0;
-    height: calc(100vh - 70px);
+    height: calc(100dvh - var(--app-chrome));
   }
   .container {
     border-radius: 0;

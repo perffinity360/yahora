@@ -2,13 +2,15 @@
 
 import express from 'express';
 import multer from 'multer';
-import { createProduct, updateProduct, deleteProduct, getProducts, getProductById, toggleLikeProduct, toggleSaveProduct, addComment, toggleCommentVote, markProductAsSold, markProductAsAvailable } from './products.controller.js';
+import { createProduct, updateProduct, deleteProduct, getProducts, getProductById, getProductMeta, toggleLikeProduct, toggleSaveProduct, addComment, toggleCommentVote, markProductAsSold, markProductAsAvailable } from './products.controller.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // READ routes (Open to cross-campus browsing)
 router.get('/', getProducts);
+// Must precede '/:id' so 'meta' isn't swallowed as an id segment.
+router.get('/:id/meta', getProductMeta);
 router.get('/:id', getProductById);
 
 // POST /api/products

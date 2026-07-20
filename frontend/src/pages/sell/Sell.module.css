@@ -182,7 +182,10 @@
 .previewWrapper {
   transform: scale(0.92);
   transform-origin: top left;
-  pointer-events: none; /* Disables clicking buttons on the preview card */
+  /* No blanket pointer-events: none here — it also killed the photo carousel's
+     chevrons (they're hover-revealed, and pointer-events: none suppresses
+     hover). ProductCard's `preview` prop makes the card inert instead, while
+     keeping the carousel usable. */
   filter: drop-shadow(0 12px 32px rgba(128, 0, 128, 0.15));
   width: 108%; /* Counter-acts the scale to fill sidebar width */
 }

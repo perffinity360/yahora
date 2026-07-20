@@ -80,6 +80,30 @@ const POSTING_DATE_OPTIONS = [
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
+/* Freezes the page behind an overlay so scrolling inside the overlay can't
+   chain through to the feed. Refcounted, because more than one overlay can be
+   mounted at a time and the last one to unmount must not unlock early. */
+let scrollLockCount = 0;
+function useBodyScrollLock(active) {
+  useEffect(() => {
+    if (!active) return;
+
+    if (scrollLockCount === 0) {
+      document.body.dataset.prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+    scrollLockCount++;
+
+    return () => {
+      scrollLockCount--;
+      if (scrollLockCount === 0) {
+        document.body.style.overflow = document.body.dataset.prevOverflow || "";
+        delete document.body.dataset.prevOverflow;
+      }
+    };
+  }, [active]);
+}
+
 const SkeletonCard = memo(function SkeletonCard() {
   return (
     <div className={styles.skeleton}>
@@ -98,12 +122,16 @@ const SkeletonCard = memo(function SkeletonCard() {
 });
 
 const SWIPE_THRESHOLD = 100;
+/* Movement (px) before we commit to an axis. Under this the gesture is still
+   ambiguous and we must not steal it from the page scroller. */
+const AXIS_LOCK_SLOP = 8;
 
 const SwipeCard = memo(function SwipeCard({
   product,
   onLike,
   onPass,
   onSave,
+  onCardClick,
   zIndex,
   isTop,
   currentUserId,
@@ -112,6 +140,10 @@ const SwipeCard = memo(function SwipeCard({
   const startX = useRef(0);
   const startY = useRef(0);
   const currentX = useRef(0);
+  /* null = axis undecided, "x" = we own the gesture (swipe),
+     "y" = the page owns it (vertical scroll) and we stay out of the way. */
+  const axis = useRef(null);
+  const activePointer = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [offsetX, setOffsetX] = useState(0);
   const [leaving, setLeaving] = useState(false);
@@ -120,44 +152,97 @@ const SwipeCard = memo(function SwipeCard({
   const likeOp = Math.min(offsetX / SWIPE_THRESHOLD, 1);
   const passOp = Math.min(-offsetX / SWIPE_THRESHOLD, 1);
 
+  const resetGesture = useCallback(() => {
+    activePointer.current = null;
+    axis.current = null;
+    setDragging(false);
+  }, []);
+
   const onPointerDown = useCallback(
     (e) => {
       if (!isTop) return;
       if (e.target.closest("button")) {
         return;
       }
-      cardRef.current?.setPointerCapture(e.pointerId);
+      /* Deliberately do NOT capture the pointer yet — capturing here would take
+         the gesture away from the page scroller before we know whether the user
+         is swiping sideways or scrolling the feed. */
       startX.current = e.clientX;
       startY.current = e.clientY;
       currentX.current = 0;
-      setDragging(true);
+      axis.current = null;
+      activePointer.current = e.pointerId;
     },
     [isTop],
   );
 
   const onPointerMove = useCallback(
     (e) => {
-      if (!dragging) return;
+      if (activePointer.current !== e.pointerId) return;
+
       const dx = e.clientX - startX.current;
+      const dy = e.clientY - startY.current;
+
+      if (axis.current === null) {
+        // Still ambiguous — wait for a decisive movement.
+        if (Math.abs(dx) < AXIS_LOCK_SLOP && Math.abs(dy) < AXIS_LOCK_SLOP)
+          return;
+
+        if (Math.abs(dx) > Math.abs(dy)) {
+          axis.current = "x";
+          cardRef.current?.setPointerCapture(e.pointerId);
+          setDragging(true);
+        } else {
+          // Vertical intent: hand the gesture back so the page can scroll.
+          axis.current = "y";
+          activePointer.current = null;
+          return;
+        }
+      }
+
+      if (axis.current !== "x") return;
       currentX.current = dx;
       setOffsetX(dx);
     },
-    [dragging],
+    [],
   );
 
-  const onPointerUp = useCallback(() => {
-    if (!dragging) return;
-    setDragging(false);
-    if (Math.abs(currentX.current) >= SWIPE_THRESHOLD) {
-      const dir = currentX.current > 0 ? "like" : "pass";
-      setLeaving(true);
-      setTimeout(() => {
-        dir === "like" ? onLike(product.id) : onPass(product.id);
-      }, 350);
-    } else {
-      setOffsetX(0);
-    }
-  }, [dragging, product.id, onLike, onPass]);
+  const onPointerUp = useCallback(
+    (e) => {
+      if (activePointer.current !== e.pointerId || axis.current !== "x") {
+        resetGesture();
+        return;
+      }
+      resetGesture();
+
+      if (Math.abs(currentX.current) >= SWIPE_THRESHOLD) {
+        const dir = currentX.current > 0 ? "like" : "pass";
+        setLeaving(true);
+        setTimeout(() => {
+          dir === "like" ? onLike(product.id) : onPass(product.id);
+        }, 350);
+      } else {
+        setOffsetX(0);
+      }
+    },
+    [product.id, onLike, onPass, resetGesture],
+  );
+
+  // The browser fires this when it takes the gesture over for native scrolling.
+  const onPointerCancel = useCallback(() => {
+    resetGesture();
+    setOffsetX(0);
+  }, [resetGesture]);
+
+  /* Swallow the click that browsers synthesise at the end of a drag, so
+     finishing a swipe never navigates to the product page. */
+  const handleCardClick = useCallback(
+    (id) => {
+      if (Math.abs(currentX.current) > AXIS_LOCK_SLOP) return;
+      onCardClick?.(id);
+    },
+    [onCardClick],
+  );
 
   const triggerLike = useCallback(() => {
     setLeaving(true);
@@ -180,6 +265,7 @@ const SwipeCard = memo(function SwipeCard({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <div
         className={styles.swipeLikeStamp}
@@ -204,6 +290,7 @@ const SwipeCard = memo(function SwipeCard({
         <ProductCard
           product={product}
           currentUserId={currentUserId}
+          onCardClick={onCardClick ? handleCardClick : null}
           onToggleLike={triggerLike}
           onToggleSave={() => onSave(product.id, product.is_saved)}
         />
@@ -215,13 +302,7 @@ const SwipeCard = memo(function SwipeCard({
 function UniSwitcher({ current, universities, onSelect, onClose }) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  // NEW: Lock background scrolling while this modal is open
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, []);
+  useBodyScrollLock(true);
 
   const filteredUniversities = universities.filter(
     (u) =>
@@ -352,6 +433,24 @@ export default function Marketplace() {
   const [selPostingDate, setSelPostingDate] = useState("");
   const [showWishlist, setShowWishlist] = useState(false);
   const [showMyListings, setShowMyListings] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // Freeze the feed behind the mobile filter drawer while it's open.
+  useBodyScrollLock(showMobileFilter);
+
+  /* Reveal the back-to-top affordance once the user is a couple of rows deep.
+     Grid view only — swipe view isn't a long scroller. */
+  useEffect(() => {
+    if (viewMode !== "grid") {
+      setShowBackToTop(false);
+      return;
+    }
+
+    const onScroll = () => setShowBackToTop(window.scrollY > 600);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [viewMode]);
 
   // Protect marketplace route
   useEffect(() => {
@@ -497,20 +596,62 @@ export default function Marketplace() {
   /* ── Swipe Handlers ── */
   const handleSwipeLike = useCallback(
     async (id) => {
+      const swiped = swipeDeck.find((p) => p.id === id);
       setSwipeDeck((prev) => prev.filter((p) => p.id !== id));
       if (!currentUserId) return;
 
+      /* /like is a TOGGLE on the backend, but a right-swipe always means "like".
+         Firing it on an already-liked item would silently un-like it, so skip
+         the request when the item is already liked. */
+      if (swiped?.is_liked) return;
+
+      // Optimistically reflect the like in the grid view too.
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, is_liked: true, likes_count: (p.likes_count || 0) + 1 }
+            : p,
+        ),
+      );
+
       try {
-        await fetch(`${API_BASE_URL}/products/${id}/like`, {
+        const res = await fetch(`${API_BASE_URL}/products/${id}/like`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: currentUserId }),
         });
+        const data = await res.json();
+
+        // Reconcile with the server's authoritative is_liked.
+        if (!res.ok || data.is_liked === false) {
+          setProducts((prev) =>
+            prev.map((p) =>
+              p.id === id
+                ? {
+                    ...p,
+                    is_liked: false,
+                    likes_count: Math.max(0, (p.likes_count || 1) - 1),
+                  }
+                : p,
+            ),
+          );
+        }
       } catch (error) {
         console.error("Failed to register swipe like:", error);
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? {
+                  ...p,
+                  is_liked: false,
+                  likes_count: Math.max(0, (p.likes_count || 1) - 1),
+                }
+              : p,
+          ),
+        );
       }
     },
-    [currentUserId],
+    [currentUserId, swipeDeck],
   );
 
   const handleSwipePass = useCallback((id) => {
@@ -635,7 +776,7 @@ export default function Marketplace() {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          height: "100vh",
+          height: "calc(100dvh - var(--app-chrome))",
         }}
       >
         <p>Loading Campus Ecosystem...</p>
@@ -729,7 +870,15 @@ export default function Marketplace() {
         <FilterSection icon={<Heart size={16} />} title="My Wishlist">
           <button
             className={`${styles.toggleFilter} ${showWishlist ? styles.toggleFilterActive : ""}`}
-            onClick={() => setShowWishlist((v) => !v)}
+            onClick={() => {
+              const next = !showWishlist;
+              setShowWishlist(next);
+              /* The swipe deck is built from the raw feed and ignores filters,
+                 so turning this on there would look like nothing happened.
+                 Hand the user to the grid, which does honour it. */
+              if (next && viewMode === "swipe") setViewMode("grid");
+              setShowMobileFilter(false);
+            }}
           >
             {showWishlist ? "✓ Showing saved items" : "Show my saved items"}
           </button>
@@ -820,6 +969,24 @@ export default function Marketplace() {
         </div>
       )}
 
+      <button
+        className={`${styles.backToTop} ${showBackToTop ? styles.backToTopVisible : ""}`}
+        onClick={() =>
+          window.scrollTo({
+            top: 0,
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+              .matches
+              ? "auto"
+              : "smooth",
+          })
+        }
+        aria-label="Back to top of feed"
+        aria-hidden={!showBackToTop}
+        tabIndex={showBackToTop ? 0 : -1}
+      >
+        <ChevronUp size={20} strokeWidth={2.5} />
+      </button>
+
       {showUniModal && (
         <UniSwitcher
           current={university}
@@ -888,8 +1055,10 @@ export default function Marketplace() {
 
       <main className={styles.main}>
         <div className={styles.topBar}>
-          <div className={styles.searchWrap}>
-            <span className={styles.searchIcon}>
+          <div
+            className={`${styles.searchWrap} ${searchQuery ? styles.searchWrapFilled : ""}`}
+          >
+            <span className={styles.searchIcon} aria-hidden="true">
               <Search size={18} />
             </span>
             <input
@@ -898,11 +1067,14 @@ export default function Marketplace() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={styles.searchInput}
+              aria-label="Search listings"
             />
             {searchQuery && (
               <button
                 className={styles.searchClear}
                 onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+                title="Clear search"
               >
                 <X size={16} />
               </button>
@@ -1065,6 +1237,7 @@ export default function Marketplace() {
                       onLike={handleSwipeLike}
                       onPass={handleSwipePass}
                       onSave={handleToggleGridSave}
+                      onCardClick={(id) => navigate(`/product/${id}`)}
                       currentUserId={currentUserId}
                     />
                   ))}

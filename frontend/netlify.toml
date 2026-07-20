@@ -1,0 +1,13 @@
+# Yahora — Netlify config (frontend)
+# Assumes the Netlify site's base directory is `frontend/`.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Injects per-product Open Graph tags so shared links render a real preview
+# card. See netlify/edge-functions/product-preview.js for why this cannot be
+# done in React.
+[[edge_functions]]
+  path = "/product/*"
+  function = "product-preview"

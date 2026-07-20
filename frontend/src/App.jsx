@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { Routes, Route, useLocation, useNavigationType } from 'react-router-dom';
 import Navbar from './components/navbar/navbar';
 import Footer from './components/footer/footer';
@@ -16,6 +16,28 @@ function App() {
   const location = useLocation(); // Get current route
   const navigationType = useNavigationType();
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
+  const chromeRef = useRef(null);
+
+  // Publish the real height of the fixed app chrome (demo banner + navbar) as
+  // --app-chrome so full-height pages can size themselves with
+  // calc(100dvh - var(--app-chrome)) instead of guessing a number. The demo
+  // banner is conditional, so a hardcoded offset overflows the viewport the
+  // moment it appears and pushes the bottom of the page off-screen.
+  useLayoutEffect(() => {
+    const el = chromeRef.current;
+    if (!el) return;
+
+    const publish = () =>
+      document.documentElement.style.setProperty(
+        "--app-chrome",
+        `${el.getBoundingClientRect().height}px`
+      );
+
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isDemoUser]);
 
   // Start each forward navigation at the top of the page. Skipping POP (browser
   // back/forward) leaves the restored scroll position intact, so returning to a
@@ -28,15 +50,21 @@ function App() {
 
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       
+      {/* Demo banner + navbar are measured together as the app chrome */}
+      <div ref={chromeRef}>
+
       {/* 🚧 GLOBAL DEMO BANNER 🚧 */}
       {isDemoUser && (
         <div style={{
           background: 'linear-gradient(90deg, #FFB347, #FF7B00)',
           color: 'white',
           textAlign: 'center',
-          padding: '8px 16px',
+          padding: '6px 12px',
           fontWeight: '600',
-          fontSize: '0.85rem',
+          // Shrinks on phones so the banner stays ~1-2 lines instead of eating
+          // three lines of an already short mobile viewport.
+          fontSize: 'clamp(0.72rem, 3vw, 0.85rem)',
+          lineHeight: 1.35,
           letterSpacing: '0.02em',
           zIndex: 9999,
           display: 'flex',
@@ -44,14 +72,16 @@ function App() {
           alignItems: 'center',
           gap: '8px'
         }}>
-          <span>🚧</span>
+          <span style={{ flexShrink: 0 }}>🚧</span>
           You are viewing the Yahora Interactive Demo Sandbox. This is not real student data.
         </div>
       )}
       
       <Navbar />
-      
-      <main style={{ flex: 1 }}>
+
+      </div>
+
+      <main style={{ flex: 1, minHeight: 0 }}>
         <Routes>
           <Route path= "/" element={<Home/>} />
           <Route path="/auth" element={<Auth />} />
