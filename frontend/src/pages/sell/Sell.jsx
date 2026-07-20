@@ -1,5 +1,5 @@
 // frontend/src/pages/sell/Sell.jsx
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Laptop,
@@ -9,7 +9,8 @@ import {
   Bike,
   Coffee,
   Dumbbell,
-  Package,ChevronDown,
+  Package,
+  ChevronDown,
 } from "lucide-react";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import styles from "./Sell.module.css";
@@ -50,6 +51,27 @@ export default function Sell() {
   const [images, setImages] = useState(editProduct?.image_urls || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  /* Object URLs for the picked Files. Previously these were minted inline
+     during render, so every keystroke in the form created a fresh blob URL for
+     every image — leaking them and giving each <img> a new src, which remounted
+     the preview carousel and snapped it back to the first photo. Now they're
+     created once per image set and revoked when that set is replaced. */
+  const imageUrls = useMemo(
+    () =>
+      images.map((img) =>
+        typeof img === "string" ? img : URL.createObjectURL(img),
+      ),
+    [images],
+  );
+
+  useEffect(
+    () => () =>
+      imageUrls.forEach((url) => {
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+      }),
+    [imageUrls],
+  );
 
   const [sellerProfile, setSellerProfile] = useState({
     full_name: "Loading...",
@@ -199,13 +221,8 @@ export default function Sell() {
     category: formData.category || "Category",
     location: formData.location || "Campus Location",
     condition: formData.condition || 'Good',
-    // Handle mix of existing URL strings and new File objects for preview
-    image_urls:
-      images.length > 0
-        ? images.map((img) =>
-            typeof img === "string" ? img : URL.createObjectURL(img),
-          )
-        : [PLACEHOLDER_IMAGE],
+    // Mix of existing URL strings (edit mode) and blob URLs for new Files.
+    image_urls: imageUrls.length > 0 ? imageUrls : [PLACEHOLDER_IMAGE],
     status: "available",
     views: 0,
     likes_count: 0,
@@ -240,7 +257,7 @@ export default function Sell() {
               Live Preview
             </div>
             <div className={styles.previewWrapper}>
-              <ProductCard product={previewProduct} />
+              <ProductCard product={previewProduct} preview />
             </div>
           </div>
         </aside>
@@ -282,10 +299,7 @@ export default function Sell() {
                     className={`${styles.previewWrap} ${idx === 0 ? styles.coverWrap : ""}`}
                   >
                     <img
-                      // Handle both existing URLs and new file objects
-                      src={
-                        typeof img === "string" ? img : URL.createObjectURL(img)
-                      }
+                      src={imageUrls[idx]}
                       alt={`preview ${idx + 1}`}
                       className={styles.previewImg}
                     />

@@ -240,6 +240,52 @@ export const getProductById = async (req, res) => {
 };
 
 
+/**
+ * Minimal, read-only product data for link previews (Open Graph cards).
+ *
+ * Deliberately NOT getProductById: that endpoint increments the view counter
+ * and joins every comment, so using it here would inflate view counts on every
+ * crawler hit and over-fetch badly for a card that shows four fields.
+ */
+export const getProductMeta = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { data: product, error } = await supabase
+            .from('products')
+            .select(`
+                id, title, description, price, condition, image_urls, status,
+                seller:users!seller_id(full_name),
+                university:universities!university_id(name)
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error || !product) {
+            return res.status(404).json({ error: 'Product not found.' });
+        }
+
+        // Cacheable: previews are crawled repeatedly and the data is public.
+        res.set('Cache-Control', 'public, max-age=300, s-maxage=300');
+        res.status(200).json({
+            product: {
+                id: product.id,
+                title: product.title,
+                description: product.description,
+                price: product.price,
+                condition: product.condition,
+                status: product.status,
+                image: product.image_urls?.[0] || null,
+                seller_name: product.seller?.full_name || null,
+                university_name: product.university?.name || null,
+            },
+        });
+    } catch (error) {
+        console.error('Get Product Meta Error:', error);
+        res.status(500).json({ error: 'Failed to fetch product meta.' });
+    }
+};
+
 export const toggleLikeProduct = async (req, res) => {
     try {
         const { id: product_id } = req.params;
