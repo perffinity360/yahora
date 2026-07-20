@@ -92,10 +92,11 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const goBack = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/profile');
-  };
+  // The root layout renders a <Slot/>, which unmounts the tab navigator while
+  // this screen is on top — so router.back() re-mounts the tabs at their initial
+  // route (Marketplace). Edit Profile is only opened from the dashboard, so both
+  // the back arrow and a completed Save should land the user back there.
+  const goBack = () => router.replace('/(tabs)/profile');
 
   const handleSave = async () => {
     setError(null);

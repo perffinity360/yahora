@@ -38,6 +38,17 @@ export interface Product {
 }
 
 /**
+ * A marketplace feed row (GET /api/products): the full product plus the joined
+ * seller and the viewer's interaction state. Structurally satisfies
+ * `ProductCardItem`, so `ProductCard` renders it directly.
+ */
+export interface MarketplaceProduct extends Product {
+  seller: { id: string; full_name: string | null; avatar_url: string | null };
+  is_liked?: boolean;
+  is_saved?: boolean;
+}
+
+/**
  * A product row as returned by the dashboard / public-profile endpoints. It is
  * the shared shape the reusable `ProductCard` renders. A full marketplace
  * `Product` (which additionally carries `seller_id`/`university_id`) is
