@@ -50,8 +50,8 @@ export default function PublicProfileScreen() {
   const isOwnProfile = !!viewer?.id && viewer.id === profileUserId;
 
   const { data, isLoading, isError, refetch } = usePublicProfile(profileUserId);
-  const toggleLike = useToggleLike(profileUserId);
-  const toggleSave = useToggleSave(profileUserId);
+  const toggleLike = useToggleLike(['publicProfile', profileUserId]);
+  const toggleSave = useToggleSave(['publicProfile', profileUserId]);
 
   const { width } = useWindowDimensions();
   const cardWidth = (width - SCREEN_PAD * 2 - GRID_GAP) / 2;
