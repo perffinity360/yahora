@@ -1118,19 +1118,6 @@ export default function Dashboard() {
        <div className={styles.ui1Btn}>
          <button
            className={styles.sellBtn}
-           onClick={() => {
-             if (isMobile) {
-               dashViewRef.current?.scrollIntoView({ behavior: "smooth" });
-             } else {
-               setIsDashboard(true);
-               window.scrollTo({ top: 0, behavior: "smooth" });
-             }
-           }}
-         >
-           Manage Your Items
-         </button>
-         <button
-           className={styles.sellBtn}
            style={{ width: "215px" }}
            onClick={() =>
              navigate(`/user/${localStorage.getItem("yahora_user_id")}`)
@@ -1138,8 +1125,7 @@ export default function Dashboard() {
          >
            View Your Public Profile
          </button>
-         
-         <button
+        <button
            className={styles.sellBtn}
            style={{ 
              width: "150px", 
@@ -1152,6 +1138,21 @@ export default function Dashboard() {
          >
            <PenIcon size={16} /> Edit Profile
          </button>
+         <button
+           className={styles.sellBtn}
+           onClick={() => {
+             if (isMobile) {
+               dashViewRef.current?.scrollIntoView({ behavior: "smooth" });
+             } else {
+               setIsDashboard(true);
+               window.scrollTo({ top: 0, behavior: "smooth" });
+             }
+           }}
+         >
+           Manage Your Items
+         </button>
+         
+        
        </div>
      </div>
 
@@ -1217,19 +1218,23 @@ export default function Dashboard() {
            </button>
          </div>
 
-         <div className={styles.listNewCard}>
-           <button
-             className={styles.listNewIcon}
-             onClick={() => {
-               navigate("/sell");
-               window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-             }}
-           >
+         {/* The whole card is the button — the plus is decorative. A nested
+             <button> would be invalid HTML and was the reason only the icon
+             responded to clicks. */}
+         <button
+           type="button"
+           className={styles.listNewCard}
+           onClick={() => {
+             navigate("/sell");
+             window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+           }}
+         >
+           <span className={styles.listNewIcon}>
              <PlusIcon size={20} />
-           </button>
+           </span>
            <div className={styles.listNewTitle}>List New Item</div>
            <div className={styles.listNewSub}>Earn some campus cash</div>
-         </div>
+         </button>
 
          <div className={styles.sidebarDetailsCard}>
            <div className={styles.detailRow}>
