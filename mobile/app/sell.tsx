@@ -22,11 +22,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../src/components/AuroraBackground';
+import { ProductCard } from '../src/components/ProductCard';
 import { PickerOption, SearchablePicker } from '../src/components/SearchablePicker';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useProduct } from '../src/hooks/useProduct';
 import { api } from '../src/lib/api';
+import { toUploadFile } from '../src/lib/upload';
 import { colors, font, radius, spacing } from '../src/theme';
+import type { ProductCardItem } from '../src/types';
 
 const BRAND_GRADIENT = [colors.purple, colors.pinkDark] as const;
 const MAX_IMAGES = 5;
@@ -74,6 +77,7 @@ export default function SellScreen() {
   const { width } = useWindowDimensions();
   const cardOuter = Math.min(width - SCREEN_PAD * 2, CARD_MAX_W);
   const tile = Math.floor((cardOuter - CARD_PAD * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS);
+  const previewWidth = Math.min(width * 0.6, 230);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -186,11 +190,10 @@ export default function SellScreen() {
         form.append('location', location.trim());
         form.append('condition', condition);
         images.forEach((asset) => {
-          form.append('images', {
-            uri: asset.uri,
-            name: asset.fileName ?? 'photo.jpg',
-            type: asset.mimeType ?? 'image/jpeg',
-          } as unknown as Blob);
+          form.append(
+            'images',
+            toUploadFile({ uri: asset.uri, name: asset.fileName ?? 'photo.jpg', type: asset.mimeType }),
+          );
         });
         await api.uploadForm('/api/products', form);
       }
@@ -208,6 +211,24 @@ export default function SellScreen() {
 
   const showPrefillLoader = isEditing && !seeded && productQuery.isLoading;
   const showPrefillError = isEditing && !seeded && productQuery.isError;
+
+  // Live preview of the card the campus will see, driven by the form state.
+  const previewImages = isEditing ? existingImages : images.map((a) => a.uri);
+  const previewProduct: ProductCardItem = {
+    id: 'preview',
+    title: title.trim() || 'Your item title',
+    price: Number(price) || 0,
+    condition: condition || 'Good',
+    status: 'available',
+    image_urls: previewImages,
+    created_at: new Date().toISOString(),
+    likes_count: 0,
+    views: 0,
+    comments_count: 0,
+    location: location.trim() || null,
+    is_liked: false,
+    is_saved: false,
+  };
 
   return (
     <View style={styles.root}>
@@ -489,6 +510,16 @@ export default function SellScreen() {
                     )}
                   </LinearGradient>
                 </Pressable>
+
+                {/* Live preview — how this item appears in the marketplace. */}
+                <View style={styles.previewSection}>
+                  <View style={styles.previewHeader}>
+                    <View style={styles.previewDot} />
+                    <Text style={styles.previewLabel}>LIVE PREVIEW</Text>
+                  </View>
+                  <Text style={styles.previewHint}>How your item appears in the marketplace</Text>
+                  <ProductCard product={previewProduct} style={{ width: previewWidth }} />
+                </View>
               </View>
             </ScrollView>
           )}
@@ -916,5 +947,35 @@ const styles = StyleSheet.create({
     height: 46,
     paddingHorizontal: spacing.xl,
     borderRadius: 999,
+  },
+
+  /* Live preview */
+  previewSection: {
+    marginTop: spacing.xl,
+    alignItems: 'center',
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  previewDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.pinkDark,
+  },
+  previewLabel: {
+    fontFamily: font.family.bold,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: colors.purpleDark,
+  },
+  previewHint: {
+    fontFamily: font.family.regular,
+    fontSize: 12,
+    color: colors.mutedText,
+    marginTop: 4,
+    marginBottom: spacing.md,
   },
 });
