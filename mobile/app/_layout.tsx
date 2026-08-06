@@ -12,6 +12,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
@@ -89,20 +90,23 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{ persister, maxAge: CACHE_MAX_AGE }}
-      >
-        <AuthProvider>
-          <AuthGate />
-        </AuthProvider>
-      </PersistQueryClientProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.flex}>
+      <SafeAreaProvider>
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={{ persister, maxAge: CACHE_MAX_AGE }}
+        >
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        </PersistQueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   splash: {
     flex: 1,
     alignItems: 'center',

@@ -22,6 +22,9 @@ export const colors = {
   errorText: '#B91C1C',
   successBg: '#F0FDF4',
   successText: '#15803D',
+  // Swipe-deck decision stamps (bright, mirrors the web's LIKE/PASS colours).
+  swipeLike: '#4ADE80',
+  swipePass: '#F87171',
   hairline: '#EEE6E2',
   demoCardPurpleBg: '#E5DBF5',
   demoCardPinkBg: '#F0DCE2',
