@@ -85,29 +85,54 @@ backend/src/
            university/(controller,routes) · user/(controller,routes)
 mobile/
   app.json · package.json · tsconfig.json · .env(.example)
+  (No babel.config.js — Expo's default transformer applies babel-preset-expo, which
+   auto-adds the react-native-worklets plugin because worklets is installed. Adding an
+   explicit babel.config.js broke the build here because babel-preset-expo is nested under
+   expo/node_modules and can't be resolved from the project root. Do NOT re-add one.)
   app/                              Expo Router routes
-    _layout.tsx                     root: QueryClient + AuthProvider + routing guard
-    (auth)/
-      _layout.tsx                   stack, no headers
-      login.tsx                     email + 8-digit OTP + demo, mirrors web Auth.jsx
-      onboarding.tsx                placeholder (Phase 3b will build the real form)
+    _layout.tsx                     root: GestureHandlerRootView + QueryClient + AuthProvider + routing guard
+    (auth)/                         login (8-digit OTP + demo) · onboarding
     (tabs)/
-      _layout.tsx                   tab bar
-      index.tsx                     Marketplace placeholder
+      _layout.tsx                   tab bar (Feather icons: shopping-bag / message-square / user)
+      index.tsx                     Marketplace: FlashList grid + swipe deck + filters/sort + campus switch
       messages.tsx                  Messages placeholder
-      profile.tsx                   Profile placeholder
+      profile.tsx                   Dashboard (own profile + listings/purchases, avatar, bio)
+    profile/[id].tsx                public profile (read-only)
+    edit-profile.tsx                edit-profile form
+    sell.tsx                        create/edit listing (multipart upload + live ProductCard preview)
   src/
-    theme/index.ts                  color, spacing, radius, font tokens
+    theme/index.ts                  color, spacing, radius, font tokens (+ conditionColors, swipeLike/swipePass)
     lib/
       api.ts                        fetch wrapper + base URL (trims + strips trailing slash)
       supabase.ts                   Supabase client (AsyncStorage session)
+      upload.ts                     toUploadFile(): FormData file part with .bytes() for Winter fetch
+      marketplace.ts                filter/sort constants + isWithinPostingDate + formatRupees
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
-    hooks/useUniversities.ts        TanStack Query hook
-    components/
-      UniversitiesModal.tsx         RN modal listing supported campuses
-      DemoModal.tsx                 RN modal: Sandbox Preview / Recorded Demo
-    types/index.ts                  University, UserProfile, Product
+    hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
+                                    useProductActions (useToggleLike/Save — take a query key) ·
+                                    useMarketplace (useMarketplaceFeed) · useMarketplaceFilters ·
+                                    useProduct · useAcademics · useAvatarActions
+    components/                     ProductCard · Skeleton · ExpandableBio · AvatarSheet ·
+                                    SearchablePicker · AuroraBackground · UniversitiesModal · DemoModal ·
+                                    FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert
+    types/index.ts                  University, UserProfile, Product, MarketplaceProduct, …
 ```
+
+## Mobile gotchas (learned the hard way)
+- **File uploads:** the global `fetch` is Expo SDK 56's **Winter** implementation. Its FormData
+  rejects React Native's classic `{ uri, name, type }` file part ("Unsupported FormDataPart
+  implementation"). Build parts with `toUploadFile()` (`src/lib/upload.ts`) — an object exposing
+  `name`, `type`, and a `bytes()` reader (via expo-file-system's `File`). Applies to every
+  `api.uploadForm` call (Sell images, avatar).
+- **Feed list:** `@shopify/flash-list` v2 (auto-sized, no `estimatedItemSize`); it needs the New
+  Architecture, which SDK 56 enables by default.
+- **Gestures/animation:** reanimated v4 + `react-native-worklets` + gesture-handler are installed and
+  configured. `GestureHandlerRootView` wraps the app in `app/_layout.tsx`; worklet transforms come
+  from babel-preset-expo (see the no-babel.config.js note above). `SwipeCard`/`SwipeDeck` use them.
+  `Skeleton` still uses core `Animated` (fine to keep).
+- **Root navigation is a `<Slot/>`** which unmounts inactive screens, so `router.back()` from a
+  detail screen resets the tabs to Marketplace. Navigate to a tab explicitly
+  (`router.replace('/(tabs)/profile')`) instead of relying on `back()`.
 
 When building a mobile screen, read the matching web file under
 `../frontend/src/pages/...` and its `.module.css` for design + behavior parity, and the

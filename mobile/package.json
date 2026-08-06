@@ -7,6 +7,7 @@
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/slider": "5.2.0",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@shopify/flash-list": "2.0.2",
     "@supabase/supabase-js": "^2.108.2",
@@ -27,9 +28,11 @@
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-gesture-handler": "~2.31.1",
+    "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
-    "react-native-url-polyfill": "^3.0.0"
+    "react-native-url-polyfill": "^3.0.0",
+    "react-native-worklets": "0.8.3"
   },
   "scripts": {
     "start": "expo start",

@@ -1,3 +1,4 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
 
 import { colors, font } from '../../src/theme';
@@ -13,9 +14,27 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: font.family.medium },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Marketplace' }} />
-      <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Dashboard' }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Marketplace',
+          tabBarIcon: ({ color, size }) => <Feather name="shopping-bag" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Messages',
+          tabBarIcon: ({ color, size }) => <Feather name="message-square" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Dashboard',
+          tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
+import { toUploadFile } from '../lib/upload';
 import type { UserProfile } from '../types';
 
 interface AvatarUploadResponse {
@@ -33,12 +34,10 @@ export function useAvatarActions(userId: string | null | undefined) {
   const uploadAvatar = useMutation({
     mutationFn: (vars: { uri: string; mimeType?: string; fileName?: string }) => {
       const form = new FormData();
-      // RN's fetch uploads a file descriptor object, not a Blob.
-      form.append('avatar', {
-        uri: vars.uri,
-        name: vars.fileName ?? 'avatar.jpg',
-        type: vars.mimeType ?? 'image/jpeg',
-      } as unknown as Blob);
+      form.append(
+        'avatar',
+        toUploadFile({ uri: vars.uri, name: vars.fileName ?? 'avatar.jpg', type: vars.mimeType }),
+      );
       return api.uploadForm<AvatarUploadResponse>(`/api/user/${userId}/avatar`, form);
     },
     onSuccess: (data) => syncAvatar(data.avatar_url),
