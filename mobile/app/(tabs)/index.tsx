@@ -28,6 +28,7 @@ import { useMarketplaceFilters } from '../../src/hooks/useMarketplaceFilters';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import { SORT_OPTIONS } from '../../src/lib/marketplace';
+import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { MarketplaceProduct, University } from '../../src/types';
 
@@ -123,13 +124,16 @@ export default function MarketplaceScreen() {
           product={item}
           isLiked={item.is_liked}
           isSaved={item.is_saved}
+          sellerName={item.seller?.full_name}
+          sellerAvatarUrl={item.seller?.avatar_url}
+          onPress={() => router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)'))}
           onLike={() => toggleLike.mutate({ productId: item.id })}
           onSave={() => toggleSave.mutate({ productId: item.id })}
           onShare={() => handleShare(item)}
         />
       </View>
     ),
-    [toggleLike, toggleSave],
+    [router, toggleLike, toggleSave],
   );
 
   const emptyTitle = filters.search.trim()

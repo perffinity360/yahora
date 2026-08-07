@@ -48,6 +48,37 @@ export interface MarketplaceProduct extends Product {
   is_saved?: boolean;
 }
 
+/** A single Q&A comment (or reply) on a product — rendered in the detail
+ *  screen's thread (part 2). `user_vote` is the viewer's own up/down state. */
+export interface ProductComment {
+  id: string;
+  content: string;
+  created_at: string;
+  upvotes: number;
+  downvotes: number;
+  parent_comment_id: string | null;
+  user: { id: string; full_name: string | null; avatar_url: string | null };
+  user_vote: -1 | 0 | 1;
+}
+
+/**
+ * The full product-detail payload (GET /api/products/:id): every product field
+ * plus the joined seller, the comment thread, and the viewer's interaction
+ * state. Superset of `Product`, so it slots into `ProductCardItem` too.
+ */
+export interface ProductDetailData extends Product {
+  seller: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    qualification: string | null;
+    year_of_study: string | null;
+  };
+  comments: ProductComment[];
+  is_liked?: boolean;
+  is_saved?: boolean;
+}
+
 /**
  * A product row as returned by the dashboard / public-profile endpoints. It is
  * the shared shape the reusable `ProductCard` renders. A full marketplace

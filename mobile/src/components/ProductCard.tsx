@@ -25,7 +25,8 @@ export function formatPrice(value: number): string {
   return `${n < 0 ? '-' : ''}₹${grouped}`;
 }
 
-function timeAgo(iso: string): string {
+/** Compact relative time ("5m ago"), falling back to a date past a month. */
+export function timeAgo(iso: string): string {
   if (!iso) return 'Just now';
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
@@ -54,6 +55,9 @@ export interface ProductCardProps {
   onDelete?: () => void;
   isLiked?: boolean;
   isSaved?: boolean;
+  /** Seller shown on the marketplace feed only (compact first-name tag). */
+  sellerName?: string | null;
+  sellerAvatarUrl?: string | null;
   /** When true, render the owner toolbar (chat / sold / edit / delete). */
   showManageActions?: boolean;
 }
@@ -105,6 +109,8 @@ function ProductCardBase({
   onDelete,
   isLiked,
   isSaved,
+  sellerName,
+  sellerAvatarUrl,
   showManageActions,
 }: ProductCardProps) {
   const image = product.image_urls?.[0];
@@ -116,6 +122,9 @@ function ProductCardBase({
   const liked = isLiked ?? product.is_liked ?? false;
   const saved = isSaved ?? product.is_saved ?? false;
   const showEngagementOnly = !showManageActions && !!(onSave || onShare);
+  const imageCount = product.image_urls?.length ?? 0;
+  const firstName = sellerName ? sellerName.trim().split(/\s+/)[0] : '';
+  const sellerInitial = firstName ? firstName.charAt(0).toUpperCase() : '?';
 
   return (
     <Pressable
@@ -135,6 +144,11 @@ function ProductCardBase({
           {sold ? (
             <View style={styles.soldOverlay}>
               <Text style={styles.soldText}>SOLD</Text>
+            </View>
+          ) : null}
+          {imageCount > 1 ? (
+            <View style={styles.imageCounter}>
+              <Text style={styles.imageCounterText}>1/{imageCount}</Text>
             </View>
           ) : null}
         </View>
@@ -228,6 +242,25 @@ function ProductCardBase({
                 label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
               />
               <IconBtn icon="share-2" onPress={onShare} label="Share" />
+              {firstName ? (
+                <View style={styles.sellerTag}>
+                  {sellerAvatarUrl ? (
+                    <Image
+                      source={{ uri: sellerAvatarUrl }}
+                      style={styles.sellerAvatar}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={styles.sellerAvatarFallback}>
+                      <Text style={styles.sellerInitial}>{sellerInitial}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.sellerName} numberOfLines={1}>
+                    {firstName}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -398,5 +431,56 @@ const styles = StyleSheet.create({
   iconBtnPressed: {
     backgroundColor: colors.pinkLight,
     transform: [{ scale: 0.94 }],
+  },
+
+  /* Image-count badge (bottom-right of the photo) */
+  imageCounter: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(20,20,20,0.62)',
+  },
+  imageCounterText: {
+    fontFamily: font.family.bold,
+    fontSize: 10.5,
+    color: colors.white,
+  },
+
+  /* Seller tag (marketplace feed only) — first name, truncates with … */
+  sellerTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginLeft: 'auto',
+    flexShrink: 1,
+    maxWidth: '58%',
+  },
+  sellerAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.inputBg,
+  },
+  sellerAvatarFallback: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.purple,
+  },
+  sellerInitial: {
+    fontFamily: font.family.bold,
+    fontSize: 9,
+    color: colors.white,
+  },
+  sellerName: {
+    flexShrink: 1,
+    fontFamily: font.family.semibold,
+    fontSize: 11,
+    color: colors.mutedText,
   },
 });

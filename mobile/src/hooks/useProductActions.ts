@@ -21,6 +21,10 @@ type Flip = (item: ListingLike) => ListingLike;
  *  preserves every other field at runtime, so the concrete row shape is kept. */
 function patchCachedListing(data: unknown, productId: string, flip: Flip): unknown {
   if (!data || typeof data !== 'object') return data;
+  // Product-detail cache (`['product', id]`) is a single listing object, not a
+  // feed — flip it in place so a like on the detail screen updates instantly.
+  const single = data as ListingLike;
+  if (single.id === productId) return flip(single);
   const feed = data as { products?: ListingLike[]; listings?: ListingLike[] };
   if (Array.isArray(feed.products)) {
     return { ...feed, products: feed.products.map((p) => (p.id === productId ? flip(p) : p)) };
@@ -35,6 +39,10 @@ function useListingToggle(
   queryKey: QueryKey,
   makeRequest: (productId: string, visitorId: string) => Promise<unknown>,
   flip: Flip,
+  // Feeds reconcile with the server by refetching on settle. The product-detail
+  // cache opts out (`false`): its GET re-increments the view counter, so a like
+  // must not trigger a refetch. The optimistic flip mirrors the server exactly.
+  invalidateOnSettle = true,
 ) {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
@@ -54,7 +62,9 @@ function useListingToggle(
     onError: (_e, _v, ctx) => {
       if (ctx?.prev !== undefined) queryClient.setQueryData(queryKey, ctx.prev);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey }),
+    onSettled: invalidateOnSettle
+      ? () => queryClient.invalidateQueries({ queryKey })
+      : undefined,
   });
 }
 
@@ -66,18 +76,20 @@ const flipLike: Flip = (item) => ({
 
 const flipSave: Flip = (item) => ({ ...item, is_saved: !item.is_saved });
 
-export function useToggleLike(queryKey: QueryKey) {
+export function useToggleLike(queryKey: QueryKey, invalidateOnSettle = true) {
   return useListingToggle(
     queryKey,
     (productId, visitorId) => api.post(`/api/products/${productId}/like`, { user_id: visitorId }),
     flipLike,
+    invalidateOnSettle,
   );
 }
 
-export function useToggleSave(queryKey: QueryKey) {
+export function useToggleSave(queryKey: QueryKey, invalidateOnSettle = true) {
   return useListingToggle(
     queryKey,
     (productId, visitorId) => api.post(`/api/products/${productId}/save`, { user_id: visitorId }),
     flipSave,
+    invalidateOnSettle,
   );
 }

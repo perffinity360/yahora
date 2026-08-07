@@ -27,6 +27,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useAvatarActions } from '../../src/hooks/useAvatarActions';
 import { useDashboard } from '../../src/hooks/useDashboard';
 import { useDashboardActions } from '../../src/hooks/useDashboardActions';
+import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { DashboardProfile, ProductListing, Purchase } from '../../src/types';
 
@@ -183,7 +184,9 @@ export default function ProfileScreen() {
               <ProfileHeader
                 profile={profile}
                 isDemoUser={isDemoUser}
-                onViewPublic={() => userId && router.push(`/profile/${userId}`)}
+                onViewPublic={() =>
+                  userId && router.push(hrefWithFrom(`/profile/${userId}`, '/(tabs)/profile'))
+                }
                 onEditProfile={() => router.push('/edit-profile')}
                 canViewPublic={!!userId}
                 onViewPhoto={() => setImageViewerOpen(true)}
@@ -233,6 +236,9 @@ export default function ProfileScreen() {
                           showManageActions
                           isLiked={item.is_liked}
                           isSaved={item.is_saved}
+                          onPress={() =>
+                            router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
+                          }
                           onLike={() =>
                             actions.toggleLike.mutate({ id: item.id, isLiked: !!item.is_liked })
                           }
