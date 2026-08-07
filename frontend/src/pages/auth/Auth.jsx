@@ -5,11 +5,27 @@ import UniversityModal from "../../components/modal/UniversityModal";
 import { useAuth } from "../../contexts/AuthContext";
 import styles from "./Auth.module.css";
 
+// Persisted across in-tab reloads so that opening the mail app on mobile to
+// fetch the OTP — which can drop the page from memory and reload it on return —
+// doesn't reset the user back to the email screen mid-verification. sessionStorage
+// is intentional: it survives reload/app-switch but clears when the tab is closed.
+const AUTH_STEP_KEY = "yahora_auth_step";
+const AUTH_EMAIL_KEY = "yahora_auth_email";
+
 const Auth = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [step, setStep] = useState(1); // 1: Email, 2: OTP
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(
+    () => sessionStorage.getItem(AUTH_EMAIL_KEY) || "",
+  );
+  // Only restore the OTP step if we also have the email it was sent to,
+  // otherwise the "code sent to <email>" screen would render blank.
+  const [step, setStep] = useState(() =>
+    sessionStorage.getItem(AUTH_STEP_KEY) === "2" &&
+    sessionStorage.getItem(AUTH_EMAIL_KEY)
+      ? 2
+      : 1,
+  ); // 1: Email, 2: OTP
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -39,6 +55,8 @@ const Auth = () => {
       );
       const data = await response.json();
       if (response.ok) {
+        sessionStorage.setItem(AUTH_STEP_KEY, "2");
+        sessionStorage.setItem(AUTH_EMAIL_KEY, email);
         setStep(2);
         setMessage(`Code sent to ${email}`);
       } else {
@@ -67,6 +85,10 @@ const Auth = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Verified — clear the persisted OTP step so a later visit to /auth
+        // (e.g. after logout) starts fresh on the email screen.
+        sessionStorage.removeItem(AUTH_STEP_KEY);
+        sessionStorage.removeItem(AUTH_EMAIL_KEY);
         localStorage.removeItem("yahora_demo_user");
 
         if (data.userProfile?.university_id) {
@@ -83,10 +105,14 @@ const Auth = () => {
           login(data.session.access_token, userId);
         }
 
+        // `replace` drops /auth out of the history stack entirely, so pressing
+        // back from here returns to whatever came before the login form instead
+        // of re-entering it (where GuestOnly would just bounce you forward
+        // again, making the back button look frozen).
         if (data.userProfile && data.userProfile.is_profile_complete) {
-          navigate("/dashboard");
+          navigate("/dashboard", { replace: true });
         } else {
-          navigate("/onboarding");
+          navigate("/onboarding", { replace: true });
         }
       } else {
         setMessage(data.message || "Invalid verification code.");
@@ -123,7 +149,8 @@ const Auth = () => {
         const userId = data.userProfile?.id || data.userAuth?.id;
         if (userId) login(data.session.access_token, userId);
 
-        navigate("/onboarding");
+        // Same as the OTP path: leave no /auth entry behind to go back to.
+        navigate("/onboarding", { replace: true });
       } else {
         setMessage(data.error || "Failed to launch demo environment.");
       }
@@ -267,7 +294,11 @@ const Auth = () => {
                   <button
                     type="button"
                     className={`${styles.textBtn} ${styles.mt2}`}
-                    onClick={() => setStep(1)}
+                    onClick={() => {
+                      sessionStorage.removeItem(AUTH_STEP_KEY);
+                      sessionStorage.removeItem(AUTH_EMAIL_KEY);
+                      setStep(1);
+                    }}
                   >
                     ← Wrong email? Go back
                   </button>

@@ -467,9 +467,8 @@
   .title {
     font-size: 0.95rem;
   }
-  .sellerName {
-    display: none; /* hide text, keep avatar */
-  }
+  /* Cards are a single full-width column on phones, so there's room to keep
+     the seller name ("by <name>") in the bottom-right — matching desktop. */
 }
 
 /* Tablet: tighten spacing slightly */

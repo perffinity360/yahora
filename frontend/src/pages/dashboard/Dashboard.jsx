@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
+import SmartImage from "../../components/SmartImage/SmartImage";
+import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar";
 
 /* ─────────────────────────────────────────────
  CONSTANTS
@@ -230,7 +232,7 @@ function Avatar({
            Wait...
          </div>
        ) : src ? (
-         <img src={src} alt="avatar" className={styles.avatarImg} />
+         <SmartImage src={src} alt="avatar" className={styles.avatarImg} />
        ) : (
          <div
            className={styles.avatarPlaceholder}
@@ -455,6 +457,8 @@ export default function Dashboard() {
        ...prev,
        profile: { ...prev.profile, avatar_url: responseData.avatar_url },
      }));
+     // Keep the navbar avatar in sync without a page refresh.
+     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
    } catch (e) {
      console.error("Failed to upload avatar:", e);
      alert("Failed to update profile photo.");
@@ -577,6 +581,10 @@ export default function Dashboard() {
          body: JSON.stringify({ [field]: value }),
        },
      );
+     // The navbar shows initials from the name — keep it in sync live.
+     if (field === "full_name") {
+       window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
+     }
    } catch (e) {
      console.error("Failed to update profile field:", e);
    }
@@ -602,6 +610,8 @@ export default function Dashboard() {
          body: JSON.stringify({ avatar_url: null }),
        },
      );
+     // Revert the navbar avatar to initials without a page refresh.
+     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
    } catch (e) {
      console.error("Failed to remove avatar:", e);
    }
