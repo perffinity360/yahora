@@ -20,7 +20,8 @@ interface Props {
 export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(width - SCREEN_PAD * 2, 340);
-  const deckHeight = cardWidth + 150;
+  // Sized to the actual card (image + info) so there's no dead space beneath it.
+  const deckHeight = cardWidth + 116;
 
   const [deck, setDeck] = useState<MarketplaceProduct[]>([]);
   const topRef = useRef<SwipeCardHandle>(null);
@@ -89,6 +90,14 @@ export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
         })}
       </View>
 
+      <Text style={styles.counter}>
+        {deck.length} item{deck.length !== 1 ? 's' : ''} left
+      </Text>
+
+      <View style={styles.spacer} />
+
+      {/* Bottom-left, sitting level with the List-an-item FAB (rendered by the
+          screen at bottom-right) so the two never collide. */}
       <View style={styles.buttons}>
         <Pressable
           onPress={() => topRef.current?.swipe('pass')}
@@ -96,7 +105,7 @@ export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
           accessibilityLabel="Pass"
           style={({ pressed }) => [styles.circleBtn, styles.passBtn, pressed && styles.circlePressed]}
         >
-          <Feather name="x" size={30} color={colors.swipePass} />
+          <Feather name="x" size={26} color={colors.swipePass} />
         </Pressable>
         <Pressable
           onPress={() => topRef.current?.swipe('like')}
@@ -104,14 +113,9 @@ export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
           accessibilityLabel="Like"
           style={({ pressed }) => [styles.circleBtn, styles.likeBtn, pressed && styles.circlePressed]}
         >
-          <Feather name="heart" size={27} color={colors.swipeLike} />
+          <Feather name="heart" size={24} color={colors.swipeLike} />
         </Pressable>
       </View>
-
-      <Text style={styles.counter}>
-        {deck.length} item{deck.length !== 1 ? 's' : ''} left
-      </Text>
-      <Text style={styles.hint}>Swipe right to like · left to pass</Text>
     </View>
   );
 }
@@ -121,20 +125,27 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingTop: spacing.md,
+    paddingHorizontal: SCREEN_PAD,
+    paddingBottom: spacing.lg,
   },
   deck: {
     alignSelf: 'center',
     position: 'relative',
   },
+  // Absorbs the space between the card and the bottom action row so the circles
+  // pin to the bottom (level with the FAB) regardless of screen height.
+  spacer: {
+    flex: 1,
+  },
   buttons: {
     flexDirection: 'row',
-    gap: spacing.xl,
-    marginTop: spacing.xl + spacing.md,
+    gap: spacing.sm,
+    alignSelf: 'flex-start',
   },
   circleBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
@@ -158,13 +169,7 @@ const styles = StyleSheet.create({
     fontFamily: font.family.semibold,
     fontSize: 13,
     color: colors.mutedText,
-    marginTop: spacing.lg,
-  },
-  hint: {
-    fontFamily: font.family.regular,
-    fontSize: 12,
-    color: colors.mutedLabel,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
 
   /* Empty */

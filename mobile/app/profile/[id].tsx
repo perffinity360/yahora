@@ -21,6 +21,7 @@ import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
 import { usePublicProfile } from '../../src/hooks/usePublicProfile';
+import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { PublicListing, PublicProfile } from '../../src/types';
 
@@ -43,8 +44,9 @@ function memberSince(iso?: string): string {
 
 export default function PublicProfileScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const profileUserId = typeof id === 'string' ? id : undefined;
+  const fromParam = typeof from === 'string' ? from : undefined;
 
   const { profile: viewer } = useAuth();
   const isOwnProfile = !!viewer?.id && viewer.id === profileUserId;
@@ -66,11 +68,11 @@ export default function PublicProfileScreen() {
     }
   }, [refetch]);
 
-  // The root layout renders a <Slot/>, which unmounts the tab navigator while a
-  // detail screen is on top — so router.back() re-mounts the tabs at their
-  // initial route (Marketplace) rather than where the user came from. This
-  // screen is only opened from the dashboard, so send them straight back there.
-  const goBack = () => router.replace('/(tabs)/profile');
+  // Root layout renders a <Slot/>, so router.back() re-mounts the tabs at their
+  // initial route rather than where the user came from. Return precisely via the
+  // `from` param each opener passes (the dashboard, or a product's seller card),
+  // falling back to the dashboard.
+  const goBack = () => router.replace(fromParam ?? '/(tabs)/profile');
 
   const handleShare = (item: PublicListing) => {
     Share.share({ message: `Check out "${item.title}" for ₹${item.price} on Yahora` }).catch(
@@ -136,10 +138,17 @@ export default function PublicProfileScreen() {
                       style={{ width: cardWidth }}
                       isLiked={item.is_liked}
                       isSaved={item.is_saved}
+                      onPress={() =>
+                        router.push(
+                          hrefWithFrom(
+                            `/product/${item.id}`,
+                            hrefWithFrom(`/profile/${profileUserId}`, fromParam),
+                          ),
+                        )
+                      }
                       onLike={() => toggleLike.mutate({ productId: item.id })}
                       onSave={() => toggleSave.mutate({ productId: item.id })}
                       onShare={() => handleShare(item)}
-                      // TODO: onPress → product detail screen (later phase).
                     />
                   ))}
                 </View>
