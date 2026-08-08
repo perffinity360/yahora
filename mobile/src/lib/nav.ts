@@ -12,5 +12,8 @@
  * Marketplace keeps every hop.
  */
 export function hrefWithFrom(path: string, from?: string | null): string {
-  return from ? `${path}?from=${encodeURIComponent(from)}` : path;
+  if (!from) return path;
+  // The path may already carry a query (e.g. /chat/:id?productId=…).
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}from=${encodeURIComponent(from)}`;
 }

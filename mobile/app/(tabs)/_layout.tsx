@@ -1,9 +1,13 @@
 import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
 
+import { useUnreadTotal } from '../../src/hooks/useMessages';
 import { colors, font } from '../../src/theme';
 
 export default function TabsLayout() {
+  // Derived from the inbox cache, so realtime arrivals move the badge instantly.
+  const unread = useUnreadTotal();
+
   return (
     <Tabs
       screenOptions={{
@@ -26,6 +30,13 @@ export default function TabsLayout() {
         options={{
           title: 'Messages',
           tabBarIcon: ({ color, size }) => <Feather name="message-square" size={size} color={color} />,
+          tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.pinkDark,
+            color: colors.white,
+            fontFamily: font.family.bold,
+            fontSize: 10,
+          },
         }}
       />
       <Tabs.Screen

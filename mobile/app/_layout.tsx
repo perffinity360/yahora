@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { RealtimeProvider } from '../src/contexts/RealtimeContext';
 import { colors } from '../src/theme';
 
 const CACHE_MAX_AGE = 1000 * 60 * 60 * 24;
@@ -97,7 +98,11 @@ export default function RootLayout() {
           persistOptions={{ persister, maxAge: CACHE_MAX_AGE }}
         >
           <AuthProvider>
-            <AuthGate />
+            {/* Owns the app's only realtime channel. It must sit above the
+                router so navigation can never unmount and re-subscribe it. */}
+            <RealtimeProvider>
+              <AuthGate />
+            </RealtimeProvider>
           </AuthProvider>
         </PersistQueryClientProvider>
       </SafeAreaProvider>

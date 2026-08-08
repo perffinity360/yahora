@@ -1,5 +1,4 @@
 import Feather from '@expo/vector-icons/Feather';
-import { Image } from 'expo-image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,9 +15,9 @@ import {
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { useAddComment, useVoteComment } from '../hooks/useComments';
-import { avatarHue, initialsOf } from '../lib/avatar';
 import { colors, font, radius, spacing } from '../theme';
 import type { ProductComment } from '../types';
+import { Avatar } from './Avatar';
 import { timeAgo } from './ProductCard';
 
 /**
@@ -126,7 +125,7 @@ export function CommentSection({
           accessibilityLabel="Ask the seller a question"
           style={({ pressed }) => [styles.prompt, pressed && styles.promptPressed]}
         >
-          <CommentAvatar name={viewerName} uri={viewerAvatarUrl} size={30} />
+          <Avatar name={viewerName} uri={viewerAvatarUrl} size={30} />
           <Text style={styles.promptText} numberOfLines={1}>
             Ask the seller a question…
           </Text>
@@ -246,7 +245,7 @@ function CommentCard({
 
   return (
     <View style={styles.commentRow}>
-      <CommentAvatar
+      <Avatar
         name={comment.user.full_name}
         uri={comment.user.avatar_url}
         size={compact ? 28 : 34}
@@ -431,32 +430,6 @@ function ReplyComposer({
           </Pressable>
         </View>
       </View>
-    </View>
-  );
-}
-
-/* ────────────────────────── Avatar ────────────────────────── */
-export function CommentAvatar({
-  name,
-  uri,
-  size,
-}: {
-  name?: string | null;
-  uri?: string | null;
-  size: number;
-}) {
-  const dims = { width: size, height: size, borderRadius: size / 2 };
-
-  if (uri) {
-    return (
-      <Image source={{ uri }} style={[styles.avatar, dims]} contentFit="cover" transition={180} />
-    );
-  }
-  return (
-    <View style={[styles.avatar, dims, { backgroundColor: avatarHue(name) }]}>
-      <Text style={[styles.avatarInitials, { fontSize: Math.round(size * 0.38) }]}>
-        {initialsOf(name) || '?'}
-      </Text>
     </View>
   );
 }
@@ -757,18 +730,6 @@ const styles = StyleSheet.create({
   sendReplyText: {
     fontFamily: font.family.bold,
     fontSize: 12.5,
-    color: colors.white,
-  },
-
-  /* Avatar */
-  avatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.pinkLight,
-    overflow: 'hidden',
-  },
-  avatarInitials: {
-    fontFamily: font.family.bold,
     color: colors.white,
   },
 });

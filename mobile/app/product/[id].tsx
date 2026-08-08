@@ -22,18 +22,14 @@ import {
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  CommentAvatar,
-  CommentSection,
-  MAX_COMMENT_LENGTH,
-} from '../../src/components/CommentThread';
+import { Avatar } from '../../src/components/Avatar';
+import { CommentSection, MAX_COMMENT_LENGTH } from '../../src/components/CommentThread';
 import { formatPrice } from '../../src/components/ProductCard';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useAddComment } from '../../src/hooks/useComments';
 import { useProductDetail } from '../../src/hooks/useProductDetail';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
-import { avatarHue, initialsOf } from '../../src/lib/avatar';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, conditionColors, font, radius, spacing } from '../../src/theme';
 import type { ProductDetailData } from '../../src/types';
@@ -120,6 +116,9 @@ export default function ProductDetailScreen() {
                   ),
                 )
               }
+              onOpenChat={(href) =>
+                router.push(hrefWithFrom(href, hrefWithFrom(`/product/${product.id}`, fromParam)))
+              }
             />
           ) : null}
 
@@ -164,6 +163,7 @@ function Content({
   onLike,
   onSave,
   onOpenSeller,
+  onOpenChat,
 }: {
   product: ProductDetailData;
   width: number;
@@ -177,6 +177,7 @@ function Content({
   onLike: () => void;
   onSave: () => void;
   onOpenSeller: () => void;
+  onOpenChat: (href: string) => void;
 }) {
   const galleryHeight = Math.min(width, 460);
   const cond =
@@ -195,10 +196,20 @@ function Content({
     .filter(Boolean)
     .join(' · ');
 
+  // Seller name / product details ride along as params so the chat header is
+  // populated on the very first frame, before the inbox row exists at all.
   const handleMessageSeller = () => {
-    // TODO(messaging phase): open the chat thread with this seller about this
-    // product, e.g. router.push(`/messages?user=${product.seller.id}&product=${product.id}`).
-    Alert.alert('Coming soon', 'Messaging sellers ships in the next update.');
+    const query = Object.entries({
+      productId: product.id,
+      contactName: product.seller.full_name ?? '',
+      contactAvatar: product.seller.avatar_url ?? '',
+      productTitle: product.title ?? '',
+      productImage: product.image_urls?.[0] ?? '',
+    })
+      .filter(([, value]) => !!value)
+      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+      .join('&');
+    onOpenChat(`/chat/${product.seller.id}?${query}`);
   };
 
   /* ── Q&A composer ──
@@ -337,20 +348,7 @@ function Content({
               accessibilityLabel={`View ${product.seller.full_name ?? 'seller'}'s profile`}
               style={({ pressed }) => [styles.sellerRow, pressed && styles.sellerRowPressed]}
             >
-              {product.seller.avatar_url ? (
-                <Image
-                  source={{ uri: product.seller.avatar_url }}
-                  style={styles.sellerAvatar}
-                  contentFit="cover"
-                  transition={200}
-                />
-              ) : (
-                <View style={[styles.sellerAvatar, { backgroundColor: avatarHue(product.seller.full_name) }]}>
-                  <Text style={styles.sellerInitials}>
-                    {initialsOf(product.seller.full_name) || '?'}
-                  </Text>
-                </View>
-              )}
+              <Avatar name={product.seller.full_name} uri={product.seller.avatar_url} size={48} />
               <View style={styles.sellerInfo}>
                 <Text style={styles.sellerName} numberOfLines={1}>
                   {product.seller.full_name || 'Yahora student'}
@@ -407,7 +405,7 @@ function Content({
             </Pressable>
           </View>
           <View style={styles.composerRow}>
-            <CommentAvatar name={viewerName} uri={viewerAvatarUrl} size={34} />
+            <Avatar name={viewerName} uri={viewerAvatarUrl} size={34} />
             <TextInput
               value={draft}
               onChangeText={setDraft}
@@ -758,20 +756,6 @@ const styles = StyleSheet.create({
   },
   sellerRowPressed: {
     opacity: 0.7,
-  },
-  sellerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.pinkLight,
-    overflow: 'hidden',
-  },
-  sellerInitials: {
-    fontFamily: font.family.bold,
-    fontSize: 17,
-    color: colors.white,
   },
   sellerInfo: {
     flex: 1,

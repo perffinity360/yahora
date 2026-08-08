@@ -126,6 +126,50 @@ export interface ProductCardItem {
   is_saved?: boolean;
 }
 
+/* ────────────────────────── Messaging ────────────────────────── */
+
+/** A row of the `messages` table, exactly as realtime and the REST API return it. */
+export interface Message {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  product_id: string;
+  university_id: string;
+  content: string;
+  is_read: boolean;
+  is_delivered: boolean;
+  created_at: string;
+}
+
+/**
+ * One conversation summary from GET /api/messages/inbox/:userId (the
+ * `get_user_inbox` RPC) — one row per contact + product, newest first.
+ */
+export interface InboxItem {
+  contact_id: string;
+  contact_name: string | null;
+  contact_avatar: string | null;
+  product_id: string;
+  product_title: string | null;
+  product_image: string | null;
+  last_message: string | null;
+  last_message_time: string | null;
+  unread_count: number;
+}
+
+/**
+ * A message in the chat cache, which also holds not-yet-confirmed sends.
+ *
+ * A confirmed message is identified by its server `id`; an optimistic one by its
+ * `client_tag` (its `id` is the tag until the server replies). Every insert path
+ * must check BOTH before appending, or the same bubble shows up twice.
+ */
+export type PendingMessage = Message & {
+  pending?: boolean;
+  failed?: boolean;
+  client_tag?: string;
+};
+
 /** Read-only profile as returned by GET /api/user/:id/public. */
 export interface PublicProfile {
   id: string;
