@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { Routes, Route, useLocation, useNavigationType } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigationType } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
 import Navbar from './components/navbar/navbar';
 import Footer from './components/footer/footer';
 import Auth from './pages/auth/Auth';
@@ -11,6 +12,21 @@ import Marketplace from './pages/marketplace/Marketplace';
 import ProductDetail from "./pages/product/ProductDetail";
 import PublicProfile from "./pages/publicProfile/PublicProfile";
 import Messages from "./pages/messages/Messages";
+
+// Keep logged-in users off the auth page: reaching /auth (via the back button,
+// a stale link, or a typed URL) sends them home instead of showing the login
+// form again. `replace` overwrites the /auth history entry rather than stacking
+// on top of it, so the next back press doesn't land straight back here.
+// AuthProvider gates rendering on its loading flag, so isAuthenticated is already
+// resolved here — no flash of the auth form before redirecting.
+//
+// Anything that signs a user out must go through AuthContext's logout() (which
+// flips isAuthenticated) rather than clearing localStorage by hand — otherwise
+// this guard still reads "logged in" and locks them out of the login form.
+function GuestOnly({ children }) {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <Navigate to="/" replace /> : children;
+}
 
 function App() {
   const location = useLocation(); // Get current route
@@ -84,7 +100,7 @@ function App() {
       <main style={{ flex: 1, minHeight: 0 }}>
         <Routes>
           <Route path= "/" element={<Home/>} />
-          <Route path="/auth" element={<Auth />} />
+          <Route path="/auth" element={<GuestOnly><Auth /></GuestOnly>} />
           <Route path="/feed" element={<div className="container mt-4"><h3>Community Feed</h3></div>} />
           <Route path="/hot" element={<div className="container mt-4"><h3>Hot Items on Campus</h3></div>} />
           <Route path="/onboarding" element={<Onboarding />} />

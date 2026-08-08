@@ -370,8 +370,13 @@
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
   animation: sidebarChildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
 }
+/* This is a <button>: the ENTIRE card is the click target, right out to the
+   dashed border. It needs the usual button resets to keep rendering as a card. */
 .listNewCard {
-  background: white;
+  width: 100%;
+  font-family: inherit;
+  text-align: center;
+  background: var(--white);
   border-radius: 24px;
   padding: 24px;
   display: flex;
@@ -380,14 +385,85 @@
   gap: 10px;
   cursor: pointer;
   border: 2px dashed #e8e0e8;
+  position: relative;
+  overflow: hidden;
   transition:
     border-color 0.25s ease,
-    background 0.25s ease;
+    background 0.25s ease,
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
   animation: sidebarChildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.28s both;
 }
+
+/* Soft glow that blooms from behind the plus on hover. */
+.listNewCard::before {
+  content: "";
+  position: absolute;
+  top: -30%;
+  left: 50%;
+  width: 180px;
+  height: 180px;
+  transform: translateX(-50%) scale(0.6);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(128, 0, 128, 0.13) 0%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition:
+    opacity 0.3s ease,
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.listNewCard:hover::before {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
 .listNewCard:hover {
   border-color: var(--purple);
+  border-style: solid;
   background: var(--pink-light);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(128, 0, 128, 0.15);
+}
+.listNewCard:active {
+  transform: translateY(-1px) scale(0.985);
+  box-shadow: 0 6px 16px rgba(128, 0, 128, 0.12);
+}
+.listNewCard:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+}
+
+/* Hovering ANYWHERE on the card drives the icon and text, so the whole
+   surface reads as a single control rather than a card with a button in it. */
+.listNewCard:hover .listNewIcon {
+  background: linear-gradient(135deg, var(--purple), var(--pink-dark));
+  color: var(--white);
+  transform: rotate(90deg) scale(1.08);
+  box-shadow: 0 8px 20px rgba(128, 0, 128, 0.32);
+}
+.listNewCard:hover .listNewTitle {
+  color: var(--purple-dark);
+}
+.listNewCard:hover .listNewSub {
+  color: var(--purple);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listNewCard,
+  .listNewCard::before,
+  .listNewCard .listNewIcon {
+    transition: none;
+  }
+  .listNewCard:hover {
+    transform: none;
+  }
+  .listNewCard:hover .listNewIcon {
+    transform: none;
+  }
 }
 
 .sidebarActions {
@@ -478,6 +554,14 @@
   gap: 12px;
 }
 
+/* Decorative only — the parent .listNewCard is the actual button. pointer-events
+   are off so every click lands on the card itself, no matter what's under the
+   cursor. */
+.listNewIcon,
+.listNewTitle,
+.listNewSub {
+  pointer-events: none;
+}
 .listNewIcon {
   width: 50px;
   height: 50px;
@@ -491,18 +575,31 @@
   border: none;
   outline: none;
   padding: 0;
-  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transition:
+    background 0.28s ease,
+    color 0.28s ease,
+    box-shadow 0.28s ease,
+    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .listNewTitle {
   font-weight: 700;
   font-size: 1rem;
   color: var(--black-soft);
+  position: relative;
+  z-index: 1;
+  transition: color 0.25s ease;
 }
 .listNewSub {
   font-size: 0.8rem;
   color: #aaa;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  position: relative;
+  z-index: 1;
+  transition: color 0.25s ease;
 }
 
 .sidebarIconBtn {

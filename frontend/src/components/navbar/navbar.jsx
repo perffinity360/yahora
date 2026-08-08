@@ -1,9 +1,15 @@
 // frontend\src\components\navbar\navbar.jsx
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import styles from "./navbar.module.css";
 import { supabase } from "../../config/supabaseClient";
+import SmartImage from "../SmartImage/SmartImage";
+
+// Broadcast this after the user changes their profile photo / name so the
+// navbar (mounted since login) re-fetches instead of showing stale initials
+// until the next full page refresh.
+export const PROFILE_UPDATED_EVENT = "yahora:profile-updated";
 
 // ─────────────────────────────────────────────
 // ICONS
@@ -132,34 +138,42 @@ function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch the user's avatar from the backend
-  useEffect(() => {
-    const fetchAvatar = async () => {
-      if (isAuthenticated) {
-        const userId = localStorage.getItem("yahora_user_id");
-        const token = localStorage.getItem("yahora_session");
-        if (userId && token) {
-          try {
-            const res = await fetch(
-              `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/dashboard`,
-              { headers: { Authorization: `Bearer ${token}` } },
-            );
-            if (res.ok) {
-              const data = await res.json();
-              if (data.profile && data.profile.avatar_url)
-                setAvatarUrl(data.profile.avatar_url);
-              if (data.profile.full_name) setUserName(data.profile.full_name);
-            }
-          } catch (e) {
-            console.error("Could not load avatar:", e);
+  // Fetch the user's avatar + name from the backend
+  const fetchAvatar = useCallback(async () => {
+    if (isAuthenticated) {
+      const userId = localStorage.getItem("yahora_user_id");
+      const token = localStorage.getItem("yahora_session");
+      if (userId && token) {
+        try {
+          const res = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/dashboard`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (res.ok) {
+            const data = await res.json();
+            // Fall back to null so a removed photo reverts to initials.
+            setAvatarUrl(data.profile?.avatar_url || null);
+            if (data.profile?.full_name) setUserName(data.profile.full_name);
           }
+        } catch (e) {
+          console.error("Could not load avatar:", e);
         }
-      } else {
-        setAvatarUrl(null);
       }
-    };
-    fetchAvatar();
+    } else {
+      setAvatarUrl(null);
+    }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchAvatar();
+  }, [fetchAvatar]);
+
+  // Re-fetch when the profile is updated elsewhere (onboarding, dashboard)
+  // so a newly set photo/name shows in the navbar without a page refresh.
+  useEffect(() => {
+    window.addEventListener(PROFILE_UPDATED_EVENT, fetchAvatar);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, fetchAvatar);
+  }, [fetchAvatar]);
 
   useEffect(() => {
     const userId = localStorage.getItem("yahora_user_id");
@@ -337,7 +351,7 @@ function Navbar() {
                 }
               >
                 {avatarUrl ? (
-                  <img
+                  <SmartImage
                     src={avatarUrl}
                     alt="User Avatar"
                     className={styles.navAvatarImg}

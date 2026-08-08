@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
+import SmartImage from "../../components/SmartImage/SmartImage";
+import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar";
 
 /* ─────────────────────────────────────────────
  CONSTANTS
@@ -230,7 +232,7 @@ function Avatar({
            Wait...
          </div>
        ) : src ? (
-         <img src={src} alt="avatar" className={styles.avatarImg} />
+         <SmartImage src={src} alt="avatar" className={styles.avatarImg} />
        ) : (
          <div
            className={styles.avatarPlaceholder}
@@ -455,6 +457,8 @@ export default function Dashboard() {
        ...prev,
        profile: { ...prev.profile, avatar_url: responseData.avatar_url },
      }));
+     // Keep the navbar avatar in sync without a page refresh.
+     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
    } catch (e) {
      console.error("Failed to upload avatar:", e);
      alert("Failed to update profile photo.");
@@ -577,6 +581,10 @@ export default function Dashboard() {
          body: JSON.stringify({ [field]: value }),
        },
      );
+     // The navbar shows initials from the name — keep it in sync live.
+     if (field === "full_name") {
+       window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
+     }
    } catch (e) {
      console.error("Failed to update profile field:", e);
    }
@@ -602,6 +610,8 @@ export default function Dashboard() {
          body: JSON.stringify({ avatar_url: null }),
        },
      );
+     // Revert the navbar avatar to initials without a page refresh.
+     window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
    } catch (e) {
      console.error("Failed to remove avatar:", e);
    }
@@ -1118,19 +1128,6 @@ export default function Dashboard() {
        <div className={styles.ui1Btn}>
          <button
            className={styles.sellBtn}
-           onClick={() => {
-             if (isMobile) {
-               dashViewRef.current?.scrollIntoView({ behavior: "smooth" });
-             } else {
-               setIsDashboard(true);
-               window.scrollTo({ top: 0, behavior: "smooth" });
-             }
-           }}
-         >
-           Manage Your Items
-         </button>
-         <button
-           className={styles.sellBtn}
            style={{ width: "215px" }}
            onClick={() =>
              navigate(`/user/${localStorage.getItem("yahora_user_id")}`)
@@ -1138,8 +1135,7 @@ export default function Dashboard() {
          >
            View Your Public Profile
          </button>
-         
-         <button
+        <button
            className={styles.sellBtn}
            style={{ 
              width: "150px", 
@@ -1152,6 +1148,21 @@ export default function Dashboard() {
          >
            <PenIcon size={16} /> Edit Profile
          </button>
+         <button
+           className={styles.sellBtn}
+           onClick={() => {
+             if (isMobile) {
+               dashViewRef.current?.scrollIntoView({ behavior: "smooth" });
+             } else {
+               setIsDashboard(true);
+               window.scrollTo({ top: 0, behavior: "smooth" });
+             }
+           }}
+         >
+           Manage Your Items
+         </button>
+         
+        
        </div>
      </div>
 
@@ -1217,19 +1228,23 @@ export default function Dashboard() {
            </button>
          </div>
 
-         <div className={styles.listNewCard}>
-           <button
-             className={styles.listNewIcon}
-             onClick={() => {
-               navigate("/sell");
-               window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-             }}
-           >
+         {/* The whole card is the button — the plus is decorative. A nested
+             <button> would be invalid HTML and was the reason only the icon
+             responded to clicks. */}
+         <button
+           type="button"
+           className={styles.listNewCard}
+           onClick={() => {
+             navigate("/sell");
+             window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+           }}
+         >
+           <span className={styles.listNewIcon}>
              <PlusIcon size={20} />
-           </button>
+           </span>
            <div className={styles.listNewTitle}>List New Item</div>
            <div className={styles.listNewSub}>Earn some campus cash</div>
-         </div>
+         </button>
 
          <div className={styles.sidebarDetailsCard}>
            <div className={styles.detailRow}>

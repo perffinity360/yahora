@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import styles from "./Marketplace.module.css";
 import { supabase } from "../../config/supabaseClient";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   Search,
   LayoutGrid,
@@ -409,6 +410,7 @@ function FilterSection({ icon, title, children, defaultOpen = false }) {
 
 export default function Marketplace() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [currentUserId] = useState(localStorage.getItem("yahora_user_id"));
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
   const [universities, setUniversities] = useState([]);
@@ -1013,9 +1015,12 @@ export default function Marketplace() {
               <button 
                 className={styles.demoAlertBtnPrimary} 
                 onClick={() => {
-                  localStorage.removeItem("yahora_demo_user");
-                  localStorage.removeItem("yahora_session");
-                  localStorage.removeItem("yahora_user_id");
+                  // Must be logout(), not a hand-rolled localStorage clear:
+                  // only logout() flips AuthContext's isAuthenticated, and the
+                  // GuestOnly guard on /auth reads that flag. Clearing the keys
+                  // directly leaves the context believing we're still signed in,
+                  // which bounces this button straight back to the home page.
+                  logout();
                   navigate("/auth");
                 }}
               >
