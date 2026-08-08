@@ -10,7 +10,8 @@
   /* Pink */
   --pink: #FF78A6;
   --pink-dark: #EB487F;
-  --pink-light: ##f4e0e4;
+  --pink-light: #f4e0e4; /* was "##f4e0e4" — the stray # made this invalid, so
+                            every var(--pink-light) silently resolved to nothing */
   --pink-bg: #fef4f6;
   --pink-emphasis: #300B15; 
 

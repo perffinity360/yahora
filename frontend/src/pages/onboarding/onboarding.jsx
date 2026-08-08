@@ -15,6 +15,8 @@ import {
 import styles from "./onboarding.module.css";
 // IMPORT YOUR FRONTEND SUPABASE CLIENT
 import { supabase } from "../../config/supabaseClient.js";
+import SmartImage from "../../components/SmartImage/SmartImage.jsx";
+import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar.jsx";
 
 // A searchable react-select wrapper with two behaviours the plain <Select>
 // lacks on this page:
@@ -274,6 +276,8 @@ const Onboarding = () => {
      const data = await response.json();
 
      if (response.ok) {
+       // Tell the navbar (mounted since login) to pull the new photo/name.
+       window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
        navigate("/dashboard");
      } else {
        setError(data.error || data.message || "Failed to save profile.");
@@ -381,7 +385,7 @@ const Onboarding = () => {
            <div className={styles.avatarUploadWrapper}>
              <div className={styles.avatarPreview}>
                {formData.avatarUrl ? (
-                 <img
+                 <SmartImage
                    src={formData.avatarUrl}
                    alt="Profile preview"
                    style={{

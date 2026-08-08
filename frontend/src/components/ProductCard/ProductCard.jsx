@@ -8,6 +8,7 @@ import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../../config/supabaseClient";
 import styles from "./ProductCard.module.css";
+import SmartImage from "../SmartImage/SmartImage";
 
 /**
  * Copy text without assuming a secure context. navigator.clipboard is undefined
@@ -593,7 +594,7 @@ const ProductCard = memo(function ProductCard({
           style={{ transform: `translateX(-${imgIndex * 100}%)` }}
         >
           {images.map((url, i) => (
-            <img
+            <SmartImage
               key={i}
               src={url}
               alt={`${product.title} ${i + 1}`}
@@ -601,8 +602,10 @@ const ProductCard = memo(function ProductCard({
               loading={i === 0 ? "eager" : "lazy"}
               draggable={false}
               onError={(e) => {
-                // Broken image: hide it so the grey placeholder shows through
-                // instead of sprawling alt text that overflows the card.
+                // Only reached once SmartImage's retries are exhausted (a
+                // freshly-uploaded image that's still propagating gets caught
+                // by the retry first). Genuinely broken: hide it so the grey
+                // placeholder shows through instead of sprawling alt text.
                 e.currentTarget.style.visibility = "hidden";
               }}
             />
