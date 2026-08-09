@@ -644,8 +644,7 @@ every TODO you raised.
 ```
 Read docs/YAHORA_BUILD_PLAN.md §0.1, §0.2, §0.5 and §0.B/0.C.
 
-TASK: Create the files that let two developers in separate Claude Code
-sessions stay coordinated.
+(create files if not present and modify if present)
 
 1. Root CLAUDE.md — ADD (do not replace the existing content):
    - The "Repo ownership" section from plan §0.D
@@ -675,20 +674,15 @@ sessions stay coordinated.
         why RLS does not protect your Express routes
      5. Cursor pagination vs offset pagination
 
-   CRITICAL for these entries: the audience is two developers with
-   under two years of experience. Write each one fresh for a beginner.
-   Do not compress into revision notes. Every worked example must use
-   THIS project's real tables and columns — users, products, follows,
-   posts — never generic foo/bar examples. Show the wrong version and
-   the right version side by side where it helps.
+   CRITICAL for these entries: the audience is developers with
+   under 1 years of experience. Write each one fresh for a beginner.
+   Compressed bullets points.
 
 HARD CONSTRAINTS:
 - Do NOT touch frontend/CLAUDE.md or mobile/CLAUDE.md. Different owner.
 - Do NOT modify any .js file.
 - Preserve all existing content in the root CLAUDE.md.
 
-When done, print the five LEARNINGS entry titles and confirm each one
-uses a real table from this repo in its example.
 ```
 
 ---
