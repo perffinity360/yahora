@@ -16,6 +16,19 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
+// ─── SAFETY GUARD ───────────────────────────────────────────
+// This script creates users and products. It must never run
+// against production. SUPABASE_URL must be the local instance.
+const url = process.env.SUPABASE_URL || '';
+if (!url.includes('127.0.0.1') && !url.includes('localhost')) {
+  console.error('\n❌ Refusing to seed a non-local database.');
+  console.error('   SUPABASE_URL =', url || '(not set)');
+  console.error('   Expected http://127.0.0.1:54321');
+  console.error('   Fix backend/.env, then try again.\n');
+  process.exit(1);
+}
+// ────────────────────────────────────────────────────────────
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
