@@ -155,3 +155,35 @@ REVOKE ALL ON FUNCTION public.cleanup_demo_users() FROM anon, authenticated;
 REVOKE ALL ON FUNCTION public.increment_product_likes(uuid) FROM anon;
 
 REVOKE ALL ON FUNCTION public.decrement_product_likes(uuid) FROM anon;
+
+
+-- ------------------------------------------------------------
+-- 4. The revokes above are not enough on their own
+--
+-- When PostgreSQL creates a function it automatically grants
+-- EXECUTE on it to the special role PUBLIC. PUBLIC is not a role
+-- you can add members to — it means "every role that exists or
+-- ever will exist", and every role inherits its privileges
+-- implicitly. anon is therefore able to execute these functions
+-- through PUBLIC even after the explicit grant to anon is
+-- revoked, because REVOKE only removes the privilege it names.
+--
+-- So `REVOKE ... FROM anon` above silently did nothing: it took
+-- away a grant that was redundant, and left the inherited one in
+-- place. The privilege has to be taken from PUBLIC itself.
+--
+-- service_role keeps its access: the baseline migration issues an
+-- explicit GRANT ALL ... TO service_role on each of these, and
+-- revoking from PUBLIC does not touch an explicit grant to a named
+-- role. The demo-cleanup cron in backend/src/utils/cronJobs.js
+-- uses the service-role client, so it is unaffected.
+--
+-- NOT revoked here, deliberately: increment_page_view() and
+-- increment_product_views(uuid). Both are called from frontend/
+-- with the anon key. Revoking them would break the footer visitor
+-- counter and the product view counter.
+-- ------------------------------------------------------------
+
+REVOKE ALL ON FUNCTION public.cleanup_demo_users()          FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.increment_product_likes(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.decrement_product_likes(uuid) FROM PUBLIC;
