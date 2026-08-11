@@ -4,15 +4,20 @@
 
 SET check_function_bodies = false;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_privileged_role') THEN
-    CREATE ROLE supabase_privileged_role;
-  END IF;
-END
-$$;
-
-GRANT supabase_privileged_role TO postgres;
+-- REMOVED: a DO block that conditionally created the role
+-- supabase_privileged_role, and a following
+-- `GRANT supabase_privileged_role TO postgres;`.
+--
+-- supabase_privileged_role is a Supabase platform role. It is not part
+-- of this project's schema and does not belong in our migrations. It
+-- appeared in the generated baseline only because of a stale local
+-- Postgres volume at the time the diff was created.
+--
+-- On a current Supabase image the role already exists and is owned by
+-- supabase_admin. Migrations run as postgres, which holds no ADMIN
+-- OPTION on it, so the GRANT fails with SQLSTATE 42501
+-- (insufficient_privilege). The CREATE was already a no-op behind its
+-- IF NOT EXISTS guard.
 
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT DELETE, INSERT, SELECT, UPDATE ON TABLES TO anon;
 
