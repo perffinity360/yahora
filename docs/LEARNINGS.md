@@ -27,6 +27,104 @@ example uses **our** tables, not a generic `foo`/`bar` one.
 
 ---
 
+## 2026-08-11 — `PUBLIC` is not "everyone else", and why our REVOKE did nothing
+
+**Where it came up:** `supabase/migrations/20260809141828_performance_and_grants.sql`. We wrote
+three `REVOKE ALL ON FUNCTION ... FROM anon` statements to stop the anon role calling functions
+that delete accounts and edit like counters. They ran without error and changed nothing.
+
+**The problem:**
+- The migration applied cleanly. No warning, no error, no output.
+- `anon` could still execute all three functions afterwards.
+- A `REVOKE` that does nothing looks *identical* to a `REVOKE` that works. This is the trap.
+
+**The concept:**
+- In PostgreSQL, permission on an object is a list of grants: *this role may do this thing*.
+- There is one special entry in that list called **`PUBLIC`**. It is not a role you can log in
+  as and it is not a group you add members to. It means **"every role, including ones that
+  don't exist yet"**. Every role's effective permissions are `(what it was granted directly)`
+  **plus** `(what PUBLIC was granted)`.
+- **When you `CREATE FUNCTION`, PostgreSQL automatically grants `EXECUTE` on it to `PUBLIC`.**
+  You don't write this and you don't see it. It is the default, and it applies to every function
+  in our database. (Tables are the opposite — a new table grants nothing to anyone.)
+- `REVOKE` only removes **the exact grant you name**. `REVOKE ... FROM anon` removes anon's
+  direct grant. It does not, and cannot, remove the `PUBLIC` grant that anon *also* inherits.
+- So after our revoke, anon's access came from a path we never touched:
+
+  ```
+  anon's EXECUTE on cleanup_demo_users()
+    ├── direct grant to anon        ← we revoked this one ✅
+    └── grant to PUBLIC (automatic) ← still there, still works ❌
+  ```
+
+- The fix is to revoke from `PUBLIC` itself. **This is safe for roles we still want to have
+  access**, as long as they hold an *explicit* grant: revoking from `PUBLIC` never touches a
+  grant made to a named role. Our baseline migration says
+  `GRANT ALL ON FUNCTION public.cleanup_demo_users() TO service_role`, so service_role keeps
+  working, and the demo-cleanup cron in `backend/src/utils/cronJobs.js` — which uses the
+  service-role client — is unaffected.
+- The general shape: **`REVOKE FROM PUBLIC` first, then `GRANT` back to exactly who needs it.**
+  Locking down and then opening up is safe. Opening up and then trying to subtract is what bit
+  us here.
+
+**Worked example:**
+
+```sql
+-- ❌ WRONG — this is what we shipped first. Applies cleanly. Does nothing.
+REVOKE ALL ON FUNCTION public.cleanup_demo_users() FROM anon, authenticated;
+```
+
+```sql
+-- ✅ RIGHT — take it from PUBLIC, which is where the privilege actually lives.
+REVOKE ALL ON FUNCTION public.cleanup_demo_users()          FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.increment_product_likes(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.decrement_product_likes(uuid) FROM PUBLIC;
+```
+
+**Never assume a GRANT/REVOKE worked — ask the database.** `has_function_privilege()` answers
+the real question ("could this role actually call it?"), inherited grants included:
+
+```sql
+SELECT p.proname,
+       has_function_privilege('anon',         p.oid, 'EXECUTE') AS anon,
+       has_function_privilege('service_role', p.oid, 'EXECUTE') AS svc
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN ('cleanup_demo_users', 'increment_product_likes');
+```
+
+Run against our local DB after `supabase db reset`, this now returns:
+
+```
+cleanup_demo_users      | f | t     ← anon locked out, cron still works
+increment_product_likes | f | t
+```
+
+Before the `FROM PUBLIC` fix, the `anon` column read `t` on both — with the "wrong" migration
+above already applied.
+
+**Why this one mattered.** `cleanup_demo_users()` is `SECURITY DEFINER` and deletes rows from
+`auth.users`. The anon key is public — it ships inside our JS bundle and our Expo app, and any
+student can read it out of DevTools. "anon can execute this" meant anyone on the internet could
+delete demo accounts with a single `rpc()` call.
+
+**Rule of thumb:**
+- Every new function starts life callable by **everyone**. Assume it until you've checked.
+- To lock a function down: `REVOKE ALL ... FROM PUBLIC`, then `GRANT EXECUTE TO <role>` for the
+  roles that genuinely need it. In that order.
+- `REVOKE FROM anon` is almost always the wrong statement. `anon` rarely has the grant that's
+  letting it in.
+- **A permission change that produces no error has not been verified.** Confirm with
+  `has_function_privilege()` / `has_table_privilege()` on the local DB before pushing.
+- Same reasoning applies to `ALTER DEFAULT PRIVILEGES` — if you don't set defaults, every future
+  function repeats this by itself.
+
+**Read more:**
+- https://www.postgresql.org/docs/current/sql-grant.html — see the note on PUBLIC and functions
+- https://www.postgresql.org/docs/current/functions-info.html#FUNCTIONS-INFO-ACCESS-TABLE
+
+---
+
 ## 2026-08-09 — Database indexes, and why a UNIQUE index is also a lookup index
 
 **Where it came up:** Phase 1, migration `002_usernames.sql`. We add three separate indexes to
