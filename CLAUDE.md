@@ -32,6 +32,21 @@ what the other developer changed.
 
 ---
 
+## Database — hard rules for Claude Code
+
+NEVER run any of these. If a task seems to need one, stop and ask:
+- supabase db push
+- supabase link / supabase unlink
+- supabase migration repair
+- supabase db dump (needs the production password — the human runs it)
+- psql or any connection string pointing at *.supabase.co
+
+Allowed: supabase migration new, supabase db reset, supabase status,
+supabase start / stop, and psql against 127.0.0.1:54322 (local only).
+
+Only Vishwajeet writes files under supabase/migrations/.
+Only Vishwajeet runs anything that touches production.
+
 ## Mandatory: teaching notes
 
 The two people working on this repo are early-career developers

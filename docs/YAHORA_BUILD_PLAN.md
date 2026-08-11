@@ -772,10 +772,10 @@ ALTER TABLE users ADD CONSTRAINT users_username_valid CHECK (
   )
 );
 
--- Once a profile is complete, a username is mandatory.
-ALTER TABLE users ADD CONSTRAINT users_username_required_when_complete CHECK (
-  is_profile_complete = false OR username IS NOT NULL
-);
+-- NOTE: the "username required when profile is complete" constraint is NOT
+-- added here. It is added in migration 003, AFTER the backfill. Adding it
+-- now would fail on production, where existing completed users still have
+-- username = NULL. See PHASE_1_RUNBOOK.md for the corrected ordering.
 
 -- ------------------------------------------------------------
 -- 3. Indexes
@@ -1069,11 +1069,17 @@ DECLARE
   r RECORD;
   new_username TEXT;
 BEGIN
-  FOR r IN SELECT id, full_name FROM users WHERE username IS NULL LOOP
+  FOR r IN SELECT id, full_name FROM users
+           WHERE username IS NULL AND is_profile_complete = true LOOP
     new_username := generate_username(coalesce(r.full_name, 'student'));
     UPDATE users SET username = new_username WHERE id = r.id;
   END LOOP;
 END $$;
+
+-- NOW it is safe to require a username on completed profiles.
+ALTER TABLE users ADD CONSTRAINT users_username_required_when_complete CHECK (
+  is_profile_complete = false OR username IS NOT NULL
+);
 ```
 
 > ### ⚠️ Read this part carefully — it's the subtlest thing in the whole plan

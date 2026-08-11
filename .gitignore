@@ -83,4 +83,5 @@ ehthumbs.db
 .vscode/
 .idea/
 *.swp
-*.swo
+*.swo.tmp-audit/
+.tmp-audit/

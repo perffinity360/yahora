@@ -4,11 +4,13 @@
 
 SET check_function_bodies = false;
 
-DROP EXTENSION pg_net;
-
-DROP EXTENSION pg_graphql;
-
-CREATE ROLE supabase_privileged_role;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_privileged_role') THEN
+    CREATE ROLE supabase_privileged_role;
+  END IF;
+END
+$$;
 
 GRANT supabase_privileged_role TO postgres;
 
@@ -536,7 +538,7 @@ CREATE TABLE public.universities (
 );
 
 ALTER TABLE public.universities
-  ADD CONSTRAINT universities_domain_key UNIQUE (DOMAIN);
+  ADD CONSTRAINT universities_domain_key UNIQUE ("domain");
 
 ALTER TABLE public.universities
   ADD CONSTRAINT universities_pkey PRIMARY KEY (id);
