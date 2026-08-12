@@ -395,18 +395,14 @@ Fix anything wrong by hand or with a follow-up prompt. Don't move on with a cont
 ### ✔ CHECK 4 — after CC-4
 
 ```bash
-ls -la CLAUDE.md backend/CLAUDE.md docs/LEARNINGS.md docs/CHANGELOG.md
-grep -c "^## " docs/LEARNINGS.md        # expect 5 seed entries
+ls -la CLAUDE.md backend/CLAUDE.md docs/CHANGELOG.md
 grep -n "MIGRATION REQUESTS" docs/CHANGELOG.md
 ```
 
-- [ ] All four files exist and are non-empty
+- [ ] All three files exist and are non-empty
 - [ ] `backend/CLAUDE.md` contains the file-ownership map, the API.md rule, and the 8-item security checklist from plan §0.5.4
-- [ ] Root `CLAUDE.md` contains the LEARNINGS.md rule and the ownership section
-- [ ] `docs/LEARNINGS.md` has 5 entries, and each uses **your** tables in its worked example — not a generic `foo`/`bar` example. If any entry is generic, send it back.
+- [ ] Root `CLAUDE.md` contains the ownership section
 - [ ] `frontend/CLAUDE.md` §16 was **not** touched — that's Neeraj's file and his job
-
-**Read the LEARNINGS entries yourself.** They're for you, and if you can't follow one, it's not written well enough. Ask Claude Code to rewrite any that lose you.
 
 ---
 
@@ -642,13 +638,12 @@ every TODO you raised.
 ## ▶ CC-4 — Governance and teaching files
 
 ```
-Read docs/YAHORA_BUILD_PLAN.md §0.1, §0.2, §0.5 and §0.B/0.C.
+Read docs/YAHORA_BUILD_PLAN.md §0.1, §0.2, §0.5 and §0.B.
 
 (create files if not present and modify if present)
 
 1. Root CLAUDE.md — ADD (do not replace the existing content):
    - The "Repo ownership" section from plan §0.D
-   - The "Mandatory: teaching notes" rule from plan §0.C Step 2
 
 2. Create backend/CLAUDE.md containing:
    - The full file-ownership map from plan §0.1
@@ -665,24 +660,10 @@ Read docs/YAHORA_BUILD_PLAN.md §0.1, §0.2, §0.5 and §0.B/0.C.
    template from plan §0.3, the Neeraj->Vishwajeet template from the
    same section, and an empty "## MIGRATION REQUESTS" heading.
 
-4. Create docs/LEARNINGS.md using the structure in plan §0.C Step 1,
-   then write these five seed entries:
-     1. Database indexes, and why a UNIQUE index is also a lookup index
-     2. Race conditions, and why "check then insert" is never safe
-     3. What ON DELETE CASCADE actually does to your data
-     4. Row Level Security: the anon key vs the service-role key, and
-        why RLS does not protect your Express routes
-     5. Cursor pagination vs offset pagination
-
-   CRITICAL for these entries: the audience is developers with
-   under 1 years of experience. Write each one fresh for a beginner.
-   Compressed bullets points.
-
 HARD CONSTRAINTS:
 - Do NOT touch frontend/CLAUDE.md or mobile/CLAUDE.md. Different owner.
 - Do NOT modify any .js file.
 - Preserve all existing content in the root CLAUDE.md.
-
 ```
 
 ---
@@ -1037,11 +1018,10 @@ Both of you tick these together. Phase 1 does not start until every box is check
 - [ ] Neeraj's review complete, blocking concerns resolved, contract updated
 
 **Governance**
-- [ ] Root `CLAUDE.md` has the ownership section and the LEARNINGS rule
+- [ ] Root `CLAUDE.md` has the ownership section
 - [ ] `backend/CLAUDE.md` has the ownership map, API.md rule and security checklist
 - [ ] `frontend/CLAUDE.md` drift resolved, §11 points at API.md, ownership limits added
 - [ ] `docs/CHANGELOG.md` exists with both handoff templates and a MIGRATION REQUESTS heading
-- [ ] `docs/LEARNINGS.md` has 5 beginner-level entries using real tables from this repo
 
 **Environments**
 - [ ] `backend/.env.example` committed; real `.env` git-ignored on both machines

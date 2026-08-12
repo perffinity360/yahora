@@ -1,1 +1,0 @@
-Read CLAUDE.md in /frontend and work in /frontend. Read git log and finally get the overview of the codebase needed to do the following changes.

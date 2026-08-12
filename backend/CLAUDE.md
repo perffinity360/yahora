@@ -31,7 +31,6 @@ person, do not edit the file. Say so in your response and stop.
 | `backend/scripts/seedDemo.js` | **Vishwajeet** | Neeraj requests additions |
 | Website (`frontend/`) | **Neeraj** | Vishwajeet doesn't touch this |
 | Mobile app (`mobile/`) | **Vishwajeet** | Neeraj doesn't touch this |
-| `docs/LEARNINGS.md` | Both append | |
 | `docs/CHANGELOG.md` | Both append | How you tell each other things |
 
 **The principle behind this split:** Vishwajeet owns everything where **a mistake is silent and
