@@ -28,3 +28,32 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
         persistSession: false
     }
 });
+
+// A throwaway client for the ONLY two calls that mint a user session:
+// auth.verifyOtp() and auth.signInWithPassword().
+//
+// Why this has to exist: supabase-js stores the session those calls return
+// ON THE CLIENT INSTANCE, and from then on sends that user's `authenticated`
+// JWT as the Authorization header instead of the service-role key. Calling
+// either of them on `supabase` above silently demotes the ONE SHARED CLIENT
+// to a logged-in student — not just for the rest of that request, but for
+// every request the process handles afterwards, until it restarts.
+//
+// `persistSession: false` does NOT prevent this. It only disables writing the
+// session to storage; the in-memory session is still applied to every request.
+//
+// This went unnoticed until migration 20260812121140 revoked anon/authenticated
+// table grants. Before it, `authenticated` could read and write every table, so
+// the demoted client kept working and nothing looked wrong. Afterwards, the
+// first query after a login fails with 42501 permission denied.
+//
+// Do NOT "fix" a demoted client with signOut({ scope: 'local' }) — that revokes
+// the refresh token you just handed to the browser, so the user's session dies
+// about an hour later. Use a separate instance instead. Verified 2026-08-12.
+export const createSessionClient = () =>
+    createClient(supabaseUrl, supabaseKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    });

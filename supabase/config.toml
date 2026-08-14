@@ -2,7 +2,7 @@
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "Yahora"
+project_id = "yahora"
 
 [api]
 enabled = true
@@ -196,7 +196,7 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+email_sent = 100
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -247,6 +247,17 @@ otp_expiry = 3600
 # [auth.email.template.invite]
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
+
+# The OTP email students actually receive when they sign in.
+#
+# content_path is resolved from the REPO ROOT, not from this file — so it needs the
+# `supabase/` prefix even though the template sits right next to config.toml. Getting
+# this wrong is loud, not silent: `supabase start` refuses to boot with
+# LegacyStartInvalidConfigError and prints the absolute path it tried. Note the
+# password_changed example lower down uses "./templates/..." and would fail as written.
+[auth.email.template.magic_link]
+subject = "Your Yahora sign-in code"
+content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

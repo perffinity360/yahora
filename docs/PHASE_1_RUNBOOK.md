@@ -25,7 +25,6 @@
 | `backend/src/modules/products/products.controller.js` | **modify** | Vishwajeet |
 | `backend/API.md` | **modify** | both |
 | `docs/CHANGELOG.md` | **modify** | both |
-| `docs/LEARNINGS.md` | **modify** | both |
 | `backend/src/modules/user/user.routes.js` | **modify** (stub exists) | Neeraj |
 | `backend/src/modules/user/user.controller.js` | **modify** (stub exists) | Neeraj |
 
@@ -477,7 +476,6 @@ curl -X PATCH http://localhost:5000/api/products/<your-own-product-id> \
 ## BLOCK F — Wrap up
 
 - [ ] `backend/API.md` — the onboarding endpoint entry now shows the `username` field and all four error codes
-- [ ] `docs/LEARNINGS.md` — five new entries (CC-6 writes them; read them and send back anything you can't follow)
 - [ ] `docs/CHANGELOG.md` — Handoff A posted
 - [ ] Everything committed and pushed to `main`
 - [ ] Neeraj's PR reviewed against the checklist in `backend/CLAUDE.md`
@@ -680,46 +678,6 @@ HARD CONSTRAINTS:
 
 When done, list every function you changed and the exact check you
 added to each.
-```
-
----
-
-## ▶ CC-6 — Learning notes
-
-```
-TASK: Add five entries to docs/LEARNINGS.md covering what came up in
-Phase 1. Use the existing entry format in that file.
-
-1. Race conditions and unique constraints — why "check availability
-   then insert" can never be safe on its own, and why catching
-   Postgres error 23505 is the actual fix. Use our real username flow.
-
-2. Why the backfill is a row-by-row loop and not one UPDATE — a single
-   statement sees a snapshot from before it started, so two students
-   named "Rahul Sharma" both generate rahul.sharma and the whole
-   statement rolls back. Show both versions.
-
-3. Adding a CHECK constraint to a table that already has data — why
-   users_username_required_when_complete had to move from migration 002
-   to 003, and why it passed locally (empty table) but would have
-   failed in production. Include the general lesson about migrations
-   that pass on an empty database.
-
-4. text_pattern_ops — why a normal btree index can't serve
-   LIKE 'rah%' under most collations, and what the second index does.
-
-5. SECURITY DEFINER — what it means, why is_username_available needs
-   it, and the risk of using it carelessly.
-
-REQUIREMENTS:
-- Audience is a developer with under two years of experience. Write
-  each one fresh, from scratch. Do not compress into revision notes.
-- Every example must use this project's real tables and columns —
-  users, username, products, follows. No foo/bar.
-- Where there's a wrong version and a right version, show both.
-
-HARD CONSTRAINTS:
-- Modify only docs/LEARNINGS.md.
 ```
 
 ---
@@ -1075,7 +1033,6 @@ Tick together before Phase 2.
 **Docs**
 - [ ] `backend/API.md` matches what was built, on both sides
 - [ ] `docs/CHANGELOG.md` has Handoff A and Neeraj's module handoff
-- [ ] `docs/LEARNINGS.md` has the five Phase 1 entries
 - [ ] Neeraj's PR reviewed and merged to `main`
 
 ---
