@@ -34,7 +34,6 @@ Every phase has:
 | `backend/scripts/seedDemo.js` | **Vishwajeet** | Neeraj requests additions |
 | Website (`frontend/`) | **Neeraj** | Vishwajeet doesn't touch this |
 | Mobile app (`mobile/`) | **Vishwajeet** | Neeraj doesn't touch this |
-| `docs/LEARNINGS.md` | Both append | |
 | `docs/CHANGELOG.md` | Both append | How you tell each other things |
 
 **The principle behind this split:** Vishwajeet owns everything where **a mistake is silent and permanent** — the database, security-critical paths, shared infrastructure. Neeraj owns things where **a mistake is loud and immediate** — endpoints he consumes in his own UI the next day, so a wrong response shape shows up on his screen within hours.
@@ -462,93 +461,18 @@ Claude Code reads `CLAUDE.md` at the start of every session in that directory. P
 
 ---
 
-## 0.C Create `docs/LEARNINGS.md` and make Claude Code maintain it
-
-Same mechanism. This is a great idea and it will compound — by the end of this project you'll have a genuine reference written around the actual decisions you made.
-
-### Step 1 — Create the file
-
-```bash
-mkdir -p docs
-```
-
-Then have Claude Code create `docs/LEARNINGS.md` with this structure:
-
-```markdown
-# Yahora — Engineering Learnings
-
-Concepts we met while building Yahora, explained from scratch.
-Newest entries at the top.
-
----
-
-## [Date] — Concept name
-
-**Where it came up:** (the actual task)
-
-**The problem:** (what went wrong or what we didn't understand)
-
-**The concept:** (plain-English explanation, assume no prior knowledge)
-
-**Worked example:** (concrete code/SQL showing it)
-
-**Rule of thumb:** (when to reach for this in future)
-
-**Read more:** (one or two links)
-```
-
-### Step 2 — Make it automatic
-
-Add this to the **root** `CLAUDE.md` (so it applies in every directory):
-
-```markdown
-## Mandatory: teaching notes
-
-The two people working on this repo are early-career developers
-learning as they build. Whenever your work involves a concept,
-pattern, tool, or failure mode that a developer with under two years
-of experience would not already know, you MUST append an entry to
-docs/LEARNINGS.md in the same response.
-
-Examples of things that qualify: database indexes and when they're
-used, race conditions, RLS, cursor vs offset pagination, N+1 queries,
-optimistic UI updates, debouncing, idempotency, cascade deletes,
-transaction isolation, why a trigger fired twice.
-
-Write the entry for a beginner. Do not compress it into revision
-notes. Always include a concrete worked example using OUR actual
-tables and code, not a generic example.
-
-Do not ask permission to add an entry. Just add it.
-If nothing new came up in a task, add nothing — don't pad the file.
-```
-
-### Step 3 — Seed it with the first entries
-
-Before you write any new code, ask Claude Code to add entries for the things already in this document that you'll hit immediately:
-
-1. What a database index is and why a `UNIQUE` index is also a lookup index
-2. Race conditions, and why "check then insert" is never safe
-3. What `ON DELETE CASCADE` actually does to your data
-4. What Row Level Security is and when it applies vs when it's bypassed
-5. Cursor pagination vs offset pagination
-
-Those five will come up in Phase 1 and Phase 2. Having them written before you hit them means you'll recognise them.
-
----
-
 ## 0.D Update the CLAUDE.md files
 
 Three files to touch:
 
-**Root `CLAUDE.md`** — add the LEARNINGS.md rule from 0.C, plus:
+**Root `CLAUDE.md`** — add:
 
 ```markdown
 ## Repo ownership (two developers, separate sessions)
 
 - Vishwajeet owns: supabase/, backend/, mobile/
 - Neeraj owns: frontend/
-- Shared, both may append: docs/CHANGELOG.md, docs/LEARNINGS.md
+- Shared, both may append: docs/CHANGELOG.md
 
 Never modify a directory outside the owner's scope without saying so
 loudly in your response. The two developers work in separate Claude
@@ -676,8 +600,7 @@ Sit down together for an hour. He reads all 37 entries and flags anything awkwar
 - [ ] `app.js` final, frozen, banner added, server boots
 - [ ] `respond.js`, `notify.js`, `requireAuth`, `optionalAuth`, `config/supabase.js` written
 - [ ] `backend/CLAUDE.md` created with: the API.md rule, the file-ownership map, and the §0.5.4 security checklist
-- [ ] Root `CLAUDE.md` has the LEARNINGS.md rule and the ownership section
-- [ ] `docs/LEARNINGS.md` exists with 5 seed entries
+- [ ] Root `CLAUDE.md` has the ownership section
 - [ ] `docs/CHANGELOG.md` exists with a `## MIGRATION REQUESTS` heading
 - [ ] `frontend/CLAUDE.md` §16 drift resolved
 - [ ] Everything committed and pushed to `main`
@@ -1096,7 +1019,7 @@ ALTER TABLE users ADD CONSTRAINT users_username_required_when_complete CHECK (
 >
 > The `DO $$ ... LOOP` version issues one `UPDATE` per row. Each `UPDATE` completes before the next iteration begins, so iteration 2 *can* see what iteration 1 wrote. It correctly returns `rahul.sharma.7402` for the second student.
 >
-> **This is a general lesson, not a username-specific one:** whenever a generated value depends on values you're writing in the same operation, you must loop, not batch. Add this to `docs/LEARNINGS.md`.
+> **This is a general lesson, not a username-specific one:** whenever a generated value depends on values you're writing in the same operation, you must loop, not batch.
 
 **Verify before moving on:**
 
@@ -1259,7 +1182,6 @@ CREATE POLICY "Authenticated product uploads"
 - [ ] `backend/API.md` updated
 - [ ] Three security bugs fixed
 - [ ] `seedDemo.js` updated to give demo users realistic handles
-- [ ] `docs/LEARNINGS.md` has entries for: unique indexes, race conditions, `text_pattern_ops`, the batch-vs-loop backfill trap, `SECURITY DEFINER`
 
 ### 🔀 HANDOFF A → Neeraj (this unblocks his Phase 2)
 
@@ -1312,7 +1234,7 @@ This is the most important screen in the phase, because a bad experience here me
 5. Show live state under the field: spinner → green tick "rahul is available" → red "taken, try rahul.7402"
 6. Continue button is disabled until the state is green
 
-**On debouncing** — this is the concept that makes the whole thing feel good, so make sure it's in `LEARNINGS.md`. If you fire a request on every keystroke, typing "rahulsharma" sends 11 requests. They arrive out of order, so the answer for "rahul" might land after the answer for "rahulsharma" and overwrite it with the wrong result. Debouncing means: wait until the user has stopped typing for 400ms, *then* send one request.
+**On debouncing** — this is the concept that makes the whole thing feel good. If you fire a request on every keystroke, typing "rahulsharma" sends 11 requests. They arrive out of order, so the answer for "rahul" might land after the answer for "rahulsharma" and overwrite it with the wrong result. Debouncing means: wait until the user has stopped typing for 400ms, *then* send one request.
 
 ```js
 // The idea, in plain JavaScript
@@ -1415,7 +1337,6 @@ Work through this list. It's easy to miss one and end up with a profile you can'
 - [ ] All 10 rows of the §2.3 table done
 - [ ] Change-username screen with the 30-day lock
 - [ ] User search screen
-- [ ] `docs/LEARNINGS.md` has an entry on debouncing and out-of-order responses
 
 ### 🔀 HANDOFF 2 — sync point
 
@@ -1628,7 +1549,7 @@ By putting it in a `BEFORE INSERT` trigger, the rule lives in exactly one place.
 
 ### The counter contention note
 
-`UPDATE users SET followers_count = followers_count + 1` locks that user's row for the duration. If one student gained 500 followers per second, those updates would queue up. At your scale this will never happen — but write it in `LEARNINGS.md` so you recognise it when it eventually does. The fix, when needed: insert into a `follow_deltas` table and roll up on a schedule.
+`UPDATE users SET followers_count = followers_count + 1` locks that user's row for the duration. If one student gained 500 followers per second, those updates would queue up. At your scale this will never happen — but it is worth recognising if it ever does. The fix, when needed: insert into a `follow_deltas` table and roll up on a schedule.
 
 ---
 
@@ -1695,7 +1616,7 @@ LIMIT 30;
 
 The index `follows_following_idx (following_id, status, created_at DESC)` serves this directly. It's the same speed on item 1 and item 100,000, and new rows never cause duplicates.
 
-Use cursor pagination for **every** list in this project: followers, following, feeds, replies, notifications, search. Add an entry to `LEARNINGS.md`.
+Use cursor pagination for **every** list in this project: followers, following, feeds, replies, notifications, search.
 
 ### Privacy checks in the backend
 
@@ -1794,7 +1715,6 @@ Any row showing `rowsecurity = false` is readable by anyone holding your anon ke
 - [ ] `SELECT tablename, rowsecurity FROM pg_tables` shows `true` for every public table
 - [ ] `backend/API.md` updated
 - [ ] `seedDemo.js` creates follows, a private demo account, and a block
-- [ ] `LEARNINGS.md` entries: RLS and the two keys, cursor vs offset pagination, why business rules live in triggers, counter contention
 
 ### 🔀 HANDOFF B → Neeraj
 
@@ -1876,7 +1796,7 @@ const followMutation = useMutation({
 });
 ```
 
-Add optimistic updates to `LEARNINGS.md` — it's one of the highest-value UI patterns you'll learn on this project, and you'll reuse it for likes in Phase 7.
+Optimistic updates are one of the highest-value UI patterns you'll learn on this project, and you'll reuse them for likes in Phase 7.
 
 ---
 
@@ -1934,7 +1854,6 @@ Because follows are global, students will now see people from other colleges. Ma
 - [ ] Block flow + blocked accounts list
 - [ ] Private profile state renders correctly (posts hidden, listings visible)
 - [ ] Campus chips on out-of-campus users
-- [ ] `LEARNINGS.md`: optimistic updates, infinite scroll with cursors
 
 ### 🔀 HANDOFF 4 — sync point
 Both post to `docs/CHANGELOG.md`. Compare the follow flows side by side.
@@ -2003,7 +1922,7 @@ USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 ### Two things worth understanding here
 
-**Partial indexes.** `CREATE INDEX ... WHERE read_at IS NULL` builds an index containing *only* unread rows. A student with 50,000 read notifications and 3 unread ones has an index of 3 entries for the badge query. This is one of Postgres's best features and it barely exists in other databases. Add it to `LEARNINGS.md`.
+**Partial indexes.** `CREATE INDEX ... WHERE read_at IS NULL` builds an index containing *only* unread rows. A student with 50,000 read notifications and 3 unread ones has an index of 3 entries for the badge query. This is one of Postgres's best features and it barely exists in other databases.
 
 **The dedupe index.** It's `UNIQUE` and partial. It means: for a given (recipient, actor, type, entity), you can only have one **unread** notification. So if someone follows, unfollows, and follows you again before you read it, you get one row, not three. The insert must therefore use `ON CONFLICT DO NOTHING`:
 
@@ -2068,7 +1987,7 @@ GET  /api/notifications/unread-count   → 200 { "count": 7 }
 POST /api/notifications/mark-read      → body { "ids": ["uuid"] } or { "all": true }
 ```
 
-The backend should **hydrate** the entity — the client shouldn't have to make a second request per notification to find out what post it refers to. Fetch all referenced entities in one query per type and attach them. (If you fetch them one at a time in a loop, that's the **N+1 query problem** — 30 notifications become 31 database round trips. Worth an entry in `LEARNINGS.md`.)
+The backend should **hydrate** the entity — the client shouldn't have to make a second request per notification to find out what post it refers to. Fetch all referenced entities in one query per type and attach them. (If you fetch them one at a time in a loop, that's the **N+1 query problem** — 30 notifications become 31 database round trips.)
 
 ---
 
@@ -2581,7 +2500,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 ```
 
-> **Note the `viewer_has_liked` subquery.** Without it, the client would need a second request to find out which of the 20 posts it already liked, and the heart icons would flicker in after the feed rendered. Computing it in the same query is what makes likes feel instant. This is the fix for the **N+1 query problem** — worth an entry in `LEARNINGS.md`.
+> **Note the `viewer_has_liked` subquery.** Without it, the client would need a second request to find out which of the 20 posts it already liked, and the heart icons would flicker in after the feed rendered. Computing it in the same query is what makes likes feel instant. This is the fix for the **N+1 query problem**.
 
 ---
 
@@ -2663,7 +2582,6 @@ cron.schedule('*/5 * * * *', async () => {
 - [ ] `posts` storage bucket created with authenticated-only insert
 - [ ] `seedDemo.js` seeds ~40 campus posts across several colleges, ~15 global posts, replies, likes
 - [ ] `backend/API.md` updated
-- [ ] `LEARNINGS.md`: partial indexes, why hot_score is stored, N+1 queries, word-boundary regex
 
 ### 🔀 HANDOFF C → Neeraj
 
@@ -2917,7 +2835,6 @@ The profile page (built in Phase 2) gains a Posts tab beside Listings.
 - [ ] Report modal with all 10 reasons
 - [ ] Profile Posts tab, private state correct
 - [ ] `/feed` and `/hot` stubs deleted
-- [ ] `LEARNINGS.md`: optimistic UI for creates, image aspect-ratio and layout shift, why not to auto-insert into a feed
 
 ### 🔀 HANDOFF 7 — sync point
 Compare web and mobile side by side. Post from web, confirm it appears on mobile. Like from mobile, confirm the count updates on web.

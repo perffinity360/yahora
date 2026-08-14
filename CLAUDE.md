@@ -13,7 +13,7 @@ working on before writing any code.
 
 - Vishwajeet owns: supabase/, backend/, mobile/
 - Neeraj owns: frontend/
-- Shared, both may append: docs/CHANGELOG.md, docs/LEARNINGS.md
+- Shared, both may append: docs/CHANGELOG.md
 
 Never modify a directory outside the owner's scope without saying so
 loudly in your response. The two developers work in separate Claude
@@ -47,22 +47,3 @@ supabase start / stop, and psql against 127.0.0.1:54322 (local only).
 Only Vishwajeet writes files under supabase/migrations/.
 Only Vishwajeet runs anything that touches production.
 
-## Mandatory: teaching notes
-
-The two people working on this repo are early-career developers
-learning as they build. Whenever your work involves a concept,
-pattern, tool, or failure mode that a developer with under two years
-of experience would not already know, you MUST append an entry to
-docs/LEARNINGS.md in the same response.
-
-Examples of things that qualify: database indexes and when they're
-used, race conditions, RLS, cursor vs offset pagination, N+1 queries,
-optimistic UI updates, debouncing, idempotency, cascade deletes,
-transaction isolation, why a trigger fired twice.
-
-Write the entry for a beginner. Do not compress it into revision
-notes. Always include a concrete worked example using OUR actual
-tables and code, not a generic example.
-
-Do not ask permission to add an entry. Just add it.
-If nothing new came up in a task, add nothing — don't pad the file.
