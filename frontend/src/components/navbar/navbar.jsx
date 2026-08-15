@@ -99,7 +99,7 @@ const handleCartClick = () => {
 };
 
 function Navbar() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, sessionReady } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
@@ -182,6 +182,12 @@ function Navbar() {
       return;
     }
 
+    // These read `messages` straight from Supabase. Wait for AuthContext to hand
+    // the session to the client — a query fired first goes out as `anon`, and a
+    // Realtime subscription that opens as `anon` goes permanently silent rather
+    // than erroring, so the badge would just never update.
+    if (!sessionReady) return;
+
     fetch(`${import.meta.env.VITE_API_BASE_URL}/api/messages/deliver`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -249,7 +255,7 @@ function Navbar() {
       supabase.removeChannel(channel);
       supabase.removeChannel(presenceChannel);
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, sessionReady]);
 
   const handleLogout = () => {
     logout();

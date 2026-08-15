@@ -205,7 +205,8 @@ const Home = () => {
           );
         }
         const userId = data.userProfile?.id || data.userAuth?.id;
-        if (userId) login(data.session.access_token, userId);
+        if (userId)
+          login(data.session.access_token, userId, data.session.refresh_token);
         navigate("/onboarding");
       }
     } catch (error) {
