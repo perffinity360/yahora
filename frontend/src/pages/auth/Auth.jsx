@@ -102,7 +102,13 @@ const Auth = () => {
           data.userProfile?.id || data.userAuth?.id || data.user?.id;
 
         if (userId) {
-          login(data.session.access_token, userId);
+          // The refresh token is what lets AuthContext re-authenticate the
+          // Supabase client on a later visit, when this handler never runs.
+          login(
+            data.session.access_token,
+            userId,
+            data.session.refresh_token,
+          );
         }
 
         // `replace` drops /auth out of the history stack entirely, so pressing
@@ -147,7 +153,8 @@ const Auth = () => {
         }
 
         const userId = data.userProfile?.id || data.userAuth?.id;
-        if (userId) login(data.session.access_token, userId);
+        if (userId)
+          login(data.session.access_token, userId, data.session.refresh_token);
 
         // Same as the OTP path: leave no /auth entry behind to go back to.
         navigate("/onboarding", { replace: true });
