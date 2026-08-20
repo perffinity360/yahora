@@ -410,7 +410,7 @@ function FilterSection({ icon, title, children, defaultOpen = false }) {
 
 export default function Marketplace() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, sessionReady } = useAuth();
   const [currentUserId] = useState(localStorage.getItem("yahora_user_id"));
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
   const [universities, setUniversities] = useState([]);
@@ -466,6 +466,14 @@ export default function Marketplace() {
 
   /* ── 1. Fetch Universities & Restore Last Campus on Mount ── */
   useEffect(() => {
+    // For a signed-in student this effect reads `users` directly from Supabase to
+    // resolve their home campus, so it has to wait for AuthContext to hand the
+    // session to the client — otherwise the query runs as `anon` and, once
+    // migration 004 lands, returns nothing and the campus switcher can no longer
+    // tell "my campus" from "browse-only". Signed-out visitors never reach that
+    // query, so they are not held up.
+    if (currentUserId && !sessionReady) return;
+
     const fetchInitialData = async () => {
       try {
         const uniResponse = await fetch(`${API_BASE_URL}/universities`);
@@ -502,7 +510,7 @@ export default function Marketplace() {
       }
     };
     fetchInitialData();
-  }, [currentUserId]);
+  }, [currentUserId, sessionReady]);
 
   /* ── 2. Fetch Products when University changes ── */
   useEffect(() => {

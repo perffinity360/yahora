@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import styles from "./Messages.module.css";
 import { supabase } from "../../config/supabaseClient";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   ArrowLeft,
   Send,
@@ -161,6 +162,7 @@ const formatDate = (isoString) => {
 };
 
 export default function Messages() {
+  const { sessionReady } = useAuth();
   const currentUserId = localStorage.getItem("yahora_user_id");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -339,6 +341,12 @@ export default function Messages() {
 
   /* ── 4. Realtime (Socket Never Closes) ── */
   useEffect(() => {
+    // Realtime re-checks the SELECT policy for the subscribed role against every
+    // changed row. A channel opened before the client is authenticated is stuck
+    // on `anon` and, once migration 004 lands, goes permanently silent — no
+    // error, no callback, just a chat that never updates. So wait for the session.
+    if (!sessionReady) return;
+
     // We don't check currentUserId here directly so the hook doesn't re-run.
     const msgChannel = supabase
       .channel("realtime:messages")
@@ -428,7 +436,10 @@ export default function Messages() {
     return () => {
       supabase.removeChannel(msgChannel);
     };
-  }, []); // 👈 MAGIC FIX: Empty array means the socket opens ONCE and never drops messages!
+    // 👈 MAGIC FIX: the socket still opens ONCE and never drops messages.
+    // `sessionReady` only goes false→true while this page is mounted, so this is
+    // a one-shot deferral, not a resubscribe loop.
+  }, [sessionReady]);
 
   /* ── Send Message ── */
   const handleSendMessage = async (e) => {

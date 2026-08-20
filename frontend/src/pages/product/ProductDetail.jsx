@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "./ProductDetail.module.css";
 import { supabase } from "../../config/supabaseClient";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   Heart,
   Share2,
@@ -85,6 +86,7 @@ export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { hash } = useLocation();
+  const { sessionReady } = useAuth();
   const currentUserId = localStorage.getItem("yahora_user_id");
   const [actualHomeUniId, setActualHomeUniId] = useState(
     localStorage.getItem("yahora_university_id"),
@@ -110,6 +112,12 @@ export default function ProductDetail() {
 
   /* ── Data Fetching ── */
   useEffect(() => {
+    // This route is public, but for a signed-in student the block below reads
+    // `users` directly from Supabase to resolve their home campus. Hold the whole
+    // effect until the client is authenticated so that query doesn't go out as
+    // `anon`; signed-out visitors skip the wait entirely.
+    if (currentUserId && !sessionReady) return;
+
     const fetchData = async () => {
       try {
         const url = `${API_BASE_URL}/products/${id}${currentUserId ? `?user_id=${currentUserId}` : ""}`;
@@ -138,7 +146,7 @@ export default function ProductDetail() {
       }
     };
     fetchData();
-  }, [id, currentUserId]);
+  }, [id, currentUserId, sessionReady]);
 
   /* NEW: Scroll to top on page load, unless navigating directly to comments */
   useEffect(() => {
