@@ -13,8 +13,21 @@
  * Run: node --experimental-vm-modules backend/scripts/seedDemo.js
  */
 
-import 'dotenv/config';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+
+// ─── ENV ────────────────────────────────────────────────────
+// `dotenv/config` resolves .env against process.cwd(), so the documented
+// invocation from the repo root (`node backend/scripts/seedDemo.js`) loaded no
+// file at all and left SUPABASE_URL unset — which the guard below correctly
+// reported as "not local". Resolve backend/.env from this file's own location
+// so the script behaves the same from any working directory. Real environment
+// variables still win; dotenv never overwrites one that is already set.
+dotenv.config({
+  path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env'),
+});
 
 // ─── SAFETY GUARD ───────────────────────────────────────────
 // This script creates users and products. It must never run
@@ -43,98 +56,150 @@ const ago = (days = 0, hours = 0) =>
   new Date(Date.now() - days * 86_400_000 - hours * 3_600_000).toISOString();
 
 // ─── 15 VERIFIED CAMPUS USER PERSONAS ────────────────────────────────────────
+//
+// Every persona needs a `username`. Migration 006 added
+// users_username_required_when_complete, so a row with is_profile_complete =
+// true and a NULL handle is rejected by the database — and every persona here
+// is seeded complete.
+//
+// Handles are derived from the persona's real name (rahul.sharma, priya_verma,
+// sid.menon), never user1/test_a — demo screenshots go in front of investors.
+// House rules, a strict subset of the users_username_valid CHECK in migration
+// 005: lowercase, 3–20 characters, [a-z0-9._] only, starts with a letter, no
+// leading or trailing dot/underscore, no doubled dots, and unique across this
+// file. None of them appear in reserved_usernames. assertValidHandles() below
+// enforces all of that before a single row is written.
 const DUMMY_USERS = [
   {
-    email:  'rahul.sharma@demo.yahora.com',
-    name:   'Rahul Sharma',
-    role:   'B.Tech CSE — Final Year',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+    email:    'rahul.sharma@demo.yahora.com',
+    username: 'rahul.sharma',
+    name:     'Rahul Sharma',
+    role:     'B.Tech CSE — Final Year',
+    avatar:   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'priya.verma@demo.yahora.com',
-    name:   'Priya Verma',
-    role:   'MBA — 2nd Year',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
+    email:    'priya.verma@demo.yahora.com',
+    username: 'priya_verma',
+    name:     'Priya Verma',
+    role:     'MBA — 2nd Year',
+    avatar:   'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'amit.gupta@demo.yahora.com',
-    name:   'Amit Gupta',
-    role:   'M.Tech Electronics — 1st Year',
-    avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=150&q=80',
+    email:    'amit.gupta@demo.yahora.com',
+    username: 'amit.gupta',
+    name:     'Amit Gupta',
+    role:     'M.Tech Electronics — 1st Year',
+    avatar:   'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'sarah.khan@demo.yahora.com',
-    name:   'Sarah Khan',
-    role:   'B.Des — 3rd Year',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80',
+    email:    'sarah.khan@demo.yahora.com',
+    username: 'sarah.khan',
+    name:     'Sarah Khan',
+    role:     'B.Des — 3rd Year',
+    avatar:   'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'nikhil.bansal@demo.yahora.com',
-    name:   'Nikhil Bansal',
-    role:   'B.Tech AI & Data Science — 3rd Year',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
+    email:    'nikhil.bansal@demo.yahora.com',
+    username: 'nikhil_bansal',
+    name:     'Nikhil Bansal',
+    role:     'B.Tech AI & Data Science — 3rd Year',
+    avatar:   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'meera.joshi@demo.yahora.com',
-    name:   'Meera Joshi',
-    role:   'B.Tech ECE — 2nd Year',
-    avatar: 'https://images.unsplash.com/photo-1521119989659-a83eee488004?auto=format&fit=crop&w=150&q=80',
+    email:    'meera.joshi@demo.yahora.com',
+    username: 'meera.joshi',
+    name:     'Meera Joshi',
+    role:     'B.Tech ECE — 2nd Year',
+    avatar:   'https://images.unsplash.com/photo-1521119989659-a83eee488004?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'arjun.singh@demo.yahora.com',
-    name:   'Arjun Singh',
-    role:   'B.Tech IT — Final Year',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=150&q=80',
+    email:    'arjun.singh@demo.yahora.com',
+    username: 'arjun.singh',
+    name:     'Arjun Singh',
+    role:     'B.Tech IT — Final Year',
+    avatar:   'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'ananya.roy@demo.yahora.com',
-    name:   'Ananya Roy',
-    role:   'B.Sc Mathematics — 3rd Year',
-    avatar: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=150&q=80',
+    email:    'ananya.roy@demo.yahora.com',
+    username: 'ananya_roy',
+    name:     'Ananya Roy',
+    role:     'B.Sc Mathematics — 3rd Year',
+    avatar:   'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'karthik.reddy@demo.yahora.com',
-    name:   'Karthik Reddy',
-    role:   'B.Tech Mechanical — 2nd Year',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+    email:    'karthik.reddy@demo.yahora.com',
+    username: 'karthik.reddy',
+    name:     'Karthik Reddy',
+    role:     'B.Tech Mechanical — 2nd Year',
+    avatar:   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'tanya.singh@demo.yahora.com',
-    name:   'Tanya Singh',
-    role:   'BBA — 3rd Year',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+    email:    'tanya.singh@demo.yahora.com',
+    username: 'tanya.singh',
+    name:     'Tanya Singh',
+    role:     'BBA — 3rd Year',
+    avatar:   'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'rohan.patel@demo.yahora.com',
-    name:   'Rohan Patel',
-    role:   'B.Tech Civil Engineering — 1st Year',
-    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80',
+    email:    'rohan.patel@demo.yahora.com',
+    username: 'rohan.patel',
+    name:     'Rohan Patel',
+    role:     'B.Tech Civil Engineering — 1st Year',
+    avatar:   'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'isha.malhotra@demo.yahora.com',
-    name:   'Isha Malhotra',
-    role:   'B.Tech CSE — 2nd Year',
-    avatar: 'https://images.unsplash.com/photo-1491349174775-aaafddd81942?auto=format&fit=crop&w=150&q=80',
+    email:    'isha.malhotra@demo.yahora.com',
+    username: 'isha.malhotra',
+    name:     'Isha Malhotra',
+    role:     'B.Tech CSE — 2nd Year',
+    avatar:   'https://images.unsplash.com/photo-1491349174775-aaafddd81942?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'devika.nair@demo.yahora.com',
-    name:   'Devika Nair',
-    role:   'M.Sc Physics — 1st Year',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=150&q=80',
+    email:    'devika.nair@demo.yahora.com',
+    username: 'devika.nair',
+    name:     'Devika Nair',
+    role:     'M.Sc Physics — 1st Year',
+    avatar:   'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'siddharth.menon@demo.yahora.com',
-    name:   'Siddharth Menon',
-    role:   'B.Tech Electrical Engineering — Final Year',
-    avatar: 'https://images.unsplash.com/photo-1463453091185-61582044d556?auto=format&fit=crop&w=150&q=80',
+    email:    'siddharth.menon@demo.yahora.com',
+    username: 'sid.menon',
+    name:     'Siddharth Menon',
+    role:     'B.Tech Electrical Engineering — Final Year',
+    avatar:   'https://images.unsplash.com/photo-1463453091185-61582044d556?auto=format&fit=crop&w=150&q=80',
   },
   {
-    email:  'zara.ali@demo.yahora.com',
-    name:   'Zara Ali',
-    role:   'B.Des Graphic Design — 2nd Year',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&q=80',
+    email:    'zara.ali@demo.yahora.com',
+    username: 'zara.ali',
+    name:     'Zara Ali',
+    role:     'B.Des Graphic Design — 2nd Year',
+    avatar:   'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&q=80',
   },
 ];
+
+
+// Fail fast and locally, with a readable message, instead of letting Postgres
+// reject row 9 of 15 halfway through a seed.
+function assertValidHandles(users) {
+  const seen = new Set();
+
+  for (const u of users) {
+    const h = u.username;
+    const bad =
+      typeof h !== 'string'          ? 'missing'
+      : !/^[a-z][a-z0-9._]*$/.test(h) ? 'illegal characters, or does not start with a lowercase letter'
+      : h.length < 3 || h.length > 20 ? 'must be 3–20 characters'
+      : /[._]$/.test(h)               ? 'must not end with a dot or underscore'
+      : h.includes('..')              ? 'must not contain a doubled dot'
+      : seen.has(h)                   ? 'duplicated in DUMMY_USERS'
+      : null;
+
+    if (bad) throw new Error(`Invalid demo username "${h}" for ${u.name}: ${bad}`);
+    seen.add(h);
+  }
+}
+
+assertValidHandles(DUMMY_USERS);
 
 // ─── 40 MARKETPLACE LISTINGS ─────────────────────────────────────────────────
 //
@@ -838,17 +903,27 @@ async function seedSandbox() {
       const authUser = await getOrCreateAuthUser(u);
       if (!authUser?.id) continue;
 
+      // UPSERT, not insert. Migration 005 added the on_auth_user_created
+      // trigger on auth.users, so getOrCreateAuthUser() above has ALREADY
+      // caused a public.users row to exist (id + university_id +
+      // is_profile_complete = false). A plain insert here hits 23505 on the
+      // primary key. ignoreDuplicates is spelled out rather than left to the
+      // default because the two behaviours are opposites and the wrong one is
+      // silent: with `true` this becomes DO NOTHING and every persona keeps the
+      // trigger's blank profile — no name, no handle, no avatar — and the seed
+      // still reports success.
       const { error: profileErr } = await supabase.from('users').upsert(
         {
           id:                  authUser.id,
           university_id:       demoUniId,
           full_name:           u.name,
+          username:            u.username,
           avatar_url:          u.avatar,
           qualification:       u.role,
           bio:                 `${u.role} · Trading on Yahora`,
           is_profile_complete: true,
         },
-        { onConflict: 'id' }
+        { onConflict: 'id', ignoreDuplicates: false }
       );
       if (profileErr) throw profileErr;
 

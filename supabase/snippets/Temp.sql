@@ -1,2 +1,2 @@
-SELECT tablename, rowsecurity FROM pg_tables
-WHERE tablename IN ('reserved_usernames','username_history','auth_attempts');
+SELECT count(*) AS orphans FROM auth.users au
+  LEFT JOIN public.users u ON u.id = au.id WHERE u.id IS NULL;

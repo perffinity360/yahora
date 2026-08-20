@@ -1316,6 +1316,14 @@ HARD CONSTRAINTS:
 ```
 TASK: Update backend/scripts/seedDemo.js so every demo user has a
 username, and its inserts survive the new handle_new_user trigger.
+Also fix this error:
+
+❌ Refusing to seed a non-local database.
+   SUPABASE_URL = (not set)
+   Expected http://127.0.0.1:54321
+   Fix backend/.env, then try again.
+
+Afterwards fix the following error:
 
 1. USERNAMES. Migration 006 requires a username on any user with
    is_profile_complete = true. Give each demo user a realistic handle
