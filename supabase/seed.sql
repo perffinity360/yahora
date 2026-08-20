@@ -56,13 +56,20 @@ on conflict do nothing;
 
 
 -- ============ Layer 2: test accounts ============
--- A helper so we write the auth boilerplate once instead of six times.
+-- A helper so we write the auth boilerplate once instead of eleven times.
+--
+-- Handles are passed in and HARDCODED, never generated. Stable-across-resets ids
+-- are the whole point of this file, and generate_username() appends a random
+-- suffix on collision — you would get a different handle every reset and any test
+-- that hardcodes one would flake. Migration 006 requires a username on every row
+-- with is_profile_complete = true, which is every account this helper creates.
 
 create or replace function pg_temp.seed_user(
   p_id            uuid,
   p_email         text,
   p_password      text,
   p_full_name     text,
+  p_username      text,
   p_university_id uuid
 ) returns void language plpgsql as $$
 begin
@@ -90,20 +97,30 @@ begin
     'email', now(), now(), now()
   ) on conflict do nothing;
 
-  insert into public.users (id, university_id, full_name, is_profile_complete)
-  values (p_id, p_university_id, p_full_name, true)
-  on conflict (id) do nothing;
+  -- MUST be do-update, not do-nothing. Migration 005 added an after-insert
+  -- trigger on auth.users (handle_new_user) that creates this row first, with
+  -- only id/university_id/is_profile_complete=false. `do nothing` therefore
+  -- silently discarded the name, the handle and the completion flag, leaving
+  -- every seeded student a nameless shell — the marketplace showed anonymous
+  -- sellers and the 006 backfill had no completed rows to work on.
+  insert into public.users (id, university_id, full_name, username, is_profile_complete)
+  values (p_id, p_university_id, p_full_name, p_username, true)
+  on conflict (id) do update set
+    university_id       = excluded.university_id,
+    full_name           = excluded.full_name,
+    username            = excluded.username,
+    is_profile_complete = excluded.is_profile_complete;
 end;
 $$;
 
 -- IIITDM Kurnool
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000001', 'arjun@iiitk.ac.in',  'password123', 'Arjun Mehta',   'a0000000-0000-4000-8000-000000000001');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000002', 'priya@iiitk.ac.in',  'password123', 'Priya Nair',    'a0000000-0000-4000-8000-000000000001');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000003', 'rahul@iiitk.ac.in',  'password123', 'Rahul Verma',   'a0000000-0000-4000-8000-000000000001');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000001', 'arjun@iiitk.ac.in',  'password123', 'Arjun Mehta',   'arjun.mehta', 'a0000000-0000-4000-8000-000000000001');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000002', 'priya@iiitk.ac.in',  'password123', 'Priya Nair',    'priya.nair',  'a0000000-0000-4000-8000-000000000001');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000003', 'rahul@iiitk.ac.in',  'password123', 'Rahul Verma',   'rahul.verma', 'a0000000-0000-4000-8000-000000000001');
 
 -- NIET Greater Noida
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000004', 'sneha@niet.co.in',   'password123', 'Sneha Gupta',   'a0000000-0000-4000-8000-000000000002');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000005', 'karan@niet.co.in',   'password123', 'Karan Singh',   'a0000000-0000-4000-8000-000000000002');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000004', 'sneha@niet.co.in',   'password123', 'Sneha Gupta',   'sneha.gupta', 'a0000000-0000-4000-8000-000000000002');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000005', 'karan@niet.co.in',   'password123', 'Karan Singh',   'karan.singh', 'a0000000-0000-4000-8000-000000000002');
 
 
 -- ============ Layer 3: demo marketplace content ============
@@ -462,12 +479,17 @@ on conflict do nothing;
 --
 -- Id blocks continue the existing series: users b0…0006-0011, products e0…0013-0024.
 
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000006', 'test@iiitk.ac.in',        'password123', 'Test Kurnool',     'a0000000-0000-4000-8000-000000000001');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000007', 'test@niet.co.in',         'password123', 'Test Noida',       'a0000000-0000-4000-8000-000000000002');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000008', 'vishwajeet@iiitk.ac.in',  'password123', 'Vishwajeet Singh', 'a0000000-0000-4000-8000-000000000001');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000009', 'neeraj@niet.co.in',       'password123', 'Neeraj Kumar',     'a0000000-0000-4000-8000-000000000002');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000010', 'vishwajeet@iittp.ac.in',  'password123', 'Vishwajeet Singh', 'a0000000-0000-4000-8000-000000000005');
-select pg_temp.seed_user('b0000000-0000-4000-8000-000000000011', 'neeraj@nitdelhi.ac.in',   'password123', 'Neeraj Kumar',     'a0000000-0000-4000-8000-000000000004');
+-- The two duplicated names get campus-suffixed handles. Usernames are globally
+-- unique, so Vishwajeet-at-Kurnool and Vishwajeet-at-Tirupati cannot both be
+-- `vishwajeet.singh` — and the suffix is what tells you which account you are
+-- logged into when you are testing cross-campus browse.
+
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000006', 'test@iiitk.ac.in',        'password123', 'Test Kurnool',     'test.kurnool',        'a0000000-0000-4000-8000-000000000001');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000007', 'test@niet.co.in',         'password123', 'Test Noida',       'test.noida',          'a0000000-0000-4000-8000-000000000002');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000008', 'vishwajeet@iiitk.ac.in',  'password123', 'Vishwajeet Singh', 'vishwajeet.singh',    'a0000000-0000-4000-8000-000000000001');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000009', 'neeraj@niet.co.in',       'password123', 'Neeraj Kumar',     'neeraj.kumar',        'a0000000-0000-4000-8000-000000000002');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000010', 'vishwajeet@iittp.ac.in',  'password123', 'Vishwajeet Singh', 'vishwajeet.tirupati', 'a0000000-0000-4000-8000-000000000005');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000011', 'neeraj@nitdelhi.ac.in',   'password123', 'Neeraj Kumar',     'neeraj.delhi',        'a0000000-0000-4000-8000-000000000004');
 
 
 -- ---- Academic details -------------------------------------------------------

@@ -1126,6 +1126,7 @@ Read first:
 
 TASK: Write the SQL into the newest empty file in supabase/migrations/
 ending in _usernames.sql. Nine sections.
+I have Created new migration at supabase/migrations/20260815061951_usernames.sql
 
 === 1. EXTENSION ===
 create extension if not exists pg_trgm;
@@ -1269,8 +1270,12 @@ HARD CONSTRAINTS:
 
 When done, print the file's full relative path and list every database
 object it creates.
-```
 
+Other Points:
+1. We will allow standard usernames similar to Instagram, YouTube, and Twitter, may be we will enforce certain rules and restrictions accordingly. Not every combination of any class of characters will be allowed as a username.
+2. Hey, claude code, please set EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 in such a way so that I don’t need to always fill in my LAN IP manually everytime and the code auto fetch and set it, so I can test the app smoothly on on my physical device. 
+
+```
 ---
 
 ## ▶ CC-2 — Migration 006 (backfill)

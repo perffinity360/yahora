@@ -1,5 +1,4 @@
-import Constants from 'expo-constants';
-
+import { getDevHost } from './devHost';
 import { supabase } from './supabase';
 
 const API_PORT = (process.env.EXPO_PUBLIC_API_PORT ?? '5000').trim();
@@ -20,9 +19,8 @@ function resolveApiUrl(): string {
   const explicit = (process.env.EXPO_PUBLIC_API_URL ?? '').trim().replace(/\/+$/, '');
   if (explicit) return explicit;
 
-  // e.g. "192.168.1.10:8081" — take the host, drop the Metro port.
-  const hostUri = Constants.expoConfig?.hostUri ?? Constants.expoGoConfig?.debuggerHost ?? '';
-  const host = hostUri.split(':')[0]?.trim();
+  // e.g. "192.168.1.10:8081" — take the host, swap in the backend port.
+  const host = getDevHost();
   if (host) return `http://${host}:${API_PORT}`;
 
   return '';
