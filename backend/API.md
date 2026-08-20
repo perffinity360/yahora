@@ -82,9 +82,12 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `DUPLICATE` | 400 | `mapDbError` — Postgres `23505` unique violation | — |
 | `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation | — |
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
-| `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`) | — |
-| `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved` | — |
-| `INVALID_FORMAT` | 400 | `CHECK users_username_valid` | — |
+| `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
+| `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
+| `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken | `message` (optional) |
+| `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty | `message` |
+| `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` — under 8 characters, equal to the chosen username, or rejected by GoTrue's own policy | `message` |
+| `COMMON_PASSWORD` | 400 | `POST /api/auth/onboarding` — matches the ~20-entry common-password blocklist in `auth.controller.js` | `message` |
 | `RATE_LIMITED` | 429 | §1.5 — the 30-day username-change window, checked in JS | `next_allowed_at` |
 | `CANNOT_FOLLOW_SELF` | 400 | `CHECK no_self_follow` | — |
 | `BLOCKED` | 403 | Trigger `trg_prepare_follow` | — |
@@ -114,13 +117,14 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 These apply to **every route that exists today** and are not repeated in each entry. None of
 them apply to Part 2, which is specified the way it should be, not the way Part 1 is.
 
-**There is no authentication anywhere in this backend.** No middleware, no `Authorization`
-header parsing, no `req.user`. A grep for `bearer|authorization|req\.user|jwt|middleware`
-across `backend/src` returns nothing. Every endpoint is therefore `**Auth:** none`, and the
-caller's identity is whatever `user_id` / `userId` / `seller_id` / `sender_id` they put in
-the body or query string. There is no ownership check on any write, so any caller can edit
-or delete any product, complete anyone's onboarding, overwrite any profile, or send a
-message as any user.
+**There is almost no authentication in this backend — one route now has it.**
+`POST /api/auth/onboarding` is behind `requireAuth` as of CC-4 and takes the caller's id from
+`req.user.id` only. **Every other endpoint is still `Auth: none`**, and the caller's identity
+is whatever `user_id` / `userId` / `seller_id` / `sender_id` they put in the body, params or
+query string. There is no ownership check on any other write, so any caller can still edit or
+delete any product, overwrite any profile, or send a message as any user. Closing the rest is
+§1.6 / CC-6 — the full inventory is in `docs/CURRENT_STATE.md` item 4 and the CC-4 audit list
+in `docs/CHANGELOG.md`.
 
 **The Supabase client uses the service-role key** (`backend/src/config/supabase.js`),
 so every query bypasses RLS. RLS is not a backstop for this path.
@@ -329,10 +333,15 @@ on 500 will keep hitting it. The 403 discloses whether a campus is onboarded.
 validation check — bad token, unknown university domain, insert failure — lands in the same
 catch. Clients cannot distinguish "you typed it wrong" from "the server is broken".
 
-On first successful verification the controller inserts a `users` row with only `id`,
-`university_id`, and `is_profile_complete: false`; every other profile column is null. The
-existence probe is `.single()`, which errors when the row is absent — that error is captured
-into `userFetchError` and never read, which is what makes the insert path work.
+On first successful verification the `users` row holds only `id`, `university_id`, and
+`is_profile_complete: false`; every other profile column is null. **Since migration 005 that
+row is created by the `on_auth_user_created` trigger, not by this controller.** The controller
+still writes it as an `upsert(..., { onConflict: 'id', ignoreDuplicates: true })` — a fallback
+for a database where the trigger is missing (dropped by a Supabase upgrade, or restored from
+before 005). When the trigger is present the upsert is a no-op that returns zero rows, and the
+controller re-reads the row rather than calling `.single()` on nothing. The existence probe is
+`.single()`, which errors when the row is absent — that error is captured into `userFetchError`
+and never read, which is what makes the fallback path work.
 
 `userProfile.is_profile_complete` is the routing flag: `false` → onboarding, `true` → home.
 Response keys are camelCase (`userAuth`, `userProfile`) while the row contents are
@@ -340,27 +349,82 @@ snake_case.
 
 ### POST /api/auth/onboarding
 **Module:** auth
-**Auth:** none — `userId` comes from the body, so any caller can complete or overwrite any
-user's onboarding.
+**Auth:** **required (Bearer token)** — the only authenticated route in Part 1. The target user
+is `req.user.id` from the verified token and nothing else.
 **Content-Type:** application/json
 **Body:**
-  - userId: uuid, required
   - full_name: string, required
+  - username: string, required — trimmed and lowercased server-side before any check, so
+    `"Rahul.Sharma "` is stored as `rahul.sharma`
+  - password: string, required, min 8 — never logged, never echoed back
   - qualification: string, required — free text (e.g. `'Graduation'`), not an enum
   - course_id: uuid, required
   - year_of_study: string, required — free text (e.g. `'3rd year'`)
   - specialization_id: uuid, required
   - avatar_url: string, optional — stored as `null` when falsy
   - bio: string, optional, max 250 — stored as `null` when falsy
+  - ~~userId~~: **removed.** If a caller sends it, it is ignored in silence — not read, not
+    validated, not errored on. See the security note below.
 **200:** `{ "message": "Profile completed successfully!", "userProfile": { "<users row>": "..." } }`
-**400:** `{ "error": "Missing required fields. Name, Qualification, Course, Year, and Specialization are mandatory." }`
-**400:** `{ "error": "Bio must be 250 characters or less." }`
-**500:** `{ "error": "Internal server error during onboarding." }`
-**Notes:** Body key is `userId` (camelCase) while every other field is snake_case. The
-required-field check is a single truthiness test, so an empty string fails the same way a
-missing key does. `is_profile_complete` is forced to `true` on success. An unknown `userId`
-makes `.single()` return zero rows → error → 500. Nothing verifies that `course_id` and
-`specialization_id` are consistent with each other, or that the caller is that user.
+  — the row now also carries `username`, `has_password: true` and `is_profile_complete: true`.
+**400:** `{ "error": "MISSING_FIELDS", "message": "..." }`
+**400:** `{ "error": "CONTENT_TOO_LONG", "max": 250, "message": "Bio must be 250 characters or less." }`
+**400:** `{ "error": "INVALID_FORMAT", "message": "..." }` — no `username` sent, or the handle
+  is unavailable for a reason that is neither reserved nor taken (i.e. it fails
+  `users_username_valid`)
+**400:** `{ "error": "USERNAME_RESERVED" }`
+**400:** `{ "error": "USERNAME_TAKEN" }` — either the availability check saw it, or the unique
+  index caught the race a millisecond later. Both produce this same code.
+**400:** `{ "error": "WEAK_PASSWORD", "message": "..." }` — under 8 characters, identical to the
+  chosen username, or rejected by GoTrue's own policy
+**400:** `{ "error": "COMMON_PASSWORD", "message": "..." }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }` — the
+  token is valid but no `public.users` row exists. Near-impossible with `on_auth_user_created`
+  in place; documented so it is a 404 and not a 500.
+**500:** `{ "error": "INTERNAL_ERROR" }` — `mapDbError` fallback only
+
+**🔒 Security — this route used to be an account-takeover hole.** Until CC-4 it read `userId`
+from the body on a route with no middleware, so anyone who knew a UUID could complete or
+overwrite that student's profile. Now that the same call also sets the account password, the
+same request would have been full takeover. Identity is `req.user.id`, full stop.
+
+**⚠️ The caller's access token is DEAD the moment this returns 200.** GoTrue revokes every
+existing session when a password is set, and this endpoint sets one — so the token that
+authorised the request is rejected (`403` from GoTrue, `401 UNAUTHORIZED` from us) immediately
+afterwards. Verified against local GoTrue: the same token that worked on the request returns
+`403` from `/auth/v1/user` one call later. The `200` body carries the profile but **no new
+session**, so a client that keeps using its token will appear logged out the instant signup
+succeeds. Clients must re-establish a session right after onboarding. **TODO — needs a
+decision: should this endpoint return a fresh `session` the way `verify-otp` does?** It has the
+password in hand at that moment and could mint one on `createSessionClient()`. Not done in CC-4
+because it changes the response contract.
+
+**Order of operations (do not reorder).** Validate everything → set the password via
+`auth.admin.updateUserById` → **only if that succeeded**, write the profile row with
+`is_profile_complete: true` and `has_password: true`. The reverse order strands a student with
+a complete profile and no password: the app never routes them back to onboarding, so nothing
+ever prompts them to set one. The failure mode of *this* order is harmless — they retry and the
+password is simply set again.
+
+**Username rules are the database's, not this controller's.** `is_username_available(p_username,
+p_user_id)` decides charset, length, the reserved list and the 30-day cooling-off window in one
+call. The controller re-queries `reserved_usernames` / `users` / `username_history` **only to
+label** which of the four reasons applies; there is no regex and no copy of the reserved list in
+JavaScript, and `INVALID_FORMAT` is reached by elimination. A JS reimplementation that drifted
+from `users_username_valid` would tell a student a handle is free and then 500 on the insert.
+
+**The `23505` catch is the point of the endpoint.** Availability is not a reservation: two
+students can both be told "free" and both submit. Only `users_username_key` can arbitrate, and
+it reports the loser as Postgres `23505`, mapped here to `400 USERNAME_TAKEN`. A 500 on that
+path is a bug. (`mapDbError` maps `23505` to the generic `DUPLICATE`; this endpoint names it
+before falling through, because the handle is the only unique column in play.)
+
+**Notes:** The required-field check is a single truthiness test, so an empty string fails the
+same way a missing key does. Nothing verifies that `course_id` and `specialization_id` are
+consistent with each other. **Note the doubled-separator gap:** `users_username_valid` permits
+`rahul..sharma` and `rahul__sharma` (Instagram-style), so those are accepted here — see the
+runbook discrepancy logged in `docs/CHANGELOG.md`.
 
 ### POST /api/auth/demo-login
 **Module:** auth
@@ -376,6 +440,12 @@ message**, i.e. a 500 that is not the generic catch.
 email `guest_<timestamp>_<random6>@demo.yahora.com`, password `Demo!<timestamp><random6>`,
 `email_confirm: true` via the admin API — then immediately signs in to mint a session. There
 is no rate limit, so this endpoint is an unbounded account-creation primitive.
+
+**This route returned 500 for every call between migration 005 and CC-4.** Each demo login
+mints a brand-new auth user, so `on_auth_user_created` had always created the `users` row by
+the time step 5 ran, and step 5's plain `.insert()` hit `23505` on the primary key. It is now
+an `upsert(..., { onConflict: 'id', ignoreDuplicates: true })` that reads the trigger's row
+back. Fixed — no client change needed.
 
 Cleanup is the `cleanup_demo_users` RPC, run by `node-cron` at `0 0 * * *` (midnight daily)
 from `backend/src/utils/cronJobs.js`. The log line there says "weekly"; the schedule is

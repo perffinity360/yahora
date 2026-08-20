@@ -82,6 +82,131 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-20 — 🚨 CC-4: onboarding is now authenticated, and takes username + password (Vishwajeet)
+
+### ⚠️ BREAKING — Neeraj, this one breaks your onboarding page. Read it before you pull.
+
+**`POST /api/auth/onboarding` now requires a Bearer token.** It is the first and only route in
+this backend behind `requireAuth`. `frontend/src/pages/onboarding/onboarding.jsx` sends
+`userId` in the body with a `"replace-with-actual-uuid"` fallback and no `Authorization`
+header — **it will get `401 UNAUTHORIZED` and no student can finish signup.**
+
+Your N-Block B has to land in the same merge window as this. If N-Block A (the AuthContext
+`setSession` fix) isn't in yet, wait — you cannot send a token you don't have.
+
+Three things changed in the contract, all breaking:
+
+1. **`userId` is gone from the body.** Not rejected — *ignored, in silence*. The target user is
+   `req.user.id` from the verified token and nothing else. Sending it does nothing at all.
+2. **`username` and `password` are now required.** Both compulsory, per runbook §0.6. There is
+   no partial-onboarding path.
+3. **Every error is now a CODE, not a human sentence.** This endpoint used to answer
+   `{ "error": "Missing required fields. Name, Qualification, ..." }`. It now answers
+   `{ "error": "MISSING_FIELDS", "message": "..." }`. **If you are matching on the error string
+   anywhere, it will stop matching.** Switch to `error` for the code and render `message`.
+
+### ⚠️ Neeraj — the token dies when onboarding succeeds. Your page must handle this.
+
+I found this while testing, and it is not in the runbook. **GoTrue revokes every session when a
+password is set**, and this endpoint sets one. So the access token your onboarding page used to
+make the call is rejected the moment the call returns `200`. Verified: the same token that
+worked on the request gets `403` from `/auth/v1/user` on the very next call.
+
+The `200` body carries the profile row but **no new session**. If your page keeps using the
+token it already has, the student appears logged out at the exact moment they finish signing
+up — and it will look like your bug, not the backend's.
+
+Options, your call: re-authenticate after the 200, or I add a `session` to the response the way
+`verify-otp` does (the endpoint has the password in hand and can mint one). **I did not add it
+in CC-4 because it changes the response contract and you are the one consuming it.** Tell me
+which you want and I will ship it.
+
+### Why the auth was urgent, not tidy-up
+
+The old handler read the target user's id from the request body on a route with no middleware.
+Anyone who knew a UUID could overwrite that student's profile. Once this same endpoint started
+setting the account password, that request became **full account takeover** — send someone
+else's UUID with a password you choose, then log in as them. That is why it went first.
+
+### New endpoints
+- None. `POST /api/auth/onboarding` changed; nothing was added.
+
+### Changed endpoints (BREAKING)
+- **`POST /api/auth/onboarding`** — auth now required; `userId` removed; `username` and
+  `password` now required; error strings replaced by codes. Full contract in
+  `backend/API.md` → *POST /api/auth/onboarding*.
+
+### Changed endpoints (NOT breaking)
+- **`POST /api/auth/demo-login` is fixed.** It had been returning 500 on every call since 005
+  landed (see the entry below). Step 5 is now an upsert that reads the trigger's row back.
+  Request and response shapes are unchanged.
+- **`POST /api/auth/verify-otp`** — its profile insert is now an upsert with
+  `ignoreDuplicates: true`, kept as a fallback for a database where the trigger is missing.
+  No shape change.
+
+### New error codes
+`MISSING_FIELDS` · `WEAK_PASSWORD` · `COMMON_PASSWORD` — all 400, all carry a human `message`.
+Added to the code table at the top of `API.md`. `USERNAME_TAKEN`, `USERNAME_RESERVED`,
+`INVALID_FORMAT`, `CONTENT_TOO_LONG`, `UNAUTHORIZED` and `NOT_FOUND` already existed and are
+now also raised here.
+
+### New fields on existing responses
+- `userProfile` from onboarding now carries `username` and `has_password: true` alongside
+  `is_profile_complete: true`.
+
+### What NOT to do yet
+- **Don't reimplement username validation in your `PATCH /api/users/me/username`.** Call
+  `is_username_available(p_username, p_user_id)` and catch `23505` — the availability check is
+  not a reservation, and the unique index is the only thing that can arbitrate the race. Copy
+  the shape from `completeOnboarding`; the controller only *labels* the reason by re-querying
+  the three tables, it never re-derives the rules.
+- **Don't fix the other user-id-from-body handlers.** The audit below is CC-6 / §1.6 work and
+  several of the files are mine. Listed here so it's on the record, not so it gets fixed today.
+
+### 🚨 Part A audit — every handler that trusts a caller-supplied user id
+
+`requireAuth` exists on exactly one route. **Every write below is still unauthenticated and
+takes its actor from the request.** Sorted by how bad it is.
+
+| # | Handler | Where the id comes from | What an unauthenticated caller can do |
+|---|---|---|---|
+| 1 | `user.controller.js:75` `updateProfile` | `req.params.userId` + **`const updates = req.body` spread wholesale into `.update()`** | **Worst hole in the backend.** Arbitrary target, arbitrary columns. Post-005 that includes `username`, `has_password`, `is_profile_complete` and `university_id` — anyone can steal any handle, or move a student to another campus. `OWNER: Neeraj` |
+| 2 | `products.controller.js:118` `deleteProduct` | `req.params.id` only — **no actor at all** | Delete any listing on any campus |
+| 3 | `products.controller.js:85` `updateProduct` | `req.params.id` only — **no actor at all** | Rewrite title, price, status of any listing |
+| 4 | `products.controller.js:8` `createProduct` | `req.body.seller_id` | Post a listing as any student |
+| 5 | `products.controller.js:296` `toggleLikeProduct` | `req.body.user_id` | Like/unlike as anyone *(named in CURRENT_STATE item 4)* |
+| 6 | `products.controller.js:323` `toggleSaveProduct` | `req.body.user_id` | Save/unsave as anyone *(named in CURRENT_STATE item 4)* |
+| 7 | `products.controller.js:349` `addComment` | `req.body.user_id` | Comment as any student — the campus check reads the *claimed* user's row |
+| 8 | `products.controller.js:387` `toggleCommentVote` | `req.body.user_id` | Vote as anyone; ballot-stuff any comment |
+| 9 | `products.controller.js:411` `markProductAsSold` | `req.params.id` + `req.body.buyer_id` | Mark anyone's listing sold, to any buyer, writing a `purchases` row |
+| 10 | `products.controller.js:445` `markProductAsAvailable` | `req.params.id` only | Un-sell anyone's listing |
+| 11 | `messages.controller.js:142` `markAsRead` | `req.body.userId` | Mark another student's messages read — silently kills their unread badge |
+| 12 | `messages.controller.js:161` `markAsDelivered` | `req.body.userId` | Same, across every thread they have |
+| 13 | `messages.controller.js:50` `sendMessage` | `req.body.sender_id` | Send a message as any student. The campus check reads the *claimed* sender's row, so it validates nothing |
+| 14 | `user.controller.js:102` `updateAvatar` | `req.params.userId` | Replace any student's avatar; deletes their old file from storage |
+
+Read-side, lower severity but same root cause — the "who is asking" is caller-supplied, so
+campus scoping and privacy are advisory: `products.controller.js:140` (`user_id` in query),
+`products.controller.js:189`, `messages.controller.js:11` `getInbox` (`:userId` — read anyone's
+inbox), `messages.controller.js:29` `getChatHistory` (read any thread), `user.controller.js:15`
+`getDashboardData`, `user.controller.js:176` `getPublicProfile` (`visitorId` from query).
+
+**Not fixed in CC-4, deliberately.** One security change per PR, and the onboarding hole was the
+one that becomes takeover the moment passwords exist.
+
+### Two contradictions in the runbook, for whoever runs Block D
+
+- **CHECK 3 expects `"Rahul..S"` → `400 INVALID_FORMAT`. It will return `200`.** Migration 005
+  explicitly *allows* doubled separators ("`rahul..sharma` and `rahul__sharma` are both ALLOWED,
+  matching Instagram") and folds case, so the handle stores as `rahul..s` and is perfectly
+  valid. CC-4 forbids reimplementing format rules in JS, so the controller cannot reject what
+  the constraint accepts. **Either the runbook check is wrong or 005's charset is — that is a
+  product decision, not a code fix.** 005's own comment already flags doubled separators as an
+  impersonation vector left to Phase 8 moderation.
+- **CHECK 5 sends `method: 'PATCH'`** to `/api/auth/onboarding`, while CHECK 1 and CHECK 2 send
+  `POST`. The route is `POST`. Run the race test with `POST` or it will 404 twice and look like
+  a pass.
+
 ## 2026-08-20 — Migrations 005 + 006: usernames, passwords, signup trigger (Vishwajeet)
 
 ### Migrations applied
@@ -150,12 +275,10 @@ check in the same instant; the loser gets 23505 and the backend turns that into 
 - None. This is a database change only.
 
 ### Changed endpoints (BREAKING)
-- **`POST /api/auth/demo-login` returns 500 for every call now.** Step 5 of `demoLogin`
-  (`auth.controller.js:227`) is a plain `.insert()` into `users` on an id the trigger has
-  already created one microsecond earlier, so it hits 23505 and the catch turns it into
-  "Internal server error during demo login". It needs to become
-  `.upsert(..., { onConflict: 'id', ignoreDuplicates: false })`. **Not fixed yet** — Vishwajeet
-  is on it. Don't debug this on your side; it is not your module and it is not your env.
+- **`POST /api/auth/demo-login` returned 500 for every call.** Step 5 of `demoLogin` was a
+  plain `.insert()` into `users` on an id the trigger had already created one microsecond
+  earlier, so it hit 23505 and the catch turned it into "Internal server error during demo
+  login". ✅ **Fixed in CC-4** — see the entry above. No client change needed.
 - `POST /api/auth/verify-otp` is fine. Its insert is guarded by an `if (!publicUser)` that the
   trigger's row now satisfies, so the insert is simply skipped. Narrow race remains; same
   upsert fix applies.

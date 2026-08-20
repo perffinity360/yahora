@@ -5,6 +5,7 @@
 // ══════════════════════════════════════════════
 import express from 'express';
 import { requestOtp, verifyOtp, completeOnboarding, demoLogin} from './auth.controller.js';
+import requireAuth from '../../middleware/requireAuth.js';
 
 const router = express.Router();
 
@@ -15,7 +16,17 @@ router.post('/request-otp', requestOtp);
 router.post('/verify-otp', verifyOtp);
 
 // POST /api/auth/onboarding
-router.post('/onboarding', completeOnboarding);
+//
+// 🔒 requireAuth is the security fix, not a convenience. Without it the handler
+// took the target user's id from the request body, so any caller could complete
+// or overwrite any student's profile — and now that this endpoint also sets the
+// account password, that would be account takeover. The token is the ONLY thing
+// that says whose profile this is.
+//
+// ⚠️ Breaking for any client that does not send an Authorization header. See
+// docs/CHANGELOG.md — the web onboarding page must ship its token fix in the
+// same window or signup returns 401.
+router.post('/onboarding', requireAuth, completeOnboarding);
 
 // POST /api/auth/demo-login 
 router.post('/demo-login', demoLogin);
