@@ -363,3 +363,128 @@
   transform: translateY(-2px);
   box-shadow: 0 12px 24px rgba(128, 0, 128, 0.4);
 }
+
+/* --- USERNAME + PASSWORD (N-Block B) --- */
+
+/* The handle rendered as the URL it becomes — makes the concept concrete. */
+.handlePreview {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--purple-dark);
+  word-break: break-all;
+}
+
+.handlePreview strong {
+  font-weight: 700;
+}
+
+/* One line of live feedback under a field: spinner / tick / cross + message.
+   Shared by the username check and the password rules so both read the same. */
+.fieldStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.statusOk {
+  color: var(--blue-dark);
+}
+
+.statusBad {
+  color: var(--pink-dark);
+}
+
+.statusNeutral {
+  color: #888;
+}
+
+/* Stands in for the tick while a rule is unmet, so the row doesn't reflow
+   by 14px the moment it turns green. */
+.ruleDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #bbb;
+  flex-shrink: 0;
+}
+
+.passwordFeedback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.suggestionChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  background-color: var(--pink-bg);
+  color: var(--purple-dark);
+  border: 1px solid rgba(235, 72, 127, 0.2);
+  border-radius: 2rem;
+  padding: 0.3rem 0.75rem;
+  font-family: "Inter", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.chip:hover {
+  background-color: var(--purple-dark);
+  color: var(--white);
+  border-color: var(--purple-dark);
+}
+
+/* Room on the right for the show/hide eye, so a long password doesn't run
+   underneath it. Scoped the same way as the base input rule so react-select's
+   nested input is never caught by it. */
+.inputWithIcon > input.withToggle {
+  padding-right: 3rem;
+}
+
+.toggleBtn {
+  position: absolute;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.toggleBtn:hover {
+  color: var(--purple);
+}
+
+.toggleBtn:focus-visible {
+  outline: 2px solid var(--purple-light);
+  outline-offset: 2px;
+  border-radius: 0.3rem;
+}
+
+/* The page had no `spin` keyframe — neither here nor in global.css — so the
+   inline `animation: "spin 1s linear infinite"` on the avatar loader never
+   animated. Keyframes declared in a CSS Module are name-hashed, so they only
+   resolve when referenced from inside the same module, as here. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
