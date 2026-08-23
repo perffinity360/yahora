@@ -10,6 +10,12 @@ import {
  Sparkles,
  GraduationCap,
  Award,
+ AtSign,
+ Lock,
+ Eye,
+ EyeOff,
+ Check,
+ X,
  Loader2, // Imported the loading spinner icon
 } from "lucide-react";
 import styles from "./onboarding.module.css";
@@ -17,6 +23,73 @@ import styles from "./onboarding.module.css";
 import { supabase } from "../../config/supabaseClient.js";
 import SmartImage from "../../components/SmartImage/SmartImage.jsx";
 import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar.jsx";
+import { useAuth } from "../../contexts/AuthContext";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+// AuthContext owns this key; it holds the ACCESS token, which is exactly what
+// the Bearer header needs. Read directly rather than through the context so the
+// pre-render redirect below can run before any request is built.
+const SESSION_KEY = "yahora_session";
+
+const MIN_PASSWORD_LENGTH = 8;
+
+// `is_username_available()` reports one of four reasons. Each gets its own
+// message: "taken" and "reserved" mean completely different things to a student
+// (pick another vs. you may never have this one), and lumping them together
+// leaves them retrying a handle they can never get.
+const REASON_TO_STATUS = {
+  TAKEN: "taken",
+  RESERVED: "reserved",
+  INVALID_FORMAT: "invalid",
+  RECENTLY_RELEASED: "recently_released",
+};
+
+// The same three codes come back from POST /api/auth/onboarding when the handle
+// was taken between the availability check and submit.
+const SUBMIT_ERROR_TO_STATUS = {
+  USERNAME_TAKEN: "taken",
+  USERNAME_RESERVED: "reserved",
+  INVALID_FORMAT: "invalid",
+};
+
+const USERNAME_STATUS_COPY = {
+  checking: "Checking availability…",
+  available: "Available",
+  taken: "That handle is already taken.",
+  reserved: "That handle is reserved and can't be used.",
+  invalid:
+    "3–20 characters: lowercase letters, numbers, . or _ — not at the start, the end, or doubled.",
+  recently_released:
+    "That handle was given up recently and is on a 30-day hold.",
+  unknown: "Couldn't check that right now — we'll confirm when you continue.",
+};
+
+const BAD_USERNAME_STATUSES = new Set([
+  "taken",
+  "reserved",
+  "invalid",
+  "recently_released",
+]);
+
+const PASSWORD_ERROR_FALLBACK = {
+  WEAK_PASSWORD: "That password is too weak. Please choose a stronger one.",
+  COMMON_PASSWORD: "That password is too common. Please choose another.",
+};
+
+// API.md still has the suggestion payload marked TODO — it may ship as a bare
+// array, `{ suggestions: [] }` or the `items` envelope. Accept all three rather
+// than render nothing the day the contract is settled the other way.
+const normalizeSuggestions = (payload) => {
+  const list = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.suggestions)
+      ? payload.suggestions
+      : Array.isArray(payload?.items)
+        ? payload.items
+        : [];
+  return list.filter((item) => typeof item === "string" && item).slice(0, 3);
+};
 
 // A searchable react-select wrapper with two behaviours the plain <Select>
 // lacks on this page:
@@ -99,9 +172,12 @@ const Onboarding = () => {
  // Safely grab the passed profile, or default to an empty object if it's a new user
  const existingProfile = location.state?.profile || {};
 
+ const { login } = useAuth();
+
  // 1. Form State (Pre-filled with existing data if available)
  const [formData, setFormData] = useState({
    fullName: existingProfile.full_name || "",
+   username: existingProfile.username || "",
    qualification: existingProfile.qualification || "",
    courseId: existingProfile.course_id || "",
    yearOfStudy: existingProfile.year_of_study || "",
@@ -117,6 +193,29 @@ const Onboarding = () => {
 
  const [loading, setLoading] = useState(false);
  const [error, setError] = useState("");
+
+ // Username availability. `status` drives both the message and the submit gate:
+ //   idle | checking | available | taken | reserved | invalid |
+ //   recently_released | unknown
+ // "unknown" means the check itself failed (endpoint down, network) — see the
+ // gating note further down for why that is not treated as a rejection.
+ const [usernameStatus, setUsernameStatus] = useState("idle");
+ const [usernameServerError, setUsernameServerError] = useState("");
+ const [usernameSuggestions, setUsernameSuggestions] = useState([]);
+ const [nameSuggestions, setNameSuggestions] = useState([]);
+
+ // Monotonic request ids. The 400ms debounce collapses a burst of keystrokes,
+ // but it does not order the responses that do go out — these do.
+ const usernameRequestIdRef = useRef(0);
+ const suggestionRequestIdRef = useRef(0);
+
+ // Passwords live in component state only. They are never written to
+ // localStorage/sessionStorage and never logged.
+ const [password, setPassword] = useState("");
+ const [confirmPassword, setConfirmPassword] = useState("");
+ const [showPassword, setShowPassword] = useState(false);
+ const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+ const [passwordError, setPasswordError] = useState("");
 
  // NEW: State and Ref for Image Upload
  const [uploadingImage, setUploadingImage] = useState(false);
@@ -172,11 +271,122 @@ const Onboarding = () => {
    fetchAcademicData();
  }, []);
 
+ // 3b. There is no route guard on /onboarding, and the endpoint now sits behind
+ // requireAuth. With no stored session the POST can only ever return 401, so
+ // send them to the login form instead of letting them fill in the whole form
+ // and hit an error screen at the end.
+ useEffect(() => {
+   if (!localStorage.getItem(SESSION_KEY)) {
+     navigate("/auth", { replace: true });
+   }
+ }, [navigate]);
+
+ // 3c. Live username availability, debounced by 400ms.
+ //
+ // Unthrottled, typing "rahulsharma" fires 11 requests. They come back out of
+ // order, so the answer for "rahul" can land AFTER the answer for "rahulsharma"
+ // and overwrite it — the student is told a handle is free when it isn't. The
+ // debounce collapses the burst; the request counter discards anything stale
+ // that still arrives late.
+ useEffect(() => {
+   const handle = formData.username.trim();
+
+   // Whatever the server said about the last handle no longer applies.
+   setUsernameServerError("");
+
+   if (!handle) {
+     setUsernameStatus("idle");
+     setUsernameSuggestions([]);
+     return;
+   }
+
+   setUsernameStatus("checking");
+
+   const timer = setTimeout(() => {
+     const requestId = ++usernameRequestIdRef.current;
+     const token = localStorage.getItem(SESSION_KEY);
+
+     fetch(
+       `${API_BASE}/api/users/username-available?username=${encodeURIComponent(handle)}`,
+       // Auth is optional here, but sending it means a student editing their
+       // profile sees their own current handle as available, not "taken".
+       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+     )
+       .then(async (res) => {
+         const data = await res.json().catch(() => ({}));
+
+         // A newer keystroke already fired. Drop this answer on the floor.
+         if (requestId !== usernameRequestIdRef.current) return;
+
+         if (!res.ok) {
+           setUsernameStatus("unknown");
+           setUsernameSuggestions([]);
+           return;
+         }
+
+         if (data.available) {
+           setUsernameStatus("available");
+           setUsernameSuggestions([]);
+           return;
+         }
+
+         setUsernameStatus(REASON_TO_STATUS[data.reason] || "invalid");
+         setUsernameSuggestions(normalizeSuggestions(data.suggestions));
+       })
+       .catch(() => {
+         if (requestId !== usernameRequestIdRef.current) return;
+         setUsernameStatus("unknown");
+         setUsernameSuggestions([]);
+       });
+   }, 400);
+
+   return () => clearTimeout(timer);
+ }, [formData.username]);
+
+ // 3d. Three suggested handles derived from the name they typed. Same debounce
+ // and same stale-response guard, for the same reason.
+ useEffect(() => {
+   const name = formData.fullName.trim();
+
+   if (name.length < 2) {
+     setNameSuggestions([]);
+     return;
+   }
+
+   const timer = setTimeout(() => {
+     const requestId = ++suggestionRequestIdRef.current;
+     const token = localStorage.getItem(SESSION_KEY);
+
+     fetch(
+       `${API_BASE}/api/users/username-suggestions?name=${encodeURIComponent(name)}`,
+       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+     )
+       .then(async (res) => {
+         const data = await res.json().catch(() => ({}));
+         if (requestId !== suggestionRequestIdRef.current) return;
+         setNameSuggestions(res.ok ? normalizeSuggestions(data) : []);
+       })
+       .catch(() => {
+         if (requestId !== suggestionRequestIdRef.current) return;
+         setNameSuggestions([]);
+       });
+   }, 400);
+
+   return () => clearTimeout(timer);
+ }, [formData.fullName]);
+
  // 4. Handlers
  const handleChange = (e) => {
    const { name, value } = e.target;
    if (name === "bio" && value.length > 250) return;
-   setFormData((prev) => ({ ...prev, [name]: value }));
+   // Handles are lowercase in the database. Convert silently as they type —
+   // a capital letter is a keyboard habit, not a mistake worth an error for.
+   const next = name === "username" ? value.toLowerCase() : value;
+   setFormData((prev) => ({ ...prev, [name]: next }));
+ };
+
+ const applySuggestion = (suggestion) => {
+   setFormData((prev) => ({ ...prev, username: suggestion }));
  };
 
  const handleDropdownChange = (selectedOption, actionMeta) => {
@@ -232,11 +442,16 @@ const Onboarding = () => {
  const handleSubmit = async (e) => {
    e.preventDefault();
    setError("");
+   setUsernameServerError("");
+   setPasswordError("");
    setLoading(true);
+
+   const handle = formData.username.trim();
 
    // Frontend Validation
    if (
      !formData.fullName ||
+     !handle ||
      !formData.qualification ||
      !formData.courseId ||
      !formData.yearOfStudy ||
@@ -247,40 +462,84 @@ const Onboarding = () => {
      return;
    }
 
-   try {
-     const token = localStorage.getItem("yahora_session");
-     const userId =
-       localStorage.getItem("yahora_user_id") || "replace-with-actual-uuid";
-
-     const response = await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/auth/onboarding`,
-       {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json",
-           Authorization: `Bearer ${token}`,
-         },
-         body: JSON.stringify({
-           userId: userId,
-           full_name: formData.fullName,
-           avatar_url: formData.avatarUrl,
-           qualification: formData.qualification,
-           course_id: formData.courseId,
-           year_of_study: formData.yearOfStudy,
-           specialization_id: formData.specializationId,
-           bio: formData.bio,
-         }),
-       },
+   if (password.length < MIN_PASSWORD_LENGTH) {
+     setPasswordError(
+       `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
      );
+     setLoading(false);
+     return;
+   }
+
+   if (password !== confirmPassword) {
+     setPasswordError("Both passwords must match.");
+     setLoading(false);
+     return;
+   }
+
+   // No session means no Bearer token means a guaranteed 401. Send them to log
+   // in rather than firing a request that cannot succeed.
+   const token = localStorage.getItem(SESSION_KEY);
+   if (!token) {
+     setLoading(false);
+     navigate("/auth", { replace: true });
+     return;
+   }
+
+   try {
+     const response = await fetch(`${API_BASE}/api/auth/onboarding`, {
+       method: "POST",
+       headers: {
+         "Content-Type": "application/json",
+         Authorization: `Bearer ${token}`,
+       },
+       // No `userId` here, deliberately. The backend takes the target user from
+       // the verified token and ignores anything sent in the body — until it
+       // grew requireAuth, that field was an account-takeover hole.
+       body: JSON.stringify({
+         full_name: formData.fullName,
+         username: handle,
+         password: password,
+         avatar_url: formData.avatarUrl,
+         qualification: formData.qualification,
+         course_id: formData.courseId,
+         year_of_study: formData.yearOfStudy,
+         specialization_id: formData.specializationId,
+         bio: formData.bio,
+       }),
+     });
 
      const data = await response.json();
 
      if (response.ok) {
+       // Setting a password revokes every existing GoTrue session, so the token
+       // that authorised this very call is dead as of now. The endpoint returns
+       // no new session today; if it ever starts to, adopt it here so the
+       // student isn't bounced to the login form the instant signup succeeds.
+       if (data.session?.access_token) {
+         login(
+           data.session.access_token,
+           data.session.user?.id || data.userProfile?.id,
+           data.session.refresh_token,
+         );
+       }
        // Tell the navbar (mounted since login) to pull the new photo/name.
        window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
        navigate("/dashboard");
+       return;
+     }
+
+     // Put each server code next to the field that caused it. Nothing in here
+     // clears an input: a password the server rejected must still be sitting
+     // there for them to edit.
+     if (SUBMIT_ERROR_TO_STATUS[data.error]) {
+       setUsernameStatus(SUBMIT_ERROR_TO_STATUS[data.error]);
+       setUsernameServerError(data.message || "");
+     } else if (PASSWORD_ERROR_FALLBACK[data.error]) {
+       setPasswordError(data.message || PASSWORD_ERROR_FALLBACK[data.error]);
+     } else if (response.status === 401) {
+       navigate("/auth", { replace: true });
      } else {
-       setError(data.error || data.message || "Failed to save profile.");
+       setError(data.message || data.error || "Failed to save profile.");
      }
    } catch (err) {
      setError("Network error. Please try again.");
@@ -288,6 +547,49 @@ const Onboarding = () => {
      setLoading(false);
    }
  };
+
+ // Live validity, recomputed each render — these drive both the inline hints
+ // and the submit gate, so the button can never disagree with the messages.
+ const trimmedUsername = formData.username.trim();
+ const passwordLongEnough = password.length >= MIN_PASSWORD_LENGTH;
+ const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
+
+ // "unknown" = the availability endpoint itself failed. Treating that as a
+ // rejection would dead-end the page on an outage, and the handle is re-checked
+ // by POST /api/auth/onboarding anyway — the unique index is the real arbiter.
+ const usernameAccepted =
+   usernameStatus === "available" || usernameStatus === "unknown";
+
+ const requiredFieldsFilled = Boolean(
+   formData.fullName &&
+     trimmedUsername &&
+     formData.qualification &&
+     formData.courseId &&
+     formData.yearOfStudy &&
+     formData.specializationId,
+ );
+
+ const canSubmit =
+   requiredFieldsFilled &&
+   usernameAccepted &&
+   passwordLongEnough &&
+   passwordsMatch &&
+   !loading &&
+   !fetchingLists &&
+   !uploadingImage;
+
+ // Suggestions derived from the rejected handle beat name-derived ones — they
+ // are closer to what the student actually wanted.
+ const suggestionChips = usernameSuggestions.length
+   ? usernameSuggestions
+   : nameSuggestions;
+
+ const usernameStatusClass =
+   usernameStatus === "available"
+     ? styles.statusOk
+     : BAD_USERNAME_STATUSES.has(usernameStatus)
+       ? styles.statusBad
+       : styles.statusNeutral;
 
  // Format data for react-select
  const courseOptions = courses.map((course) => ({
@@ -396,11 +698,7 @@ const Onboarding = () => {
                    }}
                  />
                ) : uploadingImage ? (
-                 <Loader2
-                   size={40}
-                   color="#888"
-                   style={{ animation: "spin 1s linear infinite" }}
-                 />
+                 <Loader2 size={40} color="#888" className={styles.spinner} />
                ) : (
                  <User size={40} color="#888" />
                )}
@@ -443,6 +741,67 @@ const Onboarding = () => {
                  required
                />
              </div>
+           </div>
+
+           <div className={styles.inputGroup}>
+             <label>
+               USERNAME <span className={styles.required}>*</span>
+             </label>
+             <div className={styles.inputWithIcon}>
+               <AtSign size={18} className={styles.inputIcon} />
+               <input
+                 type="text"
+                 name="username"
+                 placeholder="rahul.sharma"
+                 value={formData.username}
+                 onChange={handleChange}
+                 autoComplete="username"
+                 autoCapitalize="none"
+                 autoCorrect="off"
+                 spellCheck="false"
+                 required
+               />
+             </div>
+
+             {trimmedUsername && (
+               <p className={styles.handlePreview}>
+                 yahora.com/<strong>{trimmedUsername}</strong>
+               </p>
+             )}
+
+             {usernameStatus !== "idle" && (
+               <p className={`${styles.fieldStatus} ${usernameStatusClass}`}>
+                 {usernameStatus === "checking" ? (
+                   <Loader2 size={14} className={styles.spinner} />
+                 ) : usernameStatus === "available" ? (
+                   <Check size={14} style={{ flexShrink: 0 }} />
+                 ) : BAD_USERNAME_STATUSES.has(usernameStatus) ? (
+                   <X size={14} style={{ flexShrink: 0 }} />
+                 ) : null}
+                 <span>
+                   {usernameServerError || USERNAME_STATUS_COPY[usernameStatus]}
+                 </span>
+               </p>
+             )}
+
+             {usernameStatus !== "available" && suggestionChips.length > 0 && (
+               <div className={styles.suggestionChips}>
+                 {suggestionChips.map((suggestion) => (
+                   <button
+                     key={suggestion}
+                     type="button"
+                     className={styles.chip}
+                     onClick={() => applySuggestion(suggestion)}
+                   >
+                     {suggestion}
+                   </button>
+                 ))}
+               </div>
+             )}
+
+             <p className={styles.helperText}>
+               You can change this once every 30 days.
+             </p>
            </div>
          </div>
 
@@ -575,10 +934,115 @@ const Onboarding = () => {
            </div>
          </div>
 
+         {/* Section 4: Password.
+             Note there is no onPaste handler anywhere below, deliberately:
+             blocking paste breaks password managers, and password managers are
+             the reason students end up with strong passwords at all. */}
+         <div className={styles.formSection}>
+           <h3 className={styles.sectionTitle}>Password</h3>
+
+           <div className={styles.inputRow}>
+             <div className={styles.inputGroup}>
+               <label>
+                 PASSWORD <span className={styles.required}>*</span>
+               </label>
+               <div className={styles.inputWithIcon}>
+                 <Lock size={18} className={styles.inputIcon} />
+                 <input
+                   type={showPassword ? "text" : "password"}
+                   name="password"
+                   className={styles.withToggle}
+                   placeholder="At least 8 characters"
+                   value={password}
+                   onChange={(e) => {
+                     setPassword(e.target.value);
+                     setPasswordError("");
+                   }}
+                   autoComplete="new-password"
+                   required
+                 />
+                 <button
+                   type="button"
+                   className={styles.toggleBtn}
+                   onClick={() => setShowPassword((visible) => !visible)}
+                   aria-label={showPassword ? "Hide password" : "Show password"}
+                 >
+                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                 </button>
+               </div>
+             </div>
+
+             <div className={styles.inputGroup}>
+               <label>
+                 CONFIRM PASSWORD <span className={styles.required}>*</span>
+               </label>
+               <div className={styles.inputWithIcon}>
+                 <Lock size={18} className={styles.inputIcon} />
+                 <input
+                   type={showConfirmPassword ? "text" : "password"}
+                   name="confirmPassword"
+                   className={styles.withToggle}
+                   placeholder="Type it again"
+                   value={confirmPassword}
+                   onChange={(e) => {
+                     setConfirmPassword(e.target.value);
+                     setPasswordError("");
+                   }}
+                   autoComplete="new-password"
+                   required
+                 />
+                 <button
+                   type="button"
+                   className={styles.toggleBtn}
+                   onClick={() =>
+                     setShowConfirmPassword((visible) => !visible)
+                   }
+                   aria-label={
+                     showConfirmPassword ? "Hide password" : "Show password"
+                   }
+                 >
+                   {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                 </button>
+               </div>
+             </div>
+           </div>
+
+           <div className={styles.passwordFeedback}>
+             <p
+               className={`${styles.fieldStatus} ${
+                 passwordLongEnough ? styles.statusOk : styles.statusNeutral
+               }`}
+             >
+               {passwordLongEnough ? (
+                 <Check size={14} style={{ flexShrink: 0 }} />
+               ) : (
+                 <span className={styles.ruleDot} />
+               )}
+               <span>At least 8 characters</span>
+             </p>
+
+             {confirmPassword.length > 0 && !passwordsMatch && (
+               <p className={`${styles.fieldStatus} ${styles.statusBad}`}>
+                 <X size={14} style={{ flexShrink: 0 }} />
+                 <span>Both passwords must match.</span>
+               </p>
+             )}
+
+             {/* Server verdict (WEAK_PASSWORD / COMMON_PASSWORD). What they
+                 typed stays in the field — they edit it, they don't retype it. */}
+             {passwordError && (
+               <p className={`${styles.fieldStatus} ${styles.statusBad}`}>
+                 <X size={14} style={{ flexShrink: 0 }} />
+                 <span>{passwordError}</span>
+               </p>
+             )}
+           </div>
+         </div>
+
            <button
              type="submit"
              className={styles.btnPrimary}
-             disabled={loading || fetchingLists}
+             disabled={!canSubmit}
              style={{ flex: 1 }}
            >
              {loading ? "Saving Profile..." : "Save & Enter Yahora"}
