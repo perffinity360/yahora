@@ -10,7 +10,7 @@ trust an entry.
 | Status | Live. Deployed. | **Nothing here is implemented yet.** |
 | If code and doc disagree | The doc is wrong — fix the doc | The code is wrong — fix the code |
 
-**Part 1** documents the 30 routes that exist now, including their bugs. Where a controller
+**Part 1** documents the 33 routes that exist now, including their bugs. Where a controller
 behaves surprisingly, the surprise is documented rather than corrected. Nothing in Part 1 is
 aspirational.
 
@@ -85,9 +85,12 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
 | `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
 | `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken | `message` (optional) |
-| `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty | `message` |
-| `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` — under 8 characters, equal to the chosen username, or rejected by GoTrue's own policy | `message` |
-| `COMMON_PASSWORD` | 400 | `POST /api/auth/onboarding` — matches the ~20-entry common-password blocklist in `auth.controller.js` | `message` |
+| `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one | `message` |
+| `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — under 8 characters, equal to the caller's username, or rejected by GoTrue's own policy | `message` |
+| `COMMON_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — matches the ~20-entry common-password blocklist in `auth.controller.js` | `message` |
+| `INVALID_CREDENTIALS` | 400 | `POST /api/auth/login-password` — **the only failure code this endpoint ever returns.** Wrong password, unknown username, unknown email and an account with no password are byte-identical, deliberately. Never branch a UI on the reason; there isn't one | `message` (always the same sentence) |
+| `TOO_MANY_ATTEMPTS` | 429 | `POST /api/auth/login-password` — 10 failed attempts for one identifier inside 15 minutes. Also sent as a `Retry-After` header | `retry_after_seconds`, `message` |
+| `INVALID_CURRENT_PASSWORD` | 401 | `POST /api/auth/set-password` — `current_password` did not verify. Distinct from `INVALID_CREDENTIALS` on purpose: the caller is already authenticated, so there is no account to enumerate | `message` |
 | `RATE_LIMITED` | 429 | §1.5 — the 30-day username-change window, checked in JS | `next_allowed_at` |
 | `CANNOT_FOLLOW_SELF` | 400 | `CHECK no_self_follow` | — |
 | `BLOCKED` | 403 | Trigger `trg_prepare_follow` | — |
@@ -177,6 +180,9 @@ histories, and comment lists return every matching row.
 - [POST /api/auth/verify-otp](#post-apiauthverify-otp)
 - [POST /api/auth/onboarding](#post-apiauthonboarding)
 - [POST /api/auth/demo-login](#post-apiauthdemo-login)
+- [POST /api/auth/login-password](#post-apiauthlogin-password)
+- [POST /api/auth/set-password](#post-apiauthset-password)
+- [GET /api/auth/password-status](#get-apiauthpassword-status)
 
 **[academic](#academic)**
 - [GET /api/academic/courses](#get-apiacademiccourses)
@@ -453,6 +459,184 @@ daily.
 
 `is_profile_complete` is deliberately `false` so demo users still see onboarding. Demo-campus
 users also get the chat auto-responder — see [POST /api/messages/send](#post-apimessagessend).
+
+### POST /api/auth/login-password
+**Module:** auth
+**Auth:** none — this is how a client obtains a token
+**Content-Type:** application/json
+**Body:**
+  - identifier: string, required — a username **or** an email. Trimmed and lowercased
+    server-side, so `"Rahul "` and `rahul` are the same account *and the same lock*
+  - password: string, required — never logged, never echoed back
+**200:** Byte-identical in shape **and message** to `verify-otp`, so clients reuse one storage path:
+```json
+{
+  "message": "Authentication successful",
+  "session":  { "access_token": "string", "refresh_token": "string", "...": "..." },
+  "userAuth": { "id": "uuid", "email": "string", "...": "full Supabase auth user" },
+  "userProfile": { "<users row>": "..." }
+}
+```
+**400:** `{ "error": "INVALID_CREDENTIALS", "message": "Incorrect username or password. Please try again." }`
+**429:** `{ "error": "TOO_MANY_ATTEMPTS", "retry_after_seconds": 900, "message": "Too many failed attempts. Please try again later." }`
+  — also sets a `Retry-After` header with the same number of seconds
+**404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }` — credentials
+  were correct but no `public.users` row exists. Near-impossible with `on_auth_user_created`
+  in place; documented so it is a 404 and not a 500.
+**500:** `{ "error": "INTERNAL_ERROR" }` — `mapDbError` fallback, including an unreadable
+  `auth_attempts` ledger (see "fails closed" below)
+
+**🔒 There is exactly one failure response, and that is the feature.** Wrong password, unknown
+username, unknown email, and an account that has no password all return the **same status, the
+same code and the same sentence**. Do not build a client that branches on the reason — there is
+no reason in the payload, and adding one would be a security regression. If these ever differ,
+even in wording, anyone can test identifiers to learn which are real, then concentrate guessing
+on those; on a campus app it also answers *"is this specific classmate on Yahora?"*, which is a
+harassment precursor. Runbook §0.6.
+
+**`PASSWORD_NOT_SET` does not exist in this API.** An account with `has_password = false`
+(someone who verified an OTP and then abandoned onboarding) gets `INVALID_CREDENTIALS` like
+everyone else. The backend logs the real reason to the **server console** —
+`[login] has_password=false for <uuid> — onboarding never finished` — and tells the client
+nothing. That path is only reachable when the identifier is a **username**; see the limitation
+note below.
+
+**Order of operations (do not reorder).** Rate limit → resolve identifier → `has_password`
+check → sign in. The limiter runs **before any credential is touched**: a limiter placed after
+the password check hands an attacker one free verification per request no matter how locked the
+account is.
+
+**The lockout is on the identifier, never the IP.** 10 failed attempts for one identifier inside
+15 minutes → `429` until the tenth-newest failure ages out of the window. `req.ip` **is**
+written to `auth_attempts.ip_address` for later analysis and is **never** read by the limiter —
+campus Wi-Fi NATs an entire hostel behind one address, so an IP lock would take out hundreds of
+students because one person fat-fingered their password. (`req.ip` is the socket address unless
+`app.js` sets `trust proxy`; it is a data-quality caveat only, since nothing gates on it.)
+
+`retry_after_seconds` is **computed, not a constant** — it is the time until the tenth-newest
+failure leaves the 15-minute window, so a student 40 seconds from unlocking is told 40, not 900.
+It is capped at 900 and floored at 1.
+
+**A correct password while locked is still `429`.** The lock is on the identifier, not on being
+wrong. That is what makes it a lockout rather than a speed bump. A successful login clears every
+`succeeded = false` row for that identifier and writes one `succeeded = true` row, which is kept
+as an audit trail.
+
+**Every failed path writes a ledger row, including "no such user."** If a failed lookup were
+free, someone could probe thousands of handles a minute at no cost. Two exceptions, neither of
+them a probe: a missing/empty `identifier`, and an `identifier` longer than 320 characters
+(RFC 5321's ceiling) — both return `INVALID_CREDENTIALS` without touching the database, so
+`auth_attempts` cannot be used as an arbitrary-size write primitive.
+
+**Fails closed.** If `auth_attempts` cannot be read, the request is a `500` rather than an
+unlimited-guessing window. In practice the same database holds the `users` row this endpoint has
+to return, so a login was failing anyway.
+
+**Sign-in runs on `createSessionClient()`, never the shared client.** supabase-js stores the
+returned session *on the client instance*; calling `signInWithPassword` on the shared
+service-role client demotes it to that student's `authenticated` JWT for every later query the
+**process** makes, until it restarts. See `config/supabase.js` and the 2026-08-12 CHANGELOG
+entry.
+
+**⚠️ Known limitation — the `has_password=false` console log only fires for username logins.**
+The check needs the caller's `public.users` row *before* sign-in, and there is no way to get
+from an email to a user id today: `public.users` has no email column, `get_login_email()` maps
+handle→email only, and GoTrue's admin API cannot look a user up by address. A student who
+abandoned onboarding has no username yet, so **in practice that log line does not fire** — the
+runbook's Block E test for it will not pass as written. **Nothing about the client-visible
+behaviour changes**: the response is the same generic `INVALID_CREDENTIALS` either way, and
+GoTrue also returns `invalid_credentials` for a user with no password, so nothing leaks. Closing
+the gap needs a migration — a `get_login_identity(p_identifier)` returning `id`, `email` and
+`has_password` for both forms, which would also collapse the two username lookups into one.
+
+**⚠️ Every pre-existing account has `has_password = false`, so username login fails for all of
+them.** `has_password` was added by migration 005 with `default false`, and 006 backfilled only
+`username` — nothing set the flag for accounts whose password already existed in
+`auth.users` (the six named `seed.sql` logins, every `seedDemo.js` persona). Verified locally:
+all 20+ seeded rows read `false`. Consequence: those accounts sign in fine **by email** (the
+email path cannot read the flag, so it goes straight to GoTrue and succeeds) but are rejected at
+step 4 **by username**, with the console line and the generic 400. It is not a code bug — the
+cache is simply stale — and it does not affect anyone who onboards through
+`POST /api/auth/onboarding`, which sets `has_password: true`. A one-line
+`UPDATE public.users SET has_password = true` for the seeded ids, or a refreshed
+`seedDemo.js`, fixes it; both are outside CC-5's file scope.
+
+**Notes:** Identifier form is decided by a single `includes('@')` test — anything containing an
+`@` is treated as an email and goes straight to GoTrue; anything else is resolved through
+`get_login_email()`, which is `SECURITY DEFINER` and revoked from `anon`, `authenticated` and
+`PUBLIC`. Because the lock keys on what was typed, a student locked out under their username can
+still log in with their email (and vice versa) — the two identifiers are two locks. This is
+inherent to identifier-based locking and is accepted: both still cost the attacker a full
+lockout each, and neither reveals whether the other exists.
+
+### POST /api/auth/set-password
+**Module:** auth
+**Auth:** **required (Bearer token)** — the account is `req.user.id`; there is no target
+parameter to tamper with
+**Content-Type:** application/json
+**Body:**
+  - password: string, required, min 8 — the new password. Never logged, never echoed back
+  - current_password: string, **required only when the account already has a password**
+    (`has_password = true`). Ignored entirely when it does not
+**200:** `{ "message": "Password set", "has_password": true }`
+**400:** `{ "error": "WEAK_PASSWORD", "message": "..." }` — under 8 characters, identical to the
+  caller's username, or rejected by GoTrue's own policy
+**400:** `{ "error": "COMMON_PASSWORD", "message": "..." }`
+**400:** `{ "error": "MISSING_FIELDS", "message": "Your current password is required to change it." }`
+  — `has_password` is already true and `current_password` was absent or empty
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**401:** `{ "error": "INVALID_CURRENT_PASSWORD", "message": "Your current password is incorrect." }`
+**404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }`
+**500:** `{ "error": "INTERNAL_ERROR" }`
+
+**⚠️ The caller's access token is DEAD the moment this returns 200** — exactly as with
+`POST /api/auth/onboarding`. GoTrue revokes every existing session when a password is set, so
+the token that authorised this request is rejected immediately afterwards, and the `200` body
+carries **no new session**. A settings screen that keeps using its token will appear logged out
+the instant the password change succeeds. Re-establish a session right after the `200`.
+
+**Why `current_password` is required for a change but not the first set.** The first set happens
+during onboarding, seconds after the student proved they own the university inbox — that is
+strong enough. A later change could be someone at a phone left unlocked on a library desk, so it
+needs proof they know the existing one.
+
+**`INVALID_CURRENT_PASSWORD` is deliberately specific**, unlike `login-password`'s single
+string. The caller is already authenticated as themselves, so there is no account to enumerate
+and no reason to be vague about which field was wrong.
+
+**Order of operations (do not reorder).** Validate → verify `current_password` (via
+`createSessionClient().auth.signInWithPassword`, never the shared client) → set the password via
+`auth.admin.updateUserById` → **only then** write `has_password = true`. `has_password` is a
+cache of `auth.users.encrypted_password` (migration 005 §2), so it must never be flipped before
+GoTrue has confirmed the real change — a `true` with no password behind it would lock the
+student out of the password tab with no way back except a support ticket.
+
+**Not rate limited.** `current_password` verification does not write to `auth_attempts` and has
+no lockout, so a caller holding a valid Bearer token can guess the existing password without
+limit. Accepted for now: they already hold a token for that account, so the only thing guessing
+buys them is the plaintext itself (worth something only if the student reuses it elsewhere).
+Worth adding to the ledger if the settings screen ever ships to production — it would introduce
+a `429 TOO_MANY_ATTEMPTS` on this route, which is why it was not done inside CC-5's contract.
+
+**Notes:** The password policy is the same code and the same constants as onboarding —
+`MIN_PASSWORD_LENGTH = 8` plus the ~20-entry blocklist in `auth.controller.js`, and the new
+password may not equal the caller's username. **`MISSING_FIELDS` on an absent `current_password`
+is an addition to the Block E contract**, which listed only `WEAK_PASSWORD`, `COMMON_PASSWORD`
+and `INVALID_CURRENT_PASSWORD`; a client that forgets the field gets a precise answer instead of
+a misleading "incorrect". Nothing else in the contract changed.
+
+### GET /api/auth/password-status
+**Module:** auth
+**Auth:** **required (Bearer token)**
+**200:** `{ "has_password": true }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }`
+**500:** `{ "error": "INTERNAL_ERROR" }`
+**Notes:** Reports on the **caller's own** account only — `req.user.id`, never a parameter. A
+public "does this account have a password?" oracle would be exactly the enumeration primitive
+`login-password` is built to avoid, so this route must never grow a user id. Reads the
+`users.has_password` cache, not `auth.users`. Web no longer needs this (the *"set a password to
+sign in faster"* card was dropped in §0.6); it exists for mobile and for the settings screen.
 
 ---
 

@@ -476,3 +476,419 @@ export const demoLogin = async (req, res) => {
         res.status(500).json({ error: 'Internal server error during demo login.' });
     }
 };
+// ═══════════════════════════════════════════════════════════════════════════
+// PASSWORD LOGIN — runbook Block E / CC-5
+//
+// Three endpoints: login-password (public), set-password (auth'd),
+// password-status (auth'd).
+//
+// The single most important property of this section: **every failure of
+// login-password is byte-for-byte identical.** Wrong password, unknown
+// username, unknown email, and an account that never finished onboarding all
+// produce the same status, the same code and the same sentence. If any one of
+// them differed — even in wording — an attacker could enumerate which
+// identifiers are real, then concentrate guessing on those. On a campus app
+// that is worse than wasted effort: it also answers "is this specific
+// classmate on Yahora?", which is a harassment precursor. See runbook §0.6.
+//
+// Nothing here logs, stores or returns a password. The only credential-shaped
+// value that ever leaves the process is the boolean `has_password`.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Lockout: 10 failures for one identifier inside 15 minutes.
+const LOGIN_WINDOW_SECONDS  = 15 * 60;
+const LOGIN_MAX_FAILURES    = 10;
+
+// Longest address RFC 5321 permits. Anything longer is not an identifier
+// anyone owns, so it is rejected before it can be written to the ledger —
+// otherwise auth_attempts is a free write primitive for arbitrary-size rows.
+const MAX_IDENTIFIER_LENGTH = 320;
+
+// ⚠️ ONE STRING. Do not add a second, do not branch it, do not "improve" one
+// caller's copy. Every login failure returns exactly this.
+const INVALID_CREDENTIALS_MESSAGE = 'Incorrect username or password. Please try again.';
+
+const sendInvalidCredentials = (res) =>
+    sendError(res, 400, 'INVALID_CREDENTIALS', { message: INVALID_CREDENTIALS_MESSAGE });
+
+/**
+ * Append one row to the lockout ledger.
+ *
+ * `identifier` is what the student typed, folded to lowercase — the lock is on
+ * the identifier, never on the IP. Campus Wi-Fi NATs an entire hostel behind
+ * one address, so an IP lock would take out hundreds of students because one
+ * person fat-fingered their password. ip_address is recorded for later
+ * analysis and is NEVER read by the limiter.
+ *
+ * A failure to write is logged and swallowed. The alternative — 500 on a
+ * successful login because the audit insert failed — is worse than a missing
+ * ledger row.
+ */
+async function recordAuthAttempt(identifier, ip, succeeded) {
+    const { error } = await supabase
+        .from('auth_attempts')
+        .insert([{ identifier, ip_address: ip || null, succeeded }]);
+
+    if (error) {
+        console.error('[login] could not record auth attempt', {
+            identifier, succeeded, message: error.message,
+        });
+    }
+}
+
+// 5. Login with username-or-email + password
+//
+// Order matters and is not negotiable: rate limit FIRST, before a single
+// credential is touched. A limiter that runs after the password check gives an
+// attacker one free verification per request no matter how locked the account
+// is.
+export const loginWithPassword = async (req, res) => {
+    try {
+        const rawIdentifier = req.body?.identifier;
+        const password      = req.body?.password;
+
+        // Fold once, here. Everything downstream — the ledger key, the RPC, the
+        // username lookup — uses this exact value, so `Rahul` and `rahul ` count
+        // against the same lock instead of getting ten fresh attempts each.
+        const identifier = typeof rawIdentifier === 'string'
+            ? rawIdentifier.trim().toLowerCase()
+            : '';
+
+        // Nothing to attribute an attempt to, and nothing that could be a real
+        // account. No ledger row — a malformed body is not a probe.
+        if (!identifier || identifier.length > MAX_IDENTIFIER_LENGTH) {
+            return sendInvalidCredentials(res);
+        }
+
+        // ── 1. RATE LIMIT, before touching any credential ──────────────────
+        //
+        // One query answers both questions. Ordered newest-first and capped at
+        // the threshold, so the last row is the 10th-newest failure — the one
+        // whose expiry drops the count back to 9 and ends the lock. That gives
+        // an honest retry_after_seconds instead of a flat 900 that tells a
+        // student to wait 15 minutes when they have 40 seconds left.
+        //
+        // Reads auth_attempts_failed_idx (identifier, created_at desc) WHERE
+        // succeeded = false — successes are not in that index at all.
+        const windowStart = new Date(Date.now() - LOGIN_WINDOW_SECONDS * 1000).toISOString();
+
+        const { data: recentFailures, error: ledgerError } = await supabase
+            .from('auth_attempts')
+            .select('created_at')
+            .eq('identifier', identifier)
+            .eq('succeeded', false)
+            .gte('created_at', windowStart)
+            .order('created_at', { ascending: false })
+            .limit(LOGIN_MAX_FAILURES);
+
+        // Fail CLOSED. If the ledger is unreadable we cannot count attempts,
+        // and an unlimited-guessing window is a worse outcome than a login
+        // outage — which this already is, since the same database holds the
+        // profile row this endpoint has to return.
+        if (ledgerError) return mapDbError(res, ledgerError);
+
+        const failures = recentFailures || [];
+
+        if (failures.length >= LOGIN_MAX_FAILURES) {
+            const oldestCounted = failures[failures.length - 1];
+            const unlocksAt = new Date(oldestCounted.created_at).getTime()
+                            + LOGIN_WINDOW_SECONDS * 1000;
+            const retryAfterSeconds = Math.max(
+                1,
+                Math.min(LOGIN_WINDOW_SECONDS, Math.ceil((unlocksAt - Date.now()) / 1000)),
+            );
+
+            // The lock is on the identifier, not on being wrong: a correct
+            // password while locked is still a 429. That is what makes it a
+            // lockout rather than a speed bump.
+            res.set('Retry-After', String(retryAfterSeconds));
+            return sendError(res, 429, 'TOO_MANY_ATTEMPTS', {
+                retry_after_seconds: retryAfterSeconds,
+                message: 'Too many failed attempts. Please try again later.',
+            });
+        }
+
+        // A missing password is still a spent attempt. It cannot probe for
+        // existence — the answer below is identical either way — but it must
+        // not be free, or the limiter is trivially skipped.
+        if (typeof password !== 'string' || password.length === 0) {
+            await recordAuthAttempt(identifier, req.ip, false);
+            return sendInvalidCredentials(res);
+        }
+
+        // ── 2. Resolve the identifier to an email ─────────────────────────
+        //
+        // One field, both forms — Instagram does this and students expect it.
+        // Supabase can only sign in by email, so a handle has to be mapped
+        // first. get_login_email() is SECURITY DEFINER and revoked from anon,
+        // authenticated and PUBLIC: it is the one function in migration 005
+        // that leaks something (a handle → an address), so only the backend's
+        // service-role client may call it.
+        const isEmail = identifier.includes('@');
+
+        let email   = null;
+        let profile = null;   // { id, has_password } — only knowable via a handle
+
+        if (isEmail) {
+            email = identifier;
+        } else {
+            // Both lookups are needed on the success path, and neither depends
+            // on the other, so pay for one round trip instead of two.
+            const [emailResult, profileResult] = await Promise.all([
+                supabase.rpc('get_login_email', { p_identifier: identifier }),
+                supabase
+                    .from('users')
+                    .select('id, has_password')
+                    .eq('username', identifier)
+                    .maybeSingle(),
+            ]);
+
+            if (emailResult.error)   return mapDbError(res, emailResult.error);
+            if (profileResult.error) return mapDbError(res, profileResult.error);
+
+            email   = emailResult.data || null;
+            profile = profileResult.data || null;
+        }
+
+        // ── 3. No email found → generic failure ───────────────────────────
+        //
+        // "User not found" would be the enumeration oracle this whole endpoint
+        // is shaped to avoid. Log the attempt first: if a failed lookup were
+        // free, someone could probe thousands of handles a minute at no cost.
+        if (!email) {
+            await recordAuthAttempt(identifier, req.ip, false);
+            return sendInvalidCredentials(res);
+        }
+
+        // ── 4. Account with no password → SAME generic failure ────────────
+        //
+        // Reachable one way only: OTP verified, then onboarding abandoned, so
+        // the row exists with has_password = false. Onboarding abandonment is
+        // normal, so this must not 500 — and it must not look different from a
+        // wrong password either. The real reason goes to the SERVER CONSOLE
+        // and nowhere near the response. PASSWORD_NOT_SET is deliberately not
+        // an API code; see runbook §0.6.
+        if (profile && profile.has_password !== true) {
+            console.warn(`[login] has_password=false for ${profile.id} — onboarding never finished`);
+            await recordAuthAttempt(identifier, req.ip, false);
+            return sendInvalidCredentials(res);
+        }
+
+        // ── 5. Sign in — on a THROWAWAY client ────────────────────────────
+        //
+        // createSessionClient(), never the shared `supabase`. supabase-js
+        // stores the session this call returns on the client instance, so
+        // signing in on the shared service-role client demotes it to that
+        // student's `authenticated` JWT for every later query the process
+        // makes, until it restarts. That outage already happened once — see
+        // docs/CHANGELOG.md 2026-08-12 and config/supabase.js.
+        const { data: signInData, error: signInError } =
+            await createSessionClient().auth.signInWithPassword({ email, password });
+
+        // ── 6. Wrong password → byte-identical to step 3 ──────────────────
+        //
+        // GoTrue itself does not distinguish "no such user" from "wrong
+        // password" from "user has no password" — all three are
+        // invalid_credentials — and neither do we.
+        if (signInError || !signInData?.session || !signInData?.user) {
+            await recordAuthAttempt(identifier, req.ip, false);
+            return sendInvalidCredentials(res);
+        }
+
+        // ── 7. Success ────────────────────────────────────────────────────
+        await recordAuthAttempt(identifier, req.ip, true);
+
+        // Clear the lock. Scoped to succeeded = false so the success row just
+        // written survives as an audit trail. A student who fails nine times
+        // and then remembers their password starts the next session clean.
+        const { error: clearError } = await supabase
+            .from('auth_attempts')
+            .delete()
+            .eq('identifier', identifier)
+            .eq('succeeded', false);
+
+        if (clearError) {
+            console.error('[login] could not clear failed attempts', {
+                identifier, message: clearError.message,
+            });
+        }
+
+        const { data: userProfile, error: profileError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', signInData.user.id)
+            .maybeSingle();
+
+        if (profileError) return mapDbError(res, profileError);
+
+        // Near-impossible since on_auth_user_created creates the row inside the
+        // auth insert's own transaction. A 404 rather than a 500 so that if it
+        // ever does happen it reads as "no profile", not "server broken".
+        if (!userProfile) {
+            return sendError(res, 404, 'NOT_FOUND', {
+                message: 'No profile exists for this account.',
+            });
+        }
+
+        // EXACTLY the verify-otp shape, same message string included. Both
+        // clients store a session the same way for OTP, demo and password
+        // login; none of them needs a second code path.
+        return res.status(200).json({
+            message:     'Authentication successful',
+            session:     signInData.session,
+            userAuth:    signInData.user,
+            userProfile,
+        });
+
+    } catch (error) {
+        console.error('[login] unexpected error', error);
+        return mapDbError(res, error);
+    }
+};
+
+// 6. Set or change the account password (settings screen)
+//
+// First set: no proof beyond the Bearer token. A later change: current_password
+// required. The asymmetry is deliberate — the first set happens during
+// onboarding seconds after the student proved they own the university inbox,
+// while a change could be someone at a phone left unlocked on a library desk.
+export const setPassword = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { password, current_password: currentPassword } = req.body || {};
+
+        // ── Password policy — identical to CC-4's, same constants ─────────
+        if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+            return sendError(res, 400, 'WEAK_PASSWORD', {
+                message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+            });
+        }
+
+        if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+            return sendError(res, 400, 'COMMON_PASSWORD', {
+                message: 'That password is too common. Please choose another.',
+            });
+        }
+
+        const { data: profile, error: profileError } = await supabase
+            .from('users')
+            .select('id, username, has_password')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (profileError) return mapDbError(res, profileError);
+
+        if (!profile) {
+            return sendError(res, 404, 'NOT_FOUND', {
+                message: 'No profile exists for this account.',
+            });
+        }
+
+        if (profile.username && password.toLowerCase() === profile.username) {
+            return sendError(res, 400, 'WEAK_PASSWORD', {
+                message: 'Your password cannot be the same as your username.',
+            });
+        }
+
+        // ── Changing an existing password requires proving you know it ────
+        if (profile.has_password === true) {
+            if (typeof currentPassword !== 'string' || currentPassword.length === 0) {
+                return sendError(res, 400, 'MISSING_FIELDS', {
+                    message: 'Your current password is required to change it.',
+                });
+            }
+
+            // No email means no way to verify, and no way to sign in either.
+            // Every account here is created from a university address, so this
+            // is a corrupt-state guard, not a real branch.
+            if (!req.user.email) {
+                console.error('[set-password] auth user has no email', { userId });
+                return sendError(res, 500, 'INTERNAL_ERROR');
+            }
+
+            // Throwaway client again — same demotion trap as login above.
+            const { data: verified, error: verifyError } =
+                await createSessionClient().auth.signInWithPassword({
+                    email:    req.user.email,
+                    password: currentPassword,
+                });
+
+            if (verifyError || !verified?.user) {
+                // Distinct from INVALID_CREDENTIALS on purpose: the caller is
+                // already authenticated, so there is no account to enumerate
+                // and no reason to be vague about which field was wrong.
+                return sendError(res, 401, 'INVALID_CURRENT_PASSWORD', {
+                    message: 'Your current password is incorrect.',
+                });
+            }
+        }
+
+        // ── Set it, then flip the cache ───────────────────────────────────
+        const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+            password,
+        });
+
+        if (updateError) {
+            // GoTrue's own status and message. Never the password.
+            console.error('[set-password] password update failed', {
+                userId,
+                status:  updateError.status,
+                message: updateError.message,
+            });
+
+            // GoTrue applies its own policy on top of ours (its minimum length,
+            // or a password it has seen in a breach corpus). That is the
+            // student's input, not our bug — 400, not 500.
+            const isValidation = updateError.status === 400 || updateError.status === 422;
+            return isValidation
+                ? sendError(res, 400, 'WEAK_PASSWORD', {
+                      message: 'That password was rejected. Please choose another.',
+                  })
+                : sendError(res, 500, 'INTERNAL_ERROR');
+        }
+
+        // has_password is a CACHE of auth.users.encrypted_password (migration
+        // 005 §2). It is written only after GoTrue confirms the real change, so
+        // it can never claim a password that does not exist.
+        const { error: flagError } = await supabase
+            .from('users')
+            .update({ has_password: true })
+            .eq('id', userId);
+
+        if (flagError) return mapDbError(res, flagError);
+
+        return res.status(200).json({ message: 'Password set', has_password: true });
+
+    } catch (error) {
+        console.error('[set-password] unexpected error', error);
+        return mapDbError(res, error);
+    }
+};
+
+// 7. Does this account have a password?
+//
+// The only credential-adjacent fact this API ever discloses, and it is scoped
+// to the caller's own row — req.user.id, never a parameter.
+export const getPasswordStatus = async (req, res) => {
+    try {
+        const { data: profile, error } = await supabase
+            .from('users')
+            .select('has_password')
+            .eq('id', req.user.id)
+            .maybeSingle();
+
+        if (error) return mapDbError(res, error);
+
+        if (!profile) {
+            return sendError(res, 404, 'NOT_FOUND', {
+                message: 'No profile exists for this account.',
+            });
+        }
+
+        return res.status(200).json({ has_password: profile.has_password === true });
+
+    } catch (error) {
+        console.error('[password-status] unexpected error', error);
+        return mapDbError(res, error);
+    }
+};
