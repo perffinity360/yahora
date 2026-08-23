@@ -544,3 +544,414 @@
   display: flex;
   gap: 0.75rem;
 }
+/* ============================================
+   Login-method switcher (N-Block D / runbook §0.6)
+   ============================================ */
+
+/* Sized to hold "College Email & OTP" and "Username & Password" side by side
+   at 375px without wrapping — see the 400px override at the bottom of this
+   block. `min-width: 0` on the buttons is what stops flex refusing to shrink
+   them below their content width. */
+.tabSwitcher {
+  display: flex;
+  gap: 0.25rem;
+  background-color: #f3f0ef;
+  border-radius: 2rem;
+  padding: 0.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.tabBtn {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  border-radius: 2rem;
+  padding: 0.55rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9791a1;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tabBtn:hover:not(.tabBtnActive) {
+  color: var(--purple-dark);
+}
+
+.tabBtnActive {
+  background: var(--white);
+  color: var(--purple-dark);
+  box-shadow: 0 2px 8px rgba(128, 0, 128, 0.1);
+}
+
+.tabBtn:focus-visible {
+  outline: 2px solid var(--purple-light);
+  outline-offset: 2px;
+}
+
+/* A single-input pill. Deliberately NOT .modernInputGroup: that one becomes
+   `flex-direction: column` under 400px so its inline submit button can stack,
+   which would drop the show/hide eye onto its own row. This stays horizontal
+   at every width. */
+.pillField {
+  display: flex;
+  align-items: center;
+  background-color: #f3f0ef;
+  border-radius: 2.5rem;
+  padding: 0.35rem 0.5rem 0.35rem 1.25rem;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.pillField:focus-within {
+  background-color: var(--white);
+  border-color: var(--purple-light);
+  box-shadow: 0 0 0 4px rgba(215, 0, 215, 0.1);
+}
+
+.pillField input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 0.5rem 0;
+  font-size: 0.95rem;
+  color: var(--black-soft);
+  font-family: inherit;
+}
+
+.pillField input::placeholder {
+  color: #bbb6c8;
+}
+
+.eyeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0.4rem;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: #9791a1;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.eyeBtn:hover {
+  color: var(--purple);
+}
+
+.eyeBtn:focus-visible {
+  outline: 2px solid var(--purple-light);
+  outline-offset: 2px;
+}
+
+.forgotRow {
+  display: flex;
+  justify-content: center;
+  margin: -0.5rem 0 0.9rem;
+}
+
+.forgotRow .inlineLink {
+  text-align: center;
+}
+
+/* Shared by "Forgot your password?" and the new-user guidance — both switch
+   tabs rather than navigating, so both are buttons wearing a link's clothes. */
+.inlineLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--purple);
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.inlineLink:hover {
+  color: var(--purple-dark);
+  text-decoration: underline;
+}
+
+.signInBtn {
+  width: 100%;
+  border: none;
+  border-radius: 2rem;
+  padding: 0.8rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--white);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 4px 12px rgba(128, 0, 128, 0.2);
+}
+
+.signInBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(128, 0, 128, 0.3);
+  filter: brightness(1.1);
+}
+
+.signInBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.signInBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Permanent helper text, not an error slot. It is always in the layout, so it
+   never causes the card to jump when a login fails. */
+.newUserNote {
+  margin-top: 1.25rem;
+  padding: 1rem 1.15rem;
+  background: var(--pink-light);
+  border: 1px solid rgba(235, 72, 127, 0.18);
+  border-radius: 1rem;
+  text-align: center;
+}
+
+.newUserNote .inlineLink {
+  text-align: center;
+}
+
+/* Icon and copy on one baseline with real space between them. The icon must
+   not shrink or ride up when the sentence wraps to two lines. */
+.newUserLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  color: var(--pink-dark);
+  font-weight: 600;
+}
+
+.newUserIcon {
+  flex-shrink: 0;
+}
+
+.newUserLink:hover {
+  color: var(--pink-emphasis);
+}
+
+/* 375px: the two labels are 19 and 18 characters and must stay on one line
+   each. Shrinking the type and the horizontal padding is what buys the room —
+   the control itself never wraps or scrolls. */
+@media (max-width: 400px) {
+  .tabSwitcher {
+    gap: 0.15rem;
+    padding: 0.2rem;
+  }
+
+  .tabBtn {
+    font-size: 0.62rem;
+    padding: 0.5rem 0.25rem;
+  }
+
+  .pillField {
+    padding-left: 1rem;
+  }
+
+  .inlineLink {
+    font-size: 0.72rem;
+  }
+}
+
+/* ============================================
+   Mobile-only refinements
+   Everything below is scoped to phone/tablet widths — desktop is untouched.
+   ============================================ */
+@media (max-width: 968px) {
+  /* "Keep the Story Going..." sits at the very top of the page, centered over
+     the heading and the card. */
+  .marketingBadge {
+    display: flex;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto 1.15rem;
+    font-size: 0.72rem;
+    padding: 0.35rem 0.85rem;
+  }
+
+  .authLeft {
+    padding: 1.5rem 1rem 2rem;
+  }
+
+  .gradientHeading {
+    font-size: 1.5rem;
+    /* .floatingIcon overhangs the card top by 24px, so the visible gap is this
+       value minus 24px — hence the generous number. */
+    margin-bottom: 2.75rem;
+    text-align: center;
+  }
+
+  .formCard {
+    padding: 2rem 1.15rem 1.35rem;
+  }
+
+  /* The submit button gets its own row instead of riding inside the field.
+     The group becomes a plain stack; the pill styling moves onto the input. */
+  .modernInputGroup {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    background-color: transparent;
+    border-color: transparent;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  /* The focus ring belongs to the input now, not the whole stack. */
+  .modernInputGroup:focus-within {
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  /* 16px is the threshold below which iOS Safari zooms the viewport on focus
+     and leaves the page scrolled sideways. */
+  .modernInputGroup input,
+  .pillField input {
+    font-size: 1rem;
+  }
+
+  .modernInputGroup input {
+    min-width: 0;
+    background-color: #f3f0ef;
+    border: 1px solid transparent;
+    border-radius: 2rem;
+    padding: 0.8rem 1.1rem;
+    transition: all 0.3s ease;
+  }
+
+  .modernInputGroup input:focus {
+    background-color: var(--white);
+    border-color: var(--purple-light);
+    box-shadow: 0 0 0 4px rgba(215, 0, 215, 0.1);
+  }
+
+  /* Centered and only as wide as its label — full width read as oversized. */
+  .insideBtn {
+    align-self: center;
+    width: auto;
+    border-radius: 2rem;
+    padding: 0.6rem 1.75rem;
+    font-size: 0.82rem;
+  }
+
+  /* Same treatment as .insideBtn — full width read as oversized. */
+  .signInBtn {
+    display: block;
+    width: auto;
+    margin: 0 auto;
+    padding: 0.7rem 2.25rem;
+    font-size: 0.85rem;
+  }
+
+  /* These two pills overflow a 375px screen side by side. */
+  .uniDemo {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .uniDemo .cuteBtn,
+  .uniDemo .textBtn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.6rem 1rem;
+  }
+
+  /* Android and iOS stay side by side on every phone width. */
+  .appDownloads {
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+
+  .appBtn {
+    min-width: 0;
+    padding: 0.7rem 0.4rem;
+    font-size: 0.78rem;
+    gap: 0.3rem;
+  }
+
+  /* "Soon" badge is desktop-only — it is what makes these two wrap. */
+  .comingSoon {
+    display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  .authLeft {
+    padding: 1.25rem 0.85rem 1.75rem;
+  }
+
+  .marketingBadge {
+    font-size: 0.68rem;
+    margin-bottom: 1rem;
+  }
+
+  .gradientHeading {
+    font-size: 1.35rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .formCard {
+    padding: 1.9rem 0.9rem 1.2rem;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* Overrides the earlier 400px block so the stacked input keeps the pill
+     shape set above rather than the square one. */
+  .modernInputGroup input {
+    border-radius: 2rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0;
+  }
+
+  .insideBtn {
+    width: auto;
+    padding: 0.55rem 1.5rem;
+    font-size: 0.78rem;
+  }
+
+  .signInBtn {
+    padding: 0.65rem 1.9rem;
+    font-size: 0.8rem;
+  }
+
+  .newUserNote {
+    padding: 0.85rem 0.85rem;
+  }
+
+  .newUserLink {
+    gap: 0.45rem;
+  }
+
+  /* Same override: they stay in one row. */
+  .appDownloads {
+    flex-direction: row;
+    gap: 0.4rem;
+  }
+
+  .appBtn {
+    padding: 0.7rem 0.3rem;
+    font-size: 0.72rem;
+  }
+}
