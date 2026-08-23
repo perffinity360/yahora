@@ -10,7 +10,19 @@
 // underneath them. Mounted at BOTH /api/user (legacy) and /api/users.
 import express from 'express';
 import multer from 'multer';
-import { getDashboardData, updateProfile, updateAvatar, getPublicProfile} from './user.controller.js';
+import optionalAuth from '../../middleware/optionalAuth.js';
+import requireAuth from '../../middleware/requireAuth.js';
+import {
+  getDashboardData,
+  updateProfile,
+  updateAvatar,
+  getPublicProfile,
+  checkUsernameAvailable,
+  getUsernameSuggestions,
+  getProfileByUsername,
+  searchUsers,
+  updateMyUsername,
+} from './user.controller.js';
 
 const router = express.Router();
 
@@ -28,5 +40,39 @@ router.post('/:userId/avatar', upload.single('avatar'), updateAvatar);
 
 // Public Profile
 router.get('/:userId/public', getPublicProfile);
+
+// ─────────────────────────────────────────────────────────────────────────
+// PHASE 1 — usernames and search (plan §1.5). Everything above this line
+// pre-dates the ownership split; everything below is new.
+//
+// Ordering note: none of these collide with the four legacy routes above.
+// `/search` and `/username-available` are single-segment, and no legacy
+// route is; `/by-username/:username` and `/me/username` are two-segment but
+// the legacy two-segment routes all require a literal second segment
+// (`dashboard` / `profile` / `avatar` / `public`), so Express can never
+// mistake `by-username` or `me` for a `:userId`.
+// ─────────────────────────────────────────────────────────────────────────
+
+// GET /api/users/username-available?username=
+// optionalAuth: students check handles at onboarding, before an account
+// exists. Signed in, the caller's own id is passed to the RPC so their
+// current handle reads as available rather than "taken by you".
+router.get('/username-available', optionalAuth, checkUsernameAvailable);
+
+// GET /api/users/username-suggestions?name=
+router.get('/username-suggestions', optionalAuth, getUsernameSuggestions);
+
+// GET /api/users/search?q=&limit=
+// requireAuth: search is the one list here that enumerates other students,
+// and `is_same_campus` is meaningless without a viewer.
+router.get('/search', requireAuth, searchUsers);
+
+// PATCH /api/users/me/username
+router.patch('/me/username', requireAuth, updateMyUsername);
+
+// GET /api/users/by-username/:username
+// Last of the Phase 1 block: it is the most permissive pattern, so the
+// literal paths above get first refusal.
+router.get('/by-username/:username', optionalAuth, getProfileByUsername);
 
 export default router;

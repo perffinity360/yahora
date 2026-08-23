@@ -8,6 +8,7 @@
 // written by Vishwajeet. They are live in both web and mobile — do not
 // change their behaviour or response shapes. Phase 1 adds underneath.
 import { supabase } from '../../config/supabase.js';
+import { sendError, mapDbError } from '../../utils/respond.js';
 
 // 1. Fetch all Dashboard Data
 export const getDashboardData = async (req, res) => {
@@ -230,3 +231,472 @@ export const getPublicProfile = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch public profile.' });
     }
 };
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 1 — usernames and search (plan §1.5)
+//
+// Everything above this line pre-dates the ownership split. Everything below
+// is new, and follows one rule above all others:
+//
+//   THE DATABASE OWNS THE USERNAME RULES.
+//
+// `is_username_available(p_username, p_user_id)` checks all four things in one
+// round trip — charset/length, the reserved list, an existing handle, and the
+// 30-day cooling-off window. There is no regex in this file, no copy of the
+// reserved list, and no re-derivation of the cooling-off window. If JavaScript
+// here ever grew its own opinion and drifted from `users_username_valid`, the
+// check would say "free" and the insert would say 23505, and we would ship a
+// class of bug nobody can reproduce.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Search results are capped here regardless of what the caller asks for. An
+// uncapped limit is a denial-of-service and a bulk export of the student body
+// in one request (§0.5.4).
+const SEARCH_LIMIT_DEFAULT = 20;
+const SEARCH_LIMIT_MAX = 50;
+
+// Plan §1.5. The one username rule the database does NOT enforce — there is no
+// trigger for it, so the controller is the only thing holding the line.
+const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Fold a handle exactly the way `is_username_available()` folds it internally
+ * (`lower(trim(...))`), so a caps-lock student asking about RAHUL is answered
+ * about `rahul` instead of being told their capital letter is a format error
+ * they cannot act on.
+ */
+const foldUsername = (raw) =>
+  typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+
+/**
+ * Why the handle is unavailable — a LABEL for a decision already made, never a
+ * second opinion.
+ *
+ * `is_username_available()` returns one boolean for four different reasons and
+ * the client needs to know which. This asks the same three tables the function
+ * asks, purely to name the reason it already gave. INVALID_FORMAT is what is
+ * left when none of the three lookups hit — reached by elimination, never by a
+ * regex of our own.
+ *
+ * Failure path only, so three indexed lookups in parallel is the right cost.
+ * All three tables are RLS-on / zero-grant; this works because the backend
+ * client is service_role and bypasses RLS.
+ *
+ * `viewerId` may be null (an anonymous caller checking a handle at onboarding),
+ * in which case nothing is excluded from the lookups.
+ */
+async function classifyUnavailableUsername(username, viewerId = null) {
+  let takenQuery = supabase
+    .from('users')
+    .select('id')
+    .eq('username', username);
+
+  let releasedQuery = supabase
+    .from('username_history')
+    .select('username')
+    .eq('username', username)
+    .gt('reserved_until', new Date().toISOString());
+
+  // Only exclude the caller when there is a caller. `.neq(col, null)` is not
+  // the same query as "no filter" and would silently drop real rows.
+  if (viewerId) {
+    takenQuery = takenQuery.neq('id', viewerId);
+    releasedQuery = releasedQuery.neq('user_id', viewerId);
+  }
+
+  const [reserved, taken, released] = await Promise.all([
+    supabase
+      .from('reserved_usernames')
+      .select('username')
+      .eq('username', username)
+      .maybeSingle(),
+    takenQuery.maybeSingle(),
+    releasedQuery.limit(1),
+  ]);
+
+  if (reserved.data) return 'RESERVED';
+  if (taken.data) return 'TAKEN';
+  if (released.data?.length) return 'RECENTLY_RELEASED';
+
+  return 'INVALID_FORMAT';
+}
+
+/**
+ * The caller's campus, or null when signed out.
+ *
+ * `req.user` comes from GoTrue and carries no campus, but `suggest_usernames()`
+ * uses it to offer the `rahul_iiitk` style handle — a large amount of fresh
+ * namespace, since `rahul` is taken globally but `rahul_iiitk` almost certainly
+ * is not. Signed-out callers simply get the two campus-free suggestion shapes
+ * plus random-suffix top-ups.
+ */
+async function getViewerUniversityId(req) {
+  if (!req.user?.id) return null;
+
+  const { data } = await supabase
+    .from('users')
+    .select('university_id')
+    .eq('id', req.user.id)
+    .maybeSingle();
+
+  return data?.university_id ?? null;
+}
+
+/** Three suggestions, or an empty array if the RPC fails — suggestions are a
+ *  convenience and must never turn a working answer into a 500. */
+async function fetchSuggestions(name, universityId) {
+  const { data, error } = await supabase.rpc('suggest_usernames', {
+    p_name: name,
+    p_university_id: universityId,
+  });
+
+  if (error) {
+    console.error('[user] suggest_usernames failed:', error);
+    return [];
+  }
+
+  return data ?? [];
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 5. GET /api/users/username-available?username=
+// ───────────────────────────────────────────────────────────────────────────
+export const checkUsernameAvailable = async (req, res) => {
+  try {
+    const username = foldUsername(req.query.username);
+
+    if (!username) {
+      return sendError(res, 400, 'MISSING_FIELDS', {
+        message: 'A username query parameter is required.',
+      });
+    }
+
+    // One RPC, four rules. Passing the caller's own id is what stops a signed-in
+    // student's current handle reading back as "taken by you".
+    const { data: isAvailable, error } = await supabase.rpc(
+      'is_username_available',
+      { p_username: username, p_user_id: req.user?.id ?? null },
+    );
+
+    if (error) return mapDbError(res, error);
+
+    if (isAvailable) return res.json({ available: true });
+
+    const [reason, suggestions] = await Promise.all([
+      classifyUnavailableUsername(username, req.user?.id ?? null),
+      // The rejected handle is the best seed we have for an alternative — it is
+      // what the student actually wanted.
+      getViewerUniversityId(req).then((uni) => fetchSuggestions(username, uni)),
+    ]);
+
+    // RECENTLY_RELEASED is reported as itself here, unlike the onboarding
+    // endpoint which folds it into USERNAME_TAKEN. This response names no user
+    // and no date, so it leaks nothing about who used to hold the handle, and
+    // "on hold for a few more days" is actionable in a way that "taken" is not.
+    return res.json({ available: false, reason, suggestions });
+  } catch (error) {
+    return mapDbError(res, error);
+  }
+};
+
+// ───────────────────────────────────────────────────────────────────────────
+// 6. GET /api/users/username-suggestions?name=
+// ───────────────────────────────────────────────────────────────────────────
+export const getUsernameSuggestions = async (req, res) => {
+  try {
+    const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+
+    if (!name) {
+      return sendError(res, 400, 'MISSING_FIELDS', {
+        message: 'A name query parameter is required.',
+      });
+    }
+
+    const universityId = await getViewerUniversityId(req);
+
+    const { data, error } = await supabase.rpc('suggest_usernames', {
+      p_name: name,
+      p_university_id: universityId,
+    });
+
+    if (error) return mapDbError(res, error);
+
+    // Every candidate was passed through is_username_available() inside the
+    // RPC, so all three are free as of this instant. That is NOT a reservation:
+    // two students onboarding at once can be offered the same handle, and the
+    // unique index is what arbitrates. Do not present these as held.
+    return res.json({ suggestions: data ?? [] });
+  } catch (error) {
+    return mapDbError(res, error);
+  }
+};
+
+// ───────────────────────────────────────────────────────────────────────────
+// 7. GET /api/users/by-username/:username
+// ───────────────────────────────────────────────────────────────────────────
+export const getProfileByUsername = async (req, res) => {
+  try {
+    const username = foldUsername(req.params.username);
+
+    if (!username) return sendError(res, 404, 'USER_NOT_FOUND');
+
+    // Columns are listed explicitly, never `select('*')`. public.users has no
+    // email column by design, but an explicit list is what keeps that true the
+    // day someone adds one.
+    const { data: user, error } = await supabase
+      .from('users')
+      .select(`
+        id, username, full_name, avatar_url, bio, year_of_study, created_at,
+        course:courses(name),
+        specialization:specializations(name),
+        university:universities(id, name)
+      `)
+      .eq('username', username)
+      .maybeSingle();
+
+    if (error) return mapDbError(res, error);
+
+    if (!user) {
+      // Not a current handle. It may be one somebody released inside the last
+      // 30 days — this is what keeps a link posted in a WhatsApp group working
+      // after its owner renames themselves.
+      const { data: history, error: historyError } = await supabase
+        .from('username_history')
+        .select('user_id')
+        .eq('username', username)
+        .gt('reserved_until', new Date().toISOString())
+        .order('released_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (historyError) return mapDbError(res, historyError);
+      if (!history) return sendError(res, 404, 'USER_NOT_FOUND');
+
+      const { data: owner, error: ownerError } = await supabase
+        .from('users')
+        .select('username')
+        .eq('id', history.user_id)
+        .maybeSingle();
+
+      if (ownerError) return mapDbError(res, ownerError);
+
+      // The row is in history but the account is gone, or was renamed to NULL.
+      // There is nowhere to redirect to, so this is an ordinary 404.
+      if (!owner?.username) return sendError(res, 404, 'USER_NOT_FOUND');
+
+      // Clients navigate this with REPLACE, not push, or the back button loops
+      // between the old handle and the new one (§2.2).
+      return res.json({ redirect_to: owner.username });
+    }
+
+    return res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        avatar_url: user.avatar_url,
+        bio: user.bio,
+        university: user.university
+          ? { id: user.university.id, name: user.university.name }
+          : null,
+        // Flat strings here, deliberately. The legacy /api/user/:userId/public
+        // returns these as nested { name } objects plus courseName /
+        // specializationName; API.md marks THIS shape as the one new clients
+        // use. Both are correct for their own endpoint.
+        course: user.course?.name ?? null,
+        specialization: user.specialization?.name ?? null,
+        year_of_study: user.year_of_study,
+        // Phase 3 fields. `follows`, `blocks`, `users.is_private`,
+        // `can_view_social_content()` and `is_blocked_pair()` do not exist yet
+        // — migration 002 adds none of them. These are Phase 1 constants so the
+        // response shape is stable for clients today and the social module can
+        // fill them in without a breaking change. They are NOT read from the
+        // database, and no schema change is being assumed here.
+        followers_count: 0,
+        following_count: 0,
+        is_private: false,
+        created_at: user.created_at,
+      },
+      viewer: {
+        is_self: req.user?.id === user.id,
+        // Phase 3, as above.
+        is_following: false,
+        follow_status: null,
+        is_blocked: false,
+      },
+    });
+  } catch (error) {
+    return mapDbError(res, error);
+  }
+};
+
+// ───────────────────────────────────────────────────────────────────────────
+// 8. GET /api/users/search?q=&limit=
+// ───────────────────────────────────────────────────────────────────────────
+export const searchUsers = async (req, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+    // A blank q is not an empty search, it is a full table scan: inside the RPC
+    // it becomes `username LIKE '%'`, which matches every student on every
+    // campus. Rejecting it is a security decision, not input tidiness.
+    if (!q) {
+      return sendError(res, 400, 'MISSING_FIELDS', {
+        message: 'A search query (q) is required.',
+      });
+    }
+
+    // Cap first, then floor. A caller sending limit=100000, limit=-1, limit=0
+    // or limit=abc all land somewhere sane; NaN falls back to the default.
+    const requested = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isNaN(requested)
+      ? SEARCH_LIMIT_DEFAULT
+      : Math.min(Math.max(requested, 1), SEARCH_LIMIT_MAX);
+
+    const { data, error } = await supabase.rpc('search_users', {
+      p_query: q,
+      p_viewer: req.user.id, // requireAuth guarantees this; never a query param
+      p_limit: limit,
+    });
+
+    if (error) return mapDbError(res, error);
+
+    // Ordering is fixed inside the RPC — exact match, then same campus, then
+    // trigram rank. Do NOT re-sort here; §2.5 of the plan relies on that order.
+    // No matches is an empty array with 200, never a 404: "nobody by that name"
+    // is a successful search, and a 404 would make clients render an error.
+    return res.json({ users: data ?? [] });
+  } catch (error) {
+    return mapDbError(res, error);
+  }
+};
+
+// ───────────────────────────────────────────────────────────────────────────
+// 9. PATCH /api/users/me/username
+// ───────────────────────────────────────────────────────────────────────────
+export const updateMyUsername = async (req, res) => {
+  // Identity comes from the verified Bearer token and from nowhere else. The
+  // backend runs on the service-role key and bypasses RLS, so a `user_id` taken
+  // from the body would be an account-takeover primitive, not a convenience.
+  const userId = req.user.id;
+
+  try {
+    const username = foldUsername(req.body?.username);
+
+    if (!username) {
+      return sendError(res, 400, 'INVALID_FORMAT', {
+        message: 'A username is required.',
+      });
+    }
+
+    const { data: current, error: currentError } = await supabase
+      .from('users')
+      .select('username, username_changed_at')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (currentError) return mapDbError(res, currentError);
+    if (!current) return sendError(res, 404, 'USER_NOT_FOUND');
+
+    // No-op rename. Returning early keeps the 30-day clock from being spent on
+    // a request that changes nothing (the trigger would not fire anyway, since
+    // it tests `is distinct from`).
+    if (current.username === username) {
+      const { data: unchanged, error: unchangedError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (unchangedError) return mapDbError(res, unchangedError);
+      return res.json({ user: unchanged });
+    }
+
+    // The 30-day limit is the one rule in this module the database does not
+    // enforce — there is no trigger for it (plan §1.5).
+    if (current.username_changed_at) {
+      const changedAt = new Date(current.username_changed_at).getTime();
+      const nextAllowedAt = changedAt + USERNAME_CHANGE_COOLDOWN_MS;
+
+      if (Date.now() < nextAllowedAt) {
+        return sendError(res, 429, 'RATE_LIMITED', {
+          next_allowed_at: new Date(nextAllowedAt).toISOString(),
+        });
+      }
+    }
+
+    // Passing the caller's own id means their current handle does not read back
+    // as taken, and neither does one they released themselves.
+    const { data: isAvailable, error: rpcError } = await supabase.rpc(
+      'is_username_available',
+      { p_username: username, p_user_id: userId },
+    );
+
+    if (rpcError) return mapDbError(res, rpcError);
+
+    if (!isAvailable) {
+      const reason = await classifyUnavailableUsername(username, userId);
+
+      if (reason === 'RESERVED') return sendError(res, 400, 'USERNAME_RESERVED');
+      if (reason === 'INVALID_FORMAT') return sendError(res, 400, 'INVALID_FORMAT');
+
+      // TAKEN and RECENTLY_RELEASED are the same answer to the person asking,
+      // and naming the cooling-off case would say that a specific someone else
+      // used to hold this handle.
+      return sendError(res, 400, 'USERNAME_TAKEN');
+    }
+
+    // 🎯 THE UPDATE, AND THE CATCH THIS ENDPOINT EXISTS FOR.
+    //
+    // The availability check above resolved a few milliseconds ago and is NOT a
+    // reservation. Two students can both be told yes and both submit; nothing
+    // in JavaScript can arbitrate between them, because the gap between the
+    // check and the write is where the race lives. `users_username_key` is the
+    // only thing that can, and it reports the loser as Postgres 23505.
+    //
+    // mapDbError maps 23505 to the generic DUPLICATE. The handle is the only
+    // unique column in play on this route, so it is named here first — this is
+    // the specialisation point, because respond.js is frozen shared infra.
+    //
+    // A 500 on this path is a bug, not an edge case.
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({ username })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    // supabase-js RETURNS the error rather than throwing it, so the try/catch
+    // alone would never see 23505. Both paths route through the same handler.
+    if (updateError) return handleUsernameWriteError(res, updateError);
+
+    // username_changed_at and the username_history row are written by
+    // trg_record_username_change. Never set either by hand.
+    return res.json({ user: updated });
+  } catch (error) {
+    return handleUsernameWriteError(res, error);
+  }
+};
+
+/** The write-failure map for a username change. Named codes first, then the
+ *  shared mapper for everything else. */
+function handleUsernameWriteError(res, error) {
+  // The race, arbitrated by users_username_key.
+  if (error?.code === '23505') return sendError(res, 400, 'USERNAME_TAKEN');
+
+  // ⚠ ORDER IS LOAD-BEARING HERE. trg_username_not_reserved raises
+  // USERNAME_RESERVED with `errcode = '23514'` — the SAME SQLSTATE the
+  // users_username_valid CHECK uses. mapDbError recognises the reserved case by
+  // message, so it has to get first refusal; testing 23514 before this line
+  // would report every reserved handle as INVALID_FORMAT and send the student
+  // off editing a perfectly well-formed name.
+  if (error?.message?.includes('USERNAME_RESERVED')) return mapDbError(res, error);
+
+  // Now 23514 can only be the CHECK itself. Unreachable in normal flow —
+  // is_username_available() rejects a malformed handle before we get here — but
+  // if the function and the constraint ever drift, this is the difference
+  // between the student seeing INVALID_FORMAT and seeing a 500 on a handle we
+  // just told them was fine.
+  if (error?.code === '23514') return sendError(res, 400, 'INVALID_FORMAT');
+
+  return mapDbError(res, error);
+}
