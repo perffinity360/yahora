@@ -19,6 +19,20 @@ const USER_ID_KEY = 'yahora_user_id';
 const DEMO_KEY = 'yahora_demo_user';
 const UNIVERSITY_KEY = 'yahora_university_id';
 
+// Whether this student has finished onboarding. Mirrors
+// `users.is_profile_complete` from the last auth response.
+//
+// It exists so that ANY component can answer "where does a logged-in student
+// belong?" without an API call — specifically <GuestOnly> in App.jsx, which
+// previously sent every authenticated visitor to "/" and, because of the race
+// described on `login()` below, was intercepting students on their way to
+// /onboarding and dropping them on the home page instead.
+//
+// This is a routing hint, never an authorisation decision. It is client-side
+// state a student could edit; the backend re-derives completeness from the
+// database on every request that depends on it.
+const PROFILE_COMPLETE_KEY = 'yahora_profile_complete';
+
 // Mirror a Supabase session back into localStorage.
 //
 // This is not just bookkeeping: supabase-js auto-refreshes the access token in
@@ -51,7 +65,22 @@ export const AuthProvider = ({ children }) => {
   // restore — "settled", not "authenticated".
   const [sessionReady, setSessionReady] = useState(false);
 
+  // Seeded straight from localStorage so the very first render is already
+  // correct. A useEffect would be one render too late — <GuestOnly> renders
+  // before effects run, and a wrong answer there is a redirect, not a flicker.
+  const [profileComplete, setProfileCompleteState] = useState(
+    () => localStorage.getItem(PROFILE_COMPLETE_KEY) === 'true',
+  );
+
   const navigate = useNavigate();
+
+  // Write the flag and the storage key together. Callers pass whatever the
+  // server just told them about `is_profile_complete`.
+  const setProfileComplete = useCallback((complete) => {
+    const value = Boolean(complete);
+    localStorage.setItem(PROFILE_COMPLETE_KEY, value ? 'true' : 'false');
+    setProfileCompleteState(value);
+  }, []);
 
   const clearStoredSession = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
@@ -59,7 +88,12 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(USER_ID_KEY);
     localStorage.removeItem(DEMO_KEY);
     localStorage.removeItem(UNIVERSITY_KEY);
+    localStorage.removeItem(PROFILE_COMPLETE_KEY);
     setIsAuthenticated(false);
+    // Back to the safe default. A stale `true` left behind by the previous
+    // account would send the NEXT student to /dashboard before they have
+    // onboarded.
+    setProfileCompleteState(false);
   }, []);
 
   // Check localStorage the moment the app starts or refreshes, then hand the
@@ -163,6 +197,25 @@ export const AuthProvider = ({ children }) => {
   // the existing `login(...); navigate(...)` call sites keep working unchanged.
   // The async setSession runs alongside and is what `sessionReady` reports on.
   // It returns a promise so a caller *may* await it, but none has to.
+  //
+  // ⚠️ `login(...); navigate(...)` DOES NOT ARRIVE AS ONE RENDER, and every
+  // caller has to assume it doesn't.
+  //
+  // `setIsAuthenticated(true)` below is an ordinary urgent update.
+  // react-router's `navigate()` is not: <BrowserRouter> commits its location
+  // inside `React.startTransition` (react-router 7.13.1,
+  // dist/development/chunk-LFPYN7LY.mjs — `setState` → `startTransition`).
+  // React therefore renders the urgent half FIRST, and in that render the app
+  // is authenticated while the location is still /auth. Any guard that keys on
+  // `isAuthenticated` runs in that window, and a <Navigate> it returns beats
+  // the still-pending transition to the real destination.
+  //
+  // That is what sent students who had just verified an OTP to the home page
+  // instead of /onboarding. The fix is NOT to reorder these calls — the urgent
+  // update wins whichever order they are written in. It is that <GuestOnly>
+  // now redirects to the SAME destination the login handler is navigating to,
+  // so whichever render lands first, the student ends up in the right place.
+  // Hence `profileComplete` must be set BEFORE login() at every call site.
   const login = (token, userId, refreshToken) => {
     localStorage.setItem(SESSION_KEY, token);
     localStorage.setItem(USER_ID_KEY, userId);
@@ -213,7 +266,15 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, login, logout, loading, sessionReady }}
+      value={{
+        isAuthenticated,
+        login,
+        logout,
+        loading,
+        sessionReady,
+        profileComplete,
+        setProfileComplete,
+      }}
     >
       {/* Do not render the app until we finish checking localStorage */}
       {!loading && children}

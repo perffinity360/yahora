@@ -58,7 +58,7 @@ const formatWait = (totalSeconds) => {
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, setProfileComplete } = useAuth();
   const [email, setEmail] = useState(
     () => sessionStorage.getItem(AUTH_EMAIL_KEY) || "",
   );
@@ -137,6 +137,14 @@ const Auth = () => {
     }
 
     const userId = data.userProfile?.id || data.userAuth?.id || data.user?.id;
+
+    // MUST come before login(). login() flips `isAuthenticated` with an urgent
+    // update while navigate() below commits inside a transition, so <GuestOnly>
+    // gets a render where the student is authenticated but the location is
+    // still /auth. It decides where to send them from this flag; if the flag is
+    // not already correct it redirects to the wrong page and wins the race
+    // against the navigate() below. See App.jsx.
+    setProfileComplete(Boolean(data.userProfile?.is_profile_complete));
 
     if (userId) {
       // The refresh token is what lets AuthContext re-authenticate the
@@ -275,6 +283,14 @@ const Auth = () => {
         }
 
         const userId = data.userProfile?.id || data.userAuth?.id;
+
+        // demo-login always creates the profile with is_profile_complete false
+        // so the sandbox user still sees onboarding. Set it from the response
+        // anyway rather than hardcoding false — if that ever changes server
+        // side this keeps agreeing with it. Before login(), same reason as in
+        // completeSignIn above.
+        setProfileComplete(Boolean(data.userProfile?.is_profile_complete));
+
         if (userId)
           login(data.session.access_token, userId, data.session.refresh_token);
 

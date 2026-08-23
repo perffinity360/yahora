@@ -7,6 +7,7 @@
 import express from 'express';
 import multer from 'multer';
 import { createProduct, updateProduct, deleteProduct, getProducts, getProductById, getProductMeta, toggleLikeProduct, toggleSaveProduct, addComment, toggleCommentVote, markProductAsSold, markProductAsAvailable } from './products.controller.js';
+import requireAuth from '../../middleware/requireAuth.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -20,12 +21,25 @@ router.get('/:id', getProductById);
 // POST /api/products
 // upload.array('images', 5) means we accept an array of files under the field name 'images', max 5.
 router.post('/', upload.array('images', 5), createProduct);
-router.put('/:id', updateProduct); 
-router.delete('/:id', deleteProduct); 
+//
+// 🔒 requireAuth on both (plan §1.6 Bug 1). These handlers now compare the
+// listing's seller_id to req.user.id, and req.user only exists if the token was
+// verified. Without the middleware the ownership check would read `undefined`
+// and reject every caller, including the real seller.
+router.put('/:id', requireAuth, updateProduct);
+router.delete('/:id', requireAuth, deleteProduct);
 
 // INTERACTION routes
-router.post('/:id/like', toggleLikeProduct);
-router.post('/:id/save', toggleSaveProduct);
+//
+// 🔒 requireAuth (plan §1.6 Bug 2 / CURRENT_STATE item 4). These took the actor
+// from `req.body.user_id`, so anyone could like or save as any student. The
+// actor is now req.user.id, which only the token can supply.
+//
+// ⚠️ BREAKING for the web app: frontend/ sends no Authorization header on
+// like/save yet and will get 401 until it does. Mobile already sends one on
+// every request. See docs/CHANGELOG.md.
+router.post('/:id/like', requireAuth, toggleLikeProduct);
+router.post('/:id/save', requireAuth, toggleSaveProduct);
 
 // <-- Q&A / COMMENT ROUTES -->
 router.post('/:id/comments', addComment);

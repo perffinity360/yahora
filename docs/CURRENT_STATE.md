@@ -16,10 +16,18 @@
    bundle). This is the top priority. → migration 003.
 2. `REVOKE ... FROM anon` on functions does not work — PostgreSQL grants
    EXECUTE to PUBLIC by default and anon inherits it. Needs `FROM PUBLIC`.
-3. messages.controller.js:35 — unvalidated query params interpolated into a
-   PostgREST `.or()` filter expression.
-4. products.controller.js:296 — `user_id` read from req.body instead of the
-   auth token. Same pattern in the save/unsave handlers.
+3. ~~messages.controller.js:35 — unvalidated query params interpolated into a
+   PostgREST `.or()` filter expression.~~ ✅ FIXED 2026-08-23. All three params
+   validated against an anchored uuid regex before reaching the filter, plus a
+   participation check (req.user.id must be one of the two parties) and
+   requireAuth. Confirmed exploitable before the fix — see docs/CHANGELOG.md.
+4. ~~products.controller.js:296 — `user_id` read from req.body instead of the
+   auth token. Same pattern in the save/unsave handlers.~~ ✅ FIXED 2026-08-23.
+   Actor is req.user.id on both like and save; body `user_id` ignored. Also
+   added the §1.6 Bug 2 campus check and ownership checks on
+   updateProduct/deleteProduct. Remaining actor-from-request handlers (create,
+   comments, votes, sold/available, messages send/read/deliver, inbox) are
+   still open — see the CC-4 audit in docs/CHANGELOG.md.
 5. products.views is incremented by two independent paths with different rules
    (frontend ProductCard.jsx:506 and backend products.controller.js:237).
 6. No pagination anywhere — `.range()` is never called in any package.

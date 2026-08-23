@@ -5,11 +5,24 @@
 // ══════════════════════════════════════════════
 import express from 'express';
 import { getInbox, getChatHistory, sendMessage, markAsRead, markAsDelivered} from './messages.controller.js';
+import requireAuth from '../../middleware/requireAuth.js';
 
 const router = express.Router();
 
 router.get('/inbox/:userId', getInbox);
-router.get('/history', getChatHistory);
+
+// 🔒 requireAuth (CURRENT_STATE item 3). The handler verifies that req.user.id
+// is one of the two parties in the thread, which is only meaningful once the
+// token has been verified — without it req.user is undefined and every read of
+// a legitimate conversation would be rejected.
+//
+// ⚠️ BREAKING for the web app: frontend/src/pages/messages/Messages.jsx sends
+// no Authorization header on this call yet. Mobile already does.
+//
+// NOTE: /inbox/:userId, /send, /read and /deliver still take their actor from
+// the request and are NOT fixed here — deliberately out of scope for this
+// change. They are items 11-13 of the CC-4 audit in docs/CHANGELOG.md.
+router.get('/history', requireAuth, getChatHistory);
 router.post('/send', sendMessage);
 router.put('/read', markAsRead);
 router.put('/deliver', markAsDelivered);

@@ -34,10 +34,11 @@ const SESSION_KEY = "yahora_session";
 
 const MIN_PASSWORD_LENGTH = 8;
 
-// `is_username_available()` reports one of four reasons. Each gets its own
-// message: "taken" and "reserved" mean completely different things to a student
-// (pick another vs. you may never have this one), and lumping them together
-// leaves them retrying a handle they can never get.
+// `is_username_available()` reports one of four reasons, and each is kept as a
+// distinct status so the UI can behave differently even where it now READS the
+// same — see USERNAME_STATUS_COPY, where "taken" and "reserved" deliberately
+// share one sentence. Keep the statuses separate here regardless: collapsing
+// them at this layer would throw away the reason before anything can use it.
 const REASON_TO_STATUS = {
   TAKEN: "taken",
   RESERVED: "reserved",
@@ -56,8 +57,20 @@ const SUBMIT_ERROR_TO_STATUS = {
 const USERNAME_STATUS_COPY = {
   checking: "Checking availability…",
   available: "Available",
-  taken: "That handle is already taken.",
-  reserved: "That handle is reserved and can't be used.",
+  taken: "That handle is already taken. Please choose another.",
+  // Deliberately WORD-FOR-WORD identical to `taken`.
+  //
+  // A reserved handle is one on the `reserved_usernames` list — "admin",
+  // "support", "root". Telling a student it is "reserved" does two unhelpful
+  // things: it reads as a system error they might retry, and, said across
+  // enough guesses, it maps out the reserved list for anyone who cares to
+  // probe. "Already taken" is true from where the student is standing — the
+  // handle is not available and never will be — and it points them at the
+  // suggestions instead of at the rule.
+  //
+  // The API still reports the real reason (`reason: "RESERVED"`); this is the
+  // human copy only.
+  reserved: "That handle is already taken. Please choose another.",
   invalid:
     "3–20 characters: lowercase letters, numbers, . or _ — not at the start, the end, or doubled.",
   recently_released:
@@ -172,7 +185,7 @@ const Onboarding = () => {
  // Safely grab the passed profile, or default to an empty object if it's a new user
  const existingProfile = location.state?.profile || {};
 
- const { login } = useAuth();
+ const { login, setProfileComplete } = useAuth();
 
  // 1. Form State (Pre-filled with existing data if available)
  const [formData, setFormData] = useState({
@@ -522,6 +535,12 @@ const Onboarding = () => {
            data.session.refresh_token,
          );
        }
+       // The profile is complete as of this 200. Record it before navigating:
+       // <GuestOnly> reads this flag, and leaving it false would send a student
+       // who lands back on /auth straight into onboarding again. Same
+       // urgent-vs-transition ordering as the login handler — see App.jsx.
+       setProfileComplete(true);
+
        // Tell the navbar (mounted since login) to pull the new photo/name.
        window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
        navigate("/dashboard");

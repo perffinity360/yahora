@@ -14,7 +14,7 @@ import PublicProfile from "./pages/publicProfile/PublicProfile";
 import Messages from "./pages/messages/Messages";
 
 // Keep logged-in users off the auth page: reaching /auth (via the back button,
-// a stale link, or a typed URL) sends them home instead of showing the login
+// a stale link, or a typed URL) sends them on instead of showing the login
 // form again. `replace` overwrites the /auth history entry rather than stacking
 // on top of it, so the next back press doesn't land straight back here.
 // AuthProvider gates rendering on its loading flag, so isAuthenticated is already
@@ -23,9 +23,37 @@ import Messages from "./pages/messages/Messages";
 // Anything that signs a user out must go through AuthContext's logout() (which
 // flips isAuthenticated) rather than clearing localStorage by hand — otherwise
 // this guard still reads "logged in" and locks them out of the login form.
+//
+// 🐛 WHY THIS SENDS THEM TO /onboarding OR /dashboard AND NEVER TO "/".
+//
+// This guard used to redirect to "/", and that is what broke first-time
+// signup: a student who verified their OTP landed on the home page instead of
+// the onboarding form.
+//
+// The reason is a render-ordering race, not a logic error in Auth.jsx.
+// `login()` flips `isAuthenticated` with an urgent update, while react-router
+// commits `navigate("/onboarding")` inside `React.startTransition`
+// (<BrowserRouter> in react-router 7.13.1). React runs the urgent update
+// first, so there is one real render where the app is authenticated but the
+// location is STILL /auth. This component runs in that render, returned
+// <Navigate to="/" replace />, and that redirect beat the pending transition.
+// The student never saw /onboarding at all.
+//
+// Reordering the calls in Auth.jsx does not help — the urgent update wins
+// either way. So the guard is made to agree with the login handler instead:
+// both now resolve to the same destination from the same `profileComplete`
+// flag, which Auth.jsx writes BEFORE calling login(). Whichever render lands
+// first, the student ends up in the same place.
+//
+// This also fixes a second, quieter bug: a logged-in student with an
+// unfinished profile who typed /auth used to be dropped on the home page with
+// no route back into onboarding.
 function GuestOnly({ children }) {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <Navigate to="/" replace /> : children;
+  const { isAuthenticated, profileComplete } = useAuth();
+
+  if (!isAuthenticated) return children;
+
+  return <Navigate to={profileComplete ? "/dashboard" : "/onboarding"} replace />;
 }
 
 function App() {
