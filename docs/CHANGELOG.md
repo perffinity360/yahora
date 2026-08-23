@@ -82,6 +82,244 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-23 — §1.6 security fixes: product ownership, cross-campus interaction, chat-history injection (Vishwajeet)
+
+### 🚨 BREAKING — Neeraj, three web calls will start returning 401. Read before you pull.
+
+`requireAuth` was added to five routes. Two of them your web app already authenticates
+correctly; **three of them it does not send a token on at all**, and they will 401 until you add
+one. Mobile is unaffected — `mobile/src/lib/api.ts` attaches the header on every request.
+
+| Route | Web today | Action |
+|---|---|---|
+| `PUT /api/products/:id` | ✅ sends Bearer (`Sell.jsx:171`) | none |
+| `DELETE /api/products/:id` | ✅ sends Bearer (`Dashboard.jsx:766`) | none |
+| `POST /api/products/:id/like` | ❌ **no header** | add `Authorization` |
+| `POST /api/products/:id/save` | ❌ **no header** | add `Authorization` |
+| `GET /api/messages/history` | ❌ **no header** | add `Authorization` |
+
+Exact call sites to patch — all of them read the token from `localStorage.getItem('yahora_session')`:
+
+- `frontend/src/pages/marketplace/Marketplace.jsx` — lines ~571, ~596, ~628
+- `frontend/src/pages/product/ProductDetail.jsx` — lines ~207, ~223
+- `frontend/src/pages/publicProfile/PublicProfile.jsx` — lines ~107, ~129
+- `frontend/src/pages/dashboard/Dashboard.jsx` — lines ~720, ~741
+- `frontend/src/pages/messages/Messages.jsx` — line ~300
+
+**`user_id` in the like/save body is now ignored.** You can leave it in place — it is read from
+the token instead and the body value is dropped in silence — but it does nothing. Sending it is
+no longer how the actor is chosen, which was the whole bug.
+
+This is the same shape of change as CC-4: the actor cannot come from the request, because the
+request is what the attacker controls.
+
+### Changed endpoints (BREAKING)
+
+- **`PUT /api/products/:id`** — auth required; caller must be `seller_id`. New `401`, `403`,
+  `404`. A non-existent id was a 500, now a clean 404.
+- **`DELETE /api/products/:id`** — same. ⚠️ **Deleting a non-existent id used to return `200`;
+  it now returns `404`.** If any client treats "delete succeeded" as idempotent, check it.
+- **`POST /api/products/:id/like`** and **`/save`** — auth required; `user_id` ignored; new
+  `401`, `403 CROSS_CAMPUS_INTERACTION_BLOCKED`, `404`.
+- **`GET /api/messages/history`** — auth required; caller must be one of the two parties; all
+  three query params validated. ⚠️ **A missing or malformed param used to be a `500`, now a
+  `400 INVALID_FORMAT`.**
+
+All five 500 bodies changed shape from `{ "error": "Failed to …" }` to
+`{ "error": "INTERNAL_ERROR", "message": "Failed to …" }`. **If you render `data.error`
+directly anywhere on these paths, render `data.message` instead** — otherwise students will see
+`INTERNAL_ERROR`.
+
+### What was actually wrong
+
+**1. `updateProduct` / `deleteProduct` — no ownership check at all.** They took the id from the
+URL and acted on it with no actor. Anyone who knew a listing's uuid could rewrite its title,
+price and status, or delete it outright, on any campus — cascading to its comments, likes,
+saves and purchases. Now: fetch `seller_id` first, `404` if absent, `403` if it is not
+`req.user.id`.
+
+**2. `toggleLikeProduct` / `toggleSaveProduct` — two holes.** The actor came from
+`req.body.user_id`, so anyone could like or unlike as any student. And there was no campus
+check: our rule is browse-across-campuses / interact-only-on-your-own, and `GET /api/products`
+is deliberately cross-campus, so the API permitted an interaction the product rule forbids.
+
+⚠️ **A `NULL` `university_id` on either side is treated as a mismatch, not a pass.**
+`handle_new_user` (005) creates a user row with `university_id` NULL when the email domain is
+unknown, and "I cannot establish that you are on this campus" has to fail closed. No real
+student is affected — every account created through `request-otp` has a validated domain.
+
+**3. `getChatHistory` — the `.or()` filter injection was real, not theoretical.** I proved it
+before fixing it. `userId`/`contactId` are interpolated into a PostgREST `.or()` filter
+*expression*; unlike `.eq()`, that string is a grammar parsed server-side, so a `,` or `)` in
+the value closes the expression and appends the attacker's own conditions. On a product
+carrying two separate conversations, `<uuid>),or(id.not.is.null` returned **all 9 messages
+instead of the caller's 6** — leaking a thread the caller was not in. Three of four payloads I
+tried worked.
+
+Fixed by validating all three params against an anchored uuid regex *before* they reach the
+string — once concatenated there is nothing to escape with, so refusing non-uuids is the only
+correct control. Plus a participation check: `req.user.id` must be one of the two parties.
+Either party is accepted, because the thread is symmetric and a client passing the pair in the
+other order is still asking for its own conversation.
+
+### NOT fixed here, deliberately
+
+Still taking their actor from the request, and **out of scope for this change**:
+`createProduct` (`seller_id` in body), `addComment`, `toggleCommentVote`, `markProductAsSold`,
+`markProductAsAvailable`, `getInbox` (`:userId` in the path), `sendMessage` (`sender_id` in
+body), `markAsRead`, `markAsDelivered`, and the whole read side listed in the CC-4 audit.
+One security change per PR.
+
+### How I tested it
+
+Against the local DB with three real tokens (Arjun @ Kurnool, Priya @ Kurnool, Neeraj @ NIET):
+
+```
+owner edits own listing                  200   ← legitimate use intact
+non-owner edits                          403 FORBIDDEN
+unknown listing                          404 NOT_FOUND
+no token                                 401 UNAUTHORIZED
+owner deletes own listing                200   (row confirmed gone)
+same-campus like / unlike / save / unsave 200  ← all four toggles intact
+cross-campus like  (Kurnool → NIET)      403 CROSS_CAMPUS_INTERACTION_BLOCKED
+NIET student likes NIET listing          200   ← not over-restricted
+spoofed body user_id + valid token       200, and the row written was the TOKEN's user
+participant reads own thread             200 (6 msgs, 0 from the other thread)
+same thread, pair reversed               200   ← not over-restricted
+third party reads that thread            403 FORBIDDEN
+3 x .or() injection payloads             400 INVALID_FORMAT
+```
+
+Test data was restored afterwards (16 messages, seeded listing untouched).
+
+## 2026-08-23 — Migration 007, the two missing username endpoints, and the /auth→home redirect (Vishwajeet)
+
+### 🚨 Neeraj — I edited four of your files. Read this before you pull.
+
+Three of them because the web app was calling backend routes that did not exist, and one
+because a race in `App.jsx` was eating first-time signups. All four are yours; I have not
+touched anything else under `frontend/`. Say the word and I will hand any of it back.
+
+| File | What I did |
+|---|---|
+| `backend/src/modules/user/user.controller.js` | **added** `checkUsernameAvailable`, `getUsernameSuggestions`, `classifyUnavailableUsername` at the bottom. The four pre-existing handlers are untouched. |
+| `backend/src/modules/user/user.routes.js` | **added** the two GET routes, registered above the `/:userId/...` routes |
+| `frontend/src/App.jsx` | `GuestOnly` no longer redirects to `/` |
+| `frontend/src/contexts/AuthContext.jsx` | new `profileComplete` / `setProfileComplete` on the context |
+| `frontend/src/pages/auth/Auth.jsx` | sets `profileComplete` before `login()` |
+| `frontend/src/pages/onboarding/onboarding.jsx` | sets `profileComplete` on success; `reserved` copy now reads as "taken" |
+
+---
+
+### 🐛 First-time signup was landing on the home page instead of /onboarding
+
+Not a logic error in `Auth.jsx` — that file was routing correctly. It is a **render-ordering
+race**, and it is worth understanding because it will bite again anywhere a guard keys on
+`isAuthenticated`.
+
+`login()` flips `isAuthenticated` with an ordinary **urgent** update. `navigate()` does not:
+`<BrowserRouter>` commits its location inside `React.startTransition` (react-router 7.13.1,
+`dist/development/chunk-LFPYN7LY.mjs` — `setState` → `startTransition`). React runs the urgent
+update **first**, so there is one real render where the app is authenticated and the location is
+**still `/auth`**. `GuestOnly` ran in that window, returned `<Navigate to="/" replace />`, and
+that redirect beat the pending transition to `/onboarding`. The student never saw onboarding.
+
+**Reordering the two calls does not fix it** — the urgent update wins whichever order they are
+written in. The fix is to make the guard agree with the login handler instead: both now resolve
+the destination from one `profileComplete` flag, so whichever render lands first, the student
+ends up in the same place.
+
+`GuestOnly` now sends an authenticated visitor to `/onboarding` or `/dashboard`, never to `/`.
+That also fixes a quieter bug: a logged-in student with an unfinished profile who typed `/auth`
+used to be dropped on the home page with no route back into onboarding.
+
+**New localStorage key: `yahora_profile_complete`** (`"true"` / `"false"`). Cleared by
+`logout()`. It is a **routing hint, never an authorisation decision** — the backend re-derives
+completeness from the database on every request that depends on it.
+
+⚠️ **If you add another `login()` call site, set `profileComplete` BEFORE it.**
+
+---
+
+### 🐛 The username field gave no availability feedback — the endpoints did not exist
+
+`onboarding.jsx` was calling `GET /api/users/username-available` and
+`GET /api/users/username-suggestions`. Neither was implemented, so every keystroke got Express's
+HTML 404 (`Cannot GET /api/users/username-available`), `res.json()` threw, and the page fell to
+its `unknown` status. No "available", no "taken", and **nothing at all for reserved words**.
+
+Both are now live, implemented to the contract in `API.md` — which I also updated, resolving the
+four open TODOs on those two endpoints. Verified against the local DB:
+
+```
+totallyfreehandle  {"available":true}
+arjun.mehta.1187   {"available":false,"reason":"TAKEN","suggestions":["amehta.1187", ...]}
+admin              {"available":false,"reason":"RESERVED","suggestions":["admin.6791", ...]}
+ab                 {"available":false,"reason":"INVALID_FORMAT","suggestions":[]}
+UPPERCASE          {"available":true}          ← folded to lowercase, as the RPC does
+(no param)         400 {"error":"MISSING_FIELDS","message":"A username is required."}
+```
+
+I did **not** reimplement any username rule. `is_username_available()` still decides; the
+controller only *labels* the reason on the failure path by re-querying the three tables, exactly
+as you told me to in the CC-4 entry.
+
+**One product change you should push back on if you disagree:** `reserved` now renders the
+**same sentence** as `taken` ("That handle is already taken. Please choose another."). Your
+original copy distinguished them, and your reasoning was sound — but "reserved" reads as a
+system error a student might retry, and repeated across guesses it maps out the reserved list.
+The API still returns the true `reason: "RESERVED"`; only the copy is shared. `REASON_TO_STATUS`
+still keeps the four statuses distinct, so nothing is lost if you want to split them again.
+
+---
+
+### Migrations applied
+
+- `20260823055415_login_identity.sql` (007) — **applied LOCAL ONLY. Not on production.**
+  Vishwajeet pushes it.
+
+**New function `get_login_identity(p_identifier)`** → `(id, email, has_password)`, for a
+username **or** an email, in one call. `SECURITY DEFINER`, revoked from `PUBLIC`, `anon` and
+`authenticated` (verified: `anon=f, authenticated=f, service_role=t`). Backend-only — it maps a
+public handle to a private address and discloses whether an account exists at an address.
+Do not call it from your module. `get_login_email()` still exists but no longer has a caller.
+
+**007 also backfills `users.has_password`.** 005 added it with `default false`, 006 backfilled
+only `username`, so all 20+ seeded accounts read `false` while having real passwords. 27 rows
+corrected locally; zero rows disagree with `auth.users` afterwards; idempotent on a second run.
+
+### Changed endpoints (NOT breaking — no shape change)
+
+- **`POST /api/auth/login-password`** now resolves the identifier through `get_login_identity()`
+  instead of `get_login_email()` + a `users` select. Request and response shapes, status codes
+  and the single error string are all **unchanged**.
+
+  Two things this fixes:
+  1. The `[login] has_password=false for <uuid>` console line fired only for **username**
+     logins — and a student who abandoned onboarding has `username = NULL`, so email is the only
+     identifier they have. The line never fired for the one population it was written for.
+     It now fires for both forms.
+  2. **Username login was broken for every pre-existing account** (the stale `has_password`
+     cache above). Fixed by 007's backfill.
+
+  ⚠️ The order of operations is unchanged and still must not be reordered: rate limit → resolve
+  identifier → `has_password` → sign in.
+
+### New endpoints
+
+- `GET /api/users/username-available?username=` → see API.md
+- `GET /api/users/username-suggestions?name=`   → see API.md
+
+### What NOT to do yet
+
+- **Don't push 007 to production.** It is local-only until you have pulled the frontend changes;
+  `has_password` becoming readable on the email path is only safe once the backfill goes with it,
+  and both are in the same migration for that reason.
+- **Don't call `get_login_identity()` from the user module.** Same rule as `get_login_email()`.
+- I left a local test account behind for re-verifying the login fix:
+  `abandoned.onboarding@iiitk.ac.in` — OTP-confirmed, no password, `username NULL`. Delete it
+  whenever; `supabase db reset` will also clear it.
+
 ## 2026-08-20 — 🚨 CC-4: onboarding is now authenticated, and takes username + password (Vishwajeet)
 
 ### ⚠️ BREAKING — Neeraj, this one breaks your onboarding page. Read it before you pull.

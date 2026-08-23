@@ -139,6 +139,7 @@ Some pages define `API_BASE_URL` at module top; others inline `import.meta.env.V
 | `yahora_user_id` | current user's UUID (`users.id`) |
 | `yahora_university_id` | the user's bound campus (`universities.id`) — send as `university_id` in campus-scoped requests |
 | `yahora_demo_user` | `"true"` when in the demo sandbox (drives the global banner) |
+| `yahora_profile_complete` | `"true"` / `"false"` — mirrors `users.is_profile_complete`. A **routing hint only** (`GuestOnly` in `App.jsx` reads it), never an authorisation decision. Set it via `setProfileComplete()` from `useAuth()`, and always **before** calling `login()` — see §13. |
 
 When you need the current user or campus in a component, read from these keys (that is the existing pattern).
 
@@ -235,6 +236,14 @@ Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in t
 - **Demo users** get a persistent orange banner (`App.jsx`) and are auto-cleaned nightly by the backend cron — don't treat demo data as real.
 - **`/feed` and `/hot` routes are placeholder stubs** (community feed + "Hot at campus" not built yet). The `posts` table exists in the DB but there is no backend `posts` module yet — flag before building against it.
 - **Realtime chat** relies on the Supabase client, not the Express backend — keep both in sync when touching messaging.
+- **`login()` and `navigate()` do NOT arrive as one render.** `login()` flips `isAuthenticated`
+  with an urgent update; react-router commits `navigate()` inside `React.startTransition`
+  (`<BrowserRouter>`, v7). React renders the urgent half first, so there is a real render where
+  the app is authenticated but the location has not moved yet. Any guard keying on
+  `isAuthenticated` runs in that window and its `<Navigate>` will beat the pending transition.
+  This sent every first-time signup to the home page instead of `/onboarding`. Reordering the
+  calls does not help — make the guard resolve to the *same* destination the handler is
+  navigating to. See the comment on `GuestOnly` in `App.jsx`.
 
 ---
 

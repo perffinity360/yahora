@@ -75,16 +75,16 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | Code | HTTP | Raised by | Extra fields |
 |---|---|---|---|
 | `UNAUTHORIZED` | 401 | `requireAuth` — missing or invalid Bearer token | — |
-| `FORBIDDEN` | 403 | §1.6 — caller does not own the target | — |
-| `NOT_FOUND` | 404 | §1.6 — target row does not exist | — |
+| `FORBIDDEN` | 403 | **Live.** `PUT`/`DELETE /api/products/:id` — caller is not the listing's `seller_id`; `GET /api/messages/history` — caller is not one of the two parties in the thread | `message` |
+| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save` — no such listing; also `/like`,`/save` when the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
 | `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical | — |
-| `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | §1.6 Bug 2 — liking/saving another campus's product | — |
+| `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like` and `/save` — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
 | `DUPLICATE` | 400 | `mapDbError` — Postgres `23505` unique violation | — |
 | `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation | — |
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
 | `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
-| `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken | `message` (optional) |
+| `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken; also `GET /api/messages/history` when `userId`, `contactId` or `productId` is not a canonical uuid | `message` (optional) |
 | `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one | `message` |
 | `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — under 8 characters, equal to the caller's username, or rejected by GoTrue's own policy | `message` |
 | `COMMON_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — matches the ~20-entry common-password blocklist in `auth.controller.js` | `message` |
@@ -538,33 +538,36 @@ service-role client demotes it to that student's `authenticated` JWT for every l
 **process** makes, until it restarts. See `config/supabase.js` and the 2026-08-12 CHANGELOG
 entry.
 
-**⚠️ Known limitation — the `has_password=false` console log only fires for username logins.**
-The check needs the caller's `public.users` row *before* sign-in, and there is no way to get
-from an email to a user id today: `public.users` has no email column, `get_login_email()` maps
-handle→email only, and GoTrue's admin API cannot look a user up by address. A student who
-abandoned onboarding has no username yet, so **in practice that log line does not fire** — the
-runbook's Block E test for it will not pass as written. **Nothing about the client-visible
-behaviour changes**: the response is the same generic `INVALID_CREDENTIALS` either way, and
-GoTrue also returns `invalid_credentials` for a user with no password, so nothing leaks. Closing
-the gap needs a migration — a `get_login_identity(p_identifier)` returning `id`, `email` and
-`has_password` for both forms, which would also collapse the two username lookups into one.
+**✅ FIXED (migration 007) — the `has_password=false` console log now fires for BOTH identifier
+forms.** It previously fired only for a username, which meant it never fired at all in practice:
+the check needs the caller's `public.users` row *before* sign-in, `public.users` has no email
+column, `get_login_email()` mapped handle→email only, and a student who abandoned onboarding has
+no username yet — so email was the only identifier they had, and the email path could not read
+the flag. `get_login_identity(p_identifier)` (migration 007) now returns `id`, `email` and
+`has_password` for both forms in one call, which also collapses the two lookups the username
+path used to make. **Client-visible behaviour is unchanged**: the response is the same generic
+`INVALID_CREDENTIALS` either way.
 
-**⚠️ Every pre-existing account has `has_password = false`, so username login fails for all of
-them.** `has_password` was added by migration 005 with `default false`, and 006 backfilled only
-`username` — nothing set the flag for accounts whose password already existed in
-`auth.users` (the six named `seed.sql` logins, every `seedDemo.js` persona). Verified locally:
-all 20+ seeded rows read `false`. Consequence: those accounts sign in fine **by email** (the
-email path cannot read the flag, so it goes straight to GoTrue and succeeds) but are rejected at
-step 4 **by username**, with the console line and the generic 400. It is not a code bug — the
-cache is simply stale — and it does not affect anyone who onboards through
-`POST /api/auth/onboarding`, which sets `has_password: true`. A one-line
-`UPDATE public.users SET has_password = true` for the seeded ids, or a refreshed
-`seedDemo.js`, fixes it; both are outside CC-5's file scope.
+**✅ FIXED (migration 007) — the stale `has_password` cache is backfilled.** `has_password` was
+added by 005 with `default false` and 006 backfilled only `username`, so nothing ever set the
+flag for accounts whose password already existed in `auth.users` (the six named `seed.sql`
+logins, every `seedDemo.js` persona — all 20+ rows read `false`). Username login was therefore
+rejected at step 4 for every pre-existing account. Migration 007 reconciles the cache with what
+it is a cache *of* (`auth.users.encrypted_password is not null`); verified locally, 27 rows
+corrected and zero rows disagreeing afterwards. It is idempotent and only ever flips
+`false → true`, never the reverse — a `true` with no `encrypted_password` would mean something
+wrote the cache outside `set-password`, and silently repairing that would hide it.
 
-**Notes:** Identifier form is decided by a single `includes('@')` test — anything containing an
-`@` is treated as an email and goes straight to GoTrue; anything else is resolved through
-`get_login_email()`, which is `SECURITY DEFINER` and revoked from `anon`, `authenticated` and
-`PUBLIC`. Because the lock keys on what was typed, a student locked out under their username can
+⚠️ **This backfill is not cosmetic and must ship WITH 007.** Once `get_login_identity()` makes
+the flag readable on the email path too, a stale `false` stops being a wart and starts locking
+those accounts out of *every* login path, not just the username one.
+
+**Notes:** Identifier form is decided by a single `includes('@')` test, and `get_login_identity()`
+applies the same test internally so the two can never disagree about which lookup ran. It is
+`SECURITY DEFINER` and revoked from `anon`, `authenticated` and `PUBLIC` — it maps a public
+handle to a private address *and* discloses whether an account exists at a given address, so it
+is service-role only. `get_login_email()` is left in place but no longer called; it can be
+dropped once every environment is past 007. Because the lock keys on what was typed, a student locked out under their username can
 still log in with their email (and vice versa) — the two identifiers are two locks. This is
 inherent to identifier-based locking and is accepted: both still cost the attacker a full
 lockout each, and neither reveals whether the other exists.
@@ -960,7 +963,7 @@ same applies to any file sent under a field name other than `images`.
 
 ### PUT /api/products/:id
 **Module:** products
-**Auth:** none — **no ownership check**. Any caller can rewrite any product on any campus.
+**Auth:** **required (Bearer token)** — and the caller must be the listing's `seller_id`
 **Content-Type:** application/json
 **Path:**
   - id: uuid, required
@@ -973,7 +976,16 @@ same applies to any file sent under a field name other than `images`.
   - condition: string
   - status: string — arbitrary, so this endpoint can set a status no other code produces
 **200:** `{ "message": "Product updated successfully", "product": { "<products row>": "..." } }`
-**500:** `{ "error": "Failed to update product." }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "FORBIDDEN", "message": "You can only edit your own listings." }` — the
+  caller is not the `seller_id`
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to update product." }`
+**🔒 Ownership is enforced (plan §1.6 Bug 1, fixed 2026-08-23).** The handler reads
+`seller_id` for `:id` and compares it to `req.user.id` **before** the update. It used to take
+the id from the URL and update with no actor at all, so anyone who knew a listing's uuid could
+rewrite its title, price and status on any campus. There is deliberately no `seller_id` in the
+body to compare against — a caller-supplied one would be the same hole.
 **Notes:** **This is not a working partial update.** Omitted fields are dropped from the
 outgoing payload (`JSON.stringify` skips `undefined`) — except `price`, which the controller
 runs through `Number(price)` first. `Number(undefined)` is `NaN`, and `JSON.stringify`
@@ -981,20 +993,26 @@ serializes `NaN` as `null`, so a body without `price` sends `"price": null` agai
 `NOT NULL` column and **always fails with 500**. Every `PUT` must include a numeric `price`,
 even when only the title is changing. A non-numeric `price` fails the same way.
 
-`university_id` and `seller_id` cannot be changed here. Updating a non-existent id returns
-500 (`.single()` on zero rows).
+`university_id` and `seller_id` cannot be changed here. Updating a non-existent id now returns
+a clean **404** (the ownership lookup uses `maybeSingle()`); it used to be a 500.
 
 ### DELETE /api/products/:id
 **Module:** products
-**Auth:** none — **no ownership check**. Any caller can delete any product.
+**Auth:** **required (Bearer token)** — and the caller must be the listing's `seller_id`
 **Content-Type:** n/a (no body)
 **Path:**
   - id: uuid, required
 **200:** `{ "message": "Product deleted successfully" }`
-**500:** `{ "error": "Failed to delete product." }`
-**Notes:** **Deleting an id that does not exist still returns 200** — a delete affecting zero
-rows is not an error, and no row count is checked. The response never contains the deleted
-row.
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "FORBIDDEN", "message": "You can only delete your own listings." }`
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to delete product." }`
+**🔒 Ownership is enforced (plan §1.6 Bug 1, fixed 2026-08-23).** Same check as the `PUT`, and
+it mattered more here: an unauthenticated `DELETE` on a known uuid destroyed any listing on any
+campus, cascading to its comments, likes, saves and purchases.
+**Notes:** **Deleting an id that does not exist now returns 404, not 200.** The ownership
+lookup runs first and cannot find a row to authorise, so the old "delete affecting zero rows is
+a success" behaviour is gone. The response still never contains the deleted row.
 
 Images are **not** removed from the `products` storage bucket (there is a comment in the
 source acknowledging this), so every delete orphans up to 5 files.
@@ -1006,15 +1024,29 @@ conversations from [the inbox](#get-apimessagesinboxuserid), since that RPC inne
 
 ### POST /api/products/:id/like
 **Module:** products
-**Auth:** none — `user_id` is a body field, so a caller can like as anyone.
+**Auth:** **required (Bearer token)** — the actor is `req.user.id`
 **Content-Type:** application/json
 **Path:**
   - id: uuid, required — becomes `product_id`
-**Body:**
-  - user_id: uuid, required
+**Body:** none required. ⚠️ **`user_id` is no longer read.** A body carrying one is **ignored in
+  silence** — rejecting it would only tell an attacker the parameter used to work.
 **200 (was liked, now removed):** `{ "message": "Product unliked", "is_liked": false }`
 **200 (was not liked, now added):** `{ "message": "Product liked", "is_liked": true }`
-**500:** `{ "error": "Failed to toggle like status." }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "CROSS_CAMPUS_INTERACTION_BLOCKED", "message": "You can only interact with
+  listings on your own campus." }`
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }` — also returned
+  when the caller has no `public.users` row (`"No profile exists for this account."`)
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to toggle like status." }`
+**🔒 Identity + campus are enforced (plan §1.6 Bug 2 / CURRENT_STATE item 4, fixed 2026-08-23).**
+Two separate holes were closed here. The actor used to come from `req.body.user_id`, so anyone
+could like or unlike **as any student**. And there was no campus check at all: the product rule
+is *browse across campuses, interact only on your own*, and
+[GET /api/products](#get-apiproducts) is deliberately cross-campus, so the API was allowing an
+interaction the rule forbids. The handler now compares the product's `university_id` to the
+caller's. A `NULL` on either side is treated as a **mismatch, not a pass** — every account
+created through `request-otp` has a validated domain and therefore a campus, so no real student
+is affected.
 **Notes:** Toggle, not idempotent-set — the same request twice returns to the original state.
 
 **The insert and delete results are never checked.** Only `data` is destructured from the
@@ -1028,15 +1060,19 @@ increment locally or refetch.
 
 ### POST /api/products/:id/save
 **Module:** products
-**Auth:** none — `user_id` is a body field.
+**Auth:** **required (Bearer token)** — the actor is `req.user.id`
 **Content-Type:** application/json
 **Path:**
   - id: uuid, required — becomes `product_id`
-**Body:**
-  - user_id: uuid, required
+**Body:** none required. ⚠️ **`user_id` is no longer read** — see `/like` above.
 **200 (was saved, now removed):** `{ "message": "Product removed from wishlist", "is_saved": false }`
 **200 (was not saved, now added):** `{ "message": "Product saved to wishlist", "is_saved": true }`
-**500:** `{ "error": "Failed to toggle save status." }`
+**401:** `{ "error": "UNAUTHORIZED" }`
+**403:** `{ "error": "CROSS_CAMPUS_INTERACTION_BLOCKED", "message": "You can only interact with
+  listings on your own campus." }`
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to toggle save status." }`
+**🔒 Identity + campus are enforced**, exactly as on `/like` — same guard, same codes.
 **Notes:** Identical structure to `/like`, including the unchecked-write behaviour: a failed
 insert still returns 200 with `is_saved: true`. There is no counter and no trigger for saves,
 and **no endpoint exists to list a user's saved products** — `product_saves` can only be read
@@ -1189,20 +1225,38 @@ Field names here (`contact_*`, `product_title`, `product_image`) are unique to t
 
 ### GET /api/messages/history
 **Module:** messages
-**Auth:** none — any caller can read any conversation between any two users.
+**Auth:** **required (Bearer token)** — and `req.user.id` must be one of the two parties
 **Content-Type:** n/a (no body)
 **Query:**
-  - userId: uuid, required — not validated
-  - contactId: uuid, required — not validated
-  - productId: uuid, required — not validated
+  - userId: uuid, required — **validated**, must be a canonical 8-4-4-4-12 uuid
+  - contactId: uuid, required — **validated**
+  - productId: uuid, required — **validated**
 **200:** `{ "messages": [ { "<messages row>": "..." } ] }` — full rows, ordered `created_at`
 **ascending** (oldest first, for chat rendering).
-**500:** `{ "error": "Failed to fetch messages." }` — what a missing or malformed param
-produces, since it reaches Postgres as an invalid UUID.
-**Notes:** None of the three params is checked for presence or format. `userId` and
-`contactId` are **string-interpolated into a PostgREST `.or()` filter expression**:
-`and(sender_id.eq.${userId},receiver_id.eq.${contactId}),and(...)`. Untrusted input inside a
-filter grammar is worth a look before this ships.
+**400:** `{ "error": "INVALID_FORMAT", "message": "userId, contactId and productId must all be
+  valid UUIDs." }` — any of the three missing or malformed. This used to be a **500**.
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "FORBIDDEN", "message": "You can only read conversations you are part
+  of." }` — the caller is neither `userId` nor `contactId`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to fetch messages." }`
+
+**🔒 Filter injection is fixed (CURRENT_STATE item 3, fixed 2026-08-23).** `userId` and
+`contactId` are string-interpolated into a PostgREST `.or()` filter **expression**:
+`and(sender_id.eq.${userId},receiver_id.eq.${contactId}),and(...)`. Unlike `.eq()`, where
+supabase-js encodes the value, an `.or()` argument is a filter *grammar* parsed server-side, so
+a value carrying `,` or `)` closes the expression early and appends conditions of the
+attacker's choosing. **This was confirmed exploitable, not theoretical:** on a product carrying
+two separate conversations, payloads such as `<uuid>),or(id.not.is.null` returned all 9
+messages instead of the caller's 6 — leaking a thread they were not in. All three params are
+now checked against an anchored uuid regex *before* they reach the string; there is nothing to
+escape with once concatenated, so validation is the only correct control. `productId` is
+validated too — it only reaches the injection-safe `.eq()`, but a non-uuid there made Postgres
+raise `22P02`, which surfaced as a 500 on what is really a bad request.
+
+**🔒 Participation is enforced.** Validation alone still let anyone read any thread by naming
+two other students. Either party is accepted — the thread is symmetric, so a client passing the
+pair in the other order is still asking for its own conversation, and pinning `userId` to
+`req.user.id` would reject that legitimate call for no security gain.
 
 Returns the **entire** history for the pair+product — no limit, no cursor, no
 `before`/`after`. On a long thread this grows without bound.
@@ -1309,6 +1363,9 @@ so your controller makes one RPC, not four queries.
 > the same files. Do not change their paths or shapes.
 
 ### GET /api/users/username-available   `OWNER: Neeraj`  `PHASE 1`
+> **STATUS: IMPLEMENTED** (2026-08-23). Live at `/api/users/username-available` *and*, via the
+> legacy mount, `/api/user/username-available`. Behind `optionalAuth`. ⚠️ Written by Vishwajeet
+> in Neeraj's file to unblock web signup — see docs/CHANGELOG.md.
 **Module:** user
 **Auth:** optional — when signed in, pass the caller's own id so their *current* handle reads
 as available rather than "taken by you"
@@ -1333,25 +1390,41 @@ RPC that checks **all four** of: format (3–20 chars, lowercase, no leading/tra
 and it only ever returns a boolean — it never leaks who holds the handle. Clients debounce
 this by 400ms and discard stale responses (§2.1); an unthrottled call per keystroke sends 11
 requests for `rahulsharma` and they arrive out of order.
-**TODO — ambiguous in plan:** `is_username_available()` returns a bare `BOOLEAN`. It cannot
-say *which* of the four checks failed, yet this response requires a `reason`. Either the
-controller runs extra queries to discriminate — contradicting §1.5's "one RPC rather than
-four queries" — or the RPC needs to change to return the reason. **Which?**
-**TODO — ambiguous in plan:** where do `suggestions` come from on a rejected handle?
-`suggest_usernames()` takes a *display name*, not a rejected username, and the example output
-(`rahul.7402`, `rahul_iiitk`) is clearly derived from the rejected handle instead. Is
-`suggestions` always present when `available: false`, or only for `reason: "TAKEN"`?
+**✅ SETTLED — `reason` is a LABEL, not a second opinion.** `is_username_available()` still
+decides, in one RPC, on the success path. Only when it says *false* does the controller ask
+`reserved_usernames` / `users` / `username_history` — three indexed lookups in parallel, on the
+failure path only — purely to NAME the reason it was already given. `INVALID_FORMAT` is what is
+left by elimination when none of the three hit. §1.5's "one RPC rather than four queries" is
+about not re-deriving the RULES, and it holds: there is no regex in the controller and no copy
+of the reserved list. Same shape as `classifyUnavailableUsername()` in `auth.controller.js`,
+with one deliberate difference — that one folds `RECENTLY_RELEASED` into `TAKEN` because at
+submit time the distinction changes nothing, whereas here it is worth telling a student their
+handle is on a 30-day hold rather than gone forever. Neither ever says *who* held it.
+
+**✅ SETTLED — `suggestions` is always present when `available: false`,** and is derived from the
+**rejected handle**, not from a display name: `suggest_usernames()` slugifies whatever it is
+given, so feeding it the rejected handle yields near-misses of what the student actually wanted
+(`arjun.mehta` → `amehta`, `arjun.mehta.1961`) rather than something derived from a name they
+may not have typed yet. It is `[]` when the RPC finds nothing or itself fails — suggestions are
+a nicety, and a failure there must not cost the student the verdict.
+
+**Note — reserved reads as "taken" in the UI.** The API still reports the true
+`reason: "RESERVED"`. The web client deliberately renders the *same sentence* for `TAKEN` and
+`RESERVED` ("That handle is already taken. Please choose another."): "reserved" reads as a
+system error a student might retry, and said across enough guesses it maps out the reserved list
+for anyone probing. Keep the reasons distinct in the payload; keep the copy identical.
 
 ### GET /api/users/username-suggestions   `OWNER: Neeraj`  `PHASE 1`
+> **STATUS: IMPLEMENTED** (2026-08-23). Behind `optionalAuth`. ⚠️ Written by Vishwajeet in
+> Neeraj's file — see docs/CHANGELOG.md.
 **Module:** user
 **Auth:** optional
 **Content-Type:** n/a (no body)
 **Query:**
   - name: string, required — the student's full name, e.g. `Rahul%20Sharma`
-**200:** **TODO — ambiguous in plan: no response shape is given for this endpoint anywhere.**
-`suggest_usernames()` returns a bare `TEXT[]` of exactly 3, and §2.1 only says "show the three
-suggestions as tappable chips". Is it `{ "suggestions": ["a","b","c"] }`, a bare array like
-`/api/academic/courses`, or the `items` envelope? **Decide at the contract review.**
+**200:** `{ "suggestions": ["rsharma", "rahul.sharma.5525", "rahul.sharma.5651"] }` — **settled.**
+At most 3. `{ "suggestions": [] }` rather than a 404 when nothing can be generated.
+**400:** `{ "error": "MISSING_FIELDS", "message": "A name is required." }`
 **Enforced by:** `suggest_usernames(p_name, p_university_id)` — returns exactly 3 available
 handles: the plain slug, the slug plus a campus abbreviation, and first-initial-plus-surname,
 topped up with random 4-digit suffixes until it has three. Every candidate is passed through
@@ -1359,9 +1432,13 @@ topped up with random 4-digit suffixes until it has three. Every candidate is pa
 **Notes:** free at the moment of the call is not a reservation — two students onboarding
 simultaneously can be offered the same suggestion. The unique index is the real arbiter.
 Suffixes are random rather than sequential so they don't leak your user count.
-**TODO — ambiguous in plan:** `p_university_id` materially changes the output (it produces the
-`rahul_iiitk` style suggestion), but auth is **optional** here. Does the controller pass
-`req.user`'s university, require auth after all, or accept a `university_id` query param?
+**✅ SETTLED — `p_university_id` comes from the caller's OWN row, or is null.** When the request
+carries a valid Bearer token the controller reads `users.university_id` for `req.user.id`;
+signed out it passes `null` and the campus-flavoured suggestion simply is not produced. It is
+**never** taken from a query parameter — a caller-supplied `university_id` would let anyone mint
+handles styled for a campus they are not on. A failure to read the campus is logged and
+downgraded to `null` rather than failing the request, since it only affects one of the three
+candidates.
 
 ### GET /api/users/by-username/:username   `OWNER: Neeraj`  `PHASE 1`
 **Module:** user

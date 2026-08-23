@@ -616,49 +616,48 @@ export const loginWithPassword = async (req, res) => {
             return sendInvalidCredentials(res);
         }
 
-        // ── 2. Resolve the identifier to an email ─────────────────────────
+        // ── 2. Resolve the identifier to an identity ──────────────────────
         //
         // One field, both forms — Instagram does this and students expect it.
         // Supabase can only sign in by email, so a handle has to be mapped
-        // first. get_login_email() is SECURITY DEFINER and revoked from anon,
-        // authenticated and PUBLIC: it is the one function in migration 005
-        // that leaks something (a handle → an address), so only the backend's
-        // service-role client may call it.
-        const isEmail = identifier.includes('@');
+        // first.
+        //
+        // get_login_identity() (migration 007) answers for BOTH forms in one
+        // round trip: id, email, has_password. It replaces the old pair of
+        // lookups — get_login_email() plus a `users` select — which between
+        // them could only ever describe a HANDLE. That asymmetry was the bug:
+        // an email login could not reach the has_password check at all, and
+        // the one student the check exists for (OTP verified, onboarding
+        // abandoned) has username NULL, so email is the only identifier they
+        // have. The branch below was unreachable for exactly the population it
+        // was written for. See API.md and the migration header.
+        //
+        // SECURITY DEFINER and revoked from anon, authenticated and PUBLIC —
+        // it maps a public handle to a private address and discloses whether
+        // an account exists at all, so only the service-role client may call
+        // it.
+        const { data: identityRows, error: identityError } = await supabase.rpc(
+            'get_login_identity',
+            { p_identifier: identifier },
+        );
 
-        let email   = null;
-        let profile = null;   // { id, has_password } — only knowable via a handle
+        if (identityError) return mapDbError(res, identityError);
 
-        if (isEmail) {
-            email = identifier;
-        } else {
-            // Both lookups are needed on the success path, and neither depends
-            // on the other, so pay for one round trip instead of two.
-            const [emailResult, profileResult] = await Promise.all([
-                supabase.rpc('get_login_email', { p_identifier: identifier }),
-                supabase
-                    .from('users')
-                    .select('id, has_password')
-                    .eq('username', identifier)
-                    .maybeSingle(),
-            ]);
+        // `returns table` comes back as an array over PostgREST, capped at one
+        // row by the function's own LIMIT.
+        const identity = Array.isArray(identityRows) ? identityRows[0] : identityRows;
 
-            if (emailResult.error)   return mapDbError(res, emailResult.error);
-            if (profileResult.error) return mapDbError(res, profileResult.error);
-
-            email   = emailResult.data || null;
-            profile = profileResult.data || null;
-        }
-
-        // ── 3. No email found → generic failure ───────────────────────────
+        // ── 3. No such account → generic failure ──────────────────────────
         //
         // "User not found" would be the enumeration oracle this whole endpoint
         // is shaped to avoid. Log the attempt first: if a failed lookup were
         // free, someone could probe thousands of handles a minute at no cost.
-        if (!email) {
+        if (!identity?.email) {
             await recordAuthAttempt(identifier, req.ip, false);
             return sendInvalidCredentials(res);
         }
+
+        const email = identity.email;
 
         // ── 4. Account with no password → SAME generic failure ────────────
         //
@@ -668,8 +667,11 @@ export const loginWithPassword = async (req, res) => {
         // wrong password either. The real reason goes to the SERVER CONSOLE
         // and nowhere near the response. PASSWORD_NOT_SET is deliberately not
         // an API code; see runbook §0.6.
-        if (profile && profile.has_password !== true) {
-            console.warn(`[login] has_password=false for ${profile.id} — onboarding never finished`);
+        //
+        // Now fires for an email identifier too, which is the only kind this
+        // student can actually type.
+        if (identity.has_password !== true) {
+            console.warn(`[login] has_password=false for ${identity.id} — onboarding never finished`);
             await recordAuthAttempt(identifier, req.ip, false);
             return sendInvalidCredentials(res);
         }

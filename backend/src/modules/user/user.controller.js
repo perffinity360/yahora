@@ -8,6 +8,9 @@
 // written by Vishwajeet. They are live in both web and mobile — do not
 // change their behaviour or response shapes. Phase 1 adds underneath.
 import { supabase } from '../../config/supabase.js';
+// Phase 1 handlers only. The four pre-existing handlers above hand-roll their
+// error shapes and are left exactly as they are.
+import { sendError, mapDbError } from '../../utils/respond.js';
 
 // 1. Fetch all Dashboard Data
 export const getDashboardData = async (req, res) => {
@@ -228,5 +231,215 @@ export const getPublicProfile = async (req, res) => {
     } catch (error) {
         console.error('Public Profile Fetch Error:', error);
         res.status(500).json({ error: 'Failed to fetch public profile.' });
+    }
+};
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 1 — HANDLES
+//
+// ⚠️ WRITTEN BY VISHWAJEET, in Neeraj's file. See docs/CHANGELOG.md.
+// The web onboarding page (frontend/src/pages/onboarding/onboarding.jsx) was
+// already calling both of these; neither existed, so every availability check
+// 404'd and the student got no "available"/"taken" feedback at all. Added to
+// unblock signup. Neeraj owns them from here.
+//
+// The rules are the DATABASE'S, not this controller's. is_username_available()
+// checks all four things in one call — charset/length, the reserved list, an
+// existing users.username, and the 30-day username_history cooling-off window.
+// There is no regex in this file and no copy of the reserved list. If this ever
+// grows its own opinion about what a valid handle looks like it will drift from
+// `users_username_valid` and produce the one bug nobody can reproduce: the
+// check says free, the insert says no.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Why the handle is unavailable — a LABEL, not a second opinion.
+ *
+ * is_username_available() has already decided. It returns one boolean for four
+ * different reasons and the client needs to know which, so this asks the same
+ * three tables purely to NAME the reason it already gave. INVALID_FORMAT is
+ * what is left when none of the three lookups hit, by elimination.
+ *
+ * Mirrors classifyUnavailableUsername() in auth.controller.js, with one
+ * deliberate difference: that one folds RECENTLY_RELEASED into TAKEN because at
+ * submit time the distinction changes nothing. Here it is worth telling a
+ * student their handle is on a 30-day hold rather than gone forever — and it
+ * still never says WHO held it, which is the part that would leak.
+ *
+ * Failure path only, so three indexed lookups in parallel is the right cost.
+ * All three tables are RLS-on / zero-grant; this works because the backend
+ * client is service_role, which bypasses RLS.
+ */
+async function classifyUnavailableUsername(username, userId) {
+    const [reserved, taken, released] = await Promise.all([
+        supabase
+            .from('reserved_usernames')
+            .select('username')
+            .eq('username', username)
+            .maybeSingle(),
+        supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .neq('id', userId || '00000000-0000-0000-0000-000000000000')
+            .maybeSingle(),
+        supabase
+            .from('username_history')
+            .select('username')
+            .eq('username', username)
+            .gt('reserved_until', new Date().toISOString())
+            .neq('user_id', userId || '00000000-0000-0000-0000-000000000000')
+            .limit(1),
+    ]);
+
+    if (reserved.data)         return 'RESERVED';
+    if (taken.data)            return 'TAKEN';
+    if (released.data?.length) return 'RECENTLY_RELEASED';
+
+    return 'INVALID_FORMAT';
+}
+
+// 5. GET /api/users/username-available?username=<handle>
+//
+// optionalAuth: signed in, the caller's own current handle must read as
+// available rather than "taken by you" — that is what p_user_id does. Signed
+// out (the normal onboarding case) it is simply null.
+export const checkUsernameAvailable = async (req, res) => {
+    try {
+        // Fold first, exactly as is_username_available() does internally, so a
+        // caps-lock student asking about RAHUL is answered about rahul.
+        const raw = req.query?.username;
+        const username = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+
+        if (!username) {
+            return sendError(res, 400, 'MISSING_FIELDS', {
+                message: 'A username is required.',
+            });
+        }
+
+        // Bounded before it reaches the database. The CHECK constraint caps a
+        // real handle at 25 characters; anything past this is not a candidate
+        // anyone could hold, and there is no reason to hand it to three
+        // queries.
+        if (username.length > 100) {
+            return res.status(200).json({
+                available: false,
+                reason: 'INVALID_FORMAT',
+                suggestions: [],
+            });
+        }
+
+        const userId = req.user?.id || null;
+
+        const { data: isAvailable, error: rpcError } = await supabase.rpc(
+            'is_username_available',
+            { p_username: username, p_user_id: userId },
+        );
+
+        if (rpcError) return mapDbError(res, rpcError);
+
+        if (isAvailable === true) {
+            return res.status(200).json({ available: true });
+        }
+
+        // Label the reason, and offer a way forward in the same round trip so
+        // the student is not left staring at a rejection with no next step.
+        // suggest_usernames() slugifies whatever it is given, so feeding it the
+        // REJECTED HANDLE yields near-misses of what they actually wanted
+        // (arjun.mehta -> amehta, arjun.mehta.1961) rather than something
+        // derived from a name they have not necessarily typed yet.
+        const [reason, suggestionResult] = await Promise.all([
+            classifyUnavailableUsername(username, userId),
+            supabase.rpc('suggest_usernames', {
+                p_name: username,
+                p_university_id: null,
+            }),
+        ]);
+
+        // Suggestions are a nicety. If that RPC fails the student still needs
+        // the verdict, so log and return an empty list rather than a 500.
+        if (suggestionResult.error) {
+            console.error('[username-available] suggest_usernames failed', {
+                message: suggestionResult.error.message,
+            });
+        }
+
+        return res.status(200).json({
+            available: false,
+            reason,
+            suggestions: Array.isArray(suggestionResult.data)
+                ? suggestionResult.data.slice(0, 3)
+                : [],
+        });
+
+    } catch (error) {
+        console.error('[username-available] unexpected error', error);
+        return mapDbError(res, error);
+    }
+};
+
+// 6. GET /api/users/username-suggestions?name=<full name>
+//
+// Three handles derived from the student's display name, every one of them
+// passed through is_username_available() by the RPC before it is offered.
+//
+// "Free at the moment of the call" is NOT a reservation — two students
+// onboarding at the same instant can be offered the same handle. The unique
+// index users_username_key is the real arbiter and the onboarding endpoint
+// already catches 23505.
+export const getUsernameSuggestions = async (req, res) => {
+    try {
+        const raw = req.query?.name;
+        const name = typeof raw === 'string' ? raw.trim() : '';
+
+        if (!name) {
+            return sendError(res, 400, 'MISSING_FIELDS', {
+                message: 'A name is required.',
+            });
+        }
+
+        // Same reasoning as the length cap above: past this it is not a name.
+        if (name.length > 200) {
+            return res.status(200).json({ suggestions: [] });
+        }
+
+        // API.md flags p_university_id as an open question on an optional-auth
+        // route. Resolved the only way that cannot leak: it comes from the
+        // caller's OWN row when they are signed in, and is null otherwise —
+        // never from a query parameter. A caller-supplied university_id would
+        // let anyone mint handles styled for a campus they are not on.
+        let universityId = null;
+
+        if (req.user?.id) {
+            const { data: me, error: meError } = await supabase
+                .from('users')
+                .select('university_id')
+                .eq('id', req.user.id)
+                .maybeSingle();
+
+            // Not fatal — it only changes whether the campus-flavoured
+            // suggestion can be produced.
+            if (meError) {
+                console.error('[username-suggestions] could not read campus', {
+                    message: meError.message,
+                });
+            } else {
+                universityId = me?.university_id || null;
+            }
+        }
+
+        const { data, error } = await supabase.rpc('suggest_usernames', {
+            p_name: name,
+            p_university_id: universityId,
+        });
+
+        if (error) return mapDbError(res, error);
+
+        return res.status(200).json({
+            suggestions: Array.isArray(data) ? data.slice(0, 3) : [],
+        });
+
+    } catch (error) {
+        console.error('[username-suggestions] unexpected error', error);
+        return mapDbError(res, error);
     }
 };

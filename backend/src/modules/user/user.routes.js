@@ -10,12 +10,44 @@
 // underneath them. Mounted at BOTH /api/user (legacy) and /api/users.
 import express from 'express';
 import multer from 'multer';
-import { getDashboardData, updateProfile, updateAvatar, getPublicProfile} from './user.controller.js';
+import {
+    getDashboardData,
+    updateProfile,
+    updateAvatar,
+    getPublicProfile,
+    checkUsernameAvailable,
+    getUsernameSuggestions,
+} from './user.controller.js';
+import optionalAuth from '../../middleware/optionalAuth.js';
 
 const router = express.Router();
 
 // Configure multer to store file in memory (buffer) temporarily
 const upload = multer({ storage: multer.memoryStorage() });
+
+// ── Phase 1: handles ────────────────────────────────────────────────────────
+//
+// ⚠️ ADDED BY VISHWAJEET, in Neeraj's file. See docs/CHANGELOG.md. The web
+// onboarding page was already calling both of these and getting a 404, so the
+// username field gave no availability feedback at all.
+//
+// Registered FIRST, above the /:userId/... routes. Neither of these can
+// actually collide today (one path segment vs two), but the moment anyone adds
+// a bare `/:userId` route, `/username-available` would start matching it as a
+// user id. Literal paths before parameterised ones, always.
+//
+// optionalAuth, never requireAuth: this runs on the onboarding form, where the
+// student may not have a session yet. When they DO (editing their profile
+// later), it is what makes their own current handle read as available instead
+// of "taken".
+
+// GET /api/users/username-available?username=<handle>
+router.get('/username-available', optionalAuth, checkUsernameAvailable);
+
+// GET /api/users/username-suggestions?name=<full name>
+router.get('/username-suggestions', optionalAuth, getUsernameSuggestions);
+
+// ── Pre-existing routes ─────────────────────────────────────────────────────
 
 // GET /api/user/:userId/dashboard
 router.get('/:userId/dashboard', getDashboardData);
