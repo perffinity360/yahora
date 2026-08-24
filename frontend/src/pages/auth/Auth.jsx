@@ -315,12 +315,22 @@ const Auth = () => {
           <div className="glow-orb pink-orb"></div>
 
           <div className={styles.authFormWrapper}>
-            <div className={styles.marketingBadge}>
-              <span className={styles.dot}></span>
-              Keep the Story Going...
-            </div>
+            {/* Marketing copy is for the OTP (signup) tab only. The
+                Username & Password tab is a returning-user surface, so it
+                shows the card alone and authLeft's align-items:center
+                recenters it. */}
+            {tab === TAB_OTP && (
+              <>
+                <div className={styles.marketingBadge}>
+                  <span className={styles.dot}></span>
+                  Keep the Story Going...
+                </div>
 
-            <h1 className={styles.gradientHeading}>Buy &amp; Sell on Your Campus.</h1>
+                <h1 className={styles.gradientHeading}>
+                  Buy &amp; Sell on Your Campus.
+                </h1>
+              </>
+            )}
 
             {/* Glass Form Card */}
             <div className={styles.formCard}>
@@ -372,7 +382,7 @@ const Auth = () => {
                       password managers. */}
                   <form onSubmit={handleLoginWithPassword}>
                     <p className={styles.subtitle}>
-                      Sign in with the username and password you chose at signup
+                      Enter the username and password you chose at signup
                     </p>
 
                     <label className={styles.inputLabel} htmlFor="identifier">
