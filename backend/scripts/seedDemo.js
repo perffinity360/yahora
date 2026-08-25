@@ -922,6 +922,16 @@ async function seedSandbox() {
           qualification:       u.role,
           bio:                 `${u.role} · Trading on Yahora`,
           is_profile_complete: true,
+          // getOrCreateAuthUser() above created this account WITH a password,
+          // so the cache must say so. `has_password` mirrors
+          // auth.users.encrypted_password (migration 005 §2) and nothing syncs
+          // it for us — 007's backfill only sees rows that already exist when
+          // the migration runs, which these never do.
+          //
+          // Omitting it leaves every persona holding a real password while the
+          // flag reads false, and loginWithPassword rejects on that flag before
+          // it reaches GoTrue — so all 15 personas silently cannot log in.
+          has_password:        true,
         },
         { onConflict: 'id', ignoreDuplicates: false }
       );

@@ -716,15 +716,41 @@ export default function Dashboard() {
      ),
    }));
    try {
-     await fetch(
+     // 🔒 /like is behind requireAuth (backend §1.6 — docs/CHANGELOG.md
+     // 2026-08-23). The actor now comes from this token; the `user_id` in the
+     // body is ignored by the backend and kept only to avoid churn.
+     const token = localStorage.getItem("yahora_session");
+
+     const res = await fetch(
        `${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/like`,
        {
          method: "POST",
-         headers: { "Content-Type": "application/json" },
+         headers: {
+           "Content-Type": "application/json",
+           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+         },
          body: JSON.stringify({ user_id: userId }),
        },
      );
-   } catch (e) {}
+
+     if (!res.ok) throw new Error(`like ${res.status}`);
+   } catch (e) {
+     // Roll the optimistic update back. This catch used to be empty, so a
+     // rejected like stayed lit until the next reload with nothing logged.
+     setData((prev) => ({
+       ...prev,
+       listings: prev.listings.map((p) =>
+         p.id === productId
+           ? {
+               ...p,
+               is_liked: currentLikeState,
+               likes_count: (p.likes_count || 0) + (!currentLikeState ? -1 : 1),
+             }
+           : p,
+       ),
+     }));
+     console.error("Failed to toggle like:", e);
+   }
  };
 
  const handleToggleGridSave = async (productId, currentSaveState) => {
@@ -737,15 +763,31 @@ export default function Dashboard() {
      ),
    }));
    try {
-     await fetch(
+     // 🔒 See the note on handleToggleGridLike above.
+     const token = localStorage.getItem("yahora_session");
+
+     const res = await fetch(
        `${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/save`,
        {
          method: "POST",
-         headers: { "Content-Type": "application/json" },
+         headers: {
+           "Content-Type": "application/json",
+           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+         },
          body: JSON.stringify({ user_id: userId }),
        },
      );
-   } catch (e) {}
+
+     if (!res.ok) throw new Error(`save ${res.status}`);
+   } catch (e) {
+     setData((prev) => ({
+       ...prev,
+       listings: prev.listings.map((p) =>
+         p.id === productId ? { ...p, is_saved: currentSaveState } : p,
+       ),
+     }));
+     console.error("Failed to toggle save:", e);
+   }
  };
 
  /* ── Product Management Logic ── */

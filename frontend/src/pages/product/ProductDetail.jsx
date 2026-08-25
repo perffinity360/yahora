@@ -204,13 +204,32 @@ export default function ProductDetail() {
         : prev.likes_count + 1,
     }));
     try {
-      await fetch(`${API_BASE_URL}/products/${id}/like`, {
+      // 🔒 /like is behind requireAuth (backend §1.6 — docs/CHANGELOG.md
+      // 2026-08-23). The actor now comes from this token; the `user_id` in the
+      // body is ignored by the backend and kept only to avoid churn.
+      const token = localStorage.getItem("yahora_session");
+
+      const res = await fetch(`${API_BASE_URL}/products/${id}/like`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ user_id: currentUserId }),
       });
-    } catch {
-      /* silent */
+
+      if (!res.ok) throw new Error(`like ${res.status}`);
+    } catch (error) {
+      // Roll the optimistic update back rather than leaving a like that the
+      // server rejected lit until the next reload.
+      setProduct((prev) => ({
+        ...prev,
+        is_liked: !prev.is_liked,
+        likes_count: prev.is_liked
+          ? Math.max(0, prev.likes_count - 1)
+          : prev.likes_count + 1,
+      }));
+      console.error("Failed to toggle like:", error);
     }
   };
 
@@ -220,13 +239,22 @@ export default function ProductDetail() {
     setTimeout(() => setSavedAnim(false), 400);
     setProduct((prev) => ({ ...prev, is_saved: !prev.is_saved }));
     try {
-      await fetch(`${API_BASE_URL}/products/${id}/save`, {
+      // 🔒 See the note on handleToggleLike above.
+      const token = localStorage.getItem("yahora_session");
+
+      const res = await fetch(`${API_BASE_URL}/products/${id}/save`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ user_id: currentUserId }),
       });
-    } catch {
-      /* silent */
+
+      if (!res.ok) throw new Error(`save ${res.status}`);
+    } catch (error) {
+      setProduct((prev) => ({ ...prev, is_saved: !prev.is_saved }));
+      console.error("Failed to toggle save:", error);
     }
   };
 
