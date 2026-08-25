@@ -16,7 +16,15 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 1.5rem 2.5rem;
+  /* `safe center` degrades to start-alignment when the card is taller than
+     the panel. Plain `center` would push the overflow above the scrollport,
+     where it is unreachable — that clipped the .floatingIcon on the taller
+     Username & Password tab below ~730px of viewport height. Browsers that
+     do not know the keyword drop the declaration and keep the `center`
+     above, i.e. today's behaviour. Top padding clears the icon's -24px
+     overhang once alignment falls back to start. */
+  align-items: safe center;
+  padding: 2.5rem 2.5rem 1.5rem;
   position: relative;
   overflow-y: auto;
   /* Soft, distinct light background so the white card pops */
