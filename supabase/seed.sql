@@ -103,13 +103,34 @@ begin
   -- silently discarded the name, the handle and the completion flag, leaving
   -- every seeded student a nameless shell — the marketplace showed anonymous
   -- sellers and the 006 backfill had no completed rows to work on.
-  insert into public.users (id, university_id, full_name, username, is_profile_complete)
-  values (p_id, p_university_id, p_full_name, p_username, true)
+  -- has_password = true is REQUIRED here, and it is not cosmetic.
+  --
+  -- This helper hands every account a real bcrypt password a few lines up, but
+  -- `has_password` is a CACHE of auth.users.encrypted_password (migration 005
+  -- §2) and nothing keeps the two in sync automatically. Migration 007 has a
+  -- backfill that reconciles them — but migrations run BEFORE seed.sql on a
+  -- `supabase db reset`, so it runs against a database these rows do not exist
+  -- in yet and can never fix them.
+  --
+  -- Leave it out and every seeded account reads has_password = false while
+  -- holding a perfectly good password. loginWithPassword checks that flag and
+  -- returns INVALID_CREDENTIALS BEFORE it ever reaches GoTrue, so username and
+  -- email login are both dead for all of them — and the generic error makes it
+  -- look like a wrong password rather than bad seed data. That is exactly the
+  -- state production was in until 2026-08-25; see docs/PROD_RECONCILIATION.md.
+  --
+  -- It must be in the do-update list as well as the insert: handle_new_user
+  -- (005) creates this row first with the column at its `default false`, so an
+  -- insert-only value would be discarded on every reset. Same reason the other
+  -- four columns are here.
+  insert into public.users (id, university_id, full_name, username, is_profile_complete, has_password)
+  values (p_id, p_university_id, p_full_name, p_username, true, true)
   on conflict (id) do update set
     university_id       = excluded.university_id,
     full_name           = excluded.full_name,
     username            = excluded.username,
-    is_profile_complete = excluded.is_profile_complete;
+    is_profile_complete = excluded.is_profile_complete,
+    has_password        = excluded.has_password;
 end;
 $$;
 

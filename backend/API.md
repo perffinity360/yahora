@@ -79,13 +79,14 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save` — no such listing; also `/like`,`/save` when the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
 | `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical | — |
 | `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like` and `/save` — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
+| `INVALID_PRICE` | 400 | **Live.** `PUT /api/products/:id` — `price` was supplied but does not parse to a finite number `>= 0`. Only raised when the key is present; an absent `price` is simply left alone | `message` |
 | `DUPLICATE` | 400 | `mapDbError` — Postgres `23505` unique violation | — |
 | `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation | — |
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
 | `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
 | `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken; also `GET /api/messages/history` when `userId`, `contactId` or `productId` is not a canonical uuid | `message` (optional) |
-| `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one | `message` |
+| `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one; `PUT /api/products/:id` — the body carried none of the seven updatable keys | `message` |
 | `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — under 8 characters, equal to the caller's username, or rejected by GoTrue's own policy | `message` |
 | `COMMON_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — matches the ~20-entry common-password blocklist in `auth.controller.js` | `message` |
 | `INVALID_CREDENTIALS` | 400 | `POST /api/auth/login-password` — **the only failure code this endpoint ever returns.** Wrong password, unknown username, unknown email and an account with no password are byte-identical, deliberately. Never branch a UI on the reason; there isn't one | `message` (always the same sentence) |
@@ -137,8 +138,9 @@ with `{ "error": "<a fixed human string>" }`. There is no error code, no `mapDbE
 no distinction between "not found", "bad input", and "database is down" — a missing row from
 a `.single()` call is a Postgres error, so **most not-found cases surface as 500**, not 404.
 `GET /api/products/:id/meta` is the only route in the codebase that returns a 404.
-`utils/respond.js` now exists but **no Part 1 controller calls it** — retrofitting these
-routes onto `sendError`/`mapDbError` is the §1.6 work, not done yet.
+`utils/respond.js` now exists and the §1.6 retrofit has started: `updateProduct` and
+`deleteProduct` in `products.controller.js` use `sendError`, and `updateProduct`'s catch also
+routes `23505`/`23503` through `mapDbError`. The rest of Part 1 still hand-rolls its bodies.
 
 **No 404 handler and no error-handling middleware.** An unmatched path or an error thrown by
 middleware (e.g. multer rejecting a 6th file) falls through to Express's default handler,
@@ -371,8 +373,14 @@ is `req.user.id` from the verified token and nothing else.
   - bio: string, optional, max 250 — stored as `null` when falsy
   - ~~userId~~: **removed.** If a caller sends it, it is ignored in silence — not read, not
     validated, not errored on. See the security note below.
-**200:** `{ "message": "Profile completed successfully!", "userProfile": { "<users row>": "..." } }`
+**200:** `{ "message": "Profile completed successfully!", "userProfile": { "<users row>": "..." },
+  "session": { "access_token": "...", "refresh_token": "...", "expires_at": 0, "user": {} } }`
   — the row now also carries `username`, `has_password: true` and `is_profile_complete: true`.
+  **`session` is a fresh session for the caller, same shape as `verify-otp`'s.** Store it and
+  replace the token you made this call with — the old one is already dead (see below).
+  ⚠️ **`session` is omitted entirely — never `null` — if the re-signin failed.** The profile is
+  still saved and the password is still set; the client must send the student to log in. Treat a
+  missing `session` as "re-authenticate", not as an error.
 **400:** `{ "error": "MISSING_FIELDS", "message": "..." }`
 **400:** `{ "error": "CONTENT_TOO_LONG", "max": 250, "message": "Bio must be 250 characters or less." }`
 **400:** `{ "error": "INVALID_FORMAT", "message": "..." }` — no `username` sent, or the handle
@@ -395,16 +403,19 @@ from the body on a route with no middleware, so anyone who knew a UUID could com
 overwrite that student's profile. Now that the same call also sets the account password, the
 same request would have been full takeover. Identity is `req.user.id`, full stop.
 
-**⚠️ The caller's access token is DEAD the moment this returns 200.** GoTrue revokes every
-existing session when a password is set, and this endpoint sets one — so the token that
-authorised the request is rejected (`403` from GoTrue, `401 UNAUTHORIZED` from us) immediately
-afterwards. Verified against local GoTrue: the same token that worked on the request returns
-`403` from `/auth/v1/user` one call later. The `200` body carries the profile but **no new
-session**, so a client that keeps using its token will appear logged out the instant signup
-succeeds. Clients must re-establish a session right after onboarding. **TODO — needs a
-decision: should this endpoint return a fresh `session` the way `verify-otp` does?** It has the
-password in hand at that moment and could mint one on `createSessionClient()`. Not done in CC-4
-because it changes the response contract.
+**⚠️ The token you called this with is DEAD when it returns — use the `session` in the body.**
+GoTrue revokes every existing session when a password is set, and this endpoint sets one, so the
+token that authorised the request is rejected (`403 session_not_found` from GoTrue, `401
+UNAUTHORIZED` from us) immediately afterwards. That has not changed and **is not a bug**: a
+password change should log out every other device.
+
+What changed (2026-08-25) is that the caller no longer gets caught in it. After the password is
+set the handler signs in once on `createSessionClient()` with the email and the password just
+set, and returns that session as `session`. Verified end-to-end by
+`backend/scripts/diagnose-token.mjs` **S10**: the new token is accepted by GoTrue's own
+`/auth/v1/user`, the old one is refused by both hops, and the account's other sessions stay
+revoked. The CC-4 open question — "should this mint a session the way `verify-otp` does?" — is
+answered yes, and closed.
 
 **Order of operations (do not reorder).** Validate everything → set the password via
 `auth.admin.updateUserById` → **only if that succeeded**, write the profile row with
@@ -581,7 +592,11 @@ parameter to tamper with
   - password: string, required, min 8 — the new password. Never logged, never echoed back
   - current_password: string, **required only when the account already has a password**
     (`has_password = true`). Ignored entirely when it does not
-**200:** `{ "message": "Password set", "has_password": true }`
+**200:** `{ "message": "Password set", "has_password": true,
+  "session": { "access_token": "...", "refresh_token": "...", "expires_at": 0, "user": {} } }`
+  — `session` is a fresh session for the caller, same shape as `verify-otp`'s. **Omitted
+  entirely, never `null`, if the re-signin failed** — the password change still succeeded, so
+  send the student to log in rather than showing an error.
 **400:** `{ "error": "WEAK_PASSWORD", "message": "..." }` — under 8 characters, identical to the
   caller's username, or rejected by GoTrue's own policy
 **400:** `{ "error": "COMMON_PASSWORD", "message": "..." }`
@@ -592,11 +607,14 @@ parameter to tamper with
 **404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }`
 **500:** `{ "error": "INTERNAL_ERROR" }`
 
-**⚠️ The caller's access token is DEAD the moment this returns 200** — exactly as with
-`POST /api/auth/onboarding`. GoTrue revokes every existing session when a password is set, so
-the token that authorised this request is rejected immediately afterwards, and the `200` body
-carries **no new session**. A settings screen that keeps using its token will appear logged out
-the instant the password change succeeds. Re-establish a session right after the `200`.
+**⚠️ The token you called this with is DEAD when it returns — use the `session` in the body**
+— exactly as with `POST /api/auth/onboarding`. GoTrue revokes every existing session when a
+password is set, so the token that authorised this request is rejected immediately afterwards.
+
+**Every other device stays logged out. That is the point, and it is deliberately unchanged.**
+Only the caller is handed a replacement, minted from the password they just typed. A settings
+screen should swap its stored token for `session.access_token` on the `200`; if it keeps the old
+one, the student appears logged out the instant their password change succeeds.
 
 **Why `current_password` is required for a change but not the first set.** The first set happens
 during onboarding, seconds after the student proved they own the university inbox — that is
@@ -609,7 +627,9 @@ and no reason to be vague about which field was wrong.
 
 **Order of operations (do not reorder).** Validate → verify `current_password` (via
 `createSessionClient().auth.signInWithPassword`, never the shared client) → set the password via
-`auth.admin.updateUserById` → **only then** write `has_password = true`. `has_password` is a
+`auth.admin.updateUserById` → write `has_password = true` → **only then** mint the replacement
+session. The mint is last because it must never be able to fail the request:
+the password change has already committed and GoTrue gives us nothing to roll back with. `has_password` is a
 cache of `auth.users.encrypted_password` (migration 005 §2), so it must never be flipped before
 GoTrue has confirmed the real change — a `true` with no password behind it would lock the
 student out of the password tab with no way back except a support ticket.
@@ -967,15 +987,26 @@ same applies to any file sent under a field name other than `images`.
 **Content-Type:** application/json
 **Path:**
   - id: uuid, required
-**Body:** (all read off the body; see the note below about `price`)
+**Body:** **a true partial update — send only the fields you are changing.** At least one of:
   - title: string
   - description: string
-  - price: number, **effectively required**
+  - price: number (or a numeric string) — must parse to a finite number `>= 0`
   - category: string
   - location: string
   - condition: string
   - status: string — arbitrary, so this endpoint can set a status no other code produces
+
+  Keys outside this list are ignored. Absent keys are left untouched; a key sent as `null` or
+  `''` is written as sent (except `price`, which rejects both).
 **200:** `{ "message": "Product updated successfully", "product": { "<products row>": "..." } }`
+**400:** `{ "error": "INVALID_PRICE", "message": "Price must be a number greater than or equal
+  to 0." }` — `price` was supplied but does not parse to a finite number `>= 0`. `null`, `''`
+  and booleans are rejected explicitly, because `Number()` maps all three onto a finite number
+**400:** `{ "error": "MISSING_FIELDS", "message": "Send at least one field to update." }` — the
+  body carried none of the seven updatable keys. An `UPDATE` with no columns is a PostgREST
+  error, not a no-op, so it is refused here
+**400:** `{ "error": "DUPLICATE" }` / `{ "error": "INVALID_REFERENCE" }` — `23505` / `23503`
+  from the update, via `mapDbError`. These used to surface as `INTERNAL_ERROR`
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **403:** `{ "error": "FORBIDDEN", "message": "You can only edit your own listings." }` — the
   caller is not the `seller_id`
@@ -986,12 +1017,16 @@ same applies to any file sent under a field name other than `images`.
 the id from the URL and update with no actor at all, so anyone who knew a listing's uuid could
 rewrite its title, price and status on any campus. There is deliberately no `seller_id` in the
 body to compare against — a caller-supplied one would be the same hole.
-**Notes:** **This is not a working partial update.** Omitted fields are dropped from the
-outgoing payload (`JSON.stringify` skips `undefined`) — except `price`, which the controller
-runs through `Number(price)` first. `Number(undefined)` is `NaN`, and `JSON.stringify`
-serializes `NaN` as `null`, so a body without `price` sends `"price": null` against a
-`NOT NULL` column and **always fails with 500**. Every `PUT` must include a numeric `price`,
-even when only the title is changing. A non-numeric `price` fails the same way.
+**Notes:** **Partial updates work (plan §1.6 Bug 2, fixed 2026-08-25).** The payload is built
+from the keys the caller actually sent, tested with `hasOwnProperty` rather than truthiness, so
+`description: ''` and `price: 0` are real edits and survive. A title-only `PUT` is now a 200.
+
+Previously the payload was built unconditionally from seven destructured fields. Six were
+harmless — `JSON.stringify` drops `undefined` — but `price` was coerced with `Number(price)`
+first, and `Number(undefined)` is `NaN`, which serializes to `null`. Against the `NOT NULL`
+`products.price` that raised `23502` and the seller got a generic **500**, so every `PUT` had
+to carry a numeric `price` even when only the title was changing. A bad `price` is now a
+**400 `INVALID_PRICE`** instead.
 
 `university_id` and `seller_id` cannot be changed here. Updating a non-existent id now returns
 a clean **404** (the ownership lookup uses `maybeSingle()`); it used to be a 500.
