@@ -19,6 +19,26 @@ import {
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
+/* Which conversation this student had open last. Written on every chat select,
+   read back on mount — so stepping out to the Marketplace and coming back
+   reopens the same thread instead of the empty "Your Conversations" panel.
+   Cleared by AuthContext.clearStoredSession() so it can't leak to the next
+   account on a shared device. */
+const ACTIVE_CHAT_KEY = "yahora_active_chat";
+
+/* Breathing room left above the unread divider when a thread opens on it. */
+const UNREAD_ANCHOR_PADDING = 12;
+
+const readSavedChat = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ACTIVE_CHAT_KEY));
+    return saved?.contact_id && saved?.product_id ? saved : null;
+  } catch {
+    // Hand-edited or half-written value — treat it as "nothing saved".
+    return null;
+  }
+};
+
 /* ── Emoji data ── */
 const EMOJI_ROWS = [
   {
@@ -183,17 +203,38 @@ export default function Messages() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeEmojiRow, setActiveEmojiRow] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
+
+  /* { id, count } for the first message the contact sent that this student had
+     not read at the moment the thread opened — the WhatsApp "unread" line.
+     Pinned at open time on purpose: PUT /messages/read and the realtime UPDATE
+     handler flip `is_read` on those same rows seconds later, so deriving this
+     from `messages` on every render would make the line vanish under the
+     reader. */
+  const [unreadMarker, setUnreadMarker] = useState(null);
+
   const messagesContainerRef = useRef(null);
   const chatInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const activeChatRef = useRef(activeChat);
   const currentUserIdRef = useRef(currentUserId);
+  const unreadDividerRef = useRef(null);
 
-  const scrollToBottom = () => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop =
-        messagesContainerRef.current.scrollHeight;
-    }
+  /* True between "a thread was picked" and "that thread's messages painted".
+     Tells the scroll effect to place the viewport once, instead of gliding to
+     the bottom the way it does for a message that just arrived. */
+  const pendingInitialScrollRef = useRef(false);
+
+  /* ?user=&product= as they were on the FIRST render. Captured in a ref so the
+     inbox effect below can stay out of `searchParams` — see the note there. */
+  const deepLinkRef = useRef({
+    user: searchParams.get("user"),
+    product: searchParams.get("product"),
+  });
+
+  const scrollToBottom = (behavior = "smooth") => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior });
   };
 
   useEffect(() => {
@@ -204,7 +245,40 @@ export default function Messages() {
     currentUserIdRef.current = currentUserId;
   }, [currentUserId]);
 
-  useEffect(() => scrollToBottom(), [messages]);
+  /* ── Scroll positioning ──
+     Two behaviours share one effect:
+       • a thread just opened  → land instantly on the first unread message
+         (or the bottom, when everything is already read).
+       • a message arrived     → glide to the bottom.
+
+     The instant landing is why `scroll-behavior: smooth` was removed from
+     .messagesContainer: with it, opening an old chat animated the entire
+     backlog past the reader for about a second before settling. */
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    if (pendingInitialScrollRef.current) {
+      pendingInitialScrollRef.current = false;
+
+      const divider = unreadDividerRef.current;
+      if (divider) {
+        // Distance from the top of the viewport to the divider, measured off
+        // the rects rather than offsetTop so it doesn't depend on which
+        // ancestor happens to be the offsetParent. Adding it to the current
+        // scrollTop works from wherever the browser left the container.
+        const offset =
+          divider.getBoundingClientRect().top -
+          container.getBoundingClientRect().top;
+        container.scrollTop += offset - UNREAD_ANCHOR_PADDING;
+      } else {
+        scrollToBottom("auto");
+      }
+      return;
+    }
+
+    scrollToBottom();
+  }, [messages]);
 
   /* ── Close emoji picker on outside click ── */
   useEffect(() => {
@@ -223,7 +297,15 @@ export default function Messages() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showEmojiPicker]);
 
-  /* ── 1. Fetch Inbox & Handle URL Persistence ── */
+  /* ── 1. Fetch inbox, then reopen whichever chat should be open ──
+     Precedence: the ?user=&product= deep link (e.g. "Message Seller" on a
+     product page) first, then the thread this student last had open.
+
+     Deliberately NOT keyed on `searchParams`. handleSelectChat() calls
+     navigate() to keep the URL in sync, and that hands back a fresh
+     searchParams object; with it in the dep array, every chat click re-ran
+     this whole effect — refetching the inbox AND the history of the chat that
+     was just clicked. The first-render params are read from a ref instead. */
   useEffect(() => {
     if (!currentUserId) return navigate("/auth");
 
@@ -235,8 +317,17 @@ export default function Messages() {
         const data = await res.json();
         let fetchedInbox = data.inbox || [];
 
-        const paramUserId = searchParams.get("user");
-        const paramProductId = searchParams.get("product");
+        let paramUserId = deepLinkRef.current.user;
+        let paramProductId = deepLinkRef.current.product;
+        const isDeepLink = Boolean(paramUserId && paramProductId);
+
+        if (!isDeepLink) {
+          const saved = readSavedChat();
+          if (saved) {
+            paramUserId = saved.contact_id;
+            paramProductId = saved.product_id;
+          }
+        }
 
         if (paramUserId && paramProductId) {
           const existingChat = fetchedInbox.find(
@@ -246,8 +337,10 @@ export default function Messages() {
           );
 
           if (existingChat) {
-            handleSelectChat(existingChat, true);
-          } else {
+            // A deep link already carries the pair in the URL; a restore does
+            // not, so let handleSelectChat put it back there.
+            handleSelectChat(existingChat, isDeepLink);
+          } else if (isDeepLink) {
             const prodRes = await fetch(
               `${API_BASE_URL}/products/${paramProductId}`,
             );
@@ -269,6 +362,11 @@ export default function Messages() {
               fetchedInbox = [newChatData, ...fetchedInbox];
               handleSelectChat(newChatData, true);
             }
+          } else {
+            // The remembered thread is gone from the inbox (listing deleted,
+            // different account). Drop the pointer rather than fabricating a
+            // chat out of it the way the deep-link branch above does.
+            localStorage.removeItem(ACTIVE_CHAT_KEY);
           }
         }
 
@@ -281,13 +379,27 @@ export default function Messages() {
     };
 
     loadInboxAndCheckParams();
-  }, [currentUserId, navigate, searchParams]);
+  }, [currentUserId, navigate]);
 
   /* ── 2. Select Chat ── */
   const handleSelectChat = async (chat, isInitialLoad = false) => {
     setActiveChat(chat);
     setShowInboxOnMobile(false);
     setShowEmojiPicker(false);
+
+    // The next paint of `messages` belongs to a freshly opened thread, so the
+    // scroll effect should place the viewport rather than glide to the bottom.
+    pendingInitialScrollRef.current = true;
+    setUnreadMarker(null);
+
+    // Remember it for the next mount — see ACTIVE_CHAT_KEY.
+    localStorage.setItem(
+      ACTIVE_CHAT_KEY,
+      JSON.stringify({
+        contact_id: chat.contact_id,
+        product_id: chat.product_id,
+      }),
+    );
 
     if (!isInitialLoad) {
       navigate(`/messages?user=${chat.contact_id}&product=${chat.product_id}`, {
@@ -326,7 +438,22 @@ export default function Messages() {
       }
 
       const data = await res.json();
-      setMessages(data.messages || []);
+      const history = data.messages || [];
+      setMessages(history);
+
+      // Work this out BEFORE the read-receipt PUT below clears `is_read` on the
+      // server and the realtime UPDATE handler mirrors that into state.
+      // Messages this student sent to themselves are excluded: in a self-chat
+      // both ids are the same person, and nothing there was ever "unread".
+      const unread = history.filter(
+        (m) =>
+          m.receiver_id === currentUserId &&
+          m.sender_id !== currentUserId &&
+          !m.is_read,
+      );
+      setUnreadMarker(
+        unread.length ? { id: unread[0].id, count: unread.length } : null,
+      );
 
       if (chat.unread_count > 0) {
         await fetch(`${API_BASE_URL}/messages/read`, {
@@ -352,6 +479,7 @@ export default function Messages() {
       // the newly selected contact's header would render one student's
       // conversation as if it belonged to another — worse than showing nothing.
       setMessages([]);
+      setUnreadMarker(null);
       console.error("Failed to load chat history:", error);
     }
   };
@@ -692,6 +820,9 @@ export default function Messages() {
                   className={styles.mobileBackBtn}
                   onClick={() => {
                     setShowInboxOnMobile(true);
+                    // Going back to the list is an explicit "close this
+                    // thread", so don't reopen it on the next visit either.
+                    localStorage.removeItem(ACTIVE_CHAT_KEY);
                     navigate("/messages", { replace: true });
                   }}
                 >
@@ -833,34 +964,49 @@ export default function Messages() {
                         }
 
                         return (
-                          <div
-                            key={msg.id || index}
-                            className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs}`}
-                          >
-                            {!isMine && (
-                              <AvatarImg
-                                src={activeChat?.contact_avatar}
-                                name={activeChat?.contact_name}
-                                size={28}
-                                className={styles.messageAvatar}
-                              />
+                          <React.Fragment key={msg.id || index}>
+                            {/* WhatsApp-style unread line. `unreadMarker` is
+                                pinned when the thread opens, so this stays put
+                                as the messages under it get marked read. */}
+                            {unreadMarker?.id === msg.id && (
+                              <div
+                                className={styles.unreadDivider}
+                                ref={unreadDividerRef}
+                              >
+                                <span className={styles.unreadDividerText}>
+                                  {unreadMarker.count} unread message
+                                  {unreadMarker.count > 1 ? "s" : ""}
+                                </span>
+                              </div>
                             )}
                             <div
-                              className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs}`}
+                              className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs}`}
                             >
-                              <p className={styles.messageText}>{msg.content}</p>
-                              <div className={styles.messageMeta}>
-                                <span className={styles.messageTime}>
-                                  {formatTime(msg.created_at)}
-                                </span>
-                                {isMine && (
-                                  <span className={styles.readReceipt}>
-                                    {tickIcon}
+                              {!isMine && (
+                                <AvatarImg
+                                  src={activeChat?.contact_avatar}
+                                  name={activeChat?.contact_name}
+                                  size={28}
+                                  className={styles.messageAvatar}
+                                />
+                              )}
+                              <div
+                                className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs}`}
+                              >
+                                <p className={styles.messageText}>{msg.content}</p>
+                                <div className={styles.messageMeta}>
+                                  <span className={styles.messageTime}>
+                                    {formatTime(msg.created_at)}
                                   </span>
-                                )}
+                                  {isMine && (
+                                    <span className={styles.readReceipt}>
+                                      {tickIcon}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </React.Fragment>
                         );
                       })}
                     </React.Fragment>

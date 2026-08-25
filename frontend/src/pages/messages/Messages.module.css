@@ -555,7 +555,9 @@
   padding: 16px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-behavior: smooth;
+  /* No `scroll-behavior: smooth` here on purpose: Messages.jsx picks the
+     behaviour per scroll — instant when a thread opens on its unread line,
+     smooth when a new message arrives. */
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -627,6 +629,38 @@
   padding: 3px 10px;
   border-radius: 99px;
   border: 1px solid rgba(128,0,128,0.1);
+}
+
+/* ── Unread divider ──
+   Marks where this student stopped reading; the thread opens anchored on it. */
+.unreadDivider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 12px 0 8px;
+}
+.unreadDivider::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(235, 72, 127, 0.28);
+}
+.unreadDividerText {
+  position: relative;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--pink-dark);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--white);
+  padding: 3px 12px;
+  border-radius: 99px;
+  border: 1px solid rgba(235, 72, 127, 0.25);
+  box-shadow: 0 2px 8px rgba(235, 72, 127, 0.1);
 }
 
 /* Empty chat */

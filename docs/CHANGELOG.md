@@ -82,6 +82,44 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-25 — Messages: unread-anchored scroll + the open chat survives navigation (Neeraj)
+
+Web only (`frontend/`). **No backend or API change** — same endpoints, same shapes.
+
+### What was wrong
+1. Opening an old thread animated the whole backlog past the reader for ~1s before
+   settling at the bottom. Cause: `scroll-behavior: smooth` on `.messagesContainer`
+   turned the open-time `scrollTop = scrollHeight` jump into a visible scroll.
+2. Leaving `/messages` for another page and coming back dropped you on the empty
+   "Your Conversations" panel — the open thread was only ever held in the URL, and
+   the navbar link goes to a bare `/messages`.
+
+### What changed
+- `.messagesContainer` no longer sets `scroll-behavior`. Messages.jsx now picks per
+  scroll: **instant** when a thread opens, **smooth** when a message arrives.
+- A thread opens anchored on its first unread message with a WhatsApp-style
+  "N unread messages" divider, computed from the history response *before*
+  `PUT /messages/read` flips `is_read`. Fully-read threads still open at the bottom.
+- New localStorage key **`yahora_active_chat`** — `{ contact_id, product_id }` of the
+  last-opened thread. Restored on mount when there is no `?user=&product=` deep link
+  (the deep link still wins). Cleared by the mobile back button and by
+  `AuthContext.clearStoredSession()` on logout.
+- Effect 1 no longer depends on `searchParams`. It was re-running on every chat click,
+  because `handleSelectChat` navigates to keep the URL in sync — that refetched the
+  inbox *and* the just-clicked thread's history on every click.
+
+### For mobile
+The same two problems most likely exist in `mobile/`, and the fix carries over. If you
+add the storage key there, keep the name `yahora_active_chat` so the behaviour reads the
+same across clients.
+
+### How I tested it
+Production build passes. **Browser behaviour is unverified — please check:** opening a
+thread with unread messages lands on the divider, a fully-read thread lands at the
+bottom, and Marketplace → back to Messages reopens the same chat.
+
+---
+
 ## 2026-08-25 — seed.sql + seedDemo.js: seeded accounts could never log in with a password (Vishwajeet)
 
 ### The bug
