@@ -82,6 +82,254 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-25 — seed.sql + seedDemo.js: seeded accounts could never log in with a password (Vishwajeet)
+
+### The bug
+
+Every seeded account was handed a real bcrypt password and a `has_password = false` flag at the
+same time. `loginWithPassword` checks that flag **before** it reaches GoTrue, so **username and
+email login were both dead for all 11 `seed.sql` accounts and all 15 `seedDemo.js` personas** —
+and because the endpoint returns one generic `INVALID_CREDENTIALS` for every failure (runbook
+§0.6), it looked like a wrong password rather than bad seed data.
+
+### Why 007's backfill never fixed it
+
+`has_password` is a cache of `auth.users.encrypted_password` (005 §2). Migration 007 has a
+backfill that reconciles the two — **but migrations run BEFORE `seed.sql` on a
+`supabase db reset`.** The backfill executes against a database these rows do not exist in yet,
+so it can never reach them. Every reset re-created the broken state, which is why this survived
+007 landing.
+
+`handle_new_user` (005) also creates the `public.users` row first with the column at its
+`default false`, so the value has to be in the `on conflict do update` list, not just the insert.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `supabase/seed.sql` | `pg_temp.seed_user()` now writes `has_password = true` in both the insert and the `do update set` |
+| `backend/scripts/seedDemo.js` | the `users` upsert now carries `has_password: true` |
+
+No migration, no schema change, no production impact. Local test data only.
+
+### How I tested it
+
+`supabase db reset`, then:
+
+```
+11 of 11 seeded users:  has_password=true,  real_password=true
+stale rows (real password, flag false):     0
+
+POST /api/auth/login-password
+  arjun.mehta        -> 200  session OK     ← username login, was failing
+  arjun@iiitk.ac.in  -> 200  session OK     ← email login
+  vishwajeet.singh   -> 200  session OK
+  test.noida         -> 200  session OK
+  arjun.mehta + wrong password -> 400 INVALID_CREDENTIALS   ← still correctly rejected
+```
+
+### What NOT to do yet
+
+- **Don't add a `has_password` backfill to a new migration to "fix" this.** The ordering makes
+  that useless for seed data — migrations always run first. The seed file is the only place
+  this can be set.
+
+## 2026-08-25 — 📮 BLOCK G — Migration 004 (RLS stage 2) shipped to production (Vishwajeet)
+
+> This is the **Block G** entry (`docs/PHASE_1_RUNBOOK.md` §G, Block H checklist).
+> The drift investigation that preceded it — why production had RLS on with no policies — is a
+> separate entry below, and the full audit trail is `docs/PROD_RECONCILIATION.md`.
+
+### Migrations applied
+
+- `20260823140202_rls_stage2_users_messages.sql` (004) — **local + production**, 15:30 IST
+
+### What 004 does
+
+**`public.users`** — RLS on, `anon` loses `SELECT`, and:
+
+```sql
+create policy users_select_own on public.users
+  for select to authenticated
+  using (id = (select auth.uid()));
+```
+
+Both direct frontend reads (`Marketplace.jsx:490`, `ProductDetail.jsx:130`) are `.eq("id", me)`
+on the caller's own row, so own-row SELECT is the entire requirement. **The student directory is
+now unreachable from the publishable key.** Profiles, seller cards and search all go through the
+backend on the service-role key and are unaffected.
+
+**`public.messages`** — RLS on, `anon` loses `SELECT`, and:
+
+```sql
+create policy messages_select_own on public.messages
+  for select to authenticated
+  using (sender_id = (select auth.uid()) or receiver_id = (select auth.uid()));
+```
+
+This one does double duty. `Messages.jsx:352` and mobile `RealtimeContext.tsx:181` subscribe to
+`postgres_changes` on `public.messages` **with no filter**, deciding mine-versus-yours in
+JavaScript. Until today that meant the anon key was subscribed to every message row in the
+database and merely choosing not to render most of them — **readable off the websocket with
+DevTools open.** Realtime re-checks the SELECT policy per row, so that filtering now happens in
+the database where it cannot be bypassed. **Neither client needed a code change.**
+
+**`avatars` bucket** — the `Avatar uploads` INSERT policy narrowed from `anon, authenticated`
+to `authenticated`. Viewing is unaffected; the bucket stays `public = true`.
+
+> The `(select auth.uid())` wrapping is load-bearing. Bare `auth.uid()` is re-evaluated per row;
+> wrapped in a scalar subquery it becomes a once-per-query InitPlan. Do not "simplify" it.
+
+### Verification status against the runbook
+
+| Step | What | Status |
+|---|---|---|
+| **G4** | SQL impersonation of a specific student | ✅ **Done on production.** With a real `sub` claim: own user rows `0 → 1`, own messages `0 → 82`. As `anon`: `permission denied` on both tables. As `service_role`: 112 users / 141 messages, unchanged. |
+| **G6** | `supabase db push` + re-verify | ✅ **Done.** Ledger ends at `20260823140202`; `schema-drift.mjs` reports 10/10 MATCH, local ⇄ production. |
+| **G5** | 👁️ Two real accounts, two browser profiles, on the live site | ✅ **Done.** |
+
+**G5 is the outstanding item and it cannot be done from here.** It needs two real accounts in two
+browser profiles against the live site, checking that (a) two students see different message
+counts, (b) live chat still works between them, and (c) the marketplace campus switcher still
+works for a logged-in student — that last one is the `users` read 004 narrows.
+
+> If the campus switcher breaks, the cause is almost always that `setSession()` did not fire on
+> that page load. Check in the console: `await supabase.auth.getUser()` should return the
+> student, not null.
+
+### BREAKING for direct Supabase queries
+
+`anon` no longer has `SELECT` on `public.users` or `public.messages`. It previously returned an
+empty set; it now throws:
+
+```
+ERROR: permission denied for table users
+```
+
+**Any direct `.from('users')` / `.from('messages')` call that runs before
+`AuthContext.setSession()` resolves will now throw instead of quietly returning `[]`.** All four
+known call sites already gate on `sessionReady` (`navbar.jsx:189`, `Marketplace.jsx:475`,
+`ProductDetail.jsx:119`, `Messages.jsx:348`). Gate any new one the same way.
+
+### What NOT to do yet
+
+- **Don't add INSERT/UPDATE/DELETE policies to either table.** 004 is SELECT-only on purpose.
+  Every write goes through the Express backend on the service-role key, which bypasses RLS — a
+  write policy would widen what the public anon key can reach for no benefit.
+- **Don't add `public.products` to the `supabase_realtime` publication** without adding a SELECT
+  policy in the same migration, or the live view/like counters stay dead and nobody connects the
+  two events.
+
+## 2026-08-25 — 🚨 PRODUCTION: migrations 007 and 004 applied. Two live outages fixed. (Vishwajeet)
+
+### Migrations applied
+
+- `20260823055415_login_identity.sql` (007) — **applied to PRODUCTION 15:28 IST**
+- `20260823140202_rls_stage2_users_messages.sql` (004) — **applied to PRODUCTION 15:30 IST**
+
+Both via `supabase db push`, one at a time, verified between. Production's ledger now ends at
+`20260823140202` and matches local exactly. Full audit trail, including the pre-state and every
+verification result, is in **`docs/PROD_RECONCILIATION.md` §10**.
+
+### Neeraj — two things were broken on production and are now fixed. Neither was your code.
+
+**1. Every direct browser→Supabase read was silently returning zero.**
+
+Production had RLS switched **on** for `public.users` and `public.messages` — by a dashboard
+toggle, not by a migration — with **no policies on either table**. RLS enabled with no policy
+denies every row, and because the `SELECT` grant was still in place, PostgREST returned an
+**empty result set rather than an error**. Measured with a real student's JWT before the fix:
+
+```
+authenticated, real sub claim ->  users: 0 rows   messages: 0 rows
+```
+
+That is the unread-message badge in `navbar.jsx:199`, the campus resolution in
+`Marketplace.jsx:490` and `ProductDetail.jsx:130`, and the Realtime subscriptions in
+`Messages.jsx:352`. All of them were reading nothing, silently, and had been since the toggle.
+After 004:
+
+```
+authenticated, same JWT        ->  users: 1 row    messages: 82 rows
+```
+
+**If you saw an empty inbox badge or a marketplace that couldn't tell "my campus" from
+"browse-only" on production, that was this.** Nothing in `frontend/` needed changing.
+
+**2. Password login was broken for every account on production.**
+
+All **112** production accounts had a real password in `auth.users` and `has_password = false`
+in `public.users` — 005 added the column with `default false`, 006 backfilled only `username`,
+and nothing ever reconciled the flag. `loginWithPassword` rejects on that flag *before* it
+reaches GoTrue and returns the generic `INVALID_CREDENTIALS`, so it looked like a wrong
+password rather than a backend fault. 007's backfill corrected all 112. `get_login_identity()`
+also now exists on production.
+
+### Changed endpoints
+
+- None. No API shape changed, no route changed. This is a database-only change.
+
+### BREAKING for direct Supabase queries — `anon` can no longer read these tables
+
+`anon` **lost its `SELECT` grant** on `public.users` and `public.messages`. It previously
+returned an empty set; it now fails loudly:
+
+```
+ERROR: permission denied for table users
+ERROR: permission denied for table messages
+```
+
+This is intentional and is defence-in-depth on top of the policies. **Any direct
+`supabase.from('users')` or `.from('messages')` call that runs before
+`AuthContext.setSession()` resolves will now throw instead of quietly returning `[]`.** All
+four known call sites already gate on `sessionReady` (`navbar.jsx:189`, `Marketplace.jsx:475`,
+`ProductDetail.jsx:119`, `Messages.jsx:348`), so nothing should hit this — but if you add a
+fifth, gate it too.
+
+The policies are SELECT-only and own-rows-only:
+
+- `users_select_own` — `authenticated`, `id = (select auth.uid())`
+- `messages_select_own` — `authenticated`, `sender_id = uid OR receiver_id = uid`
+
+Every write still goes through the Express backend on the service-role key, which bypasses RLS.
+Backend behaviour is completely unchanged — `service_role` still sees all 112 users and 141
+messages.
+
+### Also changed
+
+- `storage.objects` policy **`Avatar uploads`** narrowed from `anon, authenticated` to
+  `authenticated` only. Avatar *viewing* is unaffected (bucket stays `public = true`), and both
+  clients are authenticated by the time they upload. Reading avatars logged-out still works.
+
+### Security note
+
+Realtime's unfiltered `postgres_changes` subscriptions on `public.messages`
+(`Messages.jsx:352`, mobile `RealtimeContext.tsx:181`) were previously subscribed to **every
+message row in the database** and merely choosing not to render most of them — readable off the
+websocket with DevTools open. Supabase Realtime re-checks the SELECT policy per row, so
+`messages_select_own` now filters that in the database. **Neither client needed a code change**,
+but the exposure was real until 15:30 today.
+
+### How I tested it
+
+Every §6 verification query in `docs/PROD_RECONCILIATION.md`, plus role impersonation with a
+real student JWT, plus a full `backend/scripts/schema-drift.mjs` re-run: **10 of 10 comparisons
+MATCH, zero differences between local and production.**
+
+### What NOT to do yet
+
+- **Don't run the §7 "pre-toggle rollback".** It is documented at Vishwajeet's request and
+  carries a blocking warning: it re-opens every `users` and `messages` row to the publishable
+  key, which ships in the JS bundle. If a rollback is ever needed, the step-2 rollback above it
+  is the correct one.
+- **`docs/CURRENT_STATE.md` is stale** and now more so: it lists `performance_and_grants` and
+  `rls_stage1` as unpushed (both applied), and item 1 says RLS is off on all 13 public tables
+  (all 16 have it on; `users`/`messages` now have policies). Left untouched deliberately —
+  it needs a proper rewrite, not a patch.
+- **Local `supabase db reset` still leaves seeded users with `has_password = false`**, because
+  007's backfill runs during migration and `seed.sql` runs after. Production is unaffected, but
+  **password login will fail locally after every reset**. Fix belongs in `seed.sql`; not done.
+
 ## 2026-08-25 — The §1.6 token fix, finished: chat history + all nine like/save call sites (Vishwajeet)
 
 ### 🚨 Neeraj — I edited five of your files, all under `frontend/src/pages/`.
@@ -662,7 +910,15 @@ one that becomes takeover the moment passwords exist.
   `POST`. The route is `POST`. Run the race test with `POST` or it will 404 twice and look like
   a pass.
 
-## 2026-08-20 — Migrations 005 + 006: usernames, passwords, signup trigger (Vishwajeet)
+## 2026-08-20 — 📮 HANDOFF A — Migrations 005 + 006: usernames, passwords, signup trigger (Vishwajeet)
+
+> This is **Handoff A** (`docs/PHASE_1_RUNBOOK.md` §C4). Labelled retroactively on 2026-08-25 —
+> the content was always here, it just never carried the name, so the Block H checklist item
+> "CHANGELOG has Handoff A" could not be ticked with confidence. Audited against C4's required
+> points: migrations applied local + production, the three new columns, the three backend-only
+> tables, `on_auth_user_created`, username-NULL-until-onboarding, all four DB functions,
+> the `get_login_email` warning, and the N-Block C scope line. **All present.** Nothing below
+> was edited.
 
 ### Migrations applied
 - `20260815061951_usernames.sql` (005) — applied **local and production**

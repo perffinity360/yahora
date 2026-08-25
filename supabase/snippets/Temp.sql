@@ -1,1 +1,4 @@
-DELETE FROM messages WHERE content IN ('RLSPROOF-8842', 'RLSCONTROL-3391');
+SELECT policyname, roles, cmd
+FROM pg_policies
+WHERE schemaname = 'storage' AND tablename = 'objects'
+  AND policyname ILIKE '%avatar%';
