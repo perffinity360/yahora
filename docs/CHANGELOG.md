@@ -82,6 +82,53 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-25 — Messages: chat surface design pass (Neeraj)
+
+Web only (`frontend/`). CSS + presentational JSX. **No backend, API or data-shape change.**
+
+### ⚠️ Doc conflict — needs a decision from both of us
+`DESIGN.md` calls itself canonical but was never implemented, and it disagrees with the
+code on three points:
+| | `DESIGN.md` says | Repo actually has |
+|---|---|---|
+| Tokens | `src/styles/tokens.css` | **file does not exist**; tokens live in `global.css` |
+| Palette | paper/ink + highlighter yellow `#FFD43B` | purple / pink / blue |
+| Type | Khand + Instrument Sans | Bree Serif + **Inter** (which `DESIGN.md` §3 bans by name) |
+
+`CLAUDE.md` §9 also lists `--pink-light #FFF4F7` / `--bg #F8F9FB`; `global.css` has
+`#f4e0e4` / `#f2e5e1`. I built on what the code actually has (purple/pink) and invented no
+new palette, but one of the two documents needs to be retired or rewritten.
+
+### What changed
+- **Unread divider** now has a rule running out to each side of the count, fading toward the
+  gutters, on a brand-tinted pill. It's the one sharp accent on the canvas.
+- **Message grouping:** consecutive messages from one person render as a block — only the
+  last bubble keeps the tail and the avatar. The unread line also ends a run. Previously a
+  run of four showed four identical avatars stacked.
+- **Only arriving messages animate.** History renders settled (`openingIdsRef`). Opening a
+  thread used to fly every message in at once, which fought the unread-line anchor.
+  Entrance curve changed from a spring overshoot to a settle.
+- Bubbles now use `var(--purple)`/`var(--pink-dark)` instead of hardcoded hex, with
+  two-layer elevation; received bubbles get a hairline instead of a shadow.
+- Canvas grain thinned (was 2.5px dots on a 20px grid — read as polka dots).
+- **Contrast fix:** received-bubble timestamps were `#aaa` with `opacity: 0.7` on white,
+  about 2.3:1. Now ~5:1.
+- Added `:focus-visible` rings and a `prefers-reduced-motion` block — the file had neither.
+  The spinner and typing dots keep animating on purpose; both signal live state.
+
+### Known gaps (not fixed here, flagging deliberately)
+- **Inbox rows are `<div onClick>`** — not reachable by keyboard at all. Needs `role`/
+  `tabIndex`/key handling, which is a behaviour change, so I left it.
+- A failed history load logs to console and shows an empty thread — no visible error state.
+  `DESIGN.md` §9 wants all four async states on every surface.
+
+### How I tested it
+Production build passes. Rendered the real stylesheet against a static DOM harness in
+headless Chrome at 1440px and 390px and iterated on that. **That verifies CSS only** — the
+grouping logic and the divider in the live app are unverified. Please check in the browser.
+
+---
+
 ## 2026-08-25 — Messages: read receipts were undoing the unread anchor (Neeraj)
 
 Web only (`frontend/`). Follow-up to the entry below — that fix was correct but got

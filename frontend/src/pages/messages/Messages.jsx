@@ -232,6 +232,13 @@ export default function Messages() {
      new message; a receipt rewrites the same rows in place. */
   const previousCountRef = useRef(0);
 
+  /* Ids the thread already had when it opened. Everything in here is history
+     and must render settled; only messages that arrive AFTER open animate in.
+     Without this, opening a thread flew every message in at once — which is
+     both noisy and self-defeating, since the point of anchoring on the unread
+     line is to look like you walked back into a conversation already there. */
+  const openingIdsRef = useRef(new Set());
+
   /* Whether the reader is parked at the live end of the thread. Sampled on
      scroll — i.e. before new content lands — so an arriving message can tell
      "follow the conversation" apart from "yank someone out of the backlog they
@@ -485,6 +492,7 @@ export default function Messages() {
 
       const data = await res.json();
       const history = data.messages || [];
+      openingIdsRef.current = new Set(history.map((m) => m.id));
       setMessages(history);
 
       // Work this out BEFORE the read-receipt PUT below clears `is_read` on the
@@ -526,6 +534,7 @@ export default function Messages() {
       // conversation as if it belonged to another — worse than showing nothing.
       setMessages([]);
       setUnreadMarker(null);
+      openingIdsRef.current = new Set();
       console.error("Failed to load chat history:", error);
     }
   };
@@ -990,6 +999,16 @@ export default function Messages() {
                       {msgs.map((msg, index) => {
                         const isMine = msg.sender_id === currentUserId;
 
+                        // Consecutive messages from one person read as a single
+                        // block: only the last bubble in a run keeps the tail
+                        // and the avatar. The unread line also ends a run, so a
+                        // block never appears to straddle the seam.
+                        const nextMsg = msgs[index + 1];
+                        const isRunEnd =
+                          !nextMsg ||
+                          nextMsg.sender_id !== msg.sender_id ||
+                          nextMsg.id === unreadMarker?.id;
+
                         let tickIcon = (
                           <Check size={13} className={styles.tickSent} />
                         );
@@ -1020,23 +1039,36 @@ export default function Messages() {
                                 className={styles.unreadDivider}
                                 ref={unreadDividerRef}
                               >
+                                <span className={styles.unreadDividerLine} />
                                 <span className={styles.unreadDividerText}>
                                   {unreadMarker.count} unread message
                                   {unreadMarker.count > 1 ? "s" : ""}
                                 </span>
+                                <span className={styles.unreadDividerLine} />
                               </div>
                             )}
                             <div
-                              className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs}`}
+                              className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs} ${
+                                isRunEnd ? styles.runEnd : ""
+                              } ${
+                                openingIdsRef.current.has(msg.id)
+                                  ? ""
+                                  : styles.messageEnter
+                              }`}
                             >
-                              {!isMine && (
-                                <AvatarImg
-                                  src={activeChat?.contact_avatar}
-                                  name={activeChat?.contact_name}
-                                  size={28}
-                                  className={styles.messageAvatar}
-                                />
-                              )}
+                              {!isMine &&
+                                (isRunEnd ? (
+                                  <AvatarImg
+                                    src={activeChat?.contact_avatar}
+                                    name={activeChat?.contact_name}
+                                    size={28}
+                                    className={styles.messageAvatar}
+                                  />
+                                ) : (
+                                  // Holds the column so stacked bubbles stay
+                                  // aligned with the one that has the avatar.
+                                  <span className={styles.avatarSpacer} />
+                                ))}
                               <div
                                 className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs}`}
                               >
