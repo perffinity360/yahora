@@ -1,2 +1,1 @@
-SELECT email, encrypted_password
-FROM auth.users WHERE email = 'testuser@iiitk.ac.in';
+DELETE FROM messages WHERE content IN ('RLSPROOF-8842', 'RLSCONTROL-3391');

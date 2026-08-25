@@ -296,9 +296,35 @@ export default function Messages() {
     }
 
     try {
+      // 🔒 GET /messages/history is behind requireAuth (backend §1.6 security
+      // fix — see docs/CHANGELOG.md 2026-08-23). Without this header the call
+      // returns 401, `data.messages` is undefined, and the line below used to
+      // blank the thread — which looked exactly like "the old messages were
+      // deleted". Realtime kept working throughout because it goes straight to
+      // Supabase and never touches this endpoint, which is why only the
+      // reopened chat appeared empty.
+      //
+      // Read at call time, not once at mount: supabase-js auto-refreshes the
+      // access token in the background and AuthContext writes the new one back
+      // to this key, so a cached copy goes stale on a long-lived page.
+      const token = localStorage.getItem("yahora_session");
+
       const res = await fetch(
         `${API_BASE_URL}/messages/history?userId=${currentUserId}&contactId=${chat.contact_id}&productId=${chat.product_id}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
       );
+
+      // Check the status before trusting the body. `res.json()` succeeds on a
+      // 401 too — its body is just `{"error":"UNAUTHORIZED"}` — so without this
+      // the failure is completely silent and shows up as an empty conversation
+      // rather than as an error.
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          `history ${res.status} ${body?.error || ""} ${body?.message || ""}`.trim(),
+        );
+      }
+
       const data = await res.json();
       setMessages(data.messages || []);
 
@@ -322,6 +348,10 @@ export default function Messages() {
         );
       }
     } catch (error) {
+      // Clear on failure. Leaving the previous chat's messages on screen under
+      // the newly selected contact's header would render one student's
+      // conversation as if it belonged to another — worse than showing nothing.
+      setMessages([]);
       console.error("Failed to load chat history:", error);
     }
   };

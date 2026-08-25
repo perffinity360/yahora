@@ -228,6 +228,68 @@ async function classifyUnavailableUsername(username, userId) {
 // and from nowhere else. `userId` is deliberately NOT destructured below: a
 // caller may still send it, and it is ignored in silence. Erroring on it would
 // only tell an attacker the parameter used to work.
+// ─────────────────────────────────────────────────────────────────────────────
+// Replacing the session that a password change destroys
+//
+// `supabase.auth.admin.updateUserById(userId, { password })` makes GoTrue
+// delete EVERY session belonging to that user — auth.sessions and
+// auth.refresh_tokens both drop to zero — including the one the caller is
+// holding at that exact moment. Verified 2026-08-25 by
+// backend/scripts/diagnose-token.mjs: sessions 2 → 0, refresh_tokens 2 → 0,
+// and GoTrue answers 403 session_not_found for a token with 59 minutes left.
+//
+// **That revocation is the property we want** and it is deliberately NOT
+// changed here. A password change SHOULD log out every other device. What it
+// must not do is log out the person performing it. So the caller — and only
+// the caller — is handed a replacement, minted from the password they just set.
+//
+// On a THROWAWAY client, never the shared `supabase`. signInWithPassword
+// stores the session it returns on the client instance, which would demote the
+// one shared service-role client to that student's `authenticated` JWT for
+// every later query the process makes, until it restarts. See
+// config/supabase.js:32 and the three existing call sites.
+//
+// Returns a session, or null. **This never throws and never fails a request.**
+// By the time it runs the password change has already committed, and GoTrue
+// gives us nothing to roll back with. A caller who gets no `session` is exactly
+// where they were before this fix — logged out, but with a password that
+// works. A 500 after a successful password change would be strictly worse: the
+// student would not know which password their account now has.
+async function mintReplacementSession(email, password, context) {
+    if (!email) {
+        // Every account is created from a university address, so this is a
+        // corrupt-state guard rather than a real branch.
+        console.error(`[${context}] auth user has no email — cannot mint a replacement session`);
+        return null;
+    }
+
+    try {
+        const { data, error } = await createSessionClient().auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error || !data?.session) {
+            // GoTrue's own status, code and message. Never the password.
+            console.error(`[${context}] re-signin failed — caller keeps a revoked token`, {
+                email,
+                status:  error?.status ?? null,
+                code:    error?.code ?? null,
+                message: error?.message ?? 'signInWithPassword returned no session',
+            });
+            return null;
+        }
+
+        return data.session;
+    } catch (err) {
+        console.error(`[${context}] re-signin threw — caller keeps a revoked token`, {
+            email,
+            message: err?.message ?? String(err),
+        });
+        return null;
+    }
+}
+
 export const completeOnboarding = async (req, res) => {
     try {
         // The ONLY source of identity in this handler.
@@ -363,10 +425,27 @@ export const completeOnboarding = async (req, res) => {
             });
         }
 
-        return res.status(200).json({
+        // ── 4. Replace the session step 2 just destroyed. ───────────────────
+        //
+        // Step 2 revoked every session for this user, the token that
+        // authenticated THIS request included, so without a replacement the
+        // student is logged out at the instant they finish signing up. CC-4
+        // recorded this as an open question; this is the answer.
+        //
+        // Additive: `message` and `userProfile` are unchanged.
+        const session = await mintReplacementSession(req.user.email, password, 'onboarding');
+
+        const body = {
             message: 'Profile completed successfully!',
             userProfile: updatedUser,
-        });
+        };
+
+        // Omitted entirely when the re-signin failed, never sent as null. A
+        // client seeing no `session` must re-authenticate — it is not an error,
+        // and the profile above is already saved.
+        if (session) body.session = session;
+
+        return res.status(200).json(body);
 
     } catch (error) {
         // 🎯 THE CATCH THIS ENDPOINT EXISTS FOR.
@@ -859,7 +938,16 @@ export const setPassword = async (req, res) => {
 
         if (flagError) return mapDbError(res, flagError);
 
-        return res.status(200).json({ message: 'Password set', has_password: true });
+        // ── Replace the session the update just destroyed ─────────────────
+        //
+        // Same revocation as onboarding: every other device is now logged out,
+        // which is the point. The student who typed the new password is not.
+        const session = await mintReplacementSession(req.user.email, password, 'set-password');
+
+        const body = { message: 'Password set', has_password: true };
+        if (session) body.session = session;
+
+        return res.status(200).json(body);
 
     } catch (error) {
         console.error('[set-password] unexpected error', error);

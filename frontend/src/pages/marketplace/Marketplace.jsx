@@ -568,12 +568,36 @@ export default function Marketplace() {
     );
 
     try {
-      await fetch(`${API_BASE_URL}/products/${productId}/like`, {
+      // 🔒 /like is behind requireAuth (backend §1.6 — docs/CHANGELOG.md
+      // 2026-08-23). The actor now comes from this token; the `user_id` in the
+      // body is ignored by the backend and kept only to avoid churn.
+      const token = localStorage.getItem("yahora_session");
+
+      const res = await fetch(`${API_BASE_URL}/products/${productId}/like`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ user_id: currentUserId }),
       });
+
+      if (!res.ok) throw new Error(`like ${res.status}`);
     } catch (error) {
+      // Roll the optimistic update back. Without this a rejected like stays lit
+      // until the next reload, which is the same silent-failure shape that hid
+      // the 401 on /messages/history.
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId
+            ? {
+                ...p,
+                is_liked: currentLikeState,
+                likes_count: p.likes_count + (!currentLikeState ? -1 : 1),
+              }
+            : p,
+        ),
+      );
       console.error("Failed to toggle like:", error);
     }
   };
@@ -593,12 +617,31 @@ export default function Marketplace() {
     );
 
     try {
-      await fetch(`${API_BASE_URL}/products/${productId}/save`, {
+      // 🔒 See the note on handleToggleGridLike above.
+      const token = localStorage.getItem("yahora_session");
+
+      const res = await fetch(`${API_BASE_URL}/products/${productId}/save`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ user_id: currentUserId }),
       });
+
+      if (!res.ok) throw new Error(`save ${res.status}`);
     } catch (error) {
+      // Roll back both views the optimistic update touched.
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, is_saved: currentSaveState } : p,
+        ),
+      );
+      setSwipeDeck((prev) =>
+        prev.map((p) =>
+          p.id === productId ? { ...p, is_saved: currentSaveState } : p,
+        ),
+      );
       console.error("Failed to toggle save:", error);
     }
   };
@@ -625,12 +668,20 @@ export default function Marketplace() {
       );
 
       try {
+        // 🔒 See the note on handleToggleGridLike above. The `!res.ok`
+        // reconciliation below already existed and now actually fires on a
+        // rejected like instead of every like silently 401ing.
+        const token = localStorage.getItem("yahora_session");
+
         const res = await fetch(`${API_BASE_URL}/products/${id}/like`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ user_id: currentUserId }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
 
         // Reconcile with the server's authoritative is_liked.
         if (!res.ok || data.is_liked === false) {

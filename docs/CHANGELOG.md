@@ -82,6 +82,223 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-25 — The §1.6 token fix, finished: chat history + all nine like/save call sites (Vishwajeet)
+
+### 🚨 Neeraj — I edited five of your files, all under `frontend/src/pages/`.
+
+`messages/Messages.jsx` · `marketplace/Marketplace.jsx` · `product/ProductDetail.jsx` ·
+`publicProfile/PublicProfile.jsx` · `dashboard/Dashboard.jsx`. Every change is inside an existing
+handler; no file gained an import, a dependency or a new component. Say the word and I'll hand any
+of it back.
+
+Found while testing Block G5. **Symptom:** send a message, it appears instantly and bumps the
+unread dot; close the chat and reopen it and **every message in the thread is gone.** Nothing was
+ever deleted — the messages were in the database the whole time.
+
+**Cause:** `GET /api/messages/history` went behind `requireAuth` in the §1.6 security fix (my
+entry of 2026-08-23, which listed `Messages.jsx` line ~300 as needing an `Authorization` header).
+That header was never added. So the call returned `401`, `data.messages` came back `undefined`,
+and `setMessages(data.messages || [])` emptied the thread.
+
+**Why it read as data loss rather than as an error:** `res.ok` was never checked, and `res.json()`
+parses a 401 body perfectly happily — it is just `{"error":"UNAUTHORIZED"}`. Nothing threw, so the
+`catch` never fired and the console stayed clean. Meanwhile realtime kept working the whole time
+because it talks straight to Supabase and never touches this endpoint. New messages arriving live
+while old ones vanished on reload is exactly the shape those two facts predict.
+
+Reproduced against the local stack on a seeded Arjun↔Priya thread:
+
+```
+GET /messages/history  no header    401   (data.messages||[]).length = 0   ← what the UI rendered
+GET /messages/history  with header  200   messages = 13
+send → close → reopen  with header  200   messages = 14, new one present
+```
+
+### What I changed
+
+Three lines of behaviour in `handleSelectChat`, nothing else in the file:
+
+1. `Authorization: Bearer <token>` from `localStorage.getItem('yahora_session')`. Read **at call
+   time**, not cached at mount — supabase-js rotates the access token in the background and your
+   `persistSession()` writes the new one back to that key, so a cached copy goes stale on a page
+   left open.
+2. `if (!res.ok) throw` before the body is trusted, so this class of failure can never be silent
+   again.
+3. `setMessages([])` in the `catch`. On a failed load the previous chat's messages were still on
+   screen under the newly selected contact's header — one student's conversation rendered as if it
+   belonged to another. Blank is the safer wrong answer.
+
+`npm run build` passes.
+
+### Same root cause, ALSO fixed — the nine like/save call sites
+
+The 2026-08-23 entry listed five routes. `/messages/history` was one; `/like` and `/save` are the
+others, and **every one of their call sites was missing the header too.** All nine are now
+patched, in four more of your files:
+
+| File | Handlers |
+|---|---|
+| `frontend/src/pages/marketplace/Marketplace.jsx` | `handleToggleGridLike`, `handleToggleGridSave`, `handleSwipeLike` |
+| `frontend/src/pages/product/ProductDetail.jsx` | `handleToggleLike`, `handleToggleSave` |
+| `frontend/src/pages/publicProfile/PublicProfile.jsx` | `handleToggleLike`, `handleToggleSave` |
+| `frontend/src/pages/dashboard/Dashboard.jsx` | `handleToggleGridLike`, `handleToggleGridSave` |
+
+Same three-part treatment as the chat fix: token read at call time, `if (!res.ok) throw`, and —
+new here — **the optimistic update is rolled back in the `catch`.** Every one of these handlers
+paints the heart or the bookmark immediately and then fired a request whose result it never looked
+at. `Dashboard.jsx` had two literally empty `catch (e) {}` blocks. So a rejected like stayed lit
+until the next reload, which is the same silent-failure shape that hid the 401 on
+`/messages/history` for two days.
+
+`handleSwipeLike` in `Marketplace.jsx` already reconciled against `!res.ok` — it kept its own
+logic and only gained the header (plus a `.catch(() => ({}))` on `res.json()`, since a 401 body
+is still JSON but an empty one would have thrown).
+
+Verified against the local stack on a seeded Kurnool listing Arjun does not own:
+
+```
+POST /products/:id/like   no header    401 UNAUTHORIZED       ← what every one of them was doing
+POST /products/:id/like   with header  200 is_liked: true
+POST /products/:id/like   with header  200 is_liked: false    ← toggles cleanly both ways
+POST /products/:id/save   no header    401 UNAUTHORIZED
+POST /products/:id/save   with header  200 is_saved: true
+POST /products/:id/save   with header  200 is_saved: false
+```
+
+`npm run build` passes with all nine in. Test rows were toggled back off; `product_likes`,
+`product_saves` and `products.likes_count` are as I found them.
+
+**`user_id` in the request bodies is left in place** on all nine, exactly as your 2026-08-23
+instructions said was fine — the backend ignores it and takes the actor from the token. Removing
+it would have been churn in your files for no behaviour change.
+
+### Changed endpoints
+- None. Backend untouched. `API.md` needed no edit.
+
+### What NOT to do yet
+- Don't add a user-facing error state to the chat pane on my account — the failed load now logs to
+  the console and clears, but there is no UI for "couldn't load this conversation". That is a
+  design call on your page, so I left it alone.
+
+## 2026-08-25 — Onboarding and set-password now return a fresh `session` (Vishwajeet)
+
+### 🚨 Neeraj — this closes the open question from CC-4. You asked, here it is.
+
+The CC-4 entry (2026-08-20) ended with a choice for you: *"re-authenticate after the 200, or I
+add a `session` to the response the way `verify-otp` does."* **I shipped the `session`.** Both
+password-setting endpoints now hand the caller a live session in the `200` body.
+
+**If you built the re-authenticate workaround, you can delete it.** If you have not built
+anything yet, this is now the simple path: read `session` off the `200` and store it exactly the
+way you store `verify-otp`'s. Same shape, same key, no new parsing.
+
+### Changed endpoints (BREAKING — additive, but the token you hold changes)
+
+- **`POST /api/auth/onboarding`** — `200` now carries a third top-level key:
+
+  ```json
+  { "message": "...", "userProfile": { }, "session": { "access_token": "...", "refresh_token": "..." } }
+  ```
+
+- **`POST /api/auth/set-password`** — `200` now carries a third top-level key:
+
+  ```json
+  { "message": "Password set", "has_password": true, "session": { "access_token": "...", "refresh_token": "..." } }
+  ```
+
+`message`, `userProfile` and `has_password` are **unchanged**. Nothing was removed or renamed.
+
+**⚠️ `session` can be absent.** It is omitted entirely — never sent as `null` — if the
+re-signin fails. The password change has already committed at that point and cannot be rolled
+back, so the request still returns `200` with the rest of the body. **Treat a missing `session`
+as "send them to log in", not as an error.** Don't `throw` on it; the account is fine, the
+profile is saved, and the new password works.
+
+### Why it was needed
+
+`supabase.auth.admin.updateUserById(userId, { password })` makes GoTrue delete **every** session
+for that user. Measured on the local stack: `auth.sessions` 2 → 0, `auth.refresh_tokens` 2 → 0,
+and GoTrue answers `403 session_not_found` for a token with 59 minutes of life left. Both of
+these endpoints set a password, so both were logging the student out — one at the exact moment
+they finished signing up, the other when they changed their password in settings.
+
+**The revocation itself is unchanged and I am not going to change it.** A password change
+*should* log out every other device — that is the security property, and it still holds. The bug
+was only that the caller was caught in their own blast radius. Now the caller, and nobody else,
+gets a replacement minted from the password they just typed.
+
+### Migrations applied
+
+- None. Controller-only change, `backend/src/modules/auth/auth.controller.js`.
+
+### Test data
+
+- `node backend/scripts/diagnose-token.mjs` gained **S10**, a pass/fail regression gate (S1–S9
+  are still diagnosis-only). It signs up a third fixture user and proves, for each endpoint,
+  that: the `200` carries `session.access_token`; the new token differs from the caller's old
+  one; the new token is accepted by **GoTrue's own `/auth/v1/user`**, not just our middleware;
+  and the old token is refused by **both**. 15/15 assertions pass. The script now exits non-zero
+  if any S10 check fails.
+- Fixture users are `blockg.diag*@iiitk.ac.in`. Clear them with
+  `node backend/scripts/diagnose-token.mjs --cleanup`.
+- `node backend/scripts/verify-block-f.mjs` re-run: still 10/10.
+
+### What NOT to do yet
+
+- **Don't treat this as "password changes no longer log you out".** They still do, everywhere
+  except the one device making the request. If you build a "signed in devices" screen, that is
+  the behaviour to describe.
+- **Don't read `session` from the error paths.** A `400`/`401`/`404` from either endpoint never
+  carries one, and on those paths the password was not changed, so the token you already hold is
+  still good.
+
+## 2026-08-25 — §1.6 Bug 2: `PUT /api/products/:id` is a real partial update (Vishwajeet)
+
+### 🚨 Neeraj — the good news first: a title-only edit now works.
+
+`PUT /api/products/:id` used to require a numeric `price` in **every** body, even when only the
+title was changing. Omitting it was a guaranteed **500**. If your edit form has a workaround
+that re-sends the current price on every save, you can delete it — but you do not have to, a
+body with a valid `price` behaves exactly as before.
+
+The payload is now built from the keys actually present in the body. Absent keys are left
+untouched. Presence is tested with `hasOwnProperty`, not truthiness, so `description: ''` and
+`price: 0` are real edits and are written through.
+
+### Changed endpoints (BREAKING)
+
+- **`PUT /api/products/:id`** — three new 400-class codes replace what used to be a `500`:
+
+  | Code | When |
+  |---|---|
+  | `INVALID_PRICE` | `price` was sent but does not parse to a finite number `>= 0`. `null`, `''` and booleans are rejected explicitly — `Number()` maps all three onto a finite number |
+  | `MISSING_FIELDS` | the body carried none of the seven updatable keys. An `UPDATE` with no columns is a PostgREST error, not a no-op |
+  | `DUPLICATE` / `INVALID_REFERENCE` | `23505` / `23503` from the update, via `mapDbError`. These used to surface as `INTERNAL_ERROR` |
+
+  Updatable keys: `title`, `description`, `price`, `category`, `location`, `condition`,
+  `status`. Anything else in the body is ignored. `university_id` and `seller_id` still cannot
+  be changed here.
+
+  **If your error handling branches on `INTERNAL_ERROR` for a failed save, it will stop
+  matching.** A bad price is a 400 now, not a 500.
+
+### Migrations applied
+
+- None. Controller-only change.
+
+### Test data
+
+- None. `node backend/scripts/verify-block-f.mjs` covers this — T5 (title-only `PUT` returns
+  200) and T5-verify (the title actually changed) flip from FAIL to PASS, 10/10 passing.
+
+### What NOT to do yet
+
+- Don't build a "clear the price" affordance. `products.price` is `NOT NULL`; sending `null`
+  is an `INVALID_PRICE`, not a way to unset it.
+- The ownership check from the 2026-08-23 entry is unchanged — the caller must still be
+  `seller_id`, and validation runs **after** that check, so a non-owner gets `403` and learns
+  nothing about whether their payload was valid.
+
 ## 2026-08-23 — §1.6 security fixes: product ownership, cross-campus interaction, chat-history injection (Vishwajeet)
 
 ### 🚨 BREAKING — Neeraj, three web calls will start returning 401. Read before you pull.

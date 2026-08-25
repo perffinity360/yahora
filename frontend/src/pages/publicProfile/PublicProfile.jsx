@@ -104,12 +104,35 @@ export default function PublicProfile() {
     }));
 
     try {
-      await fetch(`${API_BASE_URL}/products/${productId}/like`, {
+      // 🔒 /like is behind requireAuth (backend §1.6 — docs/CHANGELOG.md
+      // 2026-08-23). The actor now comes from this token; the `user_id` in the
+      // body is ignored by the backend and kept only to avoid churn.
+      const token = localStorage.getItem("yahora_session");
+
+      const res = await fetch(`${API_BASE_URL}/products/${productId}/like`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ user_id: currentUserId }),
       });
+
+      if (!res.ok) throw new Error(`like ${res.status}`);
     } catch (e) {
+      // Roll the optimistic update back.
+      setData((prev) => ({
+        ...prev,
+        listings: prev.listings.map((p) =>
+          p.id === productId
+            ? {
+                ...p,
+                is_liked: currentState,
+                likes_count: p.likes_count + (!currentState ? -1 : 1),
+              }
+            : p,
+        ),
+      }));
       console.error("Failed to toggle like:", e);
     }
   };
@@ -126,12 +149,26 @@ export default function PublicProfile() {
     }));
 
     try {
-      await fetch(`${API_BASE_URL}/products/${productId}/save`, {
+      // 🔒 See the note on handleToggleLike above.
+      const token = localStorage.getItem("yahora_session");
+
+      const res = await fetch(`${API_BASE_URL}/products/${productId}/save`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ user_id: currentUserId }),
       });
+
+      if (!res.ok) throw new Error(`save ${res.status}`);
     } catch (e) {
+      setData((prev) => ({
+        ...prev,
+        listings: prev.listings.map((p) =>
+          p.id === productId ? { ...p, is_saved: currentState } : p,
+        ),
+      }));
       console.error("Failed to toggle save:", e);
     }
   };
