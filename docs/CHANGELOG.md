@@ -82,6 +82,39 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-25 — Messages: read receipts were undoing the unread anchor (Neeraj)
+
+Web only (`frontend/`). Follow-up to the entry below — that fix was correct but got
+overwritten a frame later.
+
+### The bug
+The thread anchored on its unread divider, then slid to the newest message anyway.
+`markAsRead` flips `is_read` on **every** unread row in one statement, and the navbar's
+`PUT /messages/deliver` does the same for `is_delivered` on app load. Each row comes back
+as its own realtime UPDATE, the UPDATE handler calls `setMessages(prev => prev.map(...))`,
+and the scroll effect keyed on `[messages]` treated every one of those as "new message
+arrived" and scrolled to the bottom. The more unread messages, the more reliably it
+happened — which is why it looked like the anchoring never worked at all.
+
+### What changed
+- The scroll effect now compares `messages.length` against the previous render. A receipt
+  rewrites rows in place without growing the list, so it no longer moves the viewport.
+- An appended message is followed only if the reader is within 80px of the bottom or sent
+  it themselves; otherwise position is held, so an incoming message can't yank someone out
+  of the backlog they're reading.
+- Switched to `useLayoutEffect` so the anchor is applied before paint instead of after.
+
+### Heads-up for mobile
+`markAsRead` fanning out one realtime UPDATE per row is backend behaviour, not a web quirk
+— any client that both subscribes to UPDATE and auto-scrolls on message-state change will
+hit this. Worth knowing before the mobile chat screen grows the same feature.
+
+### How I tested it
+Production build passes. **Browser behaviour unverified** — needs a real two-account run:
+A sends ~10 messages, B opens the thread and should land on the divider and stay there.
+
+---
+
 ## 2026-08-25 — Messages: unread-anchored scroll + the open chat survives navigation (Neeraj)
 
 Web only (`frontend/`). **No backend or API change** — same endpoints, same shapes.

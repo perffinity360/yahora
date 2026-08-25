@@ -1,5 +1,5 @@
 // frontend/src/pages/messages/Messages.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import styles from "./Messages.module.css";
 import { supabase } from "../../config/supabaseClient";
@@ -28,6 +28,10 @@ const ACTIVE_CHAT_KEY = "yahora_active_chat";
 
 /* Breathing room left above the unread divider when a thread opens on it. */
 const UNREAD_ANCHOR_PADDING = 12;
+
+/* How close to the bottom still counts as "reading the live end of the thread".
+   Above this, an arriving message must not pull the viewport down. */
+const BOTTOM_STICK_THRESHOLD = 80;
 
 const readSavedChat = () => {
   try {
@@ -224,6 +228,16 @@ export default function Messages() {
      the bottom the way it does for a message that just arrived. */
   const pendingInitialScrollRef = useRef(false);
 
+  /* How many messages the scroll effect last acted on. Only a GROWING list is a
+     new message; a receipt rewrites the same rows in place. */
+  const previousCountRef = useRef(0);
+
+  /* Whether the reader is parked at the live end of the thread. Sampled on
+     scroll — i.e. before new content lands — so an arriving message can tell
+     "follow the conversation" apart from "yank someone out of the backlog they
+     are still reading". */
+  const isAtBottomRef = useRef(true);
+
   /* ?user=&product= as they were on the FIRST render. Captured in a ref so the
      inbox effect below can stay out of `searchParams` — see the note there. */
   const deepLinkRef = useRef({
@@ -235,6 +249,14 @@ export default function Messages() {
     const container = messagesContainerRef.current;
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior });
+  };
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    isAtBottomRef.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      BOTTOM_STICK_THRESHOLD;
   };
 
   useEffect(() => {
@@ -253,10 +275,19 @@ export default function Messages() {
 
      The instant landing is why `scroll-behavior: smooth` was removed from
      .messagesContainer: with it, opening an old chat animated the entire
-     backlog past the reader for about a second before settling. */
-  useEffect(() => {
+     backlog past the reader for about a second before settling.
+
+     useLayoutEffect, not useEffect: this measures the divider and moves the
+     viewport, and it has to happen before the browser paints. A passive effect
+     runs after, so the reader would catch one frame at the top of the thread
+     before it snapped down to the divider. */
+  useLayoutEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
+
+    const count = messages.length;
+    const previousCount = previousCountRef.current;
+    previousCountRef.current = count;
 
     if (pendingInitialScrollRef.current) {
       pendingInitialScrollRef.current = false;
@@ -271,14 +302,29 @@ export default function Messages() {
           divider.getBoundingClientRect().top -
           container.getBoundingClientRect().top;
         container.scrollTop += offset - UNREAD_ANCHOR_PADDING;
+        isAtBottomRef.current = false;
       } else {
         scrollToBottom("auto");
+        isAtBottomRef.current = true;
       }
       return;
     }
 
-    scrollToBottom();
-  }, [messages]);
+    // The list didn't grow, so `messages` was rewritten in place — which is
+    // exactly what a receipt does. PUT /messages/read flips `is_read` on every
+    // unread row in one statement (and the navbar's PUT /messages/deliver does
+    // the same for `is_delivered`), and each row comes back as its own realtime
+    // UPDATE. Scrolling on those is what dragged the reader off the unread
+    // divider and down to the newest message a moment after the thread opened —
+    // the anchoring was working, the receipts were undoing it.
+    if (count <= previousCount) return;
+
+    // A message was appended. Follow it only when the reader is already at the
+    // live end, or sent it themselves. Otherwise someone still working through
+    // the backlog gets yanked to the bottom every time the other side types.
+    const isMine = messages[count - 1]?.sender_id === currentUserId;
+    if (isMine || isAtBottomRef.current) scrollToBottom();
+  }, [messages, currentUserId]);
 
   /* ── Close emoji picker on outside click ── */
   useEffect(() => {
@@ -883,6 +929,7 @@ export default function Messages() {
               <div
                 className={styles.messagesContainer}
                 ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
               >
                 {/* Welcome message at top */}
                 <div className={styles.chatWelcomeBanner}>
