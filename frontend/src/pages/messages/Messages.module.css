@@ -555,17 +555,22 @@
   padding: 16px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-behavior: smooth;
+  /* No `scroll-behavior: smooth` here on purpose: Messages.jsx picks the
+     behaviour per scroll — instant when a thread opens on its unread line,
+     smooth when a new message arrives. */
   display: flex;
   flex-direction: column;
   gap: 4px;
 
-  /* Beautiful chat background */
+  /* Canvas: a lavender ground with two soft brand glows for depth, plus a fine
+     grain. The grain is deliberately sparse (1.4px marks on a 28px grid) — the
+     old 2.5px/20px version read as a polka-dot pattern and competed with the
+     bubbles for attention instead of sitting behind them. */
   background-color: #ede6f5;
   background-image:
-    radial-gradient(ellipse at 15% 15%, rgba(128,0,128,0.07) 0%, transparent 45%),
-    radial-gradient(ellipse at 85% 80%, rgba(43,183,255,0.05) 0%, transparent 45%),
-    url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23800080' fill-opacity='0.045' fill-rule='evenodd'%3E%3Ccircle cx='4' cy='4' r='2.5'/%3E%3Ccircle cx='24' cy='4' r='2.5'/%3E%3Ccircle cx='14' cy='14' r='2.5'/%3E%3Ccircle cx='34' cy='14' r='2.5'/%3E%3Ccircle cx='4' cy='24' r='2.5'/%3E%3Ccircle cx='24' cy='24' r='2.5'/%3E%3Ccircle cx='14' cy='34' r='2.5'/%3E%3Ccircle cx='34' cy='34' r='2.5'/%3E%3C/g%3E%3C/svg%3E");
+    radial-gradient(ellipse at 12% 10%, rgba(128,0,128,0.06) 0%, transparent 42%),
+    radial-gradient(ellipse at 88% 86%, rgba(43,183,255,0.045) 0%, transparent 42%),
+    url("data:image/svg+xml,%3Csvg width='28' height='28' viewBox='0 0 28 28' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23800080' fill-opacity='0.05'%3E%3Ccircle cx='3' cy='3' r='1.4'/%3E%3Ccircle cx='17' cy='17' r='1.4'/%3E%3C/g%3E%3C/svg%3E");
 
   scrollbar-width: thin;
   scrollbar-color: rgba(128,0,128,0.15) transparent;
@@ -629,6 +634,47 @@
   border: 1px solid rgba(128,0,128,0.1);
 }
 
+/* ── Unread divider ──
+   The seam between what this student has read and what they haven't. The thread
+   opens anchored on it (Messages.jsx), so it is the first thing seen — it gets
+   the one sharp accent on the canvas, and nothing else here competes.
+
+   A rule runs out to both edges rather than sitting behind an opaque pill: the
+   line is what says "everything below is new", the pill only counts it. */
+.unreadDivider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 2px 10px;
+}
+.unreadDividerLine {
+  flex: 1;
+  height: 1px;
+  /* Fading toward the gutters keeps the eye travelling inward to the count,
+     instead of stopping at two hard hairlines against the canvas edge. */
+  background: linear-gradient(to right, rgba(235,72,127,0), rgba(235,72,127,0.5));
+}
+.unreadDividerLine:last-child {
+  background: linear-gradient(to left, rgba(235,72,127,0), rgba(235,72,127,0.5));
+}
+.unreadDividerText {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--pink-dark);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  /* Tinted rather than stark white: the pill belongs to the pink seam it sits
+     on, and a white chip on a lavender canvas reads as a gap in the line. */
+  background: var(--pink-bg);
+  padding: 5px 15px;
+  border-radius: 99px;
+  border: 1px solid rgba(235,72,127,0.28);
+  box-shadow:
+    0 1px 2px rgba(235,72,127,0.08),
+    0 6px 18px rgba(235,72,127,0.14);
+}
+
 /* Empty chat */
 .emptyChat {
   display: flex;
@@ -683,10 +729,24 @@
   width: 100%;
   gap: 8px;
   align-items: flex-end;
-  margin-bottom: 3px;
+  /* Tight inside a run of messages from one person; .runEnd opens the gap
+     between speakers so the thread reads as blocks, not a ladder. */
+  margin-bottom: 0;
 }
-.messageMine    { justify-content: flex-end; animation: slideInRight 0.28s cubic-bezier(0.34,1.56,0.64,1) both; }
-.messageTheirs  { justify-content: flex-start; animation: slideInLeft  0.28s cubic-bezier(0.34,1.56,0.64,1) both; }
+.runEnd { margin-bottom: 9px; }
+.avatarSpacer {
+  width: 28px;
+  flex-shrink: 0;
+}
+.messageMine    { justify-content: flex-end; }
+.messageTheirs  { justify-content: flex-start; }
+
+/* Only messages that ARRIVE animate (see openingIdsRef in Messages.jsx) —
+   history renders already settled. And the curve is a settle, not the springy
+   overshoot these had: a bubble that bounces is charming once and fidgety by
+   the twentieth. */
+.messageMine.messageEnter   { animation: slideInRight 0.26s cubic-bezier(0.16,1,0.3,1) both; }
+.messageTheirs.messageEnter { animation: slideInLeft  0.26s cubic-bezier(0.16,1,0.3,1) both; }
 
 .messageAvatar {
   width: 28px;
@@ -701,21 +761,37 @@
   max-width: 68%;
   padding: 9px 13px 7px;
   border-radius: 18px;
+  /* Transparent by default so the hairline on .bubbleTheirs doesn't make one
+     side of the thread a pixel taller than the other. */
+  border: 1px solid transparent;
   position: relative;
   word-break: break-word;
 }
 
+/* Only the bubble that closes a run gets the tail — mid-run bubbles stay fully
+   rounded, which is what makes a stack read as one block. */
+.runEnd .bubbleMine   { border-bottom-right-radius: 6px; }
+.runEnd .bubbleTheirs { border-bottom-left-radius: 6px; }
+
 .bubbleMine {
-  background: linear-gradient(135deg, #800080 0%, #c0306a 100%);
-  color: #fff;
-  border-bottom-right-radius: 5px;
-  box-shadow: 0 3px 12px rgba(128,0,128,0.28);
+  /* The brand gradient, straight from the tokens. This is the only saturated
+     surface in the thread — the canvas, the received bubbles and the chrome all
+     stay quiet so it reads as "you" without any label. */
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink-dark) 100%);
+  color: var(--white);
+  /* Two soft layers — a tight contact shadow plus a wide ambient one — so the
+     bubble sits ON the canvas. The single 12px drop it had was heavy enough to
+     look like it was hovering above the page. */
+  box-shadow:
+    0 1px 2px rgba(128,0,128,0.16),
+    0 6px 18px rgba(128,0,128,0.16);
 }
 .bubbleTheirs {
-  background: #fff;
-  color: #2a1040;
-  border-bottom-left-radius: 5px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  background: var(--white);
+  color: var(--purple-emphasis);
+  /* A hairline reads crisper than a shadow against the tinted canvas. */
+  border-color: rgba(128,0,128,0.07);
+  box-shadow: 0 2px 10px rgba(42,8,42,0.05);
 }
 
 .messageText {
@@ -730,12 +806,15 @@
   justify-content: flex-end;
   gap: 4px;
 }
+/* No blanket `opacity` here: it used to compound with the colours below and
+   dragged the received-side timestamp to about 2.3:1 on white. These values are
+   set to clear 4.5:1 on their own backgrounds. */
 .messageTime {
   font-size: 0.67rem;
-  opacity: 0.7;
+  letter-spacing: 0.02em;
 }
-.bubbleMine .messageTime { color: rgba(255,255,255,0.75); }
-.bubbleTheirs .messageTime { color: #aaa; }
+.bubbleMine .messageTime { color: rgba(255,255,255,0.82); }
+.bubbleTheirs .messageTime { color: rgba(42,8,42,0.62); }
 
 /* Tick icons — amber/gold for read (not blue) */
 .readReceipt { display: flex; align-items: center; }
@@ -1105,6 +1184,18 @@
 }
 
 @media (max-width: 420px) {
+  /* The unread pill is the widest fixed-width thing on this canvas. At 320px
+     the two hairlines either side of it collapse to nothing and the seam stops
+     reading as a line across the thread, so tighten the chip instead. */
+  .unreadDivider {
+    gap: 7px;
+    margin: 14px 0 8px;
+  }
+  .unreadDividerText {
+    font-size: 0.63rem;
+    letter-spacing: 0.05em;
+    padding: 4px 11px;
+  }
   .emojiPicker {
     width: 240px;
     left: -20px;
@@ -1117,5 +1208,51 @@
   }
   .chatInputArea {
     padding: 10px 12px;
+  }
+}
+
+
+/* ── Keyboard focus ──
+   Every control on this screen was reachable by tab but invisible once focused.
+   One flat rule rather than per-component outlines so they can't drift apart. */
+.chatProductSnippet:focus-visible,
+.mobileBackBtn:focus-visible,
+.emojiToggleBtn:focus-visible,
+.emojiBtn:focus-visible,
+.sendBtn:focus-visible,
+.suggestionChip:focus-visible,
+.clearSearchBtn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+.chatInput:focus-visible,
+.searchInput:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: -1px;
+}
+
+/* ── Reduced motion ──
+   Decorative motion only. The loading spinner and the typing indicator are left
+   running on purpose: both communicate live state, and freezing them would
+   report "nothing is happening" to exactly the people who most need the cue. */
+@media (prefers-reduced-motion: reduce) {
+  .messageEnter,
+  .inboxItem,
+  .chatWelcomeBanner,
+  .emptyChat,
+  .emptyChatEmoji,
+  .emojiPicker,
+  .noChatOrb1,
+  .noChatOrb2,
+  .noChatOrb3,
+  .noChatIconWrap,
+  .noChatTip,
+  .onlinePip,
+  .chatOnlinePip,
+  .onlineDot {
+    animation: none;
+  }
+  .sendBtnActive:active {
+    animation: none;
   }
 }

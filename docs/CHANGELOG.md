@@ -82,6 +82,124 @@ shape mid-implementation, the other person's client is already written against t
 
 _Newest at the top._
 
+## 2026-08-25 — Messages: chat surface design pass (Neeraj)
+
+Web only (`frontend/`). CSS + presentational JSX. **No backend, API or data-shape change.**
+
+### ⚠️ Doc conflict — needs a decision from both of us
+`DESIGN.md` calls itself canonical but was never implemented, and it disagrees with the
+code on three points:
+| | `DESIGN.md` says | Repo actually has |
+|---|---|---|
+| Tokens | `src/styles/tokens.css` | **file does not exist**; tokens live in `global.css` |
+| Palette | paper/ink + highlighter yellow `#FFD43B` | purple / pink / blue |
+| Type | Khand + Instrument Sans | Bree Serif + **Inter** (which `DESIGN.md` §3 bans by name) |
+
+`CLAUDE.md` §9 also lists `--pink-light #FFF4F7` / `--bg #F8F9FB`; `global.css` has
+`#f4e0e4` / `#f2e5e1`. I built on what the code actually has (purple/pink) and invented no
+new palette, but one of the two documents needs to be retired or rewritten.
+
+### What changed
+- **Unread divider** now has a rule running out to each side of the count, fading toward the
+  gutters, on a brand-tinted pill. It's the one sharp accent on the canvas.
+- **Message grouping:** consecutive messages from one person render as a block — only the
+  last bubble keeps the tail and the avatar. The unread line also ends a run. Previously a
+  run of four showed four identical avatars stacked.
+- **Only arriving messages animate.** History renders settled (`openingIdsRef`). Opening a
+  thread used to fly every message in at once, which fought the unread-line anchor.
+  Entrance curve changed from a spring overshoot to a settle.
+- Bubbles now use `var(--purple)`/`var(--pink-dark)` instead of hardcoded hex, with
+  two-layer elevation; received bubbles get a hairline instead of a shadow.
+- Canvas grain thinned (was 2.5px dots on a 20px grid — read as polka dots).
+- **Contrast fix:** received-bubble timestamps were `#aaa` with `opacity: 0.7` on white,
+  about 2.3:1. Now ~5:1.
+- Added `:focus-visible` rings and a `prefers-reduced-motion` block — the file had neither.
+  The spinner and typing dots keep animating on purpose; both signal live state.
+
+### Known gaps (not fixed here, flagging deliberately)
+- **Inbox rows are `<div onClick>`** — not reachable by keyboard at all. Needs `role`/
+  `tabIndex`/key handling, which is a behaviour change, so I left it.
+- A failed history load logs to console and shows an empty thread — no visible error state.
+  `DESIGN.md` §9 wants all four async states on every surface.
+
+### How I tested it
+Production build passes. Rendered the real stylesheet against a static DOM harness in
+headless Chrome at 1440px and 390px and iterated on that. **That verifies CSS only** — the
+grouping logic and the divider in the live app are unverified. Please check in the browser.
+
+---
+
+## 2026-08-25 — Messages: read receipts were undoing the unread anchor (Neeraj)
+
+Web only (`frontend/`). Follow-up to the entry below — that fix was correct but got
+overwritten a frame later.
+
+### The bug
+The thread anchored on its unread divider, then slid to the newest message anyway.
+`markAsRead` flips `is_read` on **every** unread row in one statement, and the navbar's
+`PUT /messages/deliver` does the same for `is_delivered` on app load. Each row comes back
+as its own realtime UPDATE, the UPDATE handler calls `setMessages(prev => prev.map(...))`,
+and the scroll effect keyed on `[messages]` treated every one of those as "new message
+arrived" and scrolled to the bottom. The more unread messages, the more reliably it
+happened — which is why it looked like the anchoring never worked at all.
+
+### What changed
+- The scroll effect now compares `messages.length` against the previous render. A receipt
+  rewrites rows in place without growing the list, so it no longer moves the viewport.
+- An appended message is followed only if the reader is within 80px of the bottom or sent
+  it themselves; otherwise position is held, so an incoming message can't yank someone out
+  of the backlog they're reading.
+- Switched to `useLayoutEffect` so the anchor is applied before paint instead of after.
+
+### Heads-up for mobile
+`markAsRead` fanning out one realtime UPDATE per row is backend behaviour, not a web quirk
+— any client that both subscribes to UPDATE and auto-scrolls on message-state change will
+hit this. Worth knowing before the mobile chat screen grows the same feature.
+
+### How I tested it
+Production build passes. **Browser behaviour unverified** — needs a real two-account run:
+A sends ~10 messages, B opens the thread and should land on the divider and stay there.
+
+---
+
+## 2026-08-25 — Messages: unread-anchored scroll + the open chat survives navigation (Neeraj)
+
+Web only (`frontend/`). **No backend or API change** — same endpoints, same shapes.
+
+### What was wrong
+1. Opening an old thread animated the whole backlog past the reader for ~1s before
+   settling at the bottom. Cause: `scroll-behavior: smooth` on `.messagesContainer`
+   turned the open-time `scrollTop = scrollHeight` jump into a visible scroll.
+2. Leaving `/messages` for another page and coming back dropped you on the empty
+   "Your Conversations" panel — the open thread was only ever held in the URL, and
+   the navbar link goes to a bare `/messages`.
+
+### What changed
+- `.messagesContainer` no longer sets `scroll-behavior`. Messages.jsx now picks per
+  scroll: **instant** when a thread opens, **smooth** when a message arrives.
+- A thread opens anchored on its first unread message with a WhatsApp-style
+  "N unread messages" divider, computed from the history response *before*
+  `PUT /messages/read` flips `is_read`. Fully-read threads still open at the bottom.
+- New localStorage key **`yahora_active_chat`** — `{ contact_id, product_id }` of the
+  last-opened thread. Restored on mount when there is no `?user=&product=` deep link
+  (the deep link still wins). Cleared by the mobile back button and by
+  `AuthContext.clearStoredSession()` on logout.
+- Effect 1 no longer depends on `searchParams`. It was re-running on every chat click,
+  because `handleSelectChat` navigates to keep the URL in sync — that refetched the
+  inbox *and* the just-clicked thread's history on every click.
+
+### For mobile
+The same two problems most likely exist in `mobile/`, and the fix carries over. If you
+add the storage key there, keep the name `yahora_active_chat` so the behaviour reads the
+same across clients.
+
+### How I tested it
+Production build passes. **Browser behaviour is unverified — please check:** opening a
+thread with unread messages lands on the divider, a fully-read thread lands at the
+bottom, and Marketplace → back to Messages reopens the same chat.
+
+---
+
 ## 2026-08-25 — seed.sql + seedDemo.js: seeded accounts could never log in with a password (Vishwajeet)
 
 ### The bug
