@@ -1184,6 +1184,18 @@
 }
 
 @media (max-width: 420px) {
+  /* The unread pill is the widest fixed-width thing on this canvas. At 320px
+     the two hairlines either side of it collapse to nothing and the seam stops
+     reading as a line across the thread, so tighten the chip instead. */
+  .unreadDivider {
+    gap: 7px;
+    margin: 14px 0 8px;
+  }
+  .unreadDividerText {
+    font-size: 0.63rem;
+    letter-spacing: 0.05em;
+    padding: 4px 11px;
+  }
   .emojiPicker {
     width: 240px;
     left: -20px;

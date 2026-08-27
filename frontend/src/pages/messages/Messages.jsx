@@ -26,8 +26,17 @@ const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
    account on a shared device. */
 const ACTIVE_CHAT_KEY = "yahora_active_chat";
 
-/* Breathing room left above the unread divider when a thread opens on it. */
+/* Minimum breathing room left above the unread divider when a thread opens
+   on it, used when the thread is too short to give it any more than that. */
 const UNREAD_ANCHOR_PADDING = 12;
+
+/* How much of the viewport is kept ABOVE the unread divider on open, as a
+   fraction of the container height. The divider landing flush against the top
+   of the viewport reads as "the conversation starts here" — there is nothing
+   above it to tell you where you left off. Opening with roughly a third of the
+   screen showing already-read history puts the line in the middle of the chat,
+   which is what makes it legible as a seam between old and new. */
+const UNREAD_ANCHOR_LEAD_RATIO = 0.35;
 
 /* How close to the bottom still counts as "reading the live end of the thread".
    Above this, an arriving message must not pull the viewport down. */
@@ -245,6 +254,27 @@ export default function Messages() {
      are still reading". */
   const isAtBottomRef = useRef(true);
 
+  /* Which account the inbox effect below has already run for — see the note
+     inside it. */
+  const didInitForUserRef = useRef(null);
+
+  /* Whether this student is actually LOOKING at the page: the tab is visible
+     and the window has focus. A message that lands while this is false has not
+     been seen by anyone, so it must not be marked read — see the note on the
+     watcher effect. Starts optimistic; the effect corrects it on mount. */
+  const isWatchingRef = useRef(true);
+
+  /* { id, count } for the run of messages that arrived in the OPEN thread while
+     this student was away. Held here rather than in state because it is written
+     from the realtime handler, which reads refs only; it is promoted into
+     `unreadMarker` the moment they come back. */
+  const awayUnreadRef = useRef(null);
+
+  /* Set when `unreadMarker` was just filled in by a return from away, to tell
+     the anchoring effect to place the viewport on the new divider. Opens use
+     `pendingInitialScrollRef` instead — same placement, different trigger. */
+  const pendingReturnAnchorRef = useRef(false);
+
   /* ?user=&product= as they were on the FIRST render. Captured in a ref so the
      inbox effect below can stay out of `searchParams` — see the note there. */
   const deepLinkRef = useRef({
@@ -264,6 +294,47 @@ export default function Messages() {
     isAtBottomRef.current =
       container.scrollHeight - container.scrollTop - container.clientHeight <
       BOTTOM_STICK_THRESHOLD;
+  };
+
+  /* Park the viewport a lead-in short of the unread divider, so the tail of the
+     already-read history sits above the line and the line reads as a seam in
+     the middle of the chat rather than as the top of the thread.
+
+     Returns false when there is no divider to anchor on, which is the caller's
+     cue to fall back to the bottom of the thread. */
+  const anchorToUnreadDivider = () => {
+    const container = messagesContainerRef.current;
+    const divider = unreadDividerRef.current;
+    if (!container || !divider) return false;
+
+    // On a phone the chat pane is `display: none` while the inbox list is up
+    // (`.hideOnMobile`), so it is still mounted but has no layout — every rect
+    // reads zero and the "anchor" would just scroll a pane nobody can see.
+    if (!container.clientHeight) return false;
+
+    // Distance from the top of the viewport to the divider, measured off the
+    // rects rather than offsetTop so it doesn't depend on which ancestor
+    // happens to be the offsetParent. Adding it to the current scrollTop works
+    // from wherever the browser left the container.
+    const offset =
+      divider.getBoundingClientRect().top -
+      container.getBoundingClientRect().top;
+
+    // Proportional, not a fixed pixel count: the chat pane is roughly half as
+    // tall on a phone as on a desktop, and a lead-in sized for one leaves the
+    // divider either glued to the top edge or pushed off the bottom on the
+    // other. A third of whatever the pane actually is holds on both.
+    const lead = Math.max(
+      UNREAD_ANCHOR_PADDING,
+      Math.round(container.clientHeight * UNREAD_ANCHOR_LEAD_RATIO),
+    );
+    container.scrollTop += offset - lead;
+
+    // The browser clamps scrollTop to the scrollable range, so a thread with
+    // only a message or two under the divider can end up parked at the live end
+    // after all. Sample the result instead of assuming it.
+    handleMessagesScroll();
+    return true;
   };
 
   useEffect(() => {
@@ -298,19 +369,9 @@ export default function Messages() {
 
     if (pendingInitialScrollRef.current) {
       pendingInitialScrollRef.current = false;
-
-      const divider = unreadDividerRef.current;
-      if (divider) {
-        // Distance from the top of the viewport to the divider, measured off
-        // the rects rather than offsetTop so it doesn't depend on which
-        // ancestor happens to be the offsetParent. Adding it to the current
-        // scrollTop works from wherever the browser left the container.
-        const offset =
-          divider.getBoundingClientRect().top -
-          container.getBoundingClientRect().top;
-        container.scrollTop += offset - UNREAD_ANCHOR_PADDING;
-        isAtBottomRef.current = false;
-      } else {
+      // The divider is the whole point of the anchored open; without one there
+      // is nothing unread, so the live end of the thread is where to land.
+      if (!anchorToUnreadDivider()) {
         scrollToBottom("auto");
         isAtBottomRef.current = true;
       }
@@ -329,9 +390,118 @@ export default function Messages() {
     // A message was appended. Follow it only when the reader is already at the
     // live end, or sent it themselves. Otherwise someone still working through
     // the backlog gets yanked to the bottom every time the other side types.
+    //
+    // `isWatchingRef` is the third condition: nobody is reading a backgrounded
+    // tab, so scrolling it to the bottom only destroys the position the unread
+    // divider needs when they come back. Their own message can't arrive while
+    // they are away, so `isMine` needs no such guard.
     const isMine = messages[count - 1]?.sender_id === currentUserId;
-    if (isMine || isAtBottomRef.current) scrollToBottom();
+    if (isMine || (isWatchingRef.current && isAtBottomRef.current)) {
+      scrollToBottom();
+    }
   }, [messages, currentUserId]);
+
+  /* Placing the viewport for the OTHER way a divider appears: it was drawn on
+     the messages that landed while this student was away, and `messages` did
+     not change in that commit, so the effect above never runs. Separate effect,
+     same placement — and useLayoutEffect for the same reason. */
+  useLayoutEffect(() => {
+    if (!pendingReturnAnchorRef.current) return;
+    pendingReturnAnchorRef.current = false;
+    anchorToUnreadDivider();
+  }, [unreadMarker]);
+
+  /* Promote the run of messages that landed while this student was away into
+     the visible unread line, and only now tell the server they were read. */
+  const flushAwayUnread = () => {
+    const pending = awayUnreadRef.current;
+    if (!pending) return;
+
+    // On a phone the open thread can be sitting behind the inbox list, so
+    // coming back to the TAB is not the same as coming back to the
+    // CONVERSATION. Leave the run pending in that case: the sidebar badge goes
+    // on counting it and opening the thread draws the line the ordinary way.
+    const container = messagesContainerRef.current;
+    if (!container || !container.clientHeight) return;
+
+    awayUnreadRef.current = null;
+
+    // Replaces any earlier divider on purpose: that one marked messages this
+    // student has since read, and two lines in one thread would be a puzzle.
+    setUnreadMarker(pending);
+    pendingReturnAnchorRef.current = true;
+
+    const chat = activeChatRef.current;
+    const myId = currentUserIdRef.current;
+    if (!chat || !myId) return;
+
+    // The receipt is honest now that the messages are back on screen. It does
+    // not erase the line: `unreadMarker` is pinned state, not something derived
+    // from `is_read` — see the note on that state.
+    fetch(`${API_BASE_URL}/messages/read`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: myId,
+        contactId: chat.contact_id,
+        productId: chat.product_id,
+      }),
+    }).catch((error) =>
+      console.error("Failed to mark messages read on return:", error),
+    );
+
+    setInbox((prev) =>
+      prev.map((c) =>
+        c.contact_id === chat.contact_id && c.product_id === chat.product_id
+          ? { ...c, unread_count: 0 }
+          : c,
+      ),
+    );
+  };
+
+  /* ── Are they actually looking at this? ──
+     A message that arrives while the tab is hidden or the window is behind
+     something else has not been seen, so marking it read the moment it lands —
+     which is what the realtime handler does — is a lie, and it costs this
+     student the "N unread messages" line on the one visit that needed it: they
+     step away mid-thread, twenty messages pile up, and they come back to a
+     wall of chat with no idea where they stopped.
+
+     Both signals are needed. Switching apps or tabs on a phone fires
+     visibilitychange; alt-tabbing to another window on a desktop leaves the tab
+     "visible" and only blurs it. Pointer and key events force the flag back on
+     regardless: they cannot happen unless someone is there, which keeps a
+     browser that reports focus oddly from stranding the thread in "away". */
+  useEffect(() => {
+    const setWatching = (watching) => {
+      if (watching === isWatchingRef.current) return;
+      isWatchingRef.current = watching;
+      if (watching) flushAwayUnread();
+    };
+
+    const evaluate = () =>
+      setWatching(document.visibilityState === "visible" && document.hasFocus());
+    const markPresent = () => setWatching(true);
+
+    evaluate();
+
+    document.addEventListener("visibilitychange", evaluate);
+    window.addEventListener("focus", evaluate);
+    window.addEventListener("blur", evaluate);
+    document.addEventListener("pointerdown", markPresent, { passive: true });
+    document.addEventListener("keydown", markPresent, { passive: true });
+
+    return () => {
+      document.removeEventListener("visibilitychange", evaluate);
+      window.removeEventListener("focus", evaluate);
+      window.removeEventListener("blur", evaluate);
+      document.removeEventListener("pointerdown", markPresent);
+      document.removeEventListener("keydown", markPresent);
+    };
+    // Reads the open thread and the account through refs, so it subscribes once
+    // for the life of the page instead of re-binding on every chat switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Close emoji picker on outside click ── */
   useEffect(() => {
@@ -361,6 +531,14 @@ export default function Messages() {
      was just clicked. The first-render params are read from a ref instead. */
   useEffect(() => {
     if (!currentUserId) return navigate("/auth");
+
+    // StrictMode runs this twice on mount in dev, which opened the restored
+    // thread twice: two GET /messages/history in flight, and the second one
+    // landing after the first one's PUT /messages/read had already marked the
+    // rows read. Refs survive StrictMode's remount, so keying the guard on the
+    // account this ran for makes it a dedupe rather than a one-shot latch.
+    if (didInitForUserRef.current === currentUserId) return;
+    didInitForUserRef.current = currentUserId;
 
     const loadInboxAndCheckParams = async () => {
       try {
@@ -443,7 +621,10 @@ export default function Messages() {
     // The next paint of `messages` belongs to a freshly opened thread, so the
     // scroll effect should place the viewport rather than glide to the bottom.
     pendingInitialScrollRef.current = true;
+    pendingReturnAnchorRef.current = false;
     setUnreadMarker(null);
+    // Belongs to the thread being left, not to this one.
+    awayUnreadRef.current = null;
 
     // Remember it for the next mount — see ACTIVE_CHAT_KEY.
     localStorage.setItem(
@@ -499,12 +680,25 @@ export default function Messages() {
       // server and the realtime UPDATE handler mirrors that into state.
       // Messages this student sent to themselves are excluded: in a self-chat
       // both ids are the same person, and nothing there was ever "unread".
-      const unread = history.filter(
+      const fromContact = history.filter(
         (m) =>
-          m.receiver_id === currentUserId &&
-          m.sender_id !== currentUserId &&
-          !m.is_read,
+          m.receiver_id === currentUserId && m.sender_id !== currentUserId,
       );
+      let unread = fromContact.filter((m) => !m.is_read);
+
+      // The inbox count is the server's answer for this thread as of this page
+      // load, and it is the more reliable of the two: `is_read` on these rows
+      // can already have been flipped by a read receipt in flight — StrictMode
+      // opens the thread twice in dev, and leaving the page and coming back
+      // fires PUT /messages/read again — in which case the filter above finds
+      // nothing and the line silently disappears on exactly the visit that
+      // needed it. When the count says there are more, trust it and take that
+      // many from the end of the contact's messages.
+      const reportedUnread = Number(chat.unread_count || 0);
+      if (reportedUnread > unread.length) {
+        unread = fromContact.slice(-reportedUnread);
+      }
+
       setUnreadMarker(
         unread.length ? { id: unread[0].id, count: unread.length } : null,
       );
@@ -534,6 +728,7 @@ export default function Messages() {
       // conversation as if it belonged to another — worse than showing nothing.
       setMessages([]);
       setUnreadMarker(null);
+      awayUnreadRef.current = null;
       openingIdsRef.current = new Set();
       console.error("Failed to load chat history:", error);
     }
@@ -593,15 +788,28 @@ export default function Messages() {
               });
               
               if (newMsg.receiver_id === myId) {
-                fetch(`${API_BASE_URL}/messages/read`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    userId: myId,
-                    contactId: newMsg.sender_id,
-                    productId: newMsg.product_id,
-                  }),
-                });
+                if (isWatchingRef.current) {
+                  // They are on the thread with their eyes on it — this one is
+                  // genuinely read the moment it lands, and gets no divider.
+                  fetch(`${API_BASE_URL}/messages/read`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      userId: myId,
+                      contactId: newMsg.sender_id,
+                      productId: newMsg.product_id,
+                    }),
+                  });
+                } else {
+                  // The page is open but nobody is at it. Hold the run: the
+                  // first of these is where the line goes when they return.
+                  awayUnreadRef.current = awayUnreadRef.current
+                    ? {
+                        ...awayUnreadRef.current,
+                        count: awayUnreadRef.current.count + 1,
+                      }
+                    : { id: newMsg.id, count: 1 };
+                }
               }
             }
 
@@ -620,11 +828,16 @@ export default function Messages() {
                 updatedChat.last_message = newMsg.content;
                 updatedChat.last_message_time = newMsg.created_at;
                 
+                // Open AND being watched. A thread sitting open in a
+                // backgrounded tab has not been read, so it keeps its badge —
+                // otherwise the sidebar and the divider would disagree about
+                // the same messages.
                 const isChatActive =
                   chat &&
                   chat.product_id === newMsg.product_id &&
-                  chat.contact_id === newMsg.sender_id;
-                  
+                  chat.contact_id === newMsg.sender_id &&
+                  isWatchingRef.current;
+
                 if (newMsg.receiver_id === myId && !isChatActive) {
                   updatedChat.unread_count = Number(updatedChat.unread_count || 0) + 1;
                 }
