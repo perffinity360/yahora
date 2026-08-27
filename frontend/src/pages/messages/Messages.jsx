@@ -1,5 +1,5 @@
 // frontend/src/pages/messages/Messages.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import styles from "./Messages.module.css";
 import { supabase } from "../../config/supabaseClient";
@@ -18,6 +18,39 @@ import {
 } from "lucide-react";
 
 const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
+
+/* Which conversation this student had open last. Written on every chat select,
+   read back on mount — so stepping out to the Marketplace and coming back
+   reopens the same thread instead of the empty "Your Conversations" panel.
+   Cleared by AuthContext.clearStoredSession() so it can't leak to the next
+   account on a shared device. */
+const ACTIVE_CHAT_KEY = "yahora_active_chat";
+
+/* Minimum breathing room left above the unread divider when a thread opens
+   on it, used when the thread is too short to give it any more than that. */
+const UNREAD_ANCHOR_PADDING = 12;
+
+/* How much of the viewport is kept ABOVE the unread divider on open, as a
+   fraction of the container height. The divider landing flush against the top
+   of the viewport reads as "the conversation starts here" — there is nothing
+   above it to tell you where you left off. Opening with roughly a third of the
+   screen showing already-read history puts the line in the middle of the chat,
+   which is what makes it legible as a seam between old and new. */
+const UNREAD_ANCHOR_LEAD_RATIO = 0.35;
+
+/* How close to the bottom still counts as "reading the live end of the thread".
+   Above this, an arriving message must not pull the viewport down. */
+const BOTTOM_STICK_THRESHOLD = 80;
+
+const readSavedChat = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ACTIVE_CHAT_KEY));
+    return saved?.contact_id && saved?.product_id ? saved : null;
+  } catch {
+    // Hand-edited or half-written value — treat it as "nothing saved".
+    return null;
+  }
+};
 
 /* ── Emoji data ── */
 const EMOJI_ROWS = [
@@ -183,17 +216,125 @@ export default function Messages() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeEmojiRow, setActiveEmojiRow] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
+
+  /* { id, count } for the first message the contact sent that this student had
+     not read at the moment the thread opened — the WhatsApp "unread" line.
+     Pinned at open time on purpose: PUT /messages/read and the realtime UPDATE
+     handler flip `is_read` on those same rows seconds later, so deriving this
+     from `messages` on every render would make the line vanish under the
+     reader. */
+  const [unreadMarker, setUnreadMarker] = useState(null);
+
   const messagesContainerRef = useRef(null);
   const chatInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const activeChatRef = useRef(activeChat);
   const currentUserIdRef = useRef(currentUserId);
+  const unreadDividerRef = useRef(null);
 
-  const scrollToBottom = () => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop =
-        messagesContainerRef.current.scrollHeight;
-    }
+  /* True between "a thread was picked" and "that thread's messages painted".
+     Tells the scroll effect to place the viewport once, instead of gliding to
+     the bottom the way it does for a message that just arrived. */
+  const pendingInitialScrollRef = useRef(false);
+
+  /* How many messages the scroll effect last acted on. Only a GROWING list is a
+     new message; a receipt rewrites the same rows in place. */
+  const previousCountRef = useRef(0);
+
+  /* Ids the thread already had when it opened. Everything in here is history
+     and must render settled; only messages that arrive AFTER open animate in.
+     Without this, opening a thread flew every message in at once — which is
+     both noisy and self-defeating, since the point of anchoring on the unread
+     line is to look like you walked back into a conversation already there. */
+  const openingIdsRef = useRef(new Set());
+
+  /* Whether the reader is parked at the live end of the thread. Sampled on
+     scroll — i.e. before new content lands — so an arriving message can tell
+     "follow the conversation" apart from "yank someone out of the backlog they
+     are still reading". */
+  const isAtBottomRef = useRef(true);
+
+  /* Which account the inbox effect below has already run for — see the note
+     inside it. */
+  const didInitForUserRef = useRef(null);
+
+  /* Whether this student is actually LOOKING at the page: the tab is visible
+     and the window has focus. A message that lands while this is false has not
+     been seen by anyone, so it must not be marked read — see the note on the
+     watcher effect. Starts optimistic; the effect corrects it on mount. */
+  const isWatchingRef = useRef(true);
+
+  /* { id, count } for the run of messages that arrived in the OPEN thread while
+     this student was away. Held here rather than in state because it is written
+     from the realtime handler, which reads refs only; it is promoted into
+     `unreadMarker` the moment they come back. */
+  const awayUnreadRef = useRef(null);
+
+  /* Set when `unreadMarker` was just filled in by a return from away, to tell
+     the anchoring effect to place the viewport on the new divider. Opens use
+     `pendingInitialScrollRef` instead — same placement, different trigger. */
+  const pendingReturnAnchorRef = useRef(false);
+
+  /* ?user=&product= as they were on the FIRST render. Captured in a ref so the
+     inbox effect below can stay out of `searchParams` — see the note there. */
+  const deepLinkRef = useRef({
+    user: searchParams.get("user"),
+    product: searchParams.get("product"),
+  });
+
+  const scrollToBottom = (behavior = "smooth") => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior });
+  };
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    isAtBottomRef.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      BOTTOM_STICK_THRESHOLD;
+  };
+
+  /* Park the viewport a lead-in short of the unread divider, so the tail of the
+     already-read history sits above the line and the line reads as a seam in
+     the middle of the chat rather than as the top of the thread.
+
+     Returns false when there is no divider to anchor on, which is the caller's
+     cue to fall back to the bottom of the thread. */
+  const anchorToUnreadDivider = () => {
+    const container = messagesContainerRef.current;
+    const divider = unreadDividerRef.current;
+    if (!container || !divider) return false;
+
+    // On a phone the chat pane is `display: none` while the inbox list is up
+    // (`.hideOnMobile`), so it is still mounted but has no layout — every rect
+    // reads zero and the "anchor" would just scroll a pane nobody can see.
+    if (!container.clientHeight) return false;
+
+    // Distance from the top of the viewport to the divider, measured off the
+    // rects rather than offsetTop so it doesn't depend on which ancestor
+    // happens to be the offsetParent. Adding it to the current scrollTop works
+    // from wherever the browser left the container.
+    const offset =
+      divider.getBoundingClientRect().top -
+      container.getBoundingClientRect().top;
+
+    // Proportional, not a fixed pixel count: the chat pane is roughly half as
+    // tall on a phone as on a desktop, and a lead-in sized for one leaves the
+    // divider either glued to the top edge or pushed off the bottom on the
+    // other. A third of whatever the pane actually is holds on both.
+    const lead = Math.max(
+      UNREAD_ANCHOR_PADDING,
+      Math.round(container.clientHeight * UNREAD_ANCHOR_LEAD_RATIO),
+    );
+    container.scrollTop += offset - lead;
+
+    // The browser clamps scrollTop to the scrollable range, so a thread with
+    // only a message or two under the divider can end up parked at the live end
+    // after all. Sample the result instead of assuming it.
+    handleMessagesScroll();
+    return true;
   };
 
   useEffect(() => {
@@ -204,7 +345,163 @@ export default function Messages() {
     currentUserIdRef.current = currentUserId;
   }, [currentUserId]);
 
-  useEffect(() => scrollToBottom(), [messages]);
+  /* ── Scroll positioning ──
+     Two behaviours share one effect:
+       • a thread just opened  → land instantly on the first unread message
+         (or the bottom, when everything is already read).
+       • a message arrived     → glide to the bottom.
+
+     The instant landing is why `scroll-behavior: smooth` was removed from
+     .messagesContainer: with it, opening an old chat animated the entire
+     backlog past the reader for about a second before settling.
+
+     useLayoutEffect, not useEffect: this measures the divider and moves the
+     viewport, and it has to happen before the browser paints. A passive effect
+     runs after, so the reader would catch one frame at the top of the thread
+     before it snapped down to the divider. */
+  useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const count = messages.length;
+    const previousCount = previousCountRef.current;
+    previousCountRef.current = count;
+
+    if (pendingInitialScrollRef.current) {
+      pendingInitialScrollRef.current = false;
+      // The divider is the whole point of the anchored open; without one there
+      // is nothing unread, so the live end of the thread is where to land.
+      if (!anchorToUnreadDivider()) {
+        scrollToBottom("auto");
+        isAtBottomRef.current = true;
+      }
+      return;
+    }
+
+    // The list didn't grow, so `messages` was rewritten in place — which is
+    // exactly what a receipt does. PUT /messages/read flips `is_read` on every
+    // unread row in one statement (and the navbar's PUT /messages/deliver does
+    // the same for `is_delivered`), and each row comes back as its own realtime
+    // UPDATE. Scrolling on those is what dragged the reader off the unread
+    // divider and down to the newest message a moment after the thread opened —
+    // the anchoring was working, the receipts were undoing it.
+    if (count <= previousCount) return;
+
+    // A message was appended. Follow it only when the reader is already at the
+    // live end, or sent it themselves. Otherwise someone still working through
+    // the backlog gets yanked to the bottom every time the other side types.
+    //
+    // `isWatchingRef` is the third condition: nobody is reading a backgrounded
+    // tab, so scrolling it to the bottom only destroys the position the unread
+    // divider needs when they come back. Their own message can't arrive while
+    // they are away, so `isMine` needs no such guard.
+    const isMine = messages[count - 1]?.sender_id === currentUserId;
+    if (isMine || (isWatchingRef.current && isAtBottomRef.current)) {
+      scrollToBottom();
+    }
+  }, [messages, currentUserId]);
+
+  /* Placing the viewport for the OTHER way a divider appears: it was drawn on
+     the messages that landed while this student was away, and `messages` did
+     not change in that commit, so the effect above never runs. Separate effect,
+     same placement — and useLayoutEffect for the same reason. */
+  useLayoutEffect(() => {
+    if (!pendingReturnAnchorRef.current) return;
+    pendingReturnAnchorRef.current = false;
+    anchorToUnreadDivider();
+  }, [unreadMarker]);
+
+  /* Promote the run of messages that landed while this student was away into
+     the visible unread line, and only now tell the server they were read. */
+  const flushAwayUnread = () => {
+    const pending = awayUnreadRef.current;
+    if (!pending) return;
+
+    // On a phone the open thread can be sitting behind the inbox list, so
+    // coming back to the TAB is not the same as coming back to the
+    // CONVERSATION. Leave the run pending in that case: the sidebar badge goes
+    // on counting it and opening the thread draws the line the ordinary way.
+    const container = messagesContainerRef.current;
+    if (!container || !container.clientHeight) return;
+
+    awayUnreadRef.current = null;
+
+    // Replaces any earlier divider on purpose: that one marked messages this
+    // student has since read, and two lines in one thread would be a puzzle.
+    setUnreadMarker(pending);
+    pendingReturnAnchorRef.current = true;
+
+    const chat = activeChatRef.current;
+    const myId = currentUserIdRef.current;
+    if (!chat || !myId) return;
+
+    // The receipt is honest now that the messages are back on screen. It does
+    // not erase the line: `unreadMarker` is pinned state, not something derived
+    // from `is_read` — see the note on that state.
+    fetch(`${API_BASE_URL}/messages/read`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: myId,
+        contactId: chat.contact_id,
+        productId: chat.product_id,
+      }),
+    }).catch((error) =>
+      console.error("Failed to mark messages read on return:", error),
+    );
+
+    setInbox((prev) =>
+      prev.map((c) =>
+        c.contact_id === chat.contact_id && c.product_id === chat.product_id
+          ? { ...c, unread_count: 0 }
+          : c,
+      ),
+    );
+  };
+
+  /* ── Are they actually looking at this? ──
+     A message that arrives while the tab is hidden or the window is behind
+     something else has not been seen, so marking it read the moment it lands —
+     which is what the realtime handler does — is a lie, and it costs this
+     student the "N unread messages" line on the one visit that needed it: they
+     step away mid-thread, twenty messages pile up, and they come back to a
+     wall of chat with no idea where they stopped.
+
+     Both signals are needed. Switching apps or tabs on a phone fires
+     visibilitychange; alt-tabbing to another window on a desktop leaves the tab
+     "visible" and only blurs it. Pointer and key events force the flag back on
+     regardless: they cannot happen unless someone is there, which keeps a
+     browser that reports focus oddly from stranding the thread in "away". */
+  useEffect(() => {
+    const setWatching = (watching) => {
+      if (watching === isWatchingRef.current) return;
+      isWatchingRef.current = watching;
+      if (watching) flushAwayUnread();
+    };
+
+    const evaluate = () =>
+      setWatching(document.visibilityState === "visible" && document.hasFocus());
+    const markPresent = () => setWatching(true);
+
+    evaluate();
+
+    document.addEventListener("visibilitychange", evaluate);
+    window.addEventListener("focus", evaluate);
+    window.addEventListener("blur", evaluate);
+    document.addEventListener("pointerdown", markPresent, { passive: true });
+    document.addEventListener("keydown", markPresent, { passive: true });
+
+    return () => {
+      document.removeEventListener("visibilitychange", evaluate);
+      window.removeEventListener("focus", evaluate);
+      window.removeEventListener("blur", evaluate);
+      document.removeEventListener("pointerdown", markPresent);
+      document.removeEventListener("keydown", markPresent);
+    };
+    // Reads the open thread and the account through refs, so it subscribes once
+    // for the life of the page instead of re-binding on every chat switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Close emoji picker on outside click ── */
   useEffect(() => {
@@ -223,9 +520,25 @@ export default function Messages() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showEmojiPicker]);
 
-  /* ── 1. Fetch Inbox & Handle URL Persistence ── */
+  /* ── 1. Fetch inbox, then reopen whichever chat should be open ──
+     Precedence: the ?user=&product= deep link (e.g. "Message Seller" on a
+     product page) first, then the thread this student last had open.
+
+     Deliberately NOT keyed on `searchParams`. handleSelectChat() calls
+     navigate() to keep the URL in sync, and that hands back a fresh
+     searchParams object; with it in the dep array, every chat click re-ran
+     this whole effect — refetching the inbox AND the history of the chat that
+     was just clicked. The first-render params are read from a ref instead. */
   useEffect(() => {
     if (!currentUserId) return navigate("/auth");
+
+    // StrictMode runs this twice on mount in dev, which opened the restored
+    // thread twice: two GET /messages/history in flight, and the second one
+    // landing after the first one's PUT /messages/read had already marked the
+    // rows read. Refs survive StrictMode's remount, so keying the guard on the
+    // account this ran for makes it a dedupe rather than a one-shot latch.
+    if (didInitForUserRef.current === currentUserId) return;
+    didInitForUserRef.current = currentUserId;
 
     const loadInboxAndCheckParams = async () => {
       try {
@@ -235,8 +548,17 @@ export default function Messages() {
         const data = await res.json();
         let fetchedInbox = data.inbox || [];
 
-        const paramUserId = searchParams.get("user");
-        const paramProductId = searchParams.get("product");
+        let paramUserId = deepLinkRef.current.user;
+        let paramProductId = deepLinkRef.current.product;
+        const isDeepLink = Boolean(paramUserId && paramProductId);
+
+        if (!isDeepLink) {
+          const saved = readSavedChat();
+          if (saved) {
+            paramUserId = saved.contact_id;
+            paramProductId = saved.product_id;
+          }
+        }
 
         if (paramUserId && paramProductId) {
           const existingChat = fetchedInbox.find(
@@ -246,8 +568,10 @@ export default function Messages() {
           );
 
           if (existingChat) {
-            handleSelectChat(existingChat, true);
-          } else {
+            // A deep link already carries the pair in the URL; a restore does
+            // not, so let handleSelectChat put it back there.
+            handleSelectChat(existingChat, isDeepLink);
+          } else if (isDeepLink) {
             const prodRes = await fetch(
               `${API_BASE_URL}/products/${paramProductId}`,
             );
@@ -269,6 +593,11 @@ export default function Messages() {
               fetchedInbox = [newChatData, ...fetchedInbox];
               handleSelectChat(newChatData, true);
             }
+          } else {
+            // The remembered thread is gone from the inbox (listing deleted,
+            // different account). Drop the pointer rather than fabricating a
+            // chat out of it the way the deep-link branch above does.
+            localStorage.removeItem(ACTIVE_CHAT_KEY);
           }
         }
 
@@ -281,13 +610,30 @@ export default function Messages() {
     };
 
     loadInboxAndCheckParams();
-  }, [currentUserId, navigate, searchParams]);
+  }, [currentUserId, navigate]);
 
   /* ── 2. Select Chat ── */
   const handleSelectChat = async (chat, isInitialLoad = false) => {
     setActiveChat(chat);
     setShowInboxOnMobile(false);
     setShowEmojiPicker(false);
+
+    // The next paint of `messages` belongs to a freshly opened thread, so the
+    // scroll effect should place the viewport rather than glide to the bottom.
+    pendingInitialScrollRef.current = true;
+    pendingReturnAnchorRef.current = false;
+    setUnreadMarker(null);
+    // Belongs to the thread being left, not to this one.
+    awayUnreadRef.current = null;
+
+    // Remember it for the next mount — see ACTIVE_CHAT_KEY.
+    localStorage.setItem(
+      ACTIVE_CHAT_KEY,
+      JSON.stringify({
+        contact_id: chat.contact_id,
+        product_id: chat.product_id,
+      }),
+    );
 
     if (!isInitialLoad) {
       navigate(`/messages?user=${chat.contact_id}&product=${chat.product_id}`, {
@@ -326,7 +672,36 @@ export default function Messages() {
       }
 
       const data = await res.json();
-      setMessages(data.messages || []);
+      const history = data.messages || [];
+      openingIdsRef.current = new Set(history.map((m) => m.id));
+      setMessages(history);
+
+      // Work this out BEFORE the read-receipt PUT below clears `is_read` on the
+      // server and the realtime UPDATE handler mirrors that into state.
+      // Messages this student sent to themselves are excluded: in a self-chat
+      // both ids are the same person, and nothing there was ever "unread".
+      const fromContact = history.filter(
+        (m) =>
+          m.receiver_id === currentUserId && m.sender_id !== currentUserId,
+      );
+      let unread = fromContact.filter((m) => !m.is_read);
+
+      // The inbox count is the server's answer for this thread as of this page
+      // load, and it is the more reliable of the two: `is_read` on these rows
+      // can already have been flipped by a read receipt in flight — StrictMode
+      // opens the thread twice in dev, and leaving the page and coming back
+      // fires PUT /messages/read again — in which case the filter above finds
+      // nothing and the line silently disappears on exactly the visit that
+      // needed it. When the count says there are more, trust it and take that
+      // many from the end of the contact's messages.
+      const reportedUnread = Number(chat.unread_count || 0);
+      if (reportedUnread > unread.length) {
+        unread = fromContact.slice(-reportedUnread);
+      }
+
+      setUnreadMarker(
+        unread.length ? { id: unread[0].id, count: unread.length } : null,
+      );
 
       if (chat.unread_count > 0) {
         await fetch(`${API_BASE_URL}/messages/read`, {
@@ -352,6 +727,9 @@ export default function Messages() {
       // the newly selected contact's header would render one student's
       // conversation as if it belonged to another — worse than showing nothing.
       setMessages([]);
+      setUnreadMarker(null);
+      awayUnreadRef.current = null;
+      openingIdsRef.current = new Set();
       console.error("Failed to load chat history:", error);
     }
   };
@@ -410,15 +788,28 @@ export default function Messages() {
               });
               
               if (newMsg.receiver_id === myId) {
-                fetch(`${API_BASE_URL}/messages/read`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    userId: myId,
-                    contactId: newMsg.sender_id,
-                    productId: newMsg.product_id,
-                  }),
-                });
+                if (isWatchingRef.current) {
+                  // They are on the thread with their eyes on it — this one is
+                  // genuinely read the moment it lands, and gets no divider.
+                  fetch(`${API_BASE_URL}/messages/read`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      userId: myId,
+                      contactId: newMsg.sender_id,
+                      productId: newMsg.product_id,
+                    }),
+                  });
+                } else {
+                  // The page is open but nobody is at it. Hold the run: the
+                  // first of these is where the line goes when they return.
+                  awayUnreadRef.current = awayUnreadRef.current
+                    ? {
+                        ...awayUnreadRef.current,
+                        count: awayUnreadRef.current.count + 1,
+                      }
+                    : { id: newMsg.id, count: 1 };
+                }
               }
             }
 
@@ -437,11 +828,16 @@ export default function Messages() {
                 updatedChat.last_message = newMsg.content;
                 updatedChat.last_message_time = newMsg.created_at;
                 
+                // Open AND being watched. A thread sitting open in a
+                // backgrounded tab has not been read, so it keeps its badge —
+                // otherwise the sidebar and the divider would disagree about
+                // the same messages.
                 const isChatActive =
                   chat &&
                   chat.product_id === newMsg.product_id &&
-                  chat.contact_id === newMsg.sender_id;
-                  
+                  chat.contact_id === newMsg.sender_id &&
+                  isWatchingRef.current;
+
                 if (newMsg.receiver_id === myId && !isChatActive) {
                   updatedChat.unread_count = Number(updatedChat.unread_count || 0) + 1;
                 }
@@ -692,6 +1088,9 @@ export default function Messages() {
                   className={styles.mobileBackBtn}
                   onClick={() => {
                     setShowInboxOnMobile(true);
+                    // Going back to the list is an explicit "close this
+                    // thread", so don't reopen it on the next visit either.
+                    localStorage.removeItem(ACTIVE_CHAT_KEY);
                     navigate("/messages", { replace: true });
                   }}
                 >
@@ -752,6 +1151,7 @@ export default function Messages() {
               <div
                 className={styles.messagesContainer}
                 ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
               >
                 {/* Welcome message at top */}
                 <div className={styles.chatWelcomeBanner}>
@@ -812,6 +1212,16 @@ export default function Messages() {
                       {msgs.map((msg, index) => {
                         const isMine = msg.sender_id === currentUserId;
 
+                        // Consecutive messages from one person read as a single
+                        // block: only the last bubble in a run keeps the tail
+                        // and the avatar. The unread line also ends a run, so a
+                        // block never appears to straddle the seam.
+                        const nextMsg = msgs[index + 1];
+                        const isRunEnd =
+                          !nextMsg ||
+                          nextMsg.sender_id !== msg.sender_id ||
+                          nextMsg.id === unreadMarker?.id;
+
                         let tickIcon = (
                           <Check size={13} className={styles.tickSent} />
                         );
@@ -833,34 +1243,62 @@ export default function Messages() {
                         }
 
                         return (
-                          <div
-                            key={msg.id || index}
-                            className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs}`}
-                          >
-                            {!isMine && (
-                              <AvatarImg
-                                src={activeChat?.contact_avatar}
-                                name={activeChat?.contact_name}
-                                size={28}
-                                className={styles.messageAvatar}
-                              />
+                          <React.Fragment key={msg.id || index}>
+                            {/* WhatsApp-style unread line. `unreadMarker` is
+                                pinned when the thread opens, so this stays put
+                                as the messages under it get marked read. */}
+                            {unreadMarker?.id === msg.id && (
+                              <div
+                                className={styles.unreadDivider}
+                                ref={unreadDividerRef}
+                              >
+                                <span className={styles.unreadDividerLine} />
+                                <span className={styles.unreadDividerText}>
+                                  {unreadMarker.count} unread message
+                                  {unreadMarker.count > 1 ? "s" : ""}
+                                </span>
+                                <span className={styles.unreadDividerLine} />
+                              </div>
                             )}
                             <div
-                              className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs}`}
+                              className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs} ${
+                                isRunEnd ? styles.runEnd : ""
+                              } ${
+                                openingIdsRef.current.has(msg.id)
+                                  ? ""
+                                  : styles.messageEnter
+                              }`}
                             >
-                              <p className={styles.messageText}>{msg.content}</p>
-                              <div className={styles.messageMeta}>
-                                <span className={styles.messageTime}>
-                                  {formatTime(msg.created_at)}
-                                </span>
-                                {isMine && (
-                                  <span className={styles.readReceipt}>
-                                    {tickIcon}
+                              {!isMine &&
+                                (isRunEnd ? (
+                                  <AvatarImg
+                                    src={activeChat?.contact_avatar}
+                                    name={activeChat?.contact_name}
+                                    size={28}
+                                    className={styles.messageAvatar}
+                                  />
+                                ) : (
+                                  // Holds the column so stacked bubbles stay
+                                  // aligned with the one that has the avatar.
+                                  <span className={styles.avatarSpacer} />
+                                ))}
+                              <div
+                                className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs}`}
+                              >
+                                <p className={styles.messageText}>{msg.content}</p>
+                                <div className={styles.messageMeta}>
+                                  <span className={styles.messageTime}>
+                                    {formatTime(msg.created_at)}
                                   </span>
-                                )}
+                                  {isMine && (
+                                    <span className={styles.readReceipt}>
+                                      {tickIcon}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </React.Fragment>
                         );
                       })}
                     </React.Fragment>

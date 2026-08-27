@@ -18,6 +18,10 @@ const REFRESH_KEY = 'yahora_refresh_token';
 const USER_ID_KEY = 'yahora_user_id';
 const DEMO_KEY = 'yahora_demo_user';
 const UNIVERSITY_KEY = 'yahora_university_id';
+// Pointer to the conversation Messages.jsx should reopen on its next mount.
+// Owned by that page; cleared here so it can't follow one student's session
+// into the next account on a shared device.
+const ACTIVE_CHAT_KEY = 'yahora_active_chat';
 
 // Whether this student has finished onboarding. Mirrors
 // `users.is_profile_complete` from the last auth response.
@@ -89,6 +93,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(DEMO_KEY);
     localStorage.removeItem(UNIVERSITY_KEY);
     localStorage.removeItem(PROFILE_COMPLETE_KEY);
+    localStorage.removeItem(ACTIVE_CHAT_KEY);
     setIsAuthenticated(false);
     // Back to the safe default. A stale `true` left behind by the previous
     // account would send the NEXT student to /dashboard before they have
