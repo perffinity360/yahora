@@ -16,8 +16,8 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { API_BASE_URL } from '../../config/urls';
 
-const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
 /* Which conversation this student had open last. Written on every chat select,
    read back on mount — so stepping out to the Marketplace and coming back

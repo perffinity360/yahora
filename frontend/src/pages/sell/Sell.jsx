@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import styles from "./Sell.module.css";
+import { API_BASE_URL } from '../../config/urls';
 
 // Premium Lucide Icons instead of emojis
 const CATEGORIES = [
@@ -87,7 +88,7 @@ export default function Sell() {
 
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/dashboard`,
+          `${API_BASE_URL}/user/${userId}/dashboard`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },
@@ -163,7 +164,7 @@ export default function Sell() {
       if (editProduct) {
         // --- EDIT MODE (PUT REQUEST) ---
         res = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/api/products/${editProduct.id}`,
+          `${API_BASE_URL}/products/${editProduct.id}`,
           {
             method: "PUT",
             headers: {
@@ -192,7 +193,7 @@ export default function Sell() {
         submitData.append('condition',   formData.condition);
         images.forEach((img) => submitData.append("images", img));
 
-        res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/products`, {
+        res = await fetch(`${API_BASE_URL}/products`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: submitData,

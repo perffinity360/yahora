@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import styles from "./Home.module.css";
+import { API_BASE_URL } from '../../config/urls';
 // --- MOCK DATA FOR UI DEVELOPMENT ---
 // [Keep all your existing MOCK_BUZZ and MOCK_LISTINGS data exactly the same here]
 const MOCK_BUZZ = [
@@ -189,7 +190,7 @@ const Home = () => {
     setDemoLoading(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/auth/demo-login`,
+        `${API_BASE_URL}/auth/demo-login`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

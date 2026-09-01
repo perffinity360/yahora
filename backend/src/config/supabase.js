@@ -17,8 +17,9 @@ dotenv.config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseKey || !supabaseAnonKey) {
     throw new Error('Missing Supabase environment variables!');
 }
 
@@ -50,6 +51,35 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 // Do NOT "fix" a demoted client with signOut({ scope: 'local' }) — that revokes
 // the refresh token you just handed to the browser, so the user's session dies
 // about an hour later. Use a separate instance instead. Verified 2026-08-12.
+// ── The anon-key client — for the ONE call that must face the CAPTCHA ────────
+//
+// GoTrue exempts SERVICE-ROLE callers from captcha protection entirely. Minting
+// an OTP on the client above is therefore never challenged, no matter what is
+// configured in the Supabase dashboard. Measured 2026-09-01 against local
+// GoTrue with captcha enabled — same endpoint, same body, only the key differs:
+//
+//     anon key         + no captcha token  ->  400 captcha_failed
+//     service-role key + no captcha token  ->  200
+//
+// That made Turnstile decorative and left the email-flooding attack in runbook
+// 2.4 exactly as open as it was before, while looking protected. Calling as
+// anon is what a browser does and what GoTrue expects to police.
+//
+// Nothing else moves. The four OTP limits, the circuit breaker and the
+// otp_requests ledger all still run on the service-role client above and all
+// run BEFORE this one is reached, so a blocked request never gets this far.
+//
+// Safe as a shared instance: signInWithOtp() for email returns no session (the
+// session is minted later, by verifyOtp), so it cannot demote this client the
+// way the calls described below would. If you ever add a call here that DOES
+// return a session, give it a throwaway instance instead.
+export const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false
+    }
+});
+
 export const createSessionClient = () =>
     createClient(supabaseUrl, supabaseKey, {
         auth: {

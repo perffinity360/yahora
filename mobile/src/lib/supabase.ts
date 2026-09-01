@@ -3,27 +3,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
-import { withDevHost } from './devHost';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 
 /**
- * EXPO_PUBLIC_SUPABASE_URL stays as http://127.0.0.1:54321 for local work.
- * withDevHost() swaps the loopback host for the Metro machine's LAN IP at
- * runtime, so the same value works in the simulator and on a physical phone
- * with no .env edits when the Wi-Fi address changes. A hosted Supabase URL is
- * passed through untouched.
+ * Both values come from src/lib/config.ts, which resolves the Supabase origin
+ * from EXPO_PUBLIC_SUPABASE_URL when it is set and otherwise from the Expo dev
+ * server's host. No LAN IP is ever written down; see that file for why.
  */
-const supabaseUrl = withDevHost(process.env.EXPO_PUBLIC_SUPABASE_URL ?? '');
-const supabaseAnonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
-
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!SUPABASE_ANON_KEY) {
   throw new Error(
-    'Missing Supabase config. Set EXPO_PUBLIC_SUPABASE_URL and ' +
-      'EXPO_PUBLIC_SUPABASE_ANON_KEY in mobile/.env, then restart Metro with ' +
-      '`npx expo start -c` (env vars are inlined at bundle time).',
+    'Missing EXPO_PUBLIC_SUPABASE_ANON_KEY. Set it in mobile/.env, then ' +
+      'restart Metro with `npx expo start -c` (env vars are inlined at bundle time).',
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

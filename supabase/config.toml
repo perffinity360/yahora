@@ -211,10 +211,25 @@ token_verifications = 30
 web3 = 30
 
 # Configure one of the supported captcha providers: `hcaptcha`, `turnstile`.
-# [auth.captcha]
-# enabled = true
-# provider = "hcaptcha"
-# secret = ""
+#
+# LOCAL DEV. `secret` is read from the root .env at `supabase start` via env(),
+# so the config stays committable and the value does not. That value is
+# Cloudflare's published DUMMY secret, which accepts ANY token — pair it with
+# the dummy sitekey 1x00000000000000000000AA in the frontend. A real sitekey
+# against a dummy secret (or the reverse) rejects everything; that mismatch is
+# the first thing to check if local auth starts failing for no reason.
+#
+# Production is configured in the Supabase dashboard with the real secret and
+# is NOT driven by this file. Never `supabase config push` — it would overwrite
+# production with these test values. See docs/PRE_LAUNCH_CHECKLIST.md.
+#
+# ⚠ This is not scoped to request-otp. GoTrue applies captcha to the password
+# grant too, so demo-login and login-password need a token once this is on.
+# See the handoff in docs/CHANGELOG.md.
+[auth.captcha]
+enabled = true
+provider = "turnstile"
+secret = "env(TURNSTILE_SECRET_KEY_LOCAL)"
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
@@ -227,7 +242,19 @@ enable_confirmations = false
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+# LOCAL DEV ONLY. Effectively disabled so GoTrue does not throttle same-address
+# sends: the app's own OTP limits (auth.controller.js — 3 free, then a 60s
+# cooldown) are what Block D step 4 tests, and a GoTrue cooldown fires first and
+# masks them. At the CLI default of "1s" it rejected requests 2-4 of that burst
+# with 429 over_email_send_rate_limit, which the controller reported as a 500.
+#
+# It must be a small NON-ZERO duration. "0s" does not disable the check — GoTrue
+# reads zero as unset and falls back to its own 60s default, which is stricter
+# than the value being replaced. Verified against the local stack.
+#
+# The hosted project has its own value for this knob; check it in the dashboard
+# (Authentication -> Rate Limits) before assuming production behaves like this.
+max_frequency = "1ms"
 # Number of characters used in the email OTP.
 otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).

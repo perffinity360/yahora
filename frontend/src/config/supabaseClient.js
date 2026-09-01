@@ -1,22 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-/* Empty in dev, exactly like VITE_API_BASE_URL: fall back to the /supabase
-   proxy on whatever origin served this page (see vite.config.js).
+import { SUPABASE_URL } from './urls';
 
-   The reason is that this URL is resolved in the VISITOR'S browser, not on the
-   machine running the dev server. Pointing it at 127.0.0.1:54321 works only on
-   that one machine; open the app from another laptop on the LAN and every
-   direct browser→Supabase call — realtime chat, the presence dots, the navbar
-   unread badge, storage — silently talks to that laptop's own loopback and
-   fails, while everything routed through /api keeps working. Going through the
-   dev server means one reachable port and no machine IP written down anywhere.
+/* The URL is resolved in ./urls.js — it handles the empty-in-dev default (the
+   /supabase proxy on the serving origin) and re-points a localhost URL at the
+   host serving the page. Do not read VITE_SUPABASE_URL directly.
 
-   Hosted builds set a real absolute URL and never reach the fallback. */
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL || `${window.location.origin}/supabase`;
+   The anon key is read here unchanged: it is not a URL and needs no resolving. */
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(SUPABASE_URL, supabaseAnonKey);
 
 
 // Dev-only console handle, so `await supabase.auth.getUser()` can be run straight

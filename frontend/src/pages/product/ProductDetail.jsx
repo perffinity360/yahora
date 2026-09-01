@@ -23,8 +23,8 @@ import {
   ShieldCheck,
   User,
 } from "lucide-react";
+import { API_BASE_URL } from '../../config/urls';
 
-const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
 const CONDITION_CONFIG = {
   Mint: { label: "MINT", bg: "#2BB7FF", color: "#fff" },
