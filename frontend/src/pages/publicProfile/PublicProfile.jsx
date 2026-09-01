@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "../dashboard/Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
+import { API_BASE_URL } from '../../config/urls';
 
-const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
 function DisplayAvatar({ src, name, size, onClick }) {
   // Generate beautiful fallback avatar data

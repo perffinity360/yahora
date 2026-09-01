@@ -30,7 +30,58 @@ import adminRoutes from './modules/admin/admin.routes.js';
 
 const app = express();
 
-app.use(cors());
+// ── CORS ──────────────────────────────────────────────────────────────────
+// Production behaviour is deliberately unchanged: this server has never had an
+// explicit allowlist — it ran a bare `cors()`, which answers every origin with
+// `Access-Control-Allow-Origin: *`. Returning the literal '*' below keeps that
+// response byte-for-byte identical.
+//
+// ⚠ This branch is selected by NODE_ENV. A production deploy MUST set
+// NODE_ENV=production, or it falls into the development branch and the hosted
+// frontend's origin is rejected.
+const isProduction = process.env.NODE_ENV === 'production';
+
+// RFC 1918 ranges: 10/8, 192.168/16, 172.16/12. Anchored, so "10.0.0.1.evil.com"
+// does not match.
+const PRIVATE_IPV4 =
+    /^(?:10\.(?:\d{1,3}\.){2}\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})$/;
+
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+
+/** True for an origin served from this machine or another box on the LAN. */
+function isLocalNetworkOrigin(origin) {
+    let hostname;
+    try {
+        ({ hostname } = new URL(origin));
+    } catch {
+        return false; // Unparseable Origin header — not ours.
+    }
+    // .hostname keeps IPv6 literals bracketed ("[::1]"); strip to match the set.
+    const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return LOOPBACK_HOSTNAMES.has(host) || PRIVATE_IPV4.test(host);
+}
+
+/**
+ * Any port is fine — the web app is on 5173, the backend on 5000, and Expo's
+ * web build picks whatever is free — so only the hostname is checked.
+ */
+function corsOrigin(origin, callback) {
+    if (isProduction) return callback(null, '*');
+
+    // No Origin header: curl, server-to-server, and native app fetches, none of
+    // which are subject to the browser's same-origin policy in the first place.
+    if (!origin) return callback(null, '*');
+
+    if (isLocalNetworkOrigin(origin)) return callback(null, true);
+    return callback(null, false);
+}
+
+app.use(cors({
+    origin: corsOrigin,
+    // X-Device-Id is sent by the OTP rate limiter. It is not a CORS-safelisted
+    // header, so leaving it out makes every request-otp preflight fail.
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Id'],
+}));
 app.use(express.json());
 
 // A simple health check route

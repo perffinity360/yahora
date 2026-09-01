@@ -40,6 +40,7 @@ import {
   PartyPopper,
   Globe2,
 } from "lucide-react";
+import { API_BASE_URL } from '../../config/urls';
 
 const CATEGORIES = [
   {
@@ -79,7 +80,6 @@ const POSTING_DATE_OPTIONS = [
   { key: "older", label: "Older" },
 ];
 
-const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
 
 /* Freezes the page behind an overlay so scrolling inside the overlay can't
    chain through to the feed. Refcounted, because more than one overlay can be

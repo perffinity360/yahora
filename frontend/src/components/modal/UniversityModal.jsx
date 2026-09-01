@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, X, MapPin } from "lucide-react";
 import styles from "./UniversityModal.module.css";
+import { API_BASE_URL } from '../../config/urls';
 
 const UniversityModal = ({ isOpen, onClose }) => {
   const [universities, setUniversities] = useState([]);
@@ -21,7 +22,7 @@ const UniversityModal = ({ isOpen, onClose }) => {
   const fetchUniversities = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/universities`);
+      const response = await fetch(`${API_BASE_URL}/universities`);
       if (response.ok) {
         const data = await response.json();
         setUniversities(data);

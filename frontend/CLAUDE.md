@@ -63,7 +63,8 @@ frontend/
     ├── main.jsx                 # entry: BrowserRouter > AuthProvider > App
     ├── App.jsx                  # route table + global demo banner + Navbar/Footer
     ├── config/
-    │   └── supabaseClient.js    # exports `supabase` (VITE_SUPABASE_URL / _ANON_KEY)
+    │   ├── urls.js              # resolved API_BASE_URL / API_ORIGIN / SUPABASE_URL
+    │   └── supabaseClient.js    # exports `supabase` (URL from urls.js, key from env)
     ├── contexts/
     │   └── AuthContext.jsx      # useAuth() -> { isAuthenticated, login, logout, loading }
     ├── styles/
@@ -100,14 +101,14 @@ frontend/
 4. Onboarding submits via `POST /api/auth/onboarding`.
 5. There is also a **demo/guest** path: `POST /api/auth/demo-login` (sets the demo banner; demo users are cleaned up nightly by a backend cron).
 
-**Data fetching:** components call the Express backend with the native **`fetch`** API. The base URL is always:
+**Data fetching:** components call the Express backend with the native **`fetch`** API. The base URL is always imported from `src/config/urls.js` — **never read `import.meta.env.VITE_API_BASE_URL` directly**:
 
 ```js
-const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api`;
+import { API_BASE_URL } from "../../config/urls";
 // then: fetch(`${API_BASE_URL}/products?university_id=${uni}&user_id=${uid}`)
 ```
 
-Some pages define `API_BASE_URL` at module top; others inline `import.meta.env.VITE_API_BASE_URL`. Prefer the module-top constant for new code.
+`API_BASE_URL` already includes the `/api` suffix, so append only the route. (`API_ORIGIN` is the same value without `/api`, if you ever need the bare origin.) See §17 for what `urls.js` does and why.
 
 **Realtime:** chat presence / live message updates use the Supabase client (`config/supabaseClient.js`) directly (Supabase Realtime + Presence), not the Express backend.
 
@@ -231,7 +232,7 @@ Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in t
 
 - **OTP is 8 digits** (Supabase-delivered) — size inputs/validation accordingly.
 - **`.env` trailing spaces / trailing `/api`** on `VITE_API_BASE_URL` cause broken requests. The code appends `/api` itself.
-- **`VITE_API_BASE_URL` is empty by default** (dev), so `API_BASE_URL` resolves to a **relative** `/api` that the Vite dev proxy (`vite.config.js`) forwards to the backend. Because it's relative, **never build request URLs with `new URL(...)`** — that constructor requires an absolute URL and throws `Failed to construct 'URL': Invalid URL`. Use plain string concatenation with `fetch` (and `URLSearchParams` for query strings), like the rest of the codebase. This exact bug hid the Marketplace feed once.
+- **`VITE_API_BASE_URL` is empty by default** (dev), so `API_BASE_URL` resolves to a **relative** `/api` that the Vite dev proxy (`vite.config.js`) forwards to the backend. `urls.js` preserves that empty value deliberately. Because it's relative, **never build request URLs with `new URL(...)`** — that constructor requires an absolute URL and throws `Failed to construct 'URL': Invalid URL`. Use plain string concatenation with `fetch` (and `URLSearchParams` for query strings), like the rest of the codebase. This exact bug hid the Marketplace feed once.
 - **Marketplace mobile filter drawer reuses the desktop `SidebarContent`** (`Marketplace.jsx`), so the campus switcher and all filter sections render in both. Toggle drawer-only visibility via `.mobileDrawer .<class>` overrides in `Marketplace.module.css` — don't duplicate the markup.
 - **Demo users** get a persistent orange banner (`App.jsx`) and are auto-cleaned nightly by the backend cron — don't treat demo data as real.
 - **`/feed` and `/hot` routes are placeholder stubs** (community feed + "Hot at campus" not built yet). The `posts` table exists in the DB but there is no backend `posts` module yet — flag before building against it.
@@ -290,3 +291,29 @@ Before ANY UI work, read DESIGN.md fully. Its tokens are canonical — never har
 - Every interactive element: hover + press + focus-visible. Every async surface: skeleton, empty, error, success.
 - Animate transform/opacity only. Respect prefers-reduced-motion.
 - After building a screen: screenshot via Playwright MCP at 1440px and 390px, self-critique, fix, re-verify.
+
+---
+
+## 17. Hosts and base URLs — no hardcoded IPs
+
+Both URLs are resolved **in the visitor's browser**, so a `localhost` or `127.0.0.1` in `.env`
+means "the device holding the page". Open the site from a phone and every request goes to that
+phone's own loopback, where nothing is running. Writing a LAN IP instead just swaps one broken
+case for a value that dies with the next DHCP lease.
+
+- **`src/config/urls.js` is the only place a base URL is resolved.** Import `API_BASE_URL`
+  (origin + `/api`), `API_ORIGIN`, or `SUPABASE_URL` from it. Never read
+  `import.meta.env.VITE_API_BASE_URL` / `VITE_SUPABASE_URL` in a component, and never write a
+  host or IP into one.
+- **The rule, per URL.** Empty → returned as-is, giving relative URLs the Vite proxy forwards
+  (the dev default; keep it). Not `import.meta.env.DEV` → returned unchanged. Hostname is not
+  `localhost` / `127.0.0.1` / `::1` / `10.x` / `192.168.x` / `172.16–31.x` → returned unchanged.
+  Otherwise **only the hostname** is replaced with `window.location.hostname`, preserving
+  protocol, port and path.
+- **Production is untouched**, twice over: the `import.meta.env.DEV` guard is statically false
+  in a build, so Vite strips the whole rewrite path out of the bundle, and hosted URLs
+  (`*.supabase.co`, the Render backend) would fail the private-host test anyway.
+- **`.env` values stay empty in dev** and the variable names are unchanged. The Vite dev server
+  runs with `server.host: true`, so it listens on the LAN and prints a Network URL.
+- The `http://localhost:...` proxy targets in `vite.config.js` are **correct and must stay** —
+  they are resolved by the dev server process on the dev machine, not by the browser.

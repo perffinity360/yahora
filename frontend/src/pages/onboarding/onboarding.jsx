@@ -24,8 +24,8 @@ import { supabase } from "../../config/supabaseClient.js";
 import SmartImage from "../../components/SmartImage/SmartImage.jsx";
 import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar.jsx";
 import { useAuth } from "../../contexts/AuthContext";
+import { API_BASE_URL } from '../../config/urls';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 // AuthContext owns this key; it holds the ACCESS token, which is exactly what
 // the Bearer header needs. Read directly rather than through the context so the
@@ -273,9 +273,9 @@ const Onboarding = () => {
    const fetchAcademicData = async () => {
      try {
        const [coursesRes, specsRes] = await Promise.all([
-         fetch(`${import.meta.env.VITE_API_BASE_URL}/api/academic/courses`),
+         fetch(`${API_BASE_URL}/academic/courses`),
          fetch(
-           `${import.meta.env.VITE_API_BASE_URL}/api/academic/specializations`,
+           `${API_BASE_URL}/academic/specializations`,
          ),
        ]);
 
@@ -333,7 +333,7 @@ const Onboarding = () => {
      const token = localStorage.getItem(SESSION_KEY);
 
      fetch(
-       `${API_BASE}/api/users/username-available?username=${encodeURIComponent(handle)}`,
+       `${API_BASE_URL}/users/username-available?username=${encodeURIComponent(handle)}`,
        // Auth is optional here, but sending it means a student editing their
        // profile sees their own current handle as available, not "taken".
        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
@@ -384,7 +384,7 @@ const Onboarding = () => {
      const token = localStorage.getItem(SESSION_KEY);
 
      fetch(
-       `${API_BASE}/api/users/username-suggestions?name=${encodeURIComponent(name)}`,
+       `${API_BASE_URL}/users/username-suggestions?name=${encodeURIComponent(name)}`,
        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
      )
        .then(async (res) => {
@@ -512,7 +512,7 @@ const Onboarding = () => {
    }
 
    try {
-     const response = await fetch(`${API_BASE}/api/auth/onboarding`, {
+     const response = await fetch(`${API_BASE_URL}/auth/onboarding`, {
        method: "POST",
        headers: {
          "Content-Type": "application/json",

@@ -78,12 +78,47 @@ These files are frozen after Phase 0:
   your own module's `*.routes.js`, never in `app.js`.
 - All errors go through `sendError` / `mapDbError` from `utils/respond.js`. All paginated
   lists go through `sendPage`. Do not hand-roll an error shape or a pagination envelope.
-- The one Supabase client is `config/supabase.js`. Do not call `createClient` anywhere else.
+- All Supabase clients live in `config/supabase.js`. Do not call `createClient` anywhere else.
+  There are three, and picking the wrong one is a silent security bug: **`supabase`** (service
+  role) for everything normal; **`createSessionClient()`** for the two calls that mint a session,
+  so they cannot demote the shared client; **`supabaseAnon`** for `signInWithOtp`, because GoTrue
+  exempts service-role callers from CAPTCHA and minting an OTP on the service-role client makes
+  Turnstile decorative.
 - Notifications are emitted with `notify()` from `utils/notify.js`, wrapped so a failed
   notification never breaks the action that triggered it.
 
 If you genuinely need a change to one of these, **message Vishwajeet.** Do not edit and do not
 work around it.
+
+---
+
+## Networking: no hardcoded LAN IPs, ever
+
+A LAN IP written into a file is a DHCP lease waiting to expire. When the router hands this Mac
+a new address, every call fails with `ConnectTimeoutError` and then `EHOSTDOWN`, and
+`/api/auth/request-otp` returns 500 — a failure that reads as "Supabase is down" and costs an
+hour. This already happened once, with `SUPABASE_URL` pinned to a dead lease.
+
+- **The backend always talks to local Supabase over `http://127.0.0.1:54321`.** The Express
+  server and Supabase run on the same machine, so a LAN address here buys nothing and breaks
+  on every network change. In production `SUPABASE_URL` is the hosted
+  `https://<project>.supabase.co` origin.
+- **The server binds `0.0.0.0`** (`HOST` overrides, `PORT` stays configurable) so phones and a
+  second laptop on the same Wi-Fi can reach port 5000. On boot it prints the current LAN
+  address as a convenience line — read it off the log, never write it down.
+- **Clients resolve the dev host themselves.** The Expo app derives it from the Expo dev server
+  (`mobile/src/lib/config.ts`); the web app uses the Vite `/supabase` and `/api` proxies. Neither
+  needs an IP pasted into a config file, so nobody edits a file when the network changes.
+- **CORS branches on `NODE_ENV`.** In development any `localhost` / `127.0.0.1` / RFC-1918
+  origin is accepted on any port. Production behaviour is unchanged. `allowedHeaders` must keep
+  listing `X-Device-Id` — the OTP rate limiter sends it, and it is not a CORS-safelisted header,
+  so dropping it fails every preflight.
+
+⚠ **A production deploy must set `NODE_ENV=production`.** Without it the server applies the
+development origin rules and rejects the hosted frontend's origin.
+
+If you find a hardcoded `10.x`, `192.168.x` or `172.16–31.x` anywhere under `backend/`, it is a
+bug — replace it with loopback or with runtime resolution.
 
 ---
 

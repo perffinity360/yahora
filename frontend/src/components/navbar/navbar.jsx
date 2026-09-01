@@ -5,6 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import styles from "./navbar.module.css";
 import { supabase } from "../../config/supabaseClient";
 import SmartImage from "../SmartImage/SmartImage";
+import { API_BASE_URL } from '../../config/urls';
 
 // Broadcast this after the user changes their profile photo / name so the
 // navbar (mounted since login) re-fetches instead of showing stale initials
@@ -146,7 +147,7 @@ function Navbar() {
       if (userId && token) {
         try {
           const res = await fetch(
-            `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/dashboard`,
+            `${API_BASE_URL}/user/${userId}/dashboard`,
             { headers: { Authorization: `Bearer ${token}` } },
           );
           if (res.ok) {
@@ -188,7 +189,7 @@ function Navbar() {
     // than erroring, so the badge would just never update.
     if (!sessionReady) return;
 
-    fetch(`${import.meta.env.VITE_API_BASE_URL}/api/messages/deliver`, {
+    fetch(`${API_BASE_URL}/messages/deliver`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId }),
@@ -232,7 +233,7 @@ function Navbar() {
         },
         () => {
           setUnreadCount((prev) => prev + 1);
-          fetch(`${import.meta.env.VITE_API_BASE_URL}/api/messages/deliver`, {
+          fetch(`${API_BASE_URL}/messages/deliver`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userId }),
