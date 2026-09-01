@@ -92,7 +92,9 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `INVALID_CREDENTIALS` | 400 | `POST /api/auth/login-password` — **the only failure code this endpoint ever returns.** Wrong password, unknown username, unknown email and an account with no password are byte-identical, deliberately. Never branch a UI on the reason; there isn't one | `message` (always the same sentence) |
 | `TOO_MANY_ATTEMPTS` | 429 | `POST /api/auth/login-password` — 10 failed attempts for one identifier inside 15 minutes. Also sent as a `Retry-After` header | `retry_after_seconds`, `message` |
 | `INVALID_CURRENT_PASSWORD` | 401 | `POST /api/auth/set-password` — `current_password` did not verify. Distinct from `INVALID_CREDENTIALS` on purpose: the caller is already authenticated, so there is no account to enumerate | `message` |
-| `RATE_LIMITED` | 429 | §1.5 — the 30-day username-change window, checked in JS | `next_allowed_at` |
+| `RATE_LIMITED` | 429 | Two unrelated sources. §1.5 — the 30-day username-change window, checked in JS. **Live.** `POST /api/auth/request-otp` — any of the three OTP limits (60s email cooldown, 10/day per email, 20/day per device), **or** Supabase's own per-address send cooldown (§limit e). They deliberately share one code; the client shows one countdown and does not need to know which fired | `next_allowed_at` (§1.5) **or** `retry_after_seconds`, `message` (request-otp) — never both |
+| `CAPTCHA_FAILED` | 400 | **Live.** `POST /api/auth/request-otp` — Supabase rejected the Turnstile token, or could not reach Cloudflare. Only reachable once CAPTCHA protection is enabled on the Supabase project; before that a token is ignored and its absence is fine. Retryable at once — reset the widget, do not show a countdown | `message` |
+| `SERVICE_BUSY` | 503 | **Live.** `POST /api/auth/request-otp` — the global circuit breaker: more than 2,000 OTP requests platform-wide in the last hour. Not the caller's fault and not tied to their identity. No `retry_after_seconds`, because we genuinely do not know when it clears | `message` |
 | `CANNOT_FOLLOW_SELF` | 400 | `CHECK no_self_follow` | — |
 | `BLOCKED` | 403 | Trigger `trg_prepare_follow` | — |
 | `PRIVATE_ACCOUNT` | 403 | `can_view_social_content()` returned false | — |
@@ -146,12 +148,24 @@ routes `23505`/`23503` through `mapDbError`. The rest of Part 1 still hand-rolls
 middleware (e.g. multer rejecting a 6th file) falls through to Express's default handler,
 which responds with an **HTML** body, not JSON.
 
-**CORS** is `cors()` with no options: all origins, all the time.
+**CORS** branches on `NODE_ENV`.
+
+- **Production** (`NODE_ENV === 'production'`): all origins, all the time —
+  `Access-Control-Allow-Origin: *`. Unchanged from the previous bare `cors()`.
+- **Development** (anything else): only origins whose hostname is `localhost`,
+  `127.0.0.1`, `::1`, or in a private range (`10.x`, `192.168.x`, `172.16–31.x`),
+  on any port. The origin is reflected rather than `*`. Anything else is refused
+  the CORS headers.
+
+`allowedHeaders` is `Content-Type, Authorization, X-Device-Id` in **both**
+environments. `X-Device-Id` is not a CORS-safelisted header, so without it every
+`POST /api/auth/request-otp` preflight from a browser fails.
 
 **Pagination does not exist.** No route accepts `limit`, `offset`, or `cursor`. Feeds, chat
 histories, and comment lists return every matching row.
 
-**Base URL** is the server root; `PORT` defaults to `5000`. Routers mount at `/api/auth`,
+**Base URL** is the server root; `PORT` defaults to `5000` and the server binds `0.0.0.0`
+(override with `HOST`), so it is reachable over the LAN as well as on loopback. Routers mount at `/api/auth`,
 `/api/academic`, `/api/universities`, `/api/user`, `/api/products`, `/api/messages`.
 
 **Recurring row shapes** referenced below by name:
@@ -303,20 +317,112 @@ response is `text/html`, **not** JSON.
 **Module:** auth
 **Auth:** none
 **Content-Type:** application/json
+**Headers:**
+  - `X-Device-Id`: string, **optional** — an opaque id the client generates once and stores.
+    Accepted only if it matches `/^[A-Za-z0-9-]{1,64}$/` (a UUID qualifies); anything else is
+    treated exactly as if the header were absent. **A missing header is never an error** — the
+    mobile app does not send one and is unaffected. Its only effect is to opt the caller into
+    the per-device cap below. Sending it is in the client's own interest: without it, a shared
+    campus device has no separate quota.
 **Body:**
   - email: string, required
+  - captchaToken: string, **optional** — a Cloudflare Turnstile token from the widget on the
+    login page. Forwarded verbatim to Supabase and **never validated here**; a value that is
+    absent, empty, whitespace, or not a string is passed on as `undefined`. **A missing token
+    is never an error on our side** — Supabase decides, and only once CAPTCHA protection is
+    enabled for the project. Until then a token is accepted and ignored, and a request without
+    one succeeds. That is what lets the code deploy before the dashboard setting is flipped,
+    in either order, with no window where logins break.
 **200:** `{ "message": "OTP sent successfully!", "university": "string" }` — `university` is
 the university **name**, not its id.
 **400:** `{ "error": "Email is required" }`
 **400:** `{ "error": "Invalid email format" }` — when `email.split('@')[1]` is falsy (no `@`,
 or nothing after it).
+**400:** `{ "error": "CAPTCHA_FAILED", "message": "We could not verify that you are a real
+visitor. Please reload the page and try again." }` — Supabase rejected the Turnstile token
+(missing, invalid, expired, already used) or could not reach Cloudflare. Matched on GoTrue's
+`captcha_failed` error code, with a message match on *captcha* as a fallback for older builds.
+Checked **before** the 429 branch, so a captcha failure is never reported as a rate limit.
+
+
+The OTP is minted on the **anon-key** client (`supabaseAnon`), not the service-role one. GoTrue
+exempts service-role callers from captcha entirely, so on the service-role client the token was
+forwarded and then ignored, and enabling CAPTCHA protection had no effect at all. Verified
+2026-09-01 — see `docs/CHANGELOG.md` Handoff A. Every limit in the table below still runs on the
+service-role client, and all of them run first. The client should reset the
+widget and let the student retry **immediately** — there is no cooldown to wait out.
 **403:** `{ "error": "Unauthorized Domain. Yahora is not yet available at your university." }`
-**500:** `{ "error": "Internal server error while sending OTP." }`
-**Notes:** Gate order is domain-first: the address must match a `universities.domain` row
-before Supabase is asked to mail anything. Calls `supabase.auth.signInWithOtp` with
-`shouldCreateUser: true`, so a valid-domain address is created in `auth.users` on first
-request. Supabase's own rate limit surfaces as a **500**, not a 429 — a client that retries
-on 500 will keep hitting it. The 403 discloses whether a campus is onboarded.
+**429:** `{ "error": "RATE_LIMITED", "retry_after_seconds": 42, "message": "Too many code requests. Please try again shortly." }`
+  — also sets a `Retry-After` header with the same number of seconds. Fired by any of the
+  three limits in the table below; the response does not say which, on purpose.
+**500:** `{ "error": "INTERNAL_ERROR" }` — `mapDbError` fallback when the `otp_requests`
+  ledger cannot be read. The limiter **fails closed**, same as `login-password`.
+**500:** `{ "error": "Internal server error while sending OTP." }` — the pre-existing catch-all.
+**503:** `{ "error": "SERVICE_BUSY", "message": "We are temporarily unable to send login codes. Please try again in a few minutes." }`
+  — the circuit breaker. No `retry_after_seconds`. Clients should show a "try again later"
+  message, **not** a countdown, and must not retry automatically.
+
+**Rate limits.** All four checks run before `signInWithOtp`, so a blocked request sends no
+email and creates no `auth.users` row. Rolling windows throughout — never calendar days.
+
+| # | Limit | Counted over | Threshold | Response |
+|---|---|---|---|---|
+| a | Circuit breaker | **all** rows, last 1 hour | 2,000 | `503 SERVICE_BUSY` |
+| b | Email cooldown | one email, last 24h | from the 4th request, 60s since the last | `429 RATE_LIMITED` |
+| c | Email daily cap | one email, last 24h | 10 | `429 RATE_LIMITED` |
+| d | Device daily cap | one `X-Device-Id`, last 24h | 20 | `429 RATE_LIMITED` |
+| e | **Supabase's own cooldown** | one email address, enforced by GoTrue | `[auth.email] max_frequency` | `429 RATE_LIMITED` |
+
+`retry_after_seconds` is computed from the oldest request that still counts against the limit —
+the moment a slot actually frees — so it is an honest countdown, not a flat window length.
+
+**Limit (e) is not ours.** GoTrue enforces a minimum gap between two emails to the same address
+and answers `429 over_email_send_rate_limit`. It fires *inside* `signInWithOtp`, after a–d have
+passed, so it writes no `otp_requests` row and does not move our counters. It is mapped to the
+same `429 RATE_LIMITED` shape rather than surfaced as a 500; `retry_after_seconds` is parsed out
+of GoTrue's message, clamped to 1–60, and falls back to 60 if the wording changes.
+
+Because (e) is per-address and (b) allows three requests before its cooldown, **(e) is the
+binding constraint whenever it is set longer than the gap between requests.** Note `"0s"` does
+not disable it — GoTrue reads zero as unset and applies its own 60s default.
+
+**Measured values (2026-09-01, via the Management API):**
+
+| | production | local `config.toml` |
+|---|---|---|
+| `smtp_max_frequency` / `max_frequency` | **1s** | `1ms` |
+| `rate_limit_email_sent` / `email_sent` | **30/hour** | `100/hour` |
+
+So (b) **does** engage in production for human-paced retries — a student clicking "resend" is
+seconds apart, well outside a 1s gap, and the 4th request inside a minute gets our `RATE_LIMITED`.
+(e) only intercepts sub-second bursts. A *scripted* burst like Block D step 4 fires four requests
+in tens of milliseconds, so against production it returns `200, 429, 429, 429` rather than the
+runbook's `200, 200, 200, 429` — that test is a **local-only** validation of limits b–d, which is
+why local `max_frequency` is `1ms`.
+
+⚠ **The hourly email cap, not the circuit breaker, is the real ceiling in production.**
+`OTP_HOURLY_CEILING` is 2,000/hour, but Supabase stops sending at **30/hour** project-wide, so
+limit (a) can never fire — the 31st OTP in any hour fails at Supabase instead, with a 429 whose
+message carries no seconds, so `retry_after_seconds` falls back to 60 and understates a wait that
+may be up to an hour. Raise `rate_limit_email_sent` to match the SMTP plan (Brevo) and set
+`OTP_HOURLY_CEILING` just below it, so our own `503 SERVICE_BUSY` fires first, as designed.
+
+**No limit counts by IP address, and none ever will.** Campus Wi-Fi NATs a whole college behind
+one address, so an IP limit would lock out every student after the first twenty each morning.
+`req.ip` is recorded in `otp_requests` for after-the-fact analysis and is never read by a
+limiter. See runbook 2.2.
+
+**Notes:** Gate order is limits-first, then domain: the four checks above run before the
+`universities` lookup, so a flood costs one indexed count rather than a domain query per
+request. A request with an unknown domain still 403s and, because the ledger row is only
+written after Supabase accepts, never accumulates a count of its own. Calls
+`supabase.auth.signInWithOtp` with `shouldCreateUser: true`, so a valid-domain address is
+created in `auth.users` on first request — `cleanup_unverified_users()` (hourly cron) deletes
+those again after 24h if the code is never verified. Supabase's own rate limit still surfaces
+as a **500**, not a 429 — a client that retries on 500 will keep hitting it. The 403 discloses
+whether a campus is onboarded. A successful send is recorded in `otp_requests`; if that insert
+fails it is logged and the caller still gets the 200, because a failed audit write must not
+break a login.
 
 ### POST /api/auth/verify-otp
 **Module:** auth

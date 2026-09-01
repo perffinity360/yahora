@@ -23,5 +23,61 @@ export const startCronJobs = () => {
         }
     });
 
+    // ─── Unverified account cleanup (CC-3, runbook 2.3) ─────────────────────
+    //
+    // Hourly, because this is the job that actually stops fake accounts and
+    // the rate limits only slow them down.
+    //
+    // The mechanism is worth knowing: signInWithOtp({ shouldCreateUser: true })
+    // in requestOtp creates the auth.users row THE MOMENT THE CODE IS
+    // REQUESTED, not when it is verified. So a script hitting request-otp with
+    // invented addresses leaves an account behind for every one of them, and
+    // not one of those people ever received a code. This deletes every
+    // auth.users row that never confirmed and is over 24 hours old;
+    // public.users cascades away with it.
+    //
+    // ⚠️ The 24 hours lives in migration 008, not here. Do not "make this more
+    // aggressive" by running it more often — the frequency is how quickly junk
+    // is noticed, the 24h window is what protects the student who requested a
+    // code at 6pm and came back after dinner.
+    cron.schedule('0 * * * *', async () => {
+        console.log('🧹 [CRON] Starting unverified account cleanup...');
+
+        try {
+            // Trigger the secure RPC function in Supabase
+            const { data, error } = await supabase.rpc('cleanup_unverified_users');
+
+            if (error) throw error;
+
+            console.log(`✅ [CRON] Unverified account cleanup completed. Deleted ${data ?? 0} account(s).`);
+        } catch (error) {
+            console.error('❌ [CRON] Unverified account cleanup failed:', error.message);
+        }
+    });
+
+    // ─── OTP ledger pruning (CC-3) ──────────────────────────────────────────
+    //
+    // Housekeeping, not security. The widest window any limiter in requestOtp
+    // asks about is 24 hours and the circuit breaker only looks back one, so
+    // rows past 7 days are dead weight that make the three indexes on
+    // otp_requests bigger and every rate-limit check slower.
+    //
+    // Runs 15 minutes after the demo cleanup rather than alongside it, so two
+    // bulk deletes are not competing for the same connection at midnight.
+    cron.schedule('15 0 * * *', async () => {
+        console.log('🧹 [CRON] Starting OTP request ledger cleanup...');
+
+        try {
+            // Trigger the secure RPC function in Supabase
+            const { data, error } = await supabase.rpc('cleanup_otp_requests');
+
+            if (error) throw error;
+
+            console.log(`✅ [CRON] OTP ledger cleanup completed. Deleted ${data ?? 0} row(s).`);
+        } catch (error) {
+            console.error('❌ [CRON] OTP ledger cleanup failed:', error.message);
+        }
+    });
+
     console.log('⏰ Cron jobs initialized.');
 };

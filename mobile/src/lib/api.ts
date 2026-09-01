@@ -1,32 +1,5 @@
-import { getDevHost } from './devHost';
+import { API_BASE_URL } from './config';
 import { supabase } from './supabase';
-
-const API_PORT = (process.env.EXPO_PUBLIC_API_PORT ?? '5000').trim();
-
-/**
- * Resolve the backend base URL.
- *
- * Priority:
- *  1. EXPO_PUBLIC_API_URL when set — used verbatim. Required for
- *     production/staging builds, where there is no Metro dev server to infer a
- *     host from.
- *  2. Otherwise (local dev) derive the host from the Expo dev server URI. The
- *     machine running Metro is the same one running the backend, so we reuse its
- *     LAN IP and just swap in the backend port. A changing Wi-Fi IP then "just
- *     works" with no manual .env edits.
- */
-function resolveApiUrl(): string {
-  const explicit = (process.env.EXPO_PUBLIC_API_URL ?? '').trim().replace(/\/+$/, '');
-  if (explicit) return explicit;
-
-  // e.g. "192.168.1.10:8081" — take the host, swap in the backend port.
-  const host = getDevHost();
-  if (host) return `http://${host}:${API_PORT}`;
-
-  return '';
-}
-
-const API_URL = resolveApiUrl();
 
 async function request<T>(path: string, init: RequestInit, json = true): Promise<T> {
   const { data } = await supabase.auth.getSession();
@@ -34,7 +7,7 @@ async function request<T>(path: string, init: RequestInit, json = true): Promise
     ? { Authorization: `Bearer ${data.session.access_token}` }
     : {};
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       // Multipart bodies must NOT get an explicit Content-Type — fetch has to

@@ -5,6 +5,7 @@ import styles from "./Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import SmartImage from "../../components/SmartImage/SmartImage";
 import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar";
+import { API_BASE_URL } from '../../config/urls';
 
 /* ─────────────────────────────────────────────
  CONSTANTS
@@ -441,7 +442,7 @@ export default function Dashboard() {
      if (!userId || !token) return;
 
      const res = await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/avatar`,
+       `${API_BASE_URL}/user/${userId}/avatar`,
        {
          method: "POST",
          headers: { Authorization: `Bearer ${token}` },
@@ -480,7 +481,7 @@ export default function Dashboard() {
        }
 
        const res = await fetch(
-         `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/dashboard`,
+         `${API_BASE_URL}/user/${userId}/dashboard`,
          {
            headers: { Authorization: `Bearer ${token}` },
          },
@@ -571,7 +572,7 @@ export default function Dashboard() {
      const token = localStorage.getItem("yahora_session");
      if (!userId || !token) return;
      await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/profile`,
+       `${API_BASE_URL}/user/${userId}/profile`,
        {
          method: "PUT",
          headers: {
@@ -600,7 +601,7 @@ export default function Dashboard() {
      const userId = localStorage.getItem("yahora_user_id");
      const token = localStorage.getItem("yahora_session");
      await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/user/${userId}/profile`,
+       `${API_BASE_URL}/user/${userId}/profile`,
        {
          method: "PUT",
          headers: {
@@ -624,7 +625,7 @@ export default function Dashboard() {
    try {
      const userId = localStorage.getItem("yahora_user_id");
      const res = await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/messages/inbox/${userId}`,
+       `${API_BASE_URL}/messages/inbox/${userId}`,
      );
      const result = await res.json();
 
@@ -659,7 +660,7 @@ export default function Dashboard() {
    try {
      const token = localStorage.getItem("yahora_session");
      await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/sold`,
+       `${API_BASE_URL}/products/${productId}/sold`,
        {
          method: "POST",
          headers: {
@@ -686,7 +687,7 @@ export default function Dashboard() {
    try {
      const token = localStorage.getItem("yahora_session");
      await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/available`,
+       `${API_BASE_URL}/products/${productId}/available`,
        {
          method: "POST",
          headers: {
@@ -722,7 +723,7 @@ export default function Dashboard() {
      const token = localStorage.getItem("yahora_session");
 
      const res = await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/like`,
+       `${API_BASE_URL}/products/${productId}/like`,
        {
          method: "POST",
          headers: {
@@ -767,7 +768,7 @@ export default function Dashboard() {
      const token = localStorage.getItem("yahora_session");
 
      const res = await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/products/${productId}/save`,
+       `${API_BASE_URL}/products/${productId}/save`,
        {
          method: "POST",
          headers: {
@@ -802,7 +803,7 @@ export default function Dashboard() {
    try {
      const token = localStorage.getItem("yahora_session");
      const res = await fetch(
-       `${import.meta.env.VITE_API_BASE_URL}/api/products/${itemToDelete}`,
+       `${API_BASE_URL}/products/${itemToDelete}`,
        {
          method: "DELETE",
          headers: { Authorization: `Bearer ${token}` },

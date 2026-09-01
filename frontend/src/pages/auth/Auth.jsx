@@ -12,6 +12,7 @@ import {
 import UniversityModal from "../../components/modal/UniversityModal";
 import { useAuth } from "../../contexts/AuthContext";
 import styles from "./Auth.module.css";
+import { API_BASE_URL } from '../../config/urls';
 
 // Persisted across in-tab reloads so that opening the mail app on mobile to
 // fetch the OTP — which can drop the page from memory and reload it on return —
@@ -169,7 +170,7 @@ const Auth = () => {
     setMessage("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/auth/request-otp`,
+        `${API_BASE_URL}/auth/request-otp`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -198,7 +199,7 @@ const Auth = () => {
     setMessage("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/auth/verify-otp`,
+        `${API_BASE_URL}/auth/verify-otp`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -226,7 +227,7 @@ const Auth = () => {
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/auth/login-password`,
+        `${API_BASE_URL}/auth/login-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -265,7 +266,7 @@ const Auth = () => {
     setMessage("");
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/auth/demo-login`,
+        `${API_BASE_URL}/auth/demo-login`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

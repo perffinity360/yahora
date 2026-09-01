@@ -32,7 +32,7 @@ app/                      Expo Router routes (each file = one screen)
   sell.tsx                create listing
 src/
   theme/                  colors, spacing, typography tokens
-  lib/                    supabase.ts (client) · api.ts (fetch wrapper + base URL)
+  lib/                    config.ts (resolved base URLs) · supabase.ts (client) · api.ts (fetch wrapper)
   contexts/               AuthContext.tsx (session, current user, university_id)
   hooks/                  TanStack Query hooks (useProducts, useInbox, …)
   components/             reusable UI (ProductCard, skeleton loaders, …)
@@ -52,9 +52,8 @@ src/
   (slow-network UX is a core product goal).
 
 ## Backend (shared with the web app — already built)
-- Base URLs come from env, never hardcoded:
-  `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-  (these get set up in the data-layer phase).
+- Base URLs come from `src/lib/config.ts`, never hardcoded — see
+  "Networking: no hardcoded LAN IPs" below.
 - Existing endpoints:
   - Auth: POST `/api/auth/request-otp` · `/verify-otp` · `/onboarding` · `/demo-login`
   - Products: GET `/api/products?university_id=&user_id=` · GET `/api/products/:id` ·
@@ -63,6 +62,30 @@ src/
   - Universities: GET `/api/universities` · Academic: GET `/api/academic/courses` · `/specializations`
 - Supabase is used directly (anon key) for realtime messages/presence and the auth
   session, exactly like the web app.
+
+## Networking: no hardcoded LAN IPs, ever
+
+A LAN IP in a config file is a DHCP lease waiting to expire. When the router hands
+the Mac a new address every request fails with a network error that looks exactly
+like the backend being down. It has already cost an hour once. So:
+
+- **`src/lib/config.ts` is the only place a base URL is resolved.** Import
+  `API_BASE_URL` / `SUPABASE_URL` from it. Never write a host into a screen, a
+  hook, or `.env`.
+- **Resolution order.** If `EXPO_PUBLIC_API_URL` (or `EXPO_PUBLIC_SUPABASE_URL`)
+  is set it is used verbatim — that is how production and EAS builds work.
+  Otherwise, in dev, the host is read from `Constants.expoConfig?.hostUri`,
+  falling back to `Constants.expoGoConfig?.debuggerHost`; the port is stripped
+  and replaced with **5000** for the API and **54321** for Supabase. The machine
+  running Metro is the machine running everything else.
+- **No localhost fallback.** If neither source yields a host, `config.ts` throws
+  a readable error telling you to set `EXPO_PUBLIC_API_URL`. Falling back to
+  `127.0.0.1` would mean *the phone itself*, which fails confusingly.
+- **`mobile/.env` holds no URLs in local dev** — only the anon key. Leave both
+  URL vars commented out. `EXPO_PUBLIC_*` values are inlined at bundle time, so
+  after changing one restart Metro with `npx expo start -c`.
+- The backend is reachable on the LAN because it binds `0.0.0.0`, and its dev
+  CORS accepts any private-range origin. It prints its own LAN address on boot.
 
 ## Workflow
 - After changes: run `npx tsc --noEmit` (types) and `npx expo start` (bundles/runs).
@@ -103,8 +126,9 @@ mobile/
   src/
     theme/index.ts                  color, spacing, radius, font tokens (+ conditionColors, swipeLike/swipePass)
     lib/
-      api.ts                        fetch wrapper + base URL (trims + strips trailing slash)
-      supabase.ts                   Supabase client (AsyncStorage session)
+      config.ts                     THE base-URL resolver: API_BASE_URL + SUPABASE_URL
+      api.ts                        fetch wrapper (base URL from config.ts)
+      supabase.ts                   Supabase client (AsyncStorage session; URL from config.ts)
       upload.ts                     toUploadFile(): FormData file part with .bytes() for Winter fetch
       marketplace.ts                filter/sort constants + isWithinPostingDate + formatRupees
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped

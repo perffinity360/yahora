@@ -80,6 +80,241 @@ shape mid-implementation, the other person's client is already written against t
 
 ## Entries
 
+## 2026-09-01 — HANDOFF A: Turnstile local setup + a finding that breaks Block E (Vishwajeet)
+
+### For Neeraj — the keys you need (N-Block C)
+
+Use **Cloudflare's dummy sitekey for local development**, not the real one:
+
+| | value |
+|---|---|
+| local sitekey (`.env` / `.env.example`) | `1x00000000000000000000AA` — always passes |
+| production sitekey | the real one; ask me |
+
+**Dummy and real keys must be paired.** My local Supabase runs Cloudflare's dummy *secret*, and
+a real sitekey checked against a dummy secret is rejected every time — and vice versa. If local
+login starts failing for no visible reason, that mismatch is the first thing to check.
+
+Send the token to the backend as **`captchaToken`** in the `POST /api/auth/request-otp` body.
+It is optional today: omit it and the request still succeeds. On failure you get
+`400 {"error":"CAPTCHA_FAILED", "message": ...}` — reset the widget and let the student retry
+**immediately**; there is no cooldown, so do not show a countdown. See `API.md` §request-otp.
+
+### Local setup (done, my side)
+- Root `.env` (gitignored) holds `TURNSTILE_SECRET_KEY_LOCAL` = the dummy "always passes"
+  secret. The "always fails" key is in there commented out, for testing rejection.
+- `supabase/config.toml` gained `[auth.captcha]` with `provider = "turnstile"` and
+  `secret = "env(TURNSTILE_SECRET_KEY_LOCAL)"`. Needs `supabase stop && supabase start`.
+- ⚠ Still never `supabase config push` — it would push these test values over production.
+
+### 🚨 The finding: enabling Turnstile does NOT currently protect request-otp
+
+Measured against local GoTrue with captcha enabled — same endpoint, same body, only the key
+differs:
+
+    ANON key,         no captcha token  ->  400 captcha_failed
+    SERVICE_ROLE key, no captcha token  ->  200
+
+**GoTrue exempts service-role callers from captcha.** Our backend authenticates to Supabase with
+`SUPABASE_SERVICE_ROLE_KEY` (`config/supabase.js:19`) for every auth call, so the captcha is
+skipped on `request-otp`, `login-password`, `demo-login` and `set-password` alike.
+
+Consequences:
+- **Nothing is broken.** Turnstile being enabled on production changed no behaviour at all, in
+  either direction. There is no outage to chase.
+- **Nothing is protected either.** The flooding attack in runbook 2.4 still works exactly as
+  before, because it goes through our backend, which holds the service-role key.
+- Block E4's second check ("the DevTools script should now fail") **will not fail.** That is the
+  symptom, not a mistake in the test.
+
+The token our backend forwards is accepted and then ignored. The four CC-3 limits and the
+circuit breaker are unaffected and still work — they are ours, and run before Supabase.
+
+### The fix — APPLIED and verified
+
+`config/supabase.js` now exports a third client, **`supabaseAnon`** (anon key, same options as
+the others), and `requestOtp` mints the OTP on it instead of the service-role client. That is
+what a browser does and what GoTrue expects to police. The Turnstile secret still never enters
+this repo — only the anon key, which was already in `backend/.env`.
+
+`SUPABASE_ANON_KEY` is now **required at boot**: it joins the existing startup check, so a
+deployment missing it fails loudly instead of breaking OTP at runtime. Both `backend/.env` and
+`.env.production.local` already have it.
+
+Nothing else moved. The four CC-3 limits, the circuit breaker and the `otp_requests` ledger all
+still run on the service-role client, and all run before the Supabase call.
+
+Verified locally with captcha enabled:
+
+| check | result |
+|---|---|
+| `request-otp` with **no** token | `400 CAPTCHA_FAILED` ← the attack is now refused |
+| `request-otp` with a token | `200`, real email delivered (confirmed in Mailpit) |
+| unknown domain + valid token | `403` — still checked before the captcha |
+| 4 requests, same email, valid token | `200, 200, 200, 429 RATE_LIMITED` — limits intact |
+| `demo-login` | `200` — untouched, still service-role |
+| ledger after a rejected captcha | no row — a blocked request costs the student no quota |
+
+**Block E4's second check now passes**: the tokenless DevTools script from Block D returns
+`400 CAPTCHA_FAILED` instead of sending an OTP.
+
+
+## 2026-09-01 — request-otp: Supabase's own cooldown was surfacing as a 500 (Vishwajeet)
+
+### Symptom
+Block D step 4 gave `200, 500, 500, 500` instead of `200, 200, 200, 429`. Backend log:
+`AuthApiError ... status: 429, code: 'over_email_send_rate_limit'`.
+
+### Cause — not the hosted free tier
+Local GoTrue. Reproduced with the backend out of the loop by calling
+`http://127.0.0.1:54321/auth/v1/otp` directly: call 1 → 200, calls 2 and 3 → 429.
+`supabase/config.toml` had the CLI default `[auth.email] max_frequency = "1s"`, the minimum gap
+between two emails to the same address. The test's four `await`ed requests complete in tens of
+milliseconds, so 2–4 all landed inside that window.
+
+Two consequences, both now fixed:
+1. `requestOtp` ended in a catch-all that turned any thrown error into `500 Internal server
+   error while sending OTP`, so a rate limit was reported as a server fault.
+2. Our own limiter never ran. The `otp_requests` ledger row is written only *after*
+   `signInWithOtp` succeeds, so requests 2–4 left no rows — the ledger held exactly one row for
+   the whole burst, and the counter could never have reached the threshold.
+
+### Changed
+- **`backend/src/modules/auth/auth.controller.js`** — a 429 from Supabase now returns the
+  existing `sendRateLimited()` shape instead of falling through to the 500. New
+  `supabaseRetryAfterSeconds()` parses the seconds out of GoTrue's message (it exposes them
+  nowhere machine-readable), clamps to 1–60, and falls back to 60. **No limit, threshold,
+  window or counting rule changed** — only the mapping of an error that was already happening.
+- **`supabase/config.toml`** — `[auth.email] max_frequency` is now `"1ms"` for local dev.
+  ⚠ `"0s"` does NOT disable this: GoTrue reads zero as unset and applies its own **60s** default,
+  which is stricter than the value being replaced. I tried it, measured it, and backed it out.
+  Requires `supabase stop && supabase start` to take effect.
+- `backend/API.md` — the OTP limits table gains row (e) for Supabase's cooldown, and the
+  `RATE_LIMITED` row notes the extra source.
+
+### Production values — checked, and one is a launch blocker
+Read from the Management API on 2026-09-01. Full table in `API.md` §request-otp.
+
+- `smtp_max_frequency` = **1s** (not 60s). So limit (b) **does** engage in production for
+  human-paced retries. The Block D result stands. (e) only intercepts sub-second bursts, so the
+  *scripted* burst returns `200,429,429,429` against production — that test is local-only.
+- 🚨 `rate_limit_email_sent` = **30 per hour, project-wide.** `OTP_HOURLY_CEILING` is 2,000, so
+  **limit (a) can never fire** — Supabase stops sending at the 31st OTP in any hour. The runbook's
+  premise ("a few hundred genuine OTPs in the busiest hour") is not currently achievable. SMTP is
+  custom (Brevo), so the fix is to raise this to whatever that plan sustains and set
+  `OTP_HOURLY_CEILING` just below it, so our own `503 SERVICE_BUSY` fires first as designed.
+  **Not changed — needs a decision on the Brevo plan first.** Brevo is on the free tier
+  (300/day), so the sizing decision is deferred to launch. Written up in
+  **`docs/PRE_LAUNCH_CHECKLIST.md`** — read that before launch; it also warns against
+  `supabase config push`, which would overwrite production auth config with our local test
+  values.
+- Everything else (OTP length 8, expiry 3600, the five /5min and /hour limits) matches local.
+
+### Test data
+I cleared 5 rows from the local `otp_requests` ledger — `ratetest@iiitk.ac.in` (2, from the
+failed run) and `blockdverify@iiitk.ac.in` (3, from my verification) — so a verbatim re-run of
+Block D step 4 starts clean. Both are synthetic addresses; no real data touched. The
+`auth.users` rows those requests created are still there.
+
+### Verified
+`200, 200, 200, 429 RATE_LIMITED retry_after_seconds:60`, zero stack traces in the backend log.
+
+
+## 2026-09-01 — Web: base URLs resolved at runtime, no hardcoded hosts (Vishwajeet, in Neeraj's area)
+
+### ⚠ Ownership
+I edited **`frontend/`, which is Neeraj's**, at Vishwajeet's explicit request, as the web half
+of the same networking fix. Nothing was refactored beyond base-URL plumbing. Neeraj: read this
+before your next pull — 12 files changed, all of them mechanically.
+
+### Why
+Same root cause as the backend entry below: hosts resolved in the visitor's browser cannot be
+written down. A `localhost` in `.env` means "the phone", and a LAN IP dies with the DHCP lease.
+
+### New
+- **`frontend/src/config/urls.js`** — the single resolver. Exports `API_BASE_URL`
+  (origin + `/api`), `API_ORIGIN`, and `SUPABASE_URL`.
+- Rule per URL: empty → unchanged (relative, via the Vite proxy — the dev default);
+  `!import.meta.env.DEV` → unchanged; hostname not `localhost`/`127.0.0.1`/`::1`/`10.x`/
+  `192.168.x`/`172.16–31.x` → unchanged; otherwise **only the hostname** is replaced with
+  `window.location.hostname`, keeping protocol, port and path. A page served from
+  `http://10.37.66.39:3000` turns `http://localhost:5000` into `http://10.37.66.39:5000` itself.
+
+### Changed — mechanical, no behaviour change
+- Every direct `import.meta.env.VITE_API_BASE_URL` read (30 call sites across `navbar`,
+  `UniversityModal`, `Auth`, `Home`, `Sell`, `Dashboard`, `Marketplace`, `Messages`,
+  `ProductDetail`, `PublicProfile`, `onboarding`) now imports `API_BASE_URL` from
+  `config/urls`. The four module-level `const API_BASE_URL = ...` and onboarding's `API_BASE`
+  are gone — import the constant instead. Every resulting request string is byte-identical.
+- `config/supabaseClient.js` takes `SUPABASE_URL` from the helper. **Anon key handling is
+  untouched**, as is all auth logic.
+
+### NOT changed
+- **Production behaviour is identical.** The rewrite path is behind `import.meta.env.DEV`, which
+  is statically `false` in a build, so Vite strips it out entirely — verified: `isDevMachineHost`,
+  the private-range regex and the loopback set are all absent from `dist/assets/*.js`.
+- `.env` variable names and values (still empty in dev). `vite.config.js` — it **already** had
+  `server.host: true`; its `http://localhost:5000` / `:54321` proxy targets are correct and must
+  stay, because the dev server resolves them on the dev machine, not in the browser.
+- `netlify/edge-functions/product-preview.js` still reads `Netlify.env.get("VITE_API_BASE_URL")`
+  directly — it runs server-side at the edge in production, where there is no `window` and
+  nothing to resolve. Leave it alone.
+
+### What NOT to do
+- Don't put a host or IP back into a component or `.env` to "fix" a device — that is the bug
+  this removes. See the new §17 in `frontend/CLAUDE.md`.
+- `API_BASE_URL` already ends in `/api`. Append only the route, or you get `/api/api/...`.
+
+
+## 2026-09-01 — Networking: hardcoded LAN IPs removed, dev CORS + X-Device-Id (Vishwajeet)
+
+### Why
+`backend/.env` had `SUPABASE_URL` pinned to `http://10.37.66.122:54321` — a dead DHCP lease.
+Every backend→Supabase call failed with `ConnectTimeoutError` then `EHOSTDOWN`, and
+`POST /api/auth/request-otp` returned 500.
+
+### Changed endpoints
+None. No route, response shape or error code changed. This is networking config only —
+rate limiting, the circuit breaker, Turnstile and OTP logic are all untouched.
+
+### Backend
+- `SUPABASE_URL` is now `http://127.0.0.1:54321`. The backend and local Supabase are on the
+  same machine, so it never needs a LAN address again.
+- The server binds `0.0.0.0` (override with `HOST`; `PORT` still configurable) and prints its
+  current LAN address on boot, e.g. `LAN: http://10.37.66.39:5000`. Read it off the log.
+- `backend/.env.example` added (placeholders only, no real keys).
+
+### CORS — **read this, it affects the website**
+- **Production behaviour is unchanged**: still `Access-Control-Allow-Origin: *` for every
+  origin. It branches on `NODE_ENV === 'production'`, so **a real deploy must set
+  `NODE_ENV=production`** or it falls into the dev rules and rejects the hosted origin.
+- In development only, allowed origins are `localhost` / `127.0.0.1` / `::1` / `10.x` /
+  `192.168.x` / `172.16–31.x`, on **any** port. So `http://<mac-lan-ip>:5173` now works from
+  your phone's browser and from a second laptop without any config edit.
+- `allowedHeaders` is now explicit: `Content-Type, Authorization, X-Device-Id`. If you add a
+  new custom request header on the web side it must be added to that list in `app.js` or its
+  preflight will fail. Ping me rather than editing `app.js` yourself.
+
+### Mobile
+- New `mobile/src/lib/config.ts` is the single resolver for `API_BASE_URL` / `SUPABASE_URL`.
+  `EXPO_PUBLIC_*` wins when set; otherwise the host comes from the Expo dev server
+  (`Constants.expoConfig.hostUri` → `expoGoConfig.debuggerHost`) with port 5000 / 54321.
+  `src/lib/devHost.ts` is deleted.
+
+### Known issue — storage image URLs (not fixed here)
+`getPublicUrl()` derives storage URLs from `SUPABASE_URL` and those URLs are **written into
+the database** (`users.avatar_url`, `products.image_urls`). With loopback restored, newly
+uploaded images get `http://127.0.0.1:54321/...`, which on a phone means the phone itself, and
+rows written under the old lease still hold `http://10.37.66.122:54321/...`. Both render broken
+off-laptop. Existing rows are unaffected on the laptop itself. Fixing it means rewriting the
+host at render time (or at read time in the controllers) — I did not touch it because it is
+outside this task and `user.controller.js` is yours. Say if you want it next.
+
+### What NOT to do yet
+- Don't put a LAN IP back into any `.env` to work around the image issue — that is the bug
+  this entry removes. See the new "Networking" section in `backend/CLAUDE.md`.
+
+
 _Newest at the top._
 
 ## 2026-08-25 — Messages: chat surface design pass (Neeraj)
