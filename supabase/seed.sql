@@ -1,6 +1,22 @@
 -- supabase/seed.sql
 -- Runs automatically after every `supabase db reset`.
 -- Reference data only. Never real user data.
+--
+-- ╔══════════════════════════════════════════════════════════════════════════╗
+-- ║  LOCAL DEVELOPMENT ONLY. NEVER RUN THIS FILE AGAINST PRODUCTION.         ║
+-- ╚══════════════════════════════════════════════════════════════════════════╝
+--
+-- Every account below is a TEST account with a known, hardcoded password
+-- (`password123`) and a pre-confirmed email. They exist so a developer can log
+-- in immediately after a reset instead of walking the OTP flow. Applied to a
+-- real database they would be live accounts with a published password.
+--
+-- There is no guard in this file that can stop that — `supabase db reset` is
+-- what runs it, and that command is local-only by the rules in CLAUDE.md.
+-- Nothing here should ever be pasted into the SQL editor of a hosted project.
+--
+-- The fixed uuids are a feature, not laziness: ids stay stable across resets so
+-- other seed data, tests and curls can hardcode them.
 
 -- FIXED 2026-08-12: the `id` column was added to this block. It used to be omitted, so these
 -- two rows were inserted with gen_random_uuid() ids and took the unique `domain` values. The
@@ -661,3 +677,141 @@ values
    array['https://images.unsplash.com/photo-1517963879433-6ad2b056d712?auto=format&fit=crop&q=80&w=800'],
    'available', 'Hostel Gym, Block D basement', 'Fair', 168, now() - interval '58 days')
 on conflict do nothing;
+
+
+-- ============ Layer 5: prefixed test accounts (shared machine) ============
+-- Six fixed accounts so neither of us has to walk the OTP flow to get a
+-- log-in-able user, and so the set survives every `supabase db reset`.
+--
+-- Namespaced by the prefixes in docs/CHANGELOG.md → "Shared machine rules":
+-- `v-` is Vishwajeet's, `n-` is Neeraj's, on the email AND the handle. One
+-- database is shared between two macOS accounts; without the prefix you cannot
+-- tell whose row you are looking at.
+--
+-- Password for all six is `password123`, same as Layers 2 and 4.
+--
+-- These emails deliberately do NOT contain '+seed@'. That string is
+-- seedLocal.js's ownership marker — it deletes every account carrying it
+-- before it reseeds (backend/scripts/seedLocal.js, SEED_MARKER). Put the marker
+-- in an email here and running that script would silently delete these six.
+-- Three seeding tools, three disjoint namespaces: keep it that way.
+--
+-- Ids continue the existing series: users b0…0012-0017. Nothing else in this
+-- file points at them yet, which is exactly why they are fixed — so other seed
+-- data, a test, or a curl can hardcode one and still be right after a reset.
+
+-- ---- Two profile states, on purpose -----------------------------------------
+-- v-test1/2 and n-test1/2 are COMPLETE: username set, is_profile_complete true.
+-- v-test3 and n-test3 are PENDING: username NULL, is_profile_complete false, so
+-- the username-selection flow can be tested repeatedly without registering a
+-- new account every time.
+--
+-- Both states satisfy users_username_required_when_complete (migration 006):
+--   `is_profile_complete = false or username is not null`
+-- The complete four pass on the second disjunct, the pending two on the first.
+-- users_username_valid (migration 009) is also satisfied by both: it is written
+-- `username is null or (...)`, so a NULL handle is explicitly allowed.
+--
+-- The four handles pass the 009 format rule as written — `v-test1` starts with
+-- a letter, uses only [a-z0-9._-], and has no two separators in a row. None of
+-- the six is in reserved_usernames. No constraint was weakened for any of this.
+
+-- ---- Why the pending two need their own helper -------------------------------
+-- pg_temp.seed_user() above always writes a username and always sets
+-- is_profile_complete = true, so it cannot produce a pending account. The
+-- tempting fix — seed a handle, then UPDATE it to NULL — is a trap:
+-- trg_record_username_change (005 §6) fires `before update of username` and
+-- files the old handle in username_history with reserved_until = now() + 30
+-- days. is_username_available() honours that window, so `v-test3` would come
+-- back "taken" for a month in the very flow these accounts exist to test.
+--
+-- So this helper never touches the username column at all — not in the insert
+-- list, not in the update list. handle_new_user (005 §9) has already created
+-- the public.users row with username NULL by the time we get here, and leaving
+-- the column alone is what keeps it NULL and keeps username_history empty.
+-- seed_user() itself is deliberately NOT modified; eleven existing accounts
+-- depend on it.
+
+create or replace function pg_temp.seed_pending_user(
+  p_id            uuid,
+  p_email         text,
+  p_password      text,
+  p_full_name     text,
+  p_university_id uuid
+) returns void language plpgsql as $$
+begin
+  -- Identical to seed_user()'s auth block. The four empty strings at the end
+  -- are NOT decorative: GoTrue declares confirmation_token, recovery_token,
+  -- email_change_token_new and email_change NOT NULL with no default, and a
+  -- NULL in any of them breaks login later rather than failing the insert here.
+  -- email_confirmed_at = now() is what makes these accounts log in without an
+  -- OTP round trip.
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data,
+    confirmation_token, recovery_token, email_change_token_new, email_change
+  ) values (
+    '00000000-0000-0000-0000-000000000000',
+    p_id, 'authenticated', 'authenticated', p_email,
+    extensions.crypt(p_password, extensions.gen_salt('bf')),
+    now(), now(), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('full_name', p_full_name),
+    '', '', '', ''
+  ) on conflict (id) do nothing;
+
+  -- Required. GoTrue resolves an email login through identities, not users —
+  -- without this row the account exists and simply cannot sign in.
+  insert into auth.identities (
+    id, user_id, provider_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), p_id, p_id::text,
+    jsonb_build_object('sub', p_id::text, 'email', p_email, 'email_verified', true),
+    'email', now(), now(), now()
+  ) on conflict do nothing;
+
+  -- do-update, not do-nothing, for the reason spelled out on seed_user(): the
+  -- on_auth_user_created trigger got here first and a do-nothing would discard
+  -- the name and the campus.
+  --
+  -- has_password = true is required here exactly as it is there. It is a cache
+  -- of auth.users.encrypted_password that nothing keeps in sync, and
+  -- loginWithPassword rejects on the flag before it ever reaches GoTrue.
+  -- It must be in the update list too, because the trigger already created this
+  -- row with the column at its `default false`.
+  --
+  -- `username` appears in neither list. That is the whole point of this helper.
+  insert into public.users (id, university_id, full_name, is_profile_complete, has_password)
+  values (p_id, p_university_id, p_full_name, false, true)
+  on conflict (id) do update set
+    university_id       = excluded.university_id,
+    full_name           = excluded.full_name,
+    is_profile_complete = excluded.is_profile_complete,
+    has_password        = excluded.has_password;
+end;
+$$;
+
+-- ---- Complete profiles: ready to log in and use -----------------------------
+-- v- and n- are paired on the same campus on purpose. Community and messaging
+-- features are scoped to a university, so testing them needs two accounts on
+-- one campus that belong to different developers.
+
+-- IIITDM Kurnool  (v-test1 + n-test1 — the shared-campus pair)
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000012', 'v-test1@iiitk.ac.in',     'password123', 'V Test One', 'v-test1', 'a0000000-0000-4000-8000-000000000001');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000015', 'n-test1@iiitk.ac.in',     'password123', 'N Test One', 'n-test1', 'a0000000-0000-4000-8000-000000000001');
+
+-- NIET Greater Noida  (v-test2 + n-test2 — the second shared-campus pair)
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000013', 'v-test2@niet.co.in',      'password123', 'V Test Two', 'v-test2', 'a0000000-0000-4000-8000-000000000002');
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000016', 'n-test2@niet.co.in',      'password123', 'N Test Two', 'n-test2', 'a0000000-0000-4000-8000-000000000002');
+
+-- ---- Pending profiles: username NULL, for testing handle selection ----------
+-- These two are on separate campuses; they are single-account flows and do not
+-- need a partner on the same university.
+
+-- IIT Tirupati
+select pg_temp.seed_pending_user('b0000000-0000-4000-8000-000000000014', 'v-test3@iittp.ac.in',    'password123', 'V Test Three', 'a0000000-0000-4000-8000-000000000005');
+
+-- NIT Delhi
+select pg_temp.seed_pending_user('b0000000-0000-4000-8000-000000000017', 'n-test3@nitdelhi.ac.in', 'password123', 'N Test Three', 'a0000000-0000-4000-8000-000000000004');
