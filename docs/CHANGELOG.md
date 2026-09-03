@@ -78,7 +78,246 @@ shape mid-implementation, the other person's client is already written against t
 
 ---
 
+## New machine setup
+
+For either developer bringing up the repo on a fresh Mac. Run it top to bottom; each step has a
+check. Nothing here is shared-machine specific — that is the next section.
+
+### 1. Docker Desktop
+
+Install Docker Desktop and **start it**. Local Supabase is a stack of containers; nothing below
+works until the whale icon in the menu bar is steady.
+
+```bash
+docker --version
+docker ps          # a table header, even an empty one, means the daemon is up
+```
+
+If `docker ps` says "Cannot connect to the Docker daemon", the app is installed but not running.
+
+### 2. Supabase CLI
+
+```bash
+npm install -g supabase
+supabase --version
+```
+
+If `supabase` is "command not found" after a clean install, your npm global bin is not on PATH —
+use `npx supabase` in place of `supabase` everywhere below.
+
+### 3. Clone and install
+
+There is no root `package.json`, so there is **no root `npm install`**. Each package installs
+independently:
+
+```bash
+git clone <repo> yahora && cd yahora
+
+cd backend  && npm install && cd ..
+cd frontend && npm install && cd ..
+cd mobile   && npm install && cd ..
+```
+
+`mobile/` sits on Expo SDK 56 / React 19 and its transitive peer ranges do not always agree. If
+`npm install` there fails on a peer conflict, re-run it as `npm install --legacy-peer-deps`.
+Do not add that flag to `backend/` or `frontend/` — they install clean.
+
+### 4. Root `.env` — the Supabase CLI's file
+
+This is **not** `backend/.env` and **not** `frontend/.env`. The Supabase CLI looks for a `.env`
+beside the `supabase/` directory and `supabase/config.toml` pulls values out of it with `env(...)`,
+which is what lets the config file be committed while the value is not. It is gitignored, so a
+fresh clone does not have it. Create it:
+
+```bash
+cat > .env <<'EOF'
+TURNSTILE_SECRET_KEY_LOCAL=1x0000000000000000000000000000000AA
+EOF
+```
+
+That is **Cloudflare's published dummy "always passes" secret — local only, never production.**
+It accepts any token, including no Turnstile challenge at all, which is exactly why it must never
+reach a deploy: it would make the CAPTCHA decorative. Production's real secret lives only in the
+Supabase dashboard and is not driven by this file.
+
+Dummy keys must be **paired** with dummy sitekeys — the web app's local sitekey is
+`1x00000000000000000000AA`. A real sitekey against a dummy secret, or the reverse, rejects
+everything; check that pairing first when local auth fails for no visible reason.
+
+### 5. Per-package env files
+
+```bash
+cp backend/.env.example backend/.env
+cp mobile/.env.example  mobile/.env
+```
+
+Then fill in the placeholder keys in `backend/.env` (`SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`) and `mobile/.env` (`EXPO_PUBLIC_SUPABASE_ANON_KEY`) from
+`supabase status` once step 6 has run. `SUPABASE_URL=http://127.0.0.1:54321` in `backend/.env` is
+already correct and should stay loopback — never a LAN IP.
+
+⚠️ **There is no `frontend/.env.example` in the repo.** `frontend/.env` is gitignored, so a fresh
+clone has nothing to copy from and Vite starts with the variables unset. The two it reads are
+`VITE_SUPABASE_URL` and `VITE_API_BASE_URL` — both are meant to be **left empty** in local dev, so
+that `supabaseClient.js` falls back to the `/supabase` proxy and API calls stay relative `/api/...`
+for the Vite proxy to forward. The third, `VITE_SUPABASE_ANON_KEY`, does need the local anon key
+from `supabase status`. Someone should add a `frontend/.env.example` — until then this list is the
+only record of it, and it is Neeraj's file to create.
+
+### 6. Ports: leave the defaults alone
+
+On a machine you do not share, **you do not need any port override.** The defaults are correct:
+frontend **3000**, backend **5000**. `frontend/vite.config.js` pins 3000 with `strictPort: true`
+and proxies `/api` to `localhost:5000`; `backend/src/server.js` falls back to 5000. Overrides
+exist only for the second developer on a shared Mac — see the next section.
+
+### 7. Start the database and apply migrations
+
+```bash
+supabase start
+supabase db reset
+```
+
+`supabase start` brings the containers up. `supabase db reset` drops and rebuilds the local
+database, replays every file in `supabase/migrations/`, and then runs `supabase/seed.sql`
+(`[db.seed]` is enabled in `config.toml`). Both are safe on a machine of your own — on a shared
+one, `db reset` is Vishwajeet's alone.
+
+### 8. Verify
+
+```bash
+supabase status
+```
+
+✔ **Check:** the API URL reads `http://127.0.0.1:54321`. That same output carries the `anon key`
+and `service_role key` for step 5. Studio is on `54323`, Postgres on `54322` and Mailpit on
+`54324`.
+
+Then, in separate terminals:
+
+```bash
+cd backend  && npm run dev     # http://localhost:5000
+cd frontend && npm run dev     # http://localhost:3000
+cd mobile   && npx expo start
+```
+
+---
+
+## Shared machine rules
+
+**These apply only while the two of us are sharing one Mac, under separate macOS admin accounts.**
+On your own machine, ignore this section entirely.
+
+Docker Desktop for Mac cannot be used by two macOS accounts at once. So **one developer runs
+Docker and local Supabase; the other runs no Docker at all** and connects to the running stack over
+`127.0.0.1`. Published container ports are machine-wide, which is the whole reason this works — the
+second account reaches `127.0.0.1:54321` even with no daemon of its own.
+
+The consequence to keep in your head: **the database is not yours. It is shared.**
+
+### Port map
+
+| | frontend | backend | Supabase |
+|---|---|---|---|
+| Vishwajeet | 3000 | 5000 | 54321 (shared) |
+| Neeraj | 3001 | 5001 | 54321 (shared) |
+
+Supabase is one stack on one set of ports — `54321` API, `54322` Postgres, `54323` Studio,
+`54324` Mailpit — used by both of us at the same time.
+
+⚠️ **The 3001/5001 side is not fully wired yet, and I am not going to pretend otherwise.**
+What is in place: `supabase/config.toml` already allows `localhost:3001` and `127.0.0.1:3001` as
+auth redirect URLs, the backend's dev CORS accepts any local-network origin, and the backend port
+is a real override — `PORT=5001` in `backend/.env` works today, and mobile has
+`EXPO_PUBLIC_API_PORT` to match it. What is **not** in place: there is no frontend port override.
+`frontend/vite.config.js` hardcodes `port: 3000, strictPort: true` and proxies `/api` to
+`localhost:5000`, both as literals. Running the web app on 3001 against a backend on 5001 needs a
+change to that file — `npm run dev -- --port 3001` moves the dev server but leaves the proxy
+pointing at 5000. Neeraj owns `frontend/`; that edit is his call.
+
+### The rules
+
+**1. Only Vishwajeet runs `supabase db reset`, `db push`, or any schema change — and he announces
+it first.** A reset rebuilds the database from migrations and re-seeds it. It does not ask, and it
+does not spare the other developer's data: every account you registered, every listing and message
+you made while testing is gone. Post here and ping on WhatsApp *before*, not after.
+
+**2. Test data is namespaced by prefix.** Vishwajeet uses **`v-`**, Neeraj uses **`n-`** — on test
+emails, device IDs and usernames. One database means one `users` table; without a prefix you cannot
+tell whose row you are looking at, and you will eventually delete the other person's.
+
+Mailpit on `127.0.0.1:54324` is a **single shared inbox** for both accounts. The newest message is
+very often not yours. **Filter by recipient**, never open the top one and assume.
+
+**3. Announce before `supabase stop`.** It takes the database away from both of us. The other
+person's app does not degrade gracefully — it just starts failing every call at once, and they will
+spend twenty minutes reading their own diff before thinking to ask.
+
+**4. Schema changes go in migration files. Studio is read-only.** Studio at `127.0.0.1:54323` is
+shared and it is for *looking* — browsing rows, checking a column, running a SELECT. Never edit
+schema there. A change made in Studio exists in no migration file, so it will never reach
+production, the other developer's code will not know about it, and the next `db reset` destroys it.
+The one you spend an afternoon debugging is the change that was silently reverted. Neeraj files
+schema requests under **MIGRATION REQUESTS** at the bottom of this file; only Vishwajeet writes
+under `supabase/migrations/`.
+
+**5. When something breaks, check the shared layer before your own code.** The shared stack fails
+in three recognisable shapes, and none of them are your last commit:
+
+| symptom | what actually happened |
+|---|---|
+| *every* DB call fails at once, nothing works | the other person ran `supabase stop` |
+| your test accounts and data are gone | someone ran `supabase db reset` |
+| a column you did not expect, or one that vanished | a migration landed — read the newest entry below |
+
+Check this file and your WhatsApp thread first. Thirty seconds there beats an hour bisecting a
+diff that was never the problem.
+
+---
+
 ## Entries
+
+## 2026-09-03 — Seed users: six prefixed test accounts in seed.sql (Vishwajeet)
+
+### Test data
+
+Six log-in-able accounts, namespaced by the `v-` / `n-` prefixes from
+[Shared machine rules](#shared-machine-rules). **Shared local password for all six:
+`password123`.** Ids are fixed at `b0…0012`–`0017`, so they are safe to hardcode.
+
+| email | username | `is_profile_complete` | university |
+|---|---|---|---|
+| `v-test1@iiitk.ac.in` | `v-test1` | true | IIITDM Kurnool |
+| `n-test1@iiitk.ac.in` | `n-test1` | true | IIITDM Kurnool |
+| `v-test2@niet.co.in` | `v-test2` | true | NIET Greater Noida |
+| `n-test2@niet.co.in` | `n-test2` | true | NIET Greater Noida |
+| `v-test3@iittp.ac.in` | *(NULL)* | **false** | IIT Tirupati |
+| `n-test3@nitdelhi.ac.in` | *(NULL)* | **false** | NIT Delhi |
+
+All six are email-confirmed, so they log in with a password and no OTP round trip.
+
+`v-test1`/`n-test1` and `v-test2`/`n-test2` are paired on the same campus on purpose —
+community and messaging are scoped to a university, so testing them needs two accounts on
+one campus belonging to different developers.
+
+**`v-test3` and `n-test3` are deliberately incomplete**: no username, `is_profile_complete
+= false`. They exist so the username-selection flow can be tested repeatedly without
+registering a new account each time. Use them, then reset. Their usernames are left NULL
+from the start rather than set and then updated, which keeps the handles out of
+`username_history` and genuinely available.
+
+**These come from `supabase/seed.sql` and reappear after every `supabase db reset`** — so
+anything you break on them is undone by a reset, and any username you claim on the two
+pending accounts is released by one.
+
+### What NOT to do yet
+
+- Don't put `+seed@` in these emails. That is `seedLocal.js`'s ownership marker and that
+  script deletes every account carrying it before reseeding.
+- None of the six owns products, messages or likes yet. If you need a seller with listings,
+  use the Layer 4 accounts (`test@iiitk.ac.in` and friends) instead.
+
+---
 
 ## 2026-09-01 — HANDOFF A: Turnstile local setup + a finding that breaks Block E (Vishwajeet)
 
