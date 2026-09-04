@@ -1,0 +1,82 @@
+-- ============================================================================
+-- 011. SECURITY DEFINER on the three counter trigger functions.
+--
+-- Follow-up to 20260903115437_pin_search_path_cascade_triggers.sql (010).
+--
+-- THE SYMPTOM
+-- -----------
+-- Deleting a row from auth.users still fails, now with:
+--
+--     ERROR: permission denied for table products (SQLSTATE 42501)
+--
+-- again surfacing through GoTrue as a 500 and "Database error deleting user".
+--
+-- 010 fixed the previous error on this same path — 42P01, relation "products"
+-- does not exist — by pinning search_path so the unqualified table names in
+-- these bodies resolve. That was necessary but not sufficient: once the name
+-- resolves, the privilege check runs, and that is what fails now.
+--
+-- WHY DEFINER IS REQUIRED
+-- -----------------------
+-- auth.users cascades into public.users and on into product_likes, comments and
+-- comment_votes. Those cascaded DELETEs fire these three row triggers, and the
+-- triggers UPDATE products / UPDATE comments to keep the denormalised counters
+-- honest.
+--
+-- The delete is issued by GoTrue, on its own connection, as the role
+-- supabase_auth_admin. A SECURITY INVOKER function runs with the CALLER's
+-- privileges — so these bodies attempt to write public.products as
+-- supabase_auth_admin, which holds no grants on any table in public (checked:
+-- zero rows in information_schema.role_table_grants for that grantee). Only
+-- service_role has them; migration 003's revocation left anon and authenticated
+-- without them too.
+--
+-- The alternative fix — granting supabase_auth_admin write access on the public
+-- tables — is deliberately NOT taken. It would give the auth service standing
+-- write privileges on every application table it happens to cascade into, to
+-- solve a problem that belongs to three specific functions. SECURITY DEFINER is
+-- the narrower instrument: these three run as their owner (postgres, which owns
+-- both products and comments), and nothing else changes.
+--
+-- ⚠ PRODUCTION IMPACT, unchanged from 010: any student who has ever liked a
+-- product, commented, or voted on a comment cannot delete their account. Both
+-- migrations are needed; neither alone unblocks it. See docs/deletion_data.md.
+--
+-- THE SAFETY PRECONDITION
+-- -----------------------
+-- SECURITY DEFINER on a function with an unpinned search_path is a privilege-
+-- escalation vector: the function runs as its owner, and whoever controls the
+-- caller's search_path chooses which table an unqualified name resolves to.
+-- These bodies DO use unqualified names (`UPDATE products`, `UPDATE comments`),
+-- so that risk would be real here.
+--
+-- It is not, because 010 already pinned `search_path = public, pg_temp` on all
+-- three. THAT ORDERING IS THE WHOLE POINT: 010 is what makes 011 safe, and the
+-- two must never be squashed into one statement that sets DEFINER without the
+-- pin, nor reordered. This is the same reasoning as §5 of 20260812121140_rls_
+-- stage1 (called migration 003 in code comments), which pins search_path
+-- precisely because the functions it names are SECURITY DEFINER.
+--
+-- ALTER FUNCTION, not create or replace: it changes only the security setting
+-- and cannot touch a body, so the bodies are byte-identical by construction
+-- rather than by careful transcription. Trigger definitions are untouched.
+--
+-- NOT IN THIS FILE, deliberately:
+--   · check_username_not_reserved and record_username_change stay SECURITY
+--     INVOKER. They fire only on INSERT/UPDATE of public.users, never on
+--     DELETE, so they are not on the failing cascade path. 010 pinned their
+--     search_path as category hygiene; that does not mean they need DEFINER,
+--     and granting it without cause would widen privilege for no reason.
+--   · No grant is issued to supabase_auth_admin or to any other role.
+--   · No FK, cascade rule, trigger definition or RLS policy is altered.
+-- ============================================================================
+
+
+-- on product_likes (INSERT/DELETE) -> UPDATE products
+alter function public.update_product_likes_count()    security definer;
+
+-- on comments (INSERT/DELETE) -> UPDATE products
+alter function public.update_product_comments_count() security definer;
+
+-- on comment_votes (INSERT/DELETE/UPDATE) -> UPDATE comments
+alter function public.update_comment_vote_counts()    security definer;
