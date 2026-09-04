@@ -30,15 +30,52 @@ dotenv.config({
 });
 
 // ─── SAFETY GUARD ───────────────────────────────────────────
-// This script creates users and products. It must never run
-// against production. SUPABASE_URL must be the local instance.
+// This script creates users and products. Local is the DEFAULT and stays the
+// default: without the opt-in below, a non-local SUPABASE_URL is refused
+// exactly as it always was.
+//
+// Production is possible, but only as a conscious act. SEED_ALLOW_REMOTE must
+// equal one long, awkward string. That is the point of it — nobody types
+// 'yes-seed-production-demo-tenant' by accident, and no short flag like --prod
+// or SEED=1 would carry the same weight at 2am. Do not shorten it, and do not
+// remove the guard.
+//
+// The production invocation passes the url and key ON THE COMMAND LINE, so
+// backend/.env keeps pointing at local and the next command you run is safe
+// again (runbook Block G3):
+//
+//   SEED_ALLOW_REMOTE=yes-seed-production-demo-tenant \
+//   SUPABASE_URL=<production url> \
+//   SUPABASE_SERVICE_ROLE_KEY=<production service key> \
+//   node backend/scripts/seedDemo.js
+//
+// What makes this safe on production at all is the multi-tenant boundary: every
+// row this script writes carries the DEMO university_id, and RLS keeps a real
+// student from ever seeing it. That is a claim to VERIFY after the run
+// (Block G5 Step 4), not to assume.
 const url = process.env.SUPABASE_URL || '';
-if (!url.includes('127.0.0.1') && !url.includes('localhost')) {
+const isLocal = url.includes('127.0.0.1') || url.includes('localhost');
+const allowRemote =
+  process.env.SEED_ALLOW_REMOTE === 'yes-seed-production-demo-tenant';
+
+if (!isLocal && !allowRemote) {
   console.error('\n❌ Refusing to seed a non-local database.');
   console.error('   SUPABASE_URL =', url || '(not set)');
   console.error('   Expected http://127.0.0.1:54321');
-  console.error('   Fix backend/.env, then try again.\n');
+  console.error('   Fix backend/.env, then try again.');
+  console.error('   (To seed the demo tenant on a remote database on purpose,');
+  console.error('    see SEED_ALLOW_REMOTE in the guard comment above.)\n');
   process.exit(1);
+}
+
+if (allowRemote) {
+  console.warn('\n' + '⚠'.repeat(30));
+  console.warn('⚠️  SEEDING A REMOTE DATABASE — NOT LOCAL.');
+  console.warn(`⚠️  SUPABASE_URL = ${url}`);
+  console.warn('⚠️  Only the demo tenant (' + 'demo.yahora.com' + ') is touched.');
+  console.warn('⚠️  Every real campus must be untouched. Check the row counts');
+  console.warn('⚠️  before and after — runbook Block G5 Steps 2 and 4.');
+  console.warn('⚠'.repeat(30) + '\n');
 }
 // ────────────────────────────────────────────────────────────
 
@@ -875,13 +912,70 @@ async function seedSandbox() {
   console.log('🌱  Starting Yahora demo seed...\n');
 
   try {
-    // ── University ────────────────────────────────────────────────────────────
-    const uniData = await maybeSingle(
-      supabase.from('universities').select('id').eq('domain', DEMO_DOMAIN)
-    );
-    let demoUniId = uniData?.id;
+    // ── Demo tenant: resolve the id, then clear it ────────────────────────────
+    //
+    // THE MOST DANGEROUS LINES IN THIS SCRIPT. A delete that could reach a real
+    // campus is the thing to be afraid of here, so the id is RESOLVED FIRST and
+    // the delete is keyed on that one uuid and nothing else. Never by name,
+    // never by pattern, never by LIKE. If you edit this block, keep that shape.
+    //
+    // The lookup returns a LIST on purpose rather than using maybeSingle().
+    // maybeSingle() collapses "no rows" and "several rows" into a null once its
+    // PGRST116 is swallowed, and those two cases must not be treated alike: one
+    // is a normal first run, the other means the demo domain is duplicated and
+    // a script has no business guessing which row is real.
+    const { data: uniRows, error: uniLookupErr } = await supabase
+      .from('universities')
+      .select('id, name')
+      .eq('domain', DEMO_DOMAIN);
+    if (uniLookupErr) throw uniLookupErr;
 
-    if (!demoUniId) {
+    let demoUniId  = null;
+    let usersDeleted = 0;
+
+    if (uniRows.length > 1) {
+      // Should be impossible — `domain` is unique. Something is wrong that a
+      // seed script must not paper over, least of all on production.
+      console.error(`\n❌  ABORT: ${uniRows.length} universities share the domain ${DEMO_DOMAIN}.`);
+      console.error('    That should be impossible and this script will not guess');
+      console.error('    which one is the demo tenant. Nothing was deleted or written.');
+      for (const r of uniRows) console.error(`      · ${r.id}  ${r.name}`);
+      process.exit(1);
+    }
+
+    if (uniRows.length === 1) {
+      demoUniId = uniRows[0].id;
+      console.log(`✅  Demo university found (id: ${demoUniId})`);
+
+      // Count first, so the run can report what it destroyed.
+      const { data: doomed, error: countErr } = await supabase
+        .from('users')
+        .select('id')
+        .eq('university_id', demoUniId);
+      if (countErr) throw countErr;
+
+      if (doomed.length) {
+        // ONE delete, scoped to the resolved uuid. products, posts, messages,
+        // likes, saves and comments all cascade from public.users, so deleting
+        // the demo users is enough — and every extra delete statement would be
+        // one more chance to get a WHERE clause wrong.
+        //
+        // Note this clears public.users only. The matching auth.users rows are
+        // deliberately left: getOrCreateAuthUser() below finds and reuses them,
+        // so handles and ids stay stable across runs.
+        const { error: delErr } = await supabase
+          .from('users')
+          .delete()
+          .eq('university_id', demoUniId);
+        if (delErr) throw delErr;
+
+        usersDeleted = doomed.length;
+        console.log(`🧹  Cleared ${usersDeleted} demo user(s); their products, posts and messages cascaded away.\n`);
+      } else {
+        console.log('🧹  Demo tenant already empty — nothing to clear.\n');
+      }
+    } else {
+      // Zero rows: nothing has ever been seeded. Skip the delete entirely.
       console.log('🏫  Creating demo university...');
       const { data: newUni, error: uniErr } = await supabase
         .from('universities')
@@ -891,12 +985,13 @@ async function seedSandbox() {
       if (uniErr) throw uniErr;
       demoUniId = newUni.id;
       console.log(`✅  University created: ${DEMO_UNI_NAME} (id: ${demoUniId})\n`);
-    } else {
-      console.log(`✅  Demo university already exists (id: ${demoUniId})\n`);
     }
 
     // ── Users ─────────────────────────────────────────────────────────────────
     const userIds = [];
+    let usersWritten    = 0;
+    let productsWritten = 0;
+    let postsWritten    = 0;
     console.log(`👥  Seeding ${DUMMY_USERS.length} campus user personas...`);
 
     for (const u of DUMMY_USERS) {
@@ -937,6 +1032,7 @@ async function seedSandbox() {
       );
       if (profileErr) throw profileErr;
 
+      usersWritten += 1;
       userIds.push(authUser.id);
       console.log(`   ✓ ${u.name} (${u.role})`);
     }
@@ -955,8 +1051,14 @@ async function seedSandbox() {
       categoryCounts[p.category]  = (categoryCounts[p.category]  || 0) + 1;
       conditionCounts[p.condition] = (conditionCounts[p.condition] || 0) + 1;
 
+      // Scoped to the demo tenant. Unscoped, this asked "does ANY campus have a
+      // product with this title?" — so a real university that happened to list
+      // its own "Study Desk with Office Chair" would make this truthy and the
+      // demo listing would be silently skipped on production.
       const exists = await maybeSingle(
-        supabase.from('products').select('id').eq('title', p.title)
+        supabase.from('products').select('id')
+          .eq('university_id', demoUniId)
+          .eq('title', p.title)
       );
 
       if (!exists) {
@@ -976,6 +1078,7 @@ async function seedSandbox() {
           created_at:    ago(p.daysAgo, p.hoursAgo),
         }]);
         if (prodErr) throw prodErr;
+        productsWritten += 1;
         console.log(`   ✓ [${p.category}] ${p.title} — ₹${p.price.toLocaleString('en-IN')} · ${p.condition}`);
       } else {
         console.log(`   ↩ Already exists: ${p.title}`);
@@ -989,8 +1092,11 @@ async function seedSandbox() {
       const post     = DUMMY_POSTS[i];
       const authorId = userIds[(i + 2) % userIds.length];
 
+      // Scoped to the demo tenant, same reasoning as the product check above.
       const exists = await maybeSingle(
-        supabase.from('posts').select('id').eq('content', post.content)
+        supabase.from('posts').select('id')
+          .eq('university_id', demoUniId)
+          .eq('content', post.content)
       );
 
       if (!exists) {
@@ -1001,20 +1107,253 @@ async function seedSandbox() {
           created_at:    ago(post.daysAgo, post.hoursAgo),
         }]);
         if (postErr) throw postErr;
+        postsWritten += 1;
         console.log(`   ✓ Post ${i + 1}: "${post.content.slice(0, 60)}..."`);
       } else {
         console.log(`   ↩ Already exists (post ${i + 1})`);
       }
     }
 
+    // ── Engagement ────────────────────────────────────────────────────────────
+    //
+    // WHY THIS EXISTS: 40 listings with zero likes and an empty inbox reads as
+    // an abandoned marketplace. This is investor/HR screenshot data, so the
+    // marketplace has to look inhabited.
+    //
+    // ISOLATION, THE ONLY RULE THAT MATTERS HERE. Every row below is built from
+    // two sources and nothing else:
+    //   · userIds        — the 15 demo personas created above
+    //   · demoProducts   — re-queried with .eq('university_id', demoUniId)
+    // A like, save, comment or message therefore cannot reach another campus,
+    // and cannot straddle two universities. The assertion below enforces that
+    // rather than trusting it.
+    //
+    // CLEANUP: product_likes, product_saves, comments and messages ALL cascade
+    // from public.users (verified against pg_constraint: every FK into
+    // public.users from these four is ON DELETE CASCADE). The guarded delete at
+    // the top of this run therefore already removes this data — no extra delete
+    // statement is needed, and adding one would be another WHERE clause to get
+    // wrong.
+    //
+    // IDEMPOTENCY: the delete-then-insert flow makes the whole section
+    // repeatable. product_likes and product_saves additionally carry a
+    // composite primary key (user_id, product_id), so their upserts use
+    // ignoreDuplicates as a second line of defence.
+    //
+    // NOTE ON products.likes_count: the counter trigger increments it on every
+    // product_likes insert, on top of the tuned `p.likes` value each listing was
+    // created with (that value drives the "Trending" sort and is deliberately
+    // left alone). The displayed count is therefore seeded + real, which is
+    // stable across runs because products are recreated fresh each time.
+
+    console.log('\n❤️   Seeding engagement between demo students...');
+
+    const { data: demoProducts, error: dpErr } = await supabase
+      .from('products')
+      .select('id, title, seller_id')
+      .eq('university_id', demoUniId)
+      .order('created_at', { ascending: true });
+    if (dpErr) throw dpErr;
+
+    // Hard stop rather than a silent cross-tenant write.
+    const demoUserSet = new Set(userIds);
+    for (const prod of demoProducts) {
+      if (!demoUserSet.has(prod.seller_id)) {
+        throw new Error(
+          `Refusing to seed engagement: product ${prod.id} is scoped to the demo ` +
+          `university but its seller ${prod.seller_id} is not a demo user.`
+        );
+      }
+    }
+
+    let likesWritten    = 0;
+    let savesWritten    = 0;
+    let commentsWritten = 0;
+    let messagesWritten = 0;
+
+    // Deliberately uneven, with real zeros. A uniform count on every row is the
+    // tell that data is seeded; a long tail with a few standouts is what a live
+    // marketplace looks like. Index-aligned to demoProducts.
+    const LIKE_WEIGHTS = [11, 2, 7, 0, 13, 4, 1, 9, 3, 0, 6, 12, 2, 8, 0,
+                          5, 10, 1, 14, 3, 7, 0, 4, 11, 2, 9, 6, 1, 13, 0,
+                          8, 3, 5, 12, 2, 7, 0, 10, 4, 1];
+    const SAVE_WEIGHTS = [4, 0, 2, 1, 6, 0, 0, 3, 1, 0, 2, 5, 0, 3, 0,
+                          1, 4, 0, 7, 1, 2, 0, 1, 3, 0, 4, 2, 0, 5, 0,
+                          3, 1, 0, 4, 0, 2, 0, 3, 1, 0];
+
+    const likeRows = [];
+    const saveRows = [];
+
+    for (let i = 0; i < demoProducts.length; i++) {
+      const prod = demoProducts[i];
+      // Nobody likes or saves their own listing.
+      const others = userIds.filter((id) => id !== prod.seller_id);
+      if (!others.length) continue;
+
+      const wantLikes = Math.min(LIKE_WEIGHTS[i % LIKE_WEIGHTS.length], others.length);
+      const wantSaves = Math.min(SAVE_WEIGHTS[i % SAVE_WEIGHTS.length], others.length);
+
+      // Strides 3 and 5 are coprime with a 14-person pool, so walking them
+      // cannot repeat a user within one product — no primary-key collision.
+      for (let k = 0; k < wantLikes; k++) {
+        likeRows.push({ user_id: others[(i * 3 + k) % others.length], product_id: prod.id });
+      }
+      for (let k = 0; k < wantSaves; k++) {
+        saveRows.push({ user_id: others[(i * 5 + k) % others.length], product_id: prod.id });
+      }
+    }
+
+    if (likeRows.length) {
+      const { error } = await supabase
+        .from('product_likes')
+        .upsert(likeRows, { onConflict: 'user_id,product_id', ignoreDuplicates: true });
+      if (error) throw error;
+      likesWritten = likeRows.length;
+    }
+    console.log(`   ✓ ${likesWritten} like(s) across ${demoProducts.length} listing(s)`);
+
+    if (saveRows.length) {
+      const { error } = await supabase
+        .from('product_saves')
+        .upsert(saveRows, { onConflict: 'user_id,product_id', ignoreDuplicates: true });
+      if (error) throw error;
+      savesWritten = saveRows.length;
+    }
+    console.log(`   ✓ ${savesWritten} save(s)`);
+
+    // ── Comments ──────────────────────────────────────────────────────────────
+    // NOTE: public.comments has product_id, NOT post_id — there is no
+    // post-comment table in this schema. These attach to LISTINGS, which is the
+    // only thing the schema supports.
+    const DEMO_COMMENTS = [
+      { productIdx: 0,  userIdx: 4,  text: 'Is this still available? I can pick up from the hostel gate this evening.' },
+      { productIdx: 0,  userIdx: 7,  text: 'Bought the same model from a senior last year. Held up really well.' },
+      { productIdx: 4,  userIdx: 2,  text: 'Would you take ₹500 less if I collect today?' },
+      { productIdx: 4,  userIdx: 9,  text: 'Any scratches on the back panel?' },
+      { productIdx: 11, userIdx: 1,  text: 'Does this come with the original charger?' },
+      { productIdx: 18, userIdx: 6,  text: 'Interested. Sending you a DM now.' },
+      { productIdx: 18, userIdx: 12, text: 'Beat me to it — was about to ask the same thing.' },
+      { productIdx: 23, userIdx: 3,  text: 'How old is it? Listing says Good but photos look almost new.' },
+      { productIdx: 28, userIdx: 10, text: 'Can you share a photo of the underside?' },
+      { productIdx: 33, userIdx: 8,  text: 'Still selling? Happy to pay full price if it is as described.' },
+    ];
+
+    const commentRows = [];
+    for (const c of DEMO_COMMENTS) {
+      const prod = demoProducts[c.productIdx];
+      if (!prod) continue;
+      const author = userIds[c.userIdx % userIds.length];
+      if (author === prod.seller_id) continue;   // don't comment on your own listing
+      commentRows.push({
+        product_id:    prod.id,
+        user_id:       author,
+        university_id: demoUniId,
+        content:       c.text,
+        created_at:    ago(c.productIdx % 9, c.userIdx % 12),
+      });
+    }
+
+    if (commentRows.length) {
+      const { error } = await supabase.from('comments').insert(commentRows);
+      if (error) throw error;
+      commentsWritten = commentRows.length;
+    }
+    console.log(`   ✓ ${commentsWritten} comment(s) on listings`);
+
+    // ── Messages ──────────────────────────────────────────────────────────────
+    // Short negotiations, the shape a real campus deal actually takes: ask,
+    // counter, agree, arrange a handover. `from` is 'b' for the buyer and 's'
+    // for the seller — the seller is always the listing's own seller_id, so a
+    // thread can never span two campuses.
+    const DEMO_THREADS = [
+      { productIdx: 0,  buyerIdx: 4,  daysAgo: 2, lines: [
+        ['b', 'Hi! Is the listing still up?'],
+        ['s', 'Yes, still available.'],
+        ['b', 'Would you do ₹600 less? I can collect tonight.'],
+        ['s', 'Can do ₹300 off if you pick up from Hostel B.'],
+        ['b', 'Deal. See you at 8.'],
+      ]},
+      { productIdx: 4,  buyerIdx: 9,  daysAgo: 5, lines: [
+        ['b', 'Interested in this. Any dents?'],
+        ['s', 'One small scuff on the corner, nothing structural. Can send a photo.'],
+        ['b', 'Please do.'],
+        ['s', 'Sent. Let me know.'],
+      ]},
+      { productIdx: 11, buyerIdx: 1,  daysAgo: 8, lines: [
+        ['b', 'Does the price include the charger?'],
+        ['s', 'It does, original one.'],
+        ['b', 'Great, I will take it. Free tomorrow after 4?'],
+        ['s', 'Works. Library steps?'],
+        ['b', 'Perfect.'],
+      ]},
+      { productIdx: 18, buyerIdx: 6,  daysAgo: 12, lines: [
+        ['b', 'Saw your listing in the feed. Still selling?'],
+        ['s', 'Yes! Two other people asked but nobody has confirmed.'],
+        ['b', 'I will confirm now. Paying full price.'],
+      ]},
+      { productIdx: 28, buyerIdx: 10, daysAgo: 17, lines: [
+        ['b', 'Is this negotiable at all?'],
+        ['s', 'A little. What did you have in mind?'],
+        ['b', '₹1,200?'],
+        ['s', 'Let us meet at ₹1,400 and it is yours.'],
+        ['b', 'Fair. Booking it.'],
+      ]},
+    ];
+
+    const messageRows = [];
+    for (const t of DEMO_THREADS) {
+      const prod = demoProducts[t.productIdx];
+      if (!prod) continue;
+      const sellerId = prod.seller_id;
+      const buyerId  = userIds[t.buyerIdx % userIds.length];
+      if (buyerId === sellerId) continue;   // never a thread with yourself
+
+      t.lines.forEach(([who, text], n) => {
+        const senderId   = who === 'b' ? buyerId : sellerId;
+        const receiverId = who === 'b' ? sellerId : buyerId;
+        messageRows.push({
+          sender_id:     senderId,
+          receiver_id:   receiverId,
+          university_id: demoUniId,
+          product_id:    prod.id,
+          content:       text,
+          // Older threads read as fully caught up; the newest keeps one unread
+          // so the inbox badge is visible in a screenshot.
+          is_read:       !(t.daysAgo <= 2 && n === t.lines.length - 1),
+          is_delivered:  true,
+          created_at:    ago(t.daysAgo, t.lines.length - n),
+        });
+      });
+    }
+
+    if (messageRows.length) {
+      const { error } = await supabase.from('messages').insert(messageRows);
+      if (error) throw error;
+      messagesWritten = messageRows.length;
+    }
+    console.log(`   ✓ ${messagesWritten} message(s) across ${DEMO_THREADS.length} thread(s)`);
+
     // ── Summary ───────────────────────────────────────────────────────────────
     console.log('\n' + '─'.repeat(60));
     console.log('🎉  Yahora demo seed completed successfully!\n');
-    console.log(`   University  : ${DEMO_UNI_NAME}`);
-    console.log(`   Domain      : ${DEMO_DOMAIN}`);
-    console.log(`   Users       : ${DUMMY_USERS.length}`);
-    console.log(`   Products    : ${DUMMY_PRODUCTS.length}`);
-    console.log(`   Posts       : ${DUMMY_POSTS.length}`);
+    // ACTUAL counts, incremented at each successful write — deliberately NOT
+    // DUMMY_*.length. On a production run this block is the evidence that the
+    // script did what was expected, so it must report what it wrote, never what
+    // it intended to write. `Rows deleted` is the demo users cleared at the
+    // start; their products and posts went with them by cascade and are not
+    // counted separately.
+    console.log(`   University   : ${DEMO_UNI_NAME}`);
+    console.log(`   Domain       : ${DEMO_DOMAIN}`);
+    console.log(`   Demo uni id  : ${demoUniId}`);
+    console.log('');
+    console.log(`   Rows deleted : ${usersDeleted} demo user(s) (+ cascaded rows)`);
+    console.log(`   Users        : ${usersWritten} created`);
+    console.log(`   Products     : ${productsWritten} created`);
+    console.log(`   Posts        : ${postsWritten} created`);
+    console.log(`   Likes        : ${likesWritten} created`);
+    console.log(`   Saves        : ${savesWritten} created`);
+    console.log(`   Comments     : ${commentsWritten} created (on listings)`);
+    console.log(`   Messages     : ${messagesWritten} created`);
 
     console.log('\n   Category breakdown:');
     for (const [cat, count] of Object.entries(categoryCounts)) {
