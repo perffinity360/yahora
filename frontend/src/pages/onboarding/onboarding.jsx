@@ -71,8 +71,21 @@ const USERNAME_STATUS_COPY = {
   // The API still reports the real reason (`reason: "RESERVED"`); this is the
   // human copy only.
   reserved: "That handle is already taken. Please choose another.",
+  // Mirrors `users_username_valid` in migration 005 (^[a-z][a-z0-9._-]*$,
+  // length 3–25) — the database is the only place the rule is enforced, and
+  // this is the only place it is spelled out for a student. If the constraint
+  // ever changes, this sentence changes with it.
+  //
+  // Leads with "start with a letter" because that is the rule INVALID_FORMAT
+  // most often means: the other ways in (too short, too long, a stray space or
+  // @) are self-evident from the field, a leading digit is not.
+  //
+  // Case is deliberately absent. Uppercase is folded as they type, so it never
+  // reaches this status — naming it here would describe an error they cannot
+  // hit. Trailing and doubled separators (rahul_, rahul..sharma) are ALLOWED by
+  // the constraint, so they are not named either.
   invalid:
-    "3–20 characters: lowercase letters, numbers, . or _ — not at the start, the end, or doubled.",
+    "Start with a letter — the rest can be letters, numbers, dots, underscores or hyphens, 3–25 characters in total.",
   recently_released:
     "That handle was given up recently and is on a 30-day hold.",
   unknown: "Couldn't check that right now — we'll confirm when you continue.",
