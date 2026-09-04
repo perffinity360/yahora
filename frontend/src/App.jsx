@@ -12,6 +12,7 @@ import Marketplace from './pages/marketplace/Marketplace';
 import ProductDetail from "./pages/product/ProductDetail";
 import PublicProfile from "./pages/publicProfile/PublicProfile";
 import Messages from "./pages/messages/Messages";
+import OnboardingRequired from "./components/OnboardingRequired/OnboardingRequired";
 
 // Keep logged-in users off the auth page: reaching /auth (via the back button,
 // a stale link, or a typed URL) sends them on instead of showing the login
@@ -54,6 +55,72 @@ function GuestOnly({ children }) {
   if (!isAuthenticated) return children;
 
   return <Navigate to={profileComplete ? "/dashboard" : "/onboarding"} replace />;
+}
+
+// A demo/sandbox account is deliberately created with is_profile_complete =
+// false and is offered a "Skip for now" button out of the onboarding form
+// (onboarding.jsx), so the gate below must not apply to it. Read at render time
+// rather than hoisted to a module constant: the flag is written during
+// demo-login, after this module has already been evaluated.
+const isDemoSandbox = () => localStorage.getItem("yahora_demo_user") === "true";
+
+// 🔒 THE ONBOARDING GATE.
+//
+// Verifying an OTP already creates a real `users` row — with
+// is_profile_complete = false and no name, username, course or password on it.
+// From that moment `isAuthenticated` is true and the navbar renders its
+// signed-in state, but every app route below used to be mounted bare. So a
+// student who reached /onboarding and pressed Back was a logged-in user with a
+// blank account, free to walk into /dashboard, /marketplace, /messages and
+// /sell.
+//
+// Being authenticated is therefore no longer enough to see the app. Two gates:
+//
+//   <RequireAuth>       a session exists. Used for /onboarding itself, which is
+//                       the one place a half-registered student belongs.
+//   <RequireOnboarded>  a session AND a finished profile — everything else.
+//                       Pass `allowGuest` on routes that stay readable while
+//                       logged out (product pages, public profiles) so this
+//                       only adds the profile requirement and doesn't newly
+//                       lock guests out.
+//
+// "/" is deliberately NOT gated. A half-registered student can still browse the
+// landing page and keep the full navbar; the gate only stands in front of the
+// pages that need an account behind them.
+//
+// An unfinished profile renders <OnboardingRequired /> rather than redirecting.
+// A silent bounce to /onboarding reads as a broken link — the student clicks
+// Marketplace, the URL flicks back to the form they just left, and nothing ever
+// says why. The screen names the page they wanted, says what is still missing,
+// and gives them one button to it. Redirecting to /auth would be worse still:
+// they ARE logged in, and a login form they have already passed is a dead end.
+//
+// ⚠️ This is enforcement of the *flow*, not authorisation. `profileComplete`
+// mirrors a localStorage string a student can edit in devtools, and the guards
+// here only decide which component renders — they cannot stop a hand-written
+// request. The endpoints still have to reject half-registered accounts
+// server-side; today `backend/src/middleware/` has requireAuth but no
+// equivalent onboarding check.
+function RequireAuth({ children }) {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) return <Navigate to="/auth" replace />;
+
+  return children;
+}
+
+function RequireOnboarded({ children, allowGuest = false }) {
+  const { isAuthenticated, profileComplete } = useAuth();
+
+  if (!isAuthenticated) {
+    return allowGuest ? children : <Navigate to="/auth" replace />;
+  }
+
+  if (!profileComplete && !isDemoSandbox()) {
+    return <OnboardingRequired />;
+  }
+
+  return children;
 }
 
 function App() {
@@ -127,17 +194,28 @@ function App() {
 
       <main style={{ flex: 1, minHeight: 0 }}>
         <Routes>
+          {/* Fully public. A student who has not finished onboarding is still
+              welcome here — the gate starts at the pages below. */}
           <Route path= "/" element={<Home/>} />
           <Route path="/auth" element={<GuestOnly><Auth /></GuestOnly>} />
-          <Route path="/feed" element={<div className="container mt-4"><h3>Community Feed</h3></div>} />
-          <Route path="/hot" element={<div className="container mt-4"><h3>Hot Items on Campus</h3></div>} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/sell" element={<Sell />} />
-          <Route path="/marketplace" element={<Marketplace />} />
-          <Route path="/product/:id" element={<ProductDetail />} />
-          <Route path="/user/:id" element={<PublicProfile />} />
-          <Route path="/messages" element={<Messages />} />
+
+          {/* The only route a half-registered student is allowed to reach.
+              Completed students may come back here to edit their profile —
+              Dashboard links to it — so this checks the session only. */}
+          <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
+
+          {/* App surfaces: session + finished profile required. */}
+          <Route path="/feed" element={<RequireOnboarded><div className="container mt-4"><h3>Community Feed</h3></div></RequireOnboarded>} />
+          <Route path="/hot" element={<RequireOnboarded><div className="container mt-4"><h3>Hot Items on Campus</h3></div></RequireOnboarded>} />
+          <Route path="/dashboard" element={<RequireOnboarded><Dashboard /></RequireOnboarded>} />
+          <Route path="/sell" element={<RequireOnboarded><Sell /></RequireOnboarded>} />
+          <Route path="/marketplace" element={<RequireOnboarded><Marketplace /></RequireOnboarded>} />
+          <Route path="/messages" element={<RequireOnboarded><Messages /></RequireOnboarded>} />
+
+          {/* Shareable links — these already render for logged-out visitors and
+              keep doing so; only the unfinished-profile case is new. */}
+          <Route path="/product/:id" element={<RequireOnboarded allowGuest><ProductDetail /></RequireOnboarded>} />
+          <Route path="/user/:id" element={<RequireOnboarded allowGuest><PublicProfile /></RequireOnboarded>} />
         </Routes>
       </main>
 

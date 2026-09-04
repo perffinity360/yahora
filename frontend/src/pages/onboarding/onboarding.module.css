@@ -488,3 +488,55 @@
   animation: spin 1s linear infinite;
   flex-shrink: 0;
 }
+
+/* --- BACK OUT OF THE FORM ---
+   Sits in the card's top-left gutter. Quiet by default so it never competes
+   with the submit button, but a real target with hover/press/focus feedback —
+   for a fresh signup this is the button that abandons the account. */
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  padding: 0.4rem 0.9rem 0.4rem 0.7rem;
+  border: 1px solid rgba(235, 72, 127, 0.22);
+  border-radius: 2rem;
+  background-color: var(--pink-bg);
+  color: var(--purple-dark);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.backBtn:hover {
+  background-color: var(--purple-dark);
+  border-color: var(--purple-dark);
+  color: var(--white);
+  transform: translateX(-2px);
+}
+
+.backBtn:active {
+  transform: scale(0.98);
+}
+
+.backBtn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backBtn {
+    transition: background-color 180ms ease, border-color 180ms ease,
+      color 180ms ease;
+  }
+
+  .backBtn:hover,
+  .backBtn:active {
+    transform: none;
+  }
+}

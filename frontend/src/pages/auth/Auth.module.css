@@ -154,6 +154,10 @@
 
 .modernInputGroup input {
   flex: 1;
+  /* Flex items floor at their content width by default, so a long button
+     label ("Send in 9:59") pushed the group wider than the card on a 390px
+     screen instead of squeezing the field. */
+  min-width: 0;
   border: none;
   background: transparent;
   outline: none;
@@ -439,7 +443,7 @@
 .formMessage {
   font-size: 0.8rem;
   margin-bottom: 0.8rem;
-  padding: 0.6rem 0.8rem;
+  padding: 0.6rem 4rem;
   border-radius: 0.5rem;
   text-align: center;
   font-weight: 500;
@@ -453,6 +457,81 @@
 .success {
   background-color: #f0fdf4;
   color: #15803d;
+}
+
+/* Cloudflare Turnstile, on the OTP form only.
+   
+   NO fixed height, and `:not(:empty)` on the spacing: in Managed mode the
+   widget usually draws nothing at all, and a reserved 65px would leave a
+   permanent hole above the Send button for the students who are never
+   challenged. */
+.turnstile:not(:empty) {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+  /* The safety net for the transform below, and for anything narrower than
+     the 375px we size for. */
+  overflow: hidden;
+}
+
+.turnstile > * {
+  transform-origin: center;
+}
+
+/* Cloudflare draws a fixed 300px iframe and will not shrink it — the width is
+   set inside the frame, where our CSS cannot reach. At 375px the card's
+   content box is ~277px (375 − 48 authLeft − 48 formCard − 2 border), so the
+   widget would push the card sideways. Scaling is the only lever we have:
+   0.9 × 300 = 270px, inside 277 with room to spare. Hit-testing follows the
+   transform, so the checkbox stays clickable when it does appear. */
+@media (max-width: 420px) {
+  .turnstile > * {
+    transform: scale(0.9);
+  }
+}
+
+/* The live wait inside the "too many codes" message.
+   
+   Lifted out of the surrounding red on purpose. The red is the verdict; this
+   is the way out of it, and the one thing on screen the student is actually
+   waiting on — so it gets the brand plum, its own chip, and the visual weight
+   the sentence around it does not need.
+
+   tabular-nums is not decoration: this repaints once a second, and
+   proportional digits make "23h 41m" jump sideways on every tick. */
+.countdown {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--white);
+  color: var(--purple-dark);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(128, 0, 128, 0.15);
+  box-shadow: 0 1px 4px rgba(128, 0, 128, 0.12);
+  animation: countdownGlow 2.6s ease-in-out infinite;
+}
+
+/* Slow enough to read as "still counting", not as an alarm. */
+@keyframes countdownGlow {
+  0%, 100% { box-shadow: 0 1px 4px rgba(128, 0, 128, 0.12); }
+  50%      { box-shadow: 0 2px 10px rgba(215, 0, 215, 0.28); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countdown { animation: none; }
+}
+
+/* Neither an error the student caused nor a success — the human-check widget
+   could not load. Deliberately quieter than .error: the send button is still
+   live and the attempt may well go through, so this must read as a heads-up,
+   not as a failure. */
+.hint {
+  background-color: #fffbeb;
+  color: #92400e;
 }
 
 /* ---- Utilities ---- */

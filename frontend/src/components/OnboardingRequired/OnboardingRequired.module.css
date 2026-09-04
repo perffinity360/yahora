@@ -1,0 +1,287 @@
+/* frontend/src/components/OnboardingRequired/OnboardingRequired.module.css
+   Colours come from the tokens in src/styles/global.css — nothing is hardcoded
+   except the rgba() tints derived from those same brand hues, which is the
+   pattern the onboarding and auth cards already use. */
+
+.gate {
+  /* --app-chrome is measured at runtime in App.jsx (the demo banner changes
+     it), so never subtract a fixed navbar height here. */
+  min-height: calc(100dvh - var(--app-chrome));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background-color: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* --- Atmosphere: two soft brand-coloured glows behind the card --- */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.45;
+  z-index: 1;
+  pointer-events: none;
+  animation: float 7s ease-in-out infinite;
+}
+
+.orbPurple {
+  width: 380px;
+  height: 380px;
+  background: var(--purple-light);
+  top: -140px;
+  left: -120px;
+}
+
+.orbPink {
+  width: 300px;
+  height: 300px;
+  background: var(--pink-dark);
+  bottom: -110px;
+  right: -90px;
+  animation-delay: -3.5s; /* desync from the purple orb */
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-22px);
+  }
+}
+
+/* --- The notice card --- */
+.card {
+  position: relative;
+  z-index: 2;
+  width: min(34rem, 100%);
+  padding: 2.75rem 2.5rem 2.25rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+  animation: riseIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* A single accent stroke along the top edge — the one bold mark on the card. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  border-radius: 1.5rem 1.5rem 0 0;
+  background: linear-gradient(90deg, var(--purple) 0%, var(--pink-dark) 100%);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+  border-radius: 50%;
+  color: var(--white);
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink-dark) 100%);
+  box-shadow: 0 8px 20px rgba(128, 0, 128, 0.28);
+  animation: riseIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 80ms;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pink-dark);
+}
+
+.title {
+  margin: 0 0 0.85rem;
+  font-size: 1.6rem;
+  line-height: 1.25;
+  color: var(--purple-dark);
+}
+
+.body {
+  margin: 0 auto 1.5rem;
+  max-width: 27rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--black-soft);
+  opacity: 0.82;
+}
+
+/* --- What's still missing --- */
+.checklist {
+  list-style: none;
+  margin: 0 0 1.75rem;
+  padding: 1rem 1.1rem;
+  text-align: left;
+  border: 1px solid rgba(235, 72, 127, 0.18);
+  border-radius: 1rem;
+  background: var(--pink-bg);
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--purple-dark);
+  animation: riseIn 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.checkItem + .checkItem {
+  margin-top: 0.6rem;
+}
+
+.checkDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  color: var(--white);
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink-dark) 100%);
+}
+
+/* --- Actions --- */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 2.7rem;
+  padding: 0 1.4rem;
+  border-radius: 2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.primaryBtn {
+  color: var(--white);
+  border: none;
+  background: linear-gradient(135deg, var(--purple) 0%, var(--pink-dark) 100%);
+  box-shadow: 0 8px 20px rgba(128, 0, 128, 0.3);
+}
+
+.primaryBtn:hover {
+  color: var(--white);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(128, 0, 128, 0.4);
+}
+
+.primaryBtn:active {
+  transform: scale(0.98);
+  box-shadow: 0 6px 14px rgba(128, 0, 128, 0.3);
+}
+
+.secondaryBtn {
+  color: var(--purple-dark);
+  background-color: var(--white);
+  border: 1px solid rgba(235, 72, 127, 0.25);
+}
+
+.secondaryBtn:hover {
+  color: var(--white);
+  background-color: var(--purple-dark);
+  border-color: var(--purple-dark);
+  transform: translateY(-2px);
+}
+
+.secondaryBtn:active {
+  transform: scale(0.98);
+}
+
+.primaryBtn:focus-visible,
+.secondaryBtn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+}
+
+.footnote {
+  margin: 1.1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--black-soft);
+  opacity: 0.55;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 2.25rem 1.4rem 1.9rem;
+  }
+
+  .title {
+    font-size: 1.3rem;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .primaryBtn,
+  .secondaryBtn {
+    width: 100%;
+  }
+}
+
+/* Entrances and the floating orbs are decoration; honour the OS setting. */
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .card,
+  .badge,
+  .checkItem {
+    animation: none;
+  }
+
+  .primaryBtn,
+  .secondaryBtn {
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+
+  .primaryBtn:hover,
+  .secondaryBtn:hover,
+  .primaryBtn:active,
+  .secondaryBtn:active {
+    transform: none;
+  }
+}

@@ -12,7 +12,9 @@ import {
 import UniversityModal from "../../components/modal/UniversityModal";
 import { useAuth } from "../../contexts/AuthContext";
 import styles from "./Auth.module.css";
-import { API_BASE_URL } from '../../config/urls';
+import { Turnstile } from "@marsidev/react-turnstile";
+import { API_BASE_URL, getTurnstileSiteKey } from '../../config/urls';
+import { getDeviceId } from '../../config/deviceId';
 
 // Persisted across in-tab reloads so that opening the mail app on mobile to
 // fetch the OTP — which can drop the page from memory and reload it on return —
@@ -57,6 +59,169 @@ const formatWait = (totalSeconds) => {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 };
 
+/**
+ * A wait a student can actually read: "23h 41m", "9m 05s", "0:44".
+ *
+ * The daily cap is a rolling 24 hours, so `formatWait` alone would render it
+ * as "1440:00" — a number nobody can parse into "come back tomorrow". A flat
+ * "try again later" was the other extreme: honest, but it leaves them with no
+ * idea whether to wait a minute or a day, and no reason to believe the account
+ * still exists.
+ */
+const formatCountdown = (totalSeconds) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  // Seconds are dropped above an hour on purpose: a digit flickering once a
+  // second next to "23h" reads as broken, not as precise.
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  return `${seconds}s`;
+};
+
+// This browser's record of the codes it has sent, keyed BY EMAIL:
+//   { "[email protected]": { sends: [epochMs, ...], until: epochMs } }
+//
+// ⚠ Keyed by email because every server limit it mirrors is per email. A single
+// global deadline meant sending a code to one address disabled the button for a
+// different one, which the server would happily have allowed.
+//
+// ⚠ TIMESTAMPS, never "seconds remaining". If we stored "47 seconds left" and
+// the student came back three minutes later we would restore 47 and make them
+// wait all over again. A fixed point in time comes out right whenever they
+// return, including after a reload.
+//
+// localStorage, not sessionStorage: the server counts across tabs and across a
+// closed tab too, so the button has to agree with it there as well.
+const OTP_SENDS_KEY = "yahora_otp_sends";
+
+// ⚠ THESE THREE MIRROR THE SERVER — backend/src/modules/auth/auth.controller.js
+// (OTP_EMAIL_FREE_REQUESTS, OTP_EMAIL_COOLDOWN_SECONDS, OTP_WINDOW_SECONDS).
+// They exist so the button can be right BEFORE a request is spent instead of
+// after a 429. If they drift, the button promises something the server refuses
+// — or, as happened here, refuses something the server would have allowed.
+const OTP_FREE_REQUESTS = 3;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const OTP_WINDOW_SECONDS = 24 * 60 * 60;
+
+// Above this the countdown moves to the message line, where there is room to
+// spell out hours and minutes. Below it, the disabled button carries the
+// mm:ss on its own and needs no second line saying the same thing.
+const OTP_TIMER_MAX_SECONDS = 10 * 60;
+
+// Resolved ONCE, at module scope, and never inside render.
+//
+// getTurnstileSiteKey() throws when VITE_TURNSTILE_SITE_KEY is missing — see
+// config/urls.js for why it refuses to fall back to a hardcoded default.
+// Catching it here turns "somebody forgot a line in .env" into one explained
+// message on one form, instead of an exception thrown on every render of the
+// login page. The key is public by design; the SECRET half lives in Supabase
+// and must never appear in this package.
+let TURNSTILE_SITE_KEY = "";
+try {
+  TURNSTILE_SITE_KEY = getTurnstileSiteKey();
+} catch (err) {
+  console.error(err);
+}
+
+const normaliseEmail = (email) => (email || "").trim().toLowerCase();
+
+/** The whole ledger. A corrupt value must never take the login page down. */
+const readLedger = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(OTP_SENDS_KEY));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+/** One email's entry, with sends that have aged out of the window dropped. */
+const readEntry = (ledger, key) => {
+  const entry = ledger[key] || {};
+  const cutoff = Date.now() - OTP_WINDOW_SECONDS * 1000;
+  return {
+    sends: (Array.isArray(entry.sends) ? entry.sends : []).filter(
+      (t) => t > cutoff,
+    ),
+    until: Number(entry.until) || 0,
+  };
+};
+
+/** Save, dropping every address there is nothing left to remember about. */
+const writeLedger = (ledger) => {
+  const now = Date.now();
+  const cutoff = now - OTP_WINDOW_SECONDS * 1000;
+  const pruned = {};
+
+  for (const [key, entry] of Object.entries(ledger)) {
+    const sends = (Array.isArray(entry.sends) ? entry.sends : []).filter(
+      (t) => t > cutoff,
+    );
+    const until = Number(entry.until) || 0;
+    // Without this the ledger grows forever on a shared campus laptop.
+    if (sends.length || until > now) pruned[key] = { sends, until };
+  }
+
+  try {
+    localStorage.setItem(OTP_SENDS_KEY, JSON.stringify(pruned));
+  } catch {
+    // Private mode, or quota. The server is the real limiter; losing the
+    // mirror costs a nicer button, not correctness.
+  }
+};
+
+/**
+ * Seconds the Send button must stay disabled for `email`; 0 when it is free.
+ *
+ * Two sources, whichever runs later:
+ *  - our mirror of the server's own rule, below;
+ *  - a deadline the server handed us in a 429, which is authoritative. It is
+ *    the only one that knows about sends this browser never saw (another
+ *    device, cleared storage) and about the 24-hour daily cap.
+ */
+const readOtpCooldown = (email) => {
+  const key = normaliseEmail(email);
+  if (!key) return 0;
+
+  const { sends, until } = readEntry(readLedger(), key);
+
+  // THE FIRST THREE ARE FREE — the first code plus two retries for a slow mail
+  // server — and only from the fourth is there a minute between them. Starting
+  // the countdown on send #1 made the button stricter than the server and ate
+  // both of those retries: the student came back from "wrong email?" to a
+  // button already counting down for no reason.
+  const localUntil =
+    sends.length >= OTP_FREE_REQUESTS
+      ? Math.max(...sends) + OTP_RESEND_COOLDOWN_SECONDS * 1000
+      : 0;
+
+  const deadline = Math.max(localUntil, until);
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+};
+
+/** Note a code that was ACTUALLY sent, so the free-request count is right. */
+const recordOtpSend = (email) => {
+  const key = normaliseEmail(email);
+  if (!key) return;
+  const ledger = readLedger();
+  const entry = readEntry(ledger, key);
+  ledger[key] = { ...entry, sends: [...entry.sends, Date.now()] };
+  writeLedger(ledger);
+};
+
+/** Store a deadline the SERVER gave us, which outranks anything we counted. */
+const recordServerCooldown = (email, seconds) => {
+  const key = normaliseEmail(email);
+  if (!key) return;
+  const wait = Math.max(0, Math.ceil(Number(seconds) || 0));
+  const ledger = readLedger();
+  const entry = readEntry(ledger, key);
+  ledger[key] = { ...entry, until: Date.now() + wait * 1000 };
+  writeLedger(ledger);
+};
+
 const Auth = () => {
   const navigate = useNavigate();
   const { login, setProfileComplete } = useAuth();
@@ -89,6 +254,21 @@ const Auth = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  // Lazy initialiser, so a reload mid-countdown resumes on the right number
+  // instead of showing a clickable button the server would still refuse.
+  const [otpCooldownSeconds, setOtpCooldownSeconds] = useState(() =>
+    readOtpCooldown(email),
+  );
+  // The Turnstile token for the NEXT request-otp. request-otp is minted on
+  // Supabase's ANON client (backend/src/config/supabase.js), because GoTrue
+  // exempts service-role callers from captcha entirely — so a tokenless
+  // request is refused outright with 400 CAPTCHA_FAILED.
+  const [captchaToken, setCaptchaToken] = useState("");
+  // Only for the explanatory line below the widget. The button is gated on the
+  // TOKEN, never on this — an error means there is no token, which is already
+  // the thing that disables it.
+  const [captchaError, setCaptchaError] = useState(!TURNSTILE_SITE_KEY);
+  const turnstileRef = useRef(null);
   const videoRef = useRef(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showDemoOptions, setShowDemoOptions] = useState(false);
@@ -102,11 +282,32 @@ const Auth = () => {
 
   // TOO_MANY_ATTEMPTS lockout, ticking down so the student can see it moving
   // rather than reading a static number and guessing whether it is stale.
+  //
+  // The OTP cooldown rides the SAME tick. Two timers doing one job in one file
+  // is how a small bug quietly becomes two. The only difference is that the
+  // cooldown re-reads its stored deadline each second rather than subtracting
+  // one: a backgrounded tab has its timers throttled, and re-reading means it
+  // comes back showing the truth instead of however far it drifted.
   useEffect(() => {
-    if (lockoutSeconds <= 0) return undefined;
-    const timer = setTimeout(() => setLockoutSeconds((s) => s - 1), 1000);
+    if (lockoutSeconds <= 0 && otpCooldownSeconds <= 0) return undefined;
+    const timer = setTimeout(() => {
+      setLockoutSeconds((s) => (s > 0 ? s - 1 : 0));
+      setOtpCooldownSeconds((s) => (s > 0 ? readOtpCooldown(email) : 0));
+    }, 1000);
     return () => clearTimeout(timer);
-  }, [lockoutSeconds]);
+  }, [lockoutSeconds, otpCooldownSeconds, email]);
+
+  // The cooldown belongs to an ADDRESS, not to the page, so editing the field
+  // has to re-answer the question. Without this, typing a second address left
+  // the first one's countdown on screen — the button refusing a send the
+  // server would have accepted.
+  useEffect(() => {
+    setOtpCooldownSeconds(readOtpCooldown(email));
+  }, [email]);
+
+  // Every place the ledger changes goes through here, so the stored deadline
+  // and the number on screen can never disagree.
+  const syncOtpCooldown = () => setOtpCooldownSeconds(readOtpCooldown(email));
 
   const switchTab = (next) => {
     setTab(next);
@@ -166,6 +367,9 @@ const Auth = () => {
 
   const handleRequestOtp = async (e) => {
     e.preventDefault();
+    // The button is disabled while counting; this is the belt to that braces
+    // (a submit can still arrive from Enter in the email field).
+    if (otpCooldownSeconds > 0) return;
     setLoading(true);
     setMessage("");
     try {
@@ -173,16 +377,68 @@ const Auth = () => {
         `${API_BASE_URL}/auth/request-otp`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          headers: {
+            "Content-Type": "application/json",
+            // Opts this browser into its own per-device quota. Omitting it is
+            // never an error server-side, but then a shared campus laptop has
+            // no quota of its own to spend. See config/deviceId.js.
+            "X-Device-Id": getDeviceId(),
+          },
+          // Forwarded verbatim to Supabase, which is the only party that can
+          // judge it. Empty is not an error on our backend — it passes
+          // `undefined` on — but GoTrue rejects it whenever captcha
+          // protection is on for the project, which is why the widget
+          // gates the submit button below.
+          body: JSON.stringify({ email, captchaToken }),
         },
       );
       const data = await response.json();
+
+      // Turnstile tokens are strictly single-use, and this one is now spent
+      // whatever the server said. Clearing it before any branch below means
+      // no path can ever re-send it — a replayed token fails as surely as a
+      // missing one, and it would fail on the RESEND, making the widget look
+      // like the thing that was broken.
+      setCaptchaToken("");
+      turnstileRef.current?.reset();
+
       if (response.ok) {
+        // Record the send and let readOtpCooldown decide. It mirrors the
+        // server: sends 1-3 leave the button live, and only the fourth starts
+        // a gap. Unconditionally starting one here is what put a 60-second
+        // countdown on the very first code.
+        recordOtpSend(email);
+        syncOtpCooldown();
         sessionStorage.setItem(AUTH_STEP_KEY, "2");
         sessionStorage.setItem(AUTH_EMAIL_KEY, email);
         setStep(2);
         setMessage(`Code sent to ${email}`);
+      } else if (data.error === "RATE_LIMITED") {
+        // One code covers all of the server's OTP limits — the per-email
+        // cooldown, the daily email cap, the daily device cap and Supabase's
+        // own gap. Deliberately so: the student gets one countdown and never
+        // has to care which fired. The disabled button carries the whole
+        // message, so no error line as well.
+        recordServerCooldown(
+          email,
+          Number(data.retry_after_seconds) || OTP_RESEND_COOLDOWN_SECONDS,
+        );
+        syncOtpCooldown();
+        setMessage("");
+      } else if (data.error === "CAPTCHA_FAILED") {
+        // Retryable AT ONCE — no cooldown. The widget above has already been
+        // reset, so by the time they read this a fresh token is usually
+        // waiting and the button is live again.
+        setMessage(
+          "We could not verify that you are a real visitor. Please try again.",
+        );
+      } else if (data.error === "SERVICE_BUSY") {
+        // The platform-wide circuit breaker. Not this student's doing and not
+        // something they can wait out on a timer we could name, so no
+        // countdown and nothing that reads as their fault.
+        setMessage(
+          "We're having trouble sending codes right now. Please try again in a few minutes.",
+        );
       } else {
         setMessage(data.error || data.message || "Something went wrong");
       }
@@ -506,17 +762,99 @@ const Auth = () => {
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
+                    {/* No token, no send. request-otp is minted on Supabase's
+                        anon client, so GoTrue polices the captcha and a
+                        tokenless request is refused outright — letting the
+                        click through would spend an attempt to earn a
+                        guaranteed 400. This also closes the race where a fast
+                        student submits before the widget has finished.
+                        Runbook N-Block C, C4.3. */}
                     <button
                       type="submit"
                       className={`${styles.insideBtn} ${styles.brandGradient}`}
-                      disabled={loading}
+                      disabled={
+                        loading || otpCooldownSeconds > 0 || !captchaToken
+                      }
                     >
-                      {loading ? "Sending…" : "Send Code"}
+                      {loading
+                        ? "Sending…"
+                        : otpCooldownSeconds > OTP_TIMER_MAX_SECONDS
+                        ? // A disabled button still reading "Send Code" looks
+                          // like the page is broken. The message below carries
+                          // the detail; this just has to stop being a lie.
+                          "Locked"
+                        : otpCooldownSeconds > 0
+                        ? `Send in ${formatWait(otpCooldownSeconds)}`
+                        : "Send Code"}
                     </button>
                   </div>
 
-                  {message && (
-                    <p className={`${styles.formMessage} ${styles.error}`}>{message}</p>
+                  {/* OTP FORM ONLY — deliberately not on the Username &
+                      Password tab above. The attack this stops is fake account
+                      creation, which can only happen through OTP; on the
+                      password form it would be friction for every returning
+                      student and defend nothing. Runbook N-Block C, C4.4.
+
+                      In Managed mode this usually draws NOTHING. It sits inside
+                      step 1 on purpose: coming back from step 2 remounts it,
+                      which is exactly the fresh token a second send needs. */}
+                  {TURNSTILE_SITE_KEY && (
+                    <div className={styles.turnstile}>
+                      <Turnstile
+                        ref={turnstileRef}
+                        siteKey={TURNSTILE_SITE_KEY}
+                        onSuccess={(token) => {
+                          setCaptchaToken(token);
+                          setCaptchaError(false);
+                        }}
+                        // ~5-minute lifetime. A student who opened the page,
+                        // went to find their student email and came back would
+                        // otherwise submit a dead token and be told the captcha
+                        // failed, with nothing on screen to explain it.
+                        onExpire={() => setCaptchaToken("")}
+                        onError={() => {
+                          setCaptchaToken("");
+                          setCaptchaError(true);
+                        }}
+                        options={{
+                          theme: "light",
+                          action: "request-otp",
+                          // Draws only when Cloudflare actually wants an
+                          // interaction, which is what keeps the form from
+                          // carrying a permanent empty box.
+                          appearance: "interaction-only",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {captchaError && (
+                    <p className={`${styles.formMessage} ${styles.hint}`}>
+                      Something went wrong. Please reload or try again after
+                      some time. If you use an ad blocker or VPN, allow
+                      challenges.cloudflare.com.
+                    </p>
+                  )}
+
+                  {/* Long waits get the countdown here rather than on the
+                      button, which has no room for hours. The daily cap is a
+                      rolling 24 hours, so this is the difference between "come
+                      back tomorrow morning" and a dead end that reads like the
+                      account is gone. Under ten minutes the disabled button is
+                      already counting and explains itself, so nothing extra is
+                      said. */}
+                  {otpCooldownSeconds > OTP_TIMER_MAX_SECONDS ? (
+                    <p className={`${styles.formMessage} ${styles.error}`}>
+                      Too many codes requested for this email. You can try
+                      again in{" "}
+                      <strong className={styles.countdown}>
+                        {formatCountdown(otpCooldownSeconds)}
+                      </strong>{"."}
+                    </p>
+                  ) : (
+                    message && (
+                      <p className={`${styles.formMessage} ${styles.error}`}>{message}</p>
+                    )
                   )}
 
                   <div

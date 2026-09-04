@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@marsidev/react-turnstile": "^1.6.1",
     "@supabase/supabase-js": "^2.101.1",
     "bootstrap": "^5.3.8",
     "lucide-react": "^1.9.0",
