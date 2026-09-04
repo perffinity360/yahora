@@ -17,6 +17,7 @@ import {
  Check,
  X,
  Loader2, // Imported the loading spinner icon
+ ArrowLeft,
 } from "lucide-react";
 import styles from "./onboarding.module.css";
 // IMPORT YOUR FRONTEND SUPABASE CLIENT
@@ -198,7 +199,34 @@ const Onboarding = () => {
  // Safely grab the passed profile, or default to an empty object if it's a new user
  const existingProfile = location.state?.profile || {};
 
- const { login, setProfileComplete } = useAuth();
+ const { login, setProfileComplete, profileComplete, logout } = useAuth();
+
+ // Where "back" goes depends on why they are here, and the two cases are not
+ // the same page at all:
+ //
+ //  • Fresh signup (profile not complete) — they just verified an OTP and the
+ //    only place behind them is the login form. Going there SIGNS THEM OUT
+ //    first, and has to: <GuestOnly> in App.jsx turns any authenticated visitor
+ //    away from /auth, so navigating with the half-finished session still live
+ //    would bounce them straight back to this form. That is also why the button
+ //    is labelled rather than being a bare ← — it abandons the signup, and that
+ //    should be readable before it is pressed, not discovered after.
+ //
+ //  • Editing an existing profile (Dashboard → "Edit profile") — nothing has
+ //    been abandoned and the session is fine; send them back to the dashboard.
+ //
+ // logout() flips isAuthenticated urgently while navigate() commits in a
+ // transition, so there is a render at /onboarding with no session. <RequireAuth>
+ // resolves that render to /auth too, which is where we were going anyway.
+ const handleBack = () => {
+   if (profileComplete) {
+     navigate("/dashboard");
+     return;
+   }
+
+   logout();
+   navigate("/auth", { replace: true });
+ };
 
  // 1. Form State (Pre-filled with existing data if available)
  const [formData, setFormData] = useState({
@@ -693,6 +721,20 @@ const Onboarding = () => {
      <div className={`${styles.glowOrb} ${styles.pinkOrb}`}></div>
 
      <div className={styles.onboardingCard}>
+       <button
+         type="button"
+         onClick={handleBack}
+         className={styles.backBtn}
+         title={
+           profileComplete
+             ? "Return to your dashboard"
+             : "Leave signup and return to the login page"
+         }
+       >
+         <ArrowLeft size={16} strokeWidth={2.4} />
+         <span>{profileComplete ? "Back to dashboard" : "Back to login"}</span>
+       </button>
+
        <div className={styles.onboardingHeader}>
          <h2>{existingProfile.full_name ? "Update Your Profile" : "Complete Your Profile"}</h2>
          <p>

@@ -73,3 +73,35 @@ export const API_BASE_URL = `${API_ORIGIN}/api`;
 export const SUPABASE_URL =
   resolveDevHost(import.meta.env.VITE_SUPABASE_URL) ||
   `${window.location.origin}/supabase`;
+
+/* ── Cloudflare Turnstile ──────────────────────────────────────────────────
+   Not a URL, but it lives here for the reason the URLs do: import.meta.env is
+   read in exactly one file, so no component ever touches it directly.
+
+   The SITEKEY is public by design — it names the widget and nothing else. The
+   SECRET key is Supabase's, and must never enter this package. Locally the
+   Cloudflare dummy pair is in use; the two halves must match, dummy with dummy
+   or real with real, or every verification fails. See .env.example.
+
+   Deliberately a function, not an eagerly-resolved `const`. This module is
+   imported by nearly every page, and Vite inlines these values at build time,
+   so throwing at module scope would turn a missing captcha key into a blank
+   site — marketplace, messages, everything — instead of a readable failure at
+   the one widget that actually needs the key. */
+export function getTurnstileSiteKey() {
+  const siteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY ?? '').trim();
+
+  // No hardcoded fallback on purpose. A default here would silently ship the
+  // dummy "always passes" key to production, where it would wave through
+  // exactly the flood the widget exists to stop.
+  if (!siteKey) {
+    throw new Error(
+      'VITE_TURNSTILE_SITE_KEY is not set. Add it to frontend/.env — ' +
+        'frontend/.env.example has the value to use locally and explains the ' +
+        'production one. Restart the Vite dev server after editing .env; the ' +
+        'value is inlined at build time.',
+    );
+  }
+
+  return siteKey;
+}
