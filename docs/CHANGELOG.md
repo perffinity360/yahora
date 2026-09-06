@@ -277,6 +277,43 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-04 — Launch blockers written up in PRE_LAUNCH_CHECKLIST.md (Vishwajeet)
+
+### What changed
+`docs/PRE_LAUNCH_CHECKLIST.md` is no longer only about email capacity. It now opens with a
+**"Launch blockers — as of 4 Sep 2026"** list holding all five known blockers; the existing
+OTP/email content stayed exactly as it was and became "blocker 1 in detail". No code changed.
+
+### The four new items
+2. 🚨 **Production CORS answers every origin.** `backend/src/app.js:69` returns `'*'` when
+   `NODE_ENV=production`. Not session-hijackable (bearer tokens, not cookies), but any page
+   can drive `/api/auth/request-otp`, which undercuts Blocks D and E. Fix is an explicit
+   production allowlist containing the Netlify domain. **`allowedHeaders` at line 83 is
+   already correct — do not touch it.**
+3. **Community posts cannot be commented on.** `public.comments` has `product_id` and no
+   `post_id`, and no post-comment table exists. Found while seeding demo engagement. Needs a
+   migration + UI; Phase 3 scope.
+4. **`docs/DESIGN.md` describes a rebrand that was never adopted.** Both `CLAUDE.md` files
+   tell Claude Code to read it before any UI work, and Phase 3 is all UI. Adopt it or retract
+   it — otherwise every Phase 3 session starts from a false premise.
+5. **Prod/local divergence, one instance, already fixed.** On 3 Sep production had
+   `yahoo.com` as IIT Tirupati's domain and `gmail.com` as NIT Delhi's. `handle_new_user`
+   assigns a university by email domain, so any gmail signup would have been enrolled as an
+   NIT Delhi student. Corrected in the dashboard.
+
+### Neeraj — what this means for you
+- **Blocker 4 is yours to weigh in on** before Phase 3 UI starts. Don't build against
+  DESIGN.md until it's adopted or retracted.
+- **Blocker 3 will need a migration request** if the community feed lands in your scope.
+- Blocker 2 is a backend/infra fix (Vishwajeet). Nothing for you to change.
+
+### What NOT to do yet
+Nothing here has been fixed. Do not assume the CORS allowlist exists, and do not write
+`post_id` into any query — the column does not exist.
+
+---
+
+
 ## 2026-09-03 — Seed users: six prefixed test accounts in seed.sql (Vishwajeet)
 
 ### Test data
