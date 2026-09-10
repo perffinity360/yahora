@@ -277,240 +277,51 @@ diff that was never the problem.
 
 ## Entries
 
-## 2026-09-10 — mobile: Expo SDK 56 → 57 (Vishwajeet)
+## 2026-09-10 — CORS: production wildcard replaced with an explicit allowlist (Neeraj, in Vishwajeet's area)
 
-Nothing in `backend/`, `frontend/` or `supabase/` changed. No migrations, no endpoints, no
-response shapes. This entry exists because the mobile client's SDK floor moved and that is
-not visible from any file Neeraj works in.
-
-### Why now
-Expo Go on the test device auto-updated to SDK 57 and refused to open an SDK 56 project
-("Project is incompatible with this version of Expo Go"). Expo Go only ever supports the
-current SDK, so this was going to happen on its own schedule, not ours.
+**`backend/src/app.js` is Vishwajeet's frozen file — I edited it with his go-ahead.** Only the
+CORS block changed. No route mount, no middleware order, nothing else in the file was touched.
 
 ### What changed
-- `expo` ~56.0.12 → ^57.0.0; React Native 0.85.3 → 0.86.3.
-- **React is unchanged at 19.2.3.** SDK 57 is one of React Native's declared
-  no-user-facing-breaking-changes releases — it is RN 0.86 plus Android edge-to-edge fixes,
-  light/dark emulation in RN DevTools, and rendering/layout/animation fixes.
-- All ten `expo-*` packages realigned to ~57.x by `npx expo install --fix`, plus
-  gesture-handler ~2.32.0, reanimated 4.5.1, react-native-screens ~4.26.0,
-  react-native-worklets 0.10.1.
-- `expo-font` added. It is a required peer of `@expo/vector-icons` that was missing before
-  this upgrade — `expo-doctor` flagged it, and outside Expo Go it is a crash, not a warning.
-- `app.json`: `expo-status-bar` and `expo-font` config plugins added automatically by the CLI.
+- Production answered **every** origin with `Access-Control-Allow-Origin: *`. Any website on
+  the internet could call this API from a logged-in student's browser and read the reply,
+  which made the Phase 2 Turnstile and rate-limiting work bypassable from any page.
+- It is now an exact-string allowlist: `ALLOWED_ORIGINS` = `PRODUCTION_ORIGINS` (in `app.js`)
+  + the comma-separated `WEB_ORIGINS` env var +, in development only, the local origins below.
+- `credentials: true` added. `allowedHeaders` unchanged — `X-Device-Id` still listed.
+- A refused origin now gets a normal response with **no** `Access-Control-Allow-Origin` header,
+  so the browser blocks the read. No 500, no stack trace in the logs.
+- See API.md, "CORS" in Part 1, for the full rules.
 
-### Verified
-- `npx expo-doctor` — 21/21 checks pass (it was 20/21 before `expo-font` went in).
-- `npx tsc --noEmit` — clean.
-- Not yet opened on a device. Vishwajeet verifies in Expo Go.
+### ⚠ ACTION REQUIRED BEFORE THE NEXT PRODUCTION DEPLOY — Vishwajeet
+**`PRODUCTION_ORIGINS` is empty and marked TODO.** The deployed frontend's domain is not in
+this repo anywhere — `frontend/netlify.toml` has no domain, there is no `.netlify/state.json`,
+no env var names one — and I would not guess it. **Until you fill that array or set
+`WEB_ORIGINS` on the Render deploy, every browser request from the hosted site will be refused.**
+The Expo app is NOT affected (see below). Ping me the domain and I'll put it in the file.
 
-### What NOT to do yet
-- Don't assume the web app moved. `frontend/` is untouched — React and every web dependency
-  are exactly where they were.
-- Don't add `--legacy-peer-deps` by hand in `mobile/`; `mobile/.npmrc` already sets it.
+### What is NOT affected
+- **The mobile app.** `if (!origin) return callback(null, true)` is the first check and is
+  unchanged in both environments: Expo, curl, Postman and server-to-server calls send no
+  `Origin` header, because CORS is a browser mechanism. Do not remove that line.
+- **LAN dev testing.** `isLocalNetworkOrigin` (loopback + `10.x` / `192.168.x` / `172.16–31.x`,
+  any port) is intact, but is now consulted **only** when `NODE_ENV !== 'production'`. A phone
+  or second laptop on the Wi-Fi still reaches the dev server.
 
----
+### One change beyond the brief
+The dev allowlist includes `localhost:3000` / `127.0.0.1:3000` as well as `:5173`. **3000 is
+this repo's actual Vite port** (`vite.config.js` defaults `VITE_DEV_PORT` to 3000, strictPort
+on); 5173 is Vite's stock default and is kept as a fallback. If you run a per-developer port,
+put your origin in `WEB_ORIGINS` rather than editing `app.js`.
 
-## 2026-09-08 — 📮 HANDOFF A: Phase 2 complete — OTP limits, Turnstile, migrations 008–012 (Vishwajeet)
-
-Phase 2 wrap-up. The endpoint details are in `backend/API.md` §request-otp and are not repeated
-here — read that first, then this for what it means for you.
-
-### Migrations applied
-
-Five files, **008 through 012**. All were written locally between 31 Aug and 3 Sep; all five
-reached production on **4 Sep**. Until that push, production was running five migrations behind
-local — see [Launch blockers](#launch-blockers--updated-8-sep-2026) below, which is the more
-important half of this entry.
-
-| # | file | what it does |
-|---|---|---|
-| 008 | `20260831085218_otp_rate_limits.sql` | The `otp_requests` ledger that every OTP limit counts against, plus `cleanup_unverified_users()` and the ledger trim — both hourly cron in `utils/cronJobs.js`. |
-| 009 | `20260831095101_username_no_double_separator.sql` | A username may no longer contain two separators in a row. |
-| 010 | `20260903115437_pin_search_path_cascade_triggers.sql` | `SET search_path` on the five trigger functions a cascade from `auth.users` reaches. |
-| 011 | `20260903121302_counter_triggers_security_definer.sql` | `SECURITY DEFINER` on the three counter trigger functions. |
-| 012 | `20260903123107_pin_search_path_remaining_functions.sql` | `SET search_path` on the remaining six public functions, `get_user_inbox` and `toggle_comment_vote` among them. Nothing was broken by these; it closes the class of bug 010 found. |
-
-**010 + 011 together are what fixed account deletion.** Deleting a row from `auth.users`
-cascades into `public.users` and on into nine more tables, firing row triggers on the way.
-Three of those trigger bodies named public tables unqualified, so on GoTrue's connection — which
-does not carry `public` on its search_path — the delete died with `relation "products" does not
-exist`, surfacing as *"Database error deleting user"*. 010 made the names resolve; 011 gave the
-triggers the privileges to act once they did.
-
-**009 is the one that touches your UI.** `rahul..sharma`, `rahul._sharma` and `rahul-_sharma`
-are now rejected by the format `CHECK`, not just `..`. Migration 005 deliberately allowed
-repeated separators to match Instagram and wrote down the cost — they are impersonation vectors
-on a campus app — and left it to the Phase 8 moderation queue. This closes it in the format rule
-instead. **If your client-side username regex still allows a separator pair, it now shows a
-handle as valid that the database will reject on submit.**
-
-### New endpoints
-
-None. Phase 2 added no routes.
-
-### Changed endpoints (NOT breaking — additive)
-
-`POST /api/auth/request-otp` only. **Shapes are unchanged and every existing call still works**;
-what is new is one optional header, one optional body field, and three error codes a client that
-only ever handled 200/400/500 has not seen before. All of it is specified in `backend/API.md`
-§request-otp — including the exact JSON body of each response, which is what you want to code
-against.
-
-The short version of what to handle:
-
-- **`X-Device-Id`** — an opaque id your client generates once and persists. Optional; omitting it
-  is never an error, it only opts the caller out of the per-device cap. `frontend/src/config/deviceId.js`
-  already does this. Note it is **not** a CORS-safelisted header, which is why `allowedHeaders`
-  in `app.js` lists it — do not remove it.
-- **`captchaToken`** — the Cloudflare Turnstile token from the widget. **Our backend never
-  verifies it; Supabase does.** We forward it verbatim and have no secret key. Optional today.
-- **`429 RATE_LIMITED`** — carries `retry_after_seconds` and a `Retry-After` header. One code for
-  every limit on purpose; show one countdown, do not branch on which fired.
-- **`503 SERVICE_BUSY`** — the global circuit breaker. Platform-wide, **not** about this student.
-  Show "try again later", never a countdown, and do not retry automatically.
-- **`400 CAPTCHA_FAILED`** — reset the widget and let them retry **immediately**. There is no
-  cooldown to wait out, and a rejected token costs them no quota.
-
-### New fields on existing responses
-
-None.
-
-### Test data
-
-**`supabase/seed.sql` now carries six log-in-able accounts** — full table and ids in the
-[2026-09-03 entry](#2026-09-03--seed-users-six-prefixed-test-accounts-in-seedsql-vishwajeet).
-They follow the `v-` / `n-` convention from [Shared machine rules](#shared-machine-rules): **`v-`
-is mine, `n-` is yours**, on emails, usernames and device ids alike. One database means one
-`users` table, and without the prefix you cannot tell whose row you are looking at.
-
-`v-test1`/`n-test1` (IIITDM Kurnool) and `v-test2`/`n-test2` (NIET) are paired on one campus each
-because messaging and community are campus-scoped — testing them needs two accounts on the same
-campus owned by different people. `v-test3`/`n-test3` are deliberately incomplete (no username,
-`is_profile_complete = false`) so the username flow can be retested without registering.
-
-They come from `seed.sql`, so **a `db reset` restores all six** — anything you break on them is
-undone, and any handle you claim on the two pending accounts is released.
-
-### The standard local reset — this is the sequence
-
-```bash
-supabase db reset                        # migrations + seed.sql (the six v-/n- accounts)
-node backend/scripts/seedLocal.js        # students and listings across the REAL universities
-node backend/scripts/seedDemo.js         # the isolated demo tenant
-```
-
-Run all three, in that order. `db reset` alone leaves you with the six seed accounts and no
-marketplace content. `seedLocal.js` is the one that puts rows on **both sides of a campus
-boundary**, which is the only way to test that isolation actually holds — `seedDemo.js` fills a
-single tenant and cannot show you that. `seedLocal.js` is local-only with **no override**, by
-design; `seedDemo.js` has an opt-in for the demo tenant that you should never need.
-
-> ⚠️ **On a shared machine, `supabase db reset` destroys the other developer's data.** There is
-> one database on `54321` and the reset does not spare anyone: every account either of us
-> registered while testing, every listing, every message, gone. It is rule 1 of
-> [Shared machine rules](#shared-machine-rules) — **only Vishwajeet runs it, and he announces it
-> here and on WhatsApp first.** If your test accounts vanished and you did not run anything,
-> this is what happened.
-
-### Launch blockers — updated 8 Sep 2026
-
-The list lives in `docs/PRE_LAUNCH_CHECKLIST.md`. This is the delta since it was written on 4 Sep.
-
-**6. Production ran five migrations behind local — ✅ RESOLVED 4 Sep 2026.**
-Kept on the list rather than deleted, because the record is worth more than the tidiness. 008
-through 012 existed locally and had never been pushed. The consequences were not subtle:
-
-- **Login was broken on production.** `request-otp` counts against `otp_requests`, and that table
-  arrived in 008. Without it every limit query errored, and the limiter **fails closed** — so the
-  endpoint returned a 500 on every single call. It read exactly like Supabase being down.
-- **Account deletion was broken on production**, per 010 + 011 above.
-
-Fixed with `supabase db push`; **all 13 migrations are now on production.** Verified after the
-push: login works, and a demo user was deleted through the Supabase dashboard without error —
-the first time that has succeeded.
-
-The lesson is the gap itself. Both failures were fixed locally days before production ever saw
-the fix, and neither was visible from a local machine. A migration written is not a migration
-applied.
-
-**2. Production CORS answers every origin — now the top open blocker.**
-Unchanged since 4 Sep: `backend/src/app.js` returns `'*'` for every origin when
-`NODE_ENV=production`, so any page can drive `/api/auth/request-otp` and undercut the limits
-above. Needs an explicit production allowlist holding the Netlify domain. **`allowedHeaders` is
-already correct — do not touch it**; dropping `X-Device-Id` from it fails every browser preflight.
-
-> ⚠️ **Item 1 in the checklist is not the migrations — it is the OTP ceilings, and it is still
-> open.** `OTP_HOURLY_CEILING` is 2,000/hour while Supabase stops sending at 30/hour, so the
-> circuit breaker is code that cannot execute in production. It is waiting on a business
-> decision (which Brevo plan), not on engineering, which is why CORS is the top item anyone can
-> actually go and fix. Do not read "item 2 is top" as "item 1 is done".
-
-**7. Mobile login fails against production — CAPTCHA. (Phase 3, new.)**
-Production has CAPTCHA protection enabled, and the Expo app sends no token:
-`mobile/src/contexts/AuthContext.tsx:108` posts `{ email }` and nothing else. Against production
-that is a `400 CAPTCHA_FAILED` on every attempt — **there is currently no way to log in to the
-mobile app on production.** Local is unaffected, because local runs the dummy "always passes"
-secret.
-
-The awkward part is that **Turnstile has no native React Native widget.** The fix is a
-WebView-based approach — render the widget in a `react-native-webview`, post the token back over
-the bridge, and send it as `captchaToken` like the web app does. Sizing, theming and the
-challenge-expiry callback all have to work inside that WebView. Mine to build; flagged here
-because it is the reason a mobile build against production looks broken and is not.
-
-### What NOT to do yet
-
-- **Do not assume the production CORS allowlist exists.** It does not. Blocker 2 is open.
-- **Do not build a mobile login flow against production** until blocker 7 lands. It cannot work.
-- **Do not treat `503 SERVICE_BUSY` as a user error.** No countdown, no auto-retry.
-- **Do not put a Turnstile secret key anywhere in `backend/` or `frontend/`.** The backend never
-  verifies the token and has no use for a secret; the browser only ever holds the public sitekey.
-  Local uses Cloudflare's dummy pair and production the real pair, and **a dummy sitekey against a
-  real secret is rejected every time, as is the reverse** — check that pairing first when local
-  auth fails for no visible reason.
-- **Do not run `supabase db push`, `db reset` or `config push`.** `config.toml` holds local test
-  values; pushing it would put a 1ms email cooldown on production.
-
----
-
-
-## 2026-09-04 — Launch blockers written up in PRE_LAUNCH_CHECKLIST.md (Vishwajeet)
-
-### What changed
-`docs/PRE_LAUNCH_CHECKLIST.md` is no longer only about email capacity. It now opens with a
-**"Launch blockers — as of 4 Sep 2026"** list holding all five known blockers; the existing
-OTP/email content stayed exactly as it was and became "blocker 1 in detail". No code changed.
-
-### The four new items
-2. 🚨 **Production CORS answers every origin.** `backend/src/app.js:69` returns `'*'` when
-   `NODE_ENV=production`. Not session-hijackable (bearer tokens, not cookies), but any page
-   can drive `/api/auth/request-otp`, which undercuts Blocks D and E. Fix is an explicit
-   production allowlist containing the Netlify domain. **`allowedHeaders` at line 83 is
-   already correct — do not touch it.**
-3. **Community posts cannot be commented on.** `public.comments` has `product_id` and no
-   `post_id`, and no post-comment table exists. Found while seeding demo engagement. Needs a
-   migration + UI; Phase 3 scope.
-4. **`docs/DESIGN.md` describes a rebrand that was never adopted.** Both `CLAUDE.md` files
-   tell Claude Code to read it before any UI work, and Phase 3 is all UI. Adopt it or retract
-   it — otherwise every Phase 3 session starts from a false premise.
-5. **Prod/local divergence, one instance, already fixed.** On 3 Sep production had
-   `yahoo.com` as IIT Tirupati's domain and `gmail.com` as NIT Delhi's. `handle_new_user`
-   assigns a university by email domain, so any gmail signup would have been enrolled as an
-   NIT Delhi student. Corrected in the dashboard.
-
-### Neeraj — what this means for you
-- **Blocker 4 is yours to weigh in on** before Phase 3 UI starts. Don't build against
-  DESIGN.md until it's adopted or retracted.
-- **Blocker 3 will need a migration request** if the community feed lands in your scope.
-- Blocker 2 is a backend/infra fix (Vishwajeet). Nothing for you to change.
-
-### What NOT to do yet
-Nothing here has been fixed. Do not assume the CORS allowlist exists, and do not write
-`post_id` into any query — the column does not exist.
-
----
+### How I tested it
+Extracted the real CORS block from `app.js` and drove it through `cors` on an ephemeral server.
+Verified: no-Origin allowed in dev **and** prod; `localhost:3000`/`:5173`, `192.168.1.42:8081`,
+`10.0.0.7:3001`, `172.20.5.5:3000`, `[::1]:3000` all reflected in dev; `evil.com` and
+`10.0.0.1.evil.com` (anchor-bypass attempt) refused in dev; in production `192.168.1.42:3000`,
+`localhost:3000`, `evil.com` and a trailing-slash variant of an allowlisted origin all refused,
+the exact allowlisted origin reflected, and the `OPTIONS` preflight returning 204 with
+`Content-Type,Authorization,X-Device-Id`. Not verified in a browser or against production.
 
 
 ## 2026-09-03 — Seed users: six prefixed test accounts in seed.sql (Vishwajeet)

@@ -29,16 +29,24 @@ const router = express.Router();
 // Configure multer to store file in memory (buffer) temporarily
 const upload = multer({ storage: multer.memoryStorage() });
 
-// GET /api/user/:userId/dashboard
-router.get('/:userId/dashboard', getDashboardData);
+// ⚠ SECURITY (CURRENT_STATE §"Known open issues" 1 and 2): the first three
+// routes below ran with NO auth at all. `:userId` was the only thing naming
+// the actor, so any caller who knew a UUID could read a private dashboard,
+// rewrite a student's row, or replace their avatar. `requireAuth` is now in
+// front of all three and each handler takes the actor from `req.user.id`.
+// The path param is kept only so the URLs stay unchanged for web and mobile.
 
-// PUT /api/user/:userId/profile
-router.put('/:userId/profile', updateProfile);
+// GET /api/user/:userId/dashboard — own dashboard only (403 otherwise).
+router.get('/:userId/dashboard', requireAuth, getDashboardData);
+
+// PUT /api/user/:userId/profile — writes the caller's own row, allow-listed.
+router.put('/:userId/profile', requireAuth, updateProfile);
 
 // POST /api/user/:userId/avatar -> New route for handling image uploads
-router.post('/:userId/avatar', upload.single('avatar'), updateAvatar);
+router.post('/:userId/avatar', requireAuth, upload.single('avatar'), updateAvatar);
 
-// Public Profile
+// Public Profile — deliberately unauthenticated; it is a public page and the
+// projection is an explicit, non-sensitive column list. Do not add auth here.
 router.get('/:userId/public', getPublicProfile);
 
 // ─────────────────────────────────────────────────────────────────────────

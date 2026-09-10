@@ -10,10 +10,61 @@
 import { supabase } from '../../config/supabase.js';
 import { sendError, mapDbError } from '../../utils/respond.js';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// The only columns PUT /:userId/profile may write.
+//
+// An ALLOW-list, not a block-list: a column added to `users` later is
+// un-writable through this endpoint until someone deliberately adds it here.
+// The reverse (a block-list) makes every new column writable by default, and
+// the one we forget is the one that costs us.
+//
+// Excluded on purpose, each for its own reason:
+//   username             — has its own endpoint (PATCH /me/username) with a
+//                          30-day cooling-off window and reserved-word checks
+//   has_password         — set only by the password endpoints
+//   university_id        — set once at signup; changing it moves a student to
+//                          another campus and defeats tenant isolation
+//   is_profile_complete  — set only by onboarding
+//   id, created_at       — never writable
+// ═══════════════════════════════════════════════════════════════════════════
+const ALLOWED_PROFILE_FIELDS = [
+  'full_name', 'bio', 'avatar_url',
+  'qualification', 'course_id', 'specialization_id',
+  'year_of_study',
+];
+
+/**
+ * Copy only the allow-listed keys out of a request body.
+ *
+ * Presence is tested with `hasOwnProperty`, never truthiness: the web dashboard clears an
+ * avatar with `{ avatar_url: null }` and the mobile editor clears a bio with
+ * `{ bio: null }`. A truthiness check would silently drop both and the field
+ * would never clear.
+ *
+ * Anything not on the list is ignored in silence — no error. An unknown key is
+ * far more likely to be an old client than an attack, and failing the whole
+ * request would break it for no gain.
+ */
+function pickAllowedProfileFields(body) {
+  const updates = {};
+  if (!body || typeof body !== 'object') return updates;
+
+  for (const field of ALLOWED_PROFILE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(body, field)) {
+      updates[field] = body[field];
+    }
+  }
+  return updates;
+}
+
 // 1. Fetch all Dashboard Data
 export const getDashboardData = async (req, res) => {
     try {
+        // The dashboard is private: own listings, own purchases, and the full
+        // `users` row. Identity comes from the token; the path param is only
+        // allowed to name the caller themselves.
         const { userId } = req.params;
+        if (userId !== req.user.id) return sendError(res, 403, 'FORBIDDEN');
 
         // A. Fetch Profile (Joining courses and specializations to get the actual names)
         const { data: profile, error: profileError } = await supabase
@@ -66,17 +117,38 @@ export const getDashboardData = async (req, res) => {
 
     } catch (error) {
         console.error('Dashboard Fetch Error:', error);
-        res.status(500).json({ error: 'Failed to fetch dashboard data.' });
+        return sendError(res, 500, 'Failed to fetch dashboard data.');
     }
 };
 
 // 2. Update Profile Details
 export const updateProfile = async (req, res) => {
     try {
-        const { userId } = req.params;
-        const updates = req.body;
+        // Identity comes from the token and nowhere else. `req.params.userId`
+        // is deliberately ignored: it is caller-supplied, so honouring it let
+        // anyone rewrite anyone's row. Both clients only ever send the signed-in
+        // user's own id, so ignoring it changes nothing for legitimate use.
+        const userId = req.user.id;
+        const updates = pickAllowedProfileFields(req.body);
 
-        // This accepts any field sent from the frontend (e.g., { bio: "New bio" } or { avatar_url: "..." })
+        // Nothing writable was sent. `.update({})` is not a no-op in PostgREST,
+        // so return the current row in the usual envelope rather than erroring —
+        // the caller still gets the shape it expects.
+        if (Object.keys(updates).length === 0) {
+            const { data: current, error: readError } = await supabase
+                .from('users')
+                .select()
+                .eq('id', userId)
+                .single();
+
+            if (readError) throw readError;
+
+            return res.status(200).json({
+                message: 'Profile updated successfully!',
+                userProfile: current
+            });
+        }
+
         const { data, error } = await supabase
             .from('users')
             .update(updates)
@@ -93,18 +165,21 @@ export const updateProfile = async (req, res) => {
 
     } catch (error) {
         console.error('Profile Update Error:', error);
-        res.status(500).json({ error: 'Failed to update profile.' });
+        return sendError(res, 500, 'Failed to update profile.');
     }
 };
 
 // 3. Update User Avatar (with old file deletion)
 export const updateAvatar = async (req, res) => {
     try {
-        const { userId } = req.params;
+        // Actor from the token, not the path — the old code wrote the avatar of
+        // whatever `:userId` named. The object name is derived from this id too,
+        // so a caller cannot overwrite someone else's file either.
+        const userId = req.user.id;
         const file = req.file;
 
         if (!file) {
-            return res.status(400).json({ error: 'No image file provided.' });
+            return sendError(res, 400, 'No image file provided.');
         }
 
         // A. Fetch current profile to get the old avatar URL
@@ -167,7 +242,7 @@ export const updateAvatar = async (req, res) => {
 
     } catch (error) {
         console.error('Avatar Update Error:', error);
-        res.status(500).json({ error: 'Failed to update avatar.' });
+        return sendError(res, 500, 'Failed to update avatar.');
     }
 };
 
@@ -228,7 +303,7 @@ export const getPublicProfile = async (req, res) => {
 
     } catch (error) {
         console.error('Public Profile Fetch Error:', error);
-        res.status(500).json({ error: 'Failed to fetch public profile.' });
+        return sendError(res, 500, 'Failed to fetch public profile.');
     }
 };
 // ═══════════════════════════════════════════════════════════════════════════
