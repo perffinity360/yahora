@@ -277,6 +277,53 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-10 — CORS: production wildcard replaced with an explicit allowlist (Neeraj, in Vishwajeet's area)
+
+**`backend/src/app.js` is Vishwajeet's frozen file — I edited it with his go-ahead.** Only the
+CORS block changed. No route mount, no middleware order, nothing else in the file was touched.
+
+### What changed
+- Production answered **every** origin with `Access-Control-Allow-Origin: *`. Any website on
+  the internet could call this API from a logged-in student's browser and read the reply,
+  which made the Phase 2 Turnstile and rate-limiting work bypassable from any page.
+- It is now an exact-string allowlist: `ALLOWED_ORIGINS` = `PRODUCTION_ORIGINS` (in `app.js`)
+  + the comma-separated `WEB_ORIGINS` env var +, in development only, the local origins below.
+- `credentials: true` added. `allowedHeaders` unchanged — `X-Device-Id` still listed.
+- A refused origin now gets a normal response with **no** `Access-Control-Allow-Origin` header,
+  so the browser blocks the read. No 500, no stack trace in the logs.
+- See API.md, "CORS" in Part 1, for the full rules.
+
+### ⚠ ACTION REQUIRED BEFORE THE NEXT PRODUCTION DEPLOY — Vishwajeet
+**`PRODUCTION_ORIGINS` is empty and marked TODO.** The deployed frontend's domain is not in
+this repo anywhere — `frontend/netlify.toml` has no domain, there is no `.netlify/state.json`,
+no env var names one — and I would not guess it. **Until you fill that array or set
+`WEB_ORIGINS` on the Render deploy, every browser request from the hosted site will be refused.**
+The Expo app is NOT affected (see below). Ping me the domain and I'll put it in the file.
+
+### What is NOT affected
+- **The mobile app.** `if (!origin) return callback(null, true)` is the first check and is
+  unchanged in both environments: Expo, curl, Postman and server-to-server calls send no
+  `Origin` header, because CORS is a browser mechanism. Do not remove that line.
+- **LAN dev testing.** `isLocalNetworkOrigin` (loopback + `10.x` / `192.168.x` / `172.16–31.x`,
+  any port) is intact, but is now consulted **only** when `NODE_ENV !== 'production'`. A phone
+  or second laptop on the Wi-Fi still reaches the dev server.
+
+### One change beyond the brief
+The dev allowlist includes `localhost:3000` / `127.0.0.1:3000` as well as `:5173`. **3000 is
+this repo's actual Vite port** (`vite.config.js` defaults `VITE_DEV_PORT` to 3000, strictPort
+on); 5173 is Vite's stock default and is kept as a fallback. If you run a per-developer port,
+put your origin in `WEB_ORIGINS` rather than editing `app.js`.
+
+### How I tested it
+Extracted the real CORS block from `app.js` and drove it through `cors` on an ephemeral server.
+Verified: no-Origin allowed in dev **and** prod; `localhost:3000`/`:5173`, `192.168.1.42:8081`,
+`10.0.0.7:3001`, `172.20.5.5:3000`, `[::1]:3000` all reflected in dev; `evil.com` and
+`10.0.0.1.evil.com` (anchor-bypass attempt) refused in dev; in production `192.168.1.42:3000`,
+`localhost:3000`, `evil.com` and a trailing-slash variant of an allowlisted origin all refused,
+the exact allowlisted origin reflected, and the `OPTIONS` preflight returning 204 with
+`Content-Type,Authorization,X-Device-Id`. Not verified in a browser or against production.
+
+
 ## 2026-09-03 — Seed users: six prefixed test accounts in seed.sql (Vishwajeet)
 
 ### Test data
