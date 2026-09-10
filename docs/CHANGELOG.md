@@ -118,7 +118,7 @@ cd frontend && npm install && cd ..
 cd mobile   && npm install && cd ..
 ```
 
-`mobile/` sits on Expo SDK 56 / React 19 and its transitive peer ranges do not always agree. If
+`mobile/` sits on Expo SDK 57 / React 19 and its transitive peer ranges do not always agree. If
 `npm install` there fails on a peer conflict, re-run it as `npm install --legacy-peer-deps`.
 Do not add that flag to `backend/` or `frontend/` — they install clean.
 
@@ -276,6 +276,41 @@ diff that was never the problem.
 ---
 
 ## Entries
+
+## 2026-09-10 — mobile: Expo SDK 56 → 57 (Vishwajeet)
+
+Nothing in `backend/`, `frontend/` or `supabase/` changed. No migrations, no endpoints, no
+response shapes. This entry exists because the mobile client's SDK floor moved and that is
+not visible from any file Neeraj works in.
+
+### Why now
+Expo Go on the test device auto-updated to SDK 57 and refused to open an SDK 56 project
+("Project is incompatible with this version of Expo Go"). Expo Go only ever supports the
+current SDK, so this was going to happen on its own schedule, not ours.
+
+### What changed
+- `expo` ~56.0.12 → ^57.0.0; React Native 0.85.3 → 0.86.3.
+- **React is unchanged at 19.2.3.** SDK 57 is one of React Native's declared
+  no-user-facing-breaking-changes releases — it is RN 0.86 plus Android edge-to-edge fixes,
+  light/dark emulation in RN DevTools, and rendering/layout/animation fixes.
+- All ten `expo-*` packages realigned to ~57.x by `npx expo install --fix`, plus
+  gesture-handler ~2.32.0, reanimated 4.5.1, react-native-screens ~4.26.0,
+  react-native-worklets 0.10.1.
+- `expo-font` added. It is a required peer of `@expo/vector-icons` that was missing before
+  this upgrade — `expo-doctor` flagged it, and outside Expo Go it is a crash, not a warning.
+- `app.json`: `expo-status-bar` and `expo-font` config plugins added automatically by the CLI.
+
+### Verified
+- `npx expo-doctor` — 21/21 checks pass (it was 20/21 before `expo-font` went in).
+- `npx tsc --noEmit` — clean.
+- Not yet opened on a device. Vishwajeet verifies in Expo Go.
+
+### What NOT to do yet
+- Don't assume the web app moved. `frontend/` is untouched — React and every web dependency
+  are exactly where they were.
+- Don't add `--legacy-peer-deps` by hand in `mobile/`; `mobile/.npmrc` already sets it.
+
+---
 
 ## 2026-09-08 — 📮 HANDOFF A: Phase 2 complete — OTP limits, Turnstile, migrations 008–012 (Vishwajeet)
 
