@@ -10,7 +10,7 @@ Supabase project as the web app** (`../frontend` + `../backend`).
 or Bootstrap. You may mirror logic patterns, but do not import web code.
 
 ## Stack
-- Expo SDK 56 · React Native 0.85 · React 19.2 · **TypeScript**
+- Expo SDK 57 · React Native 0.86 · React 19.2 · **TypeScript**
 - **Navigation:** Expo Router (file-based, under `app/`)
 - **Server state + caching:** TanStack Query, with AsyncStorage persistence for offline use
 - **Backend:** REST calls to the existing Express API (same endpoints the web app uses)
@@ -143,13 +143,13 @@ mobile/
 ```
 
 ## Mobile gotchas (learned the hard way)
-- **File uploads:** the global `fetch` is Expo SDK 56's **Winter** implementation. Its FormData
+- **File uploads:** the global `fetch` is Expo SDK 57's **Winter** implementation. Its FormData
   rejects React Native's classic `{ uri, name, type }` file part ("Unsupported FormDataPart
   implementation"). Build parts with `toUploadFile()` (`src/lib/upload.ts`) — an object exposing
   `name`, `type`, and a `bytes()` reader (via expo-file-system's `File`). Applies to every
   `api.uploadForm` call (Sell images, avatar).
 - **Feed list:** `@shopify/flash-list` v2 (auto-sized, no `estimatedItemSize`); it needs the New
-  Architecture, which SDK 56 enables by default.
+  Architecture, which SDK 57 enables by default.
 - **Gestures/animation:** reanimated v4 + `react-native-worklets` + gesture-handler are installed and
   configured. `GestureHandlerRootView` wraps the app in `app/_layout.tsx`; worklet transforms come
   from babel-preset-expo (see the no-babel.config.js note above). `SwipeCard`/`SwipeDeck` use them.

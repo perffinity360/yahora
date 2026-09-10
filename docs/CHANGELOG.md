@@ -118,7 +118,7 @@ cd frontend && npm install && cd ..
 cd mobile   && npm install && cd ..
 ```
 
-`mobile/` sits on Expo SDK 56 / React 19 and its transitive peer ranges do not always agree. If
+`mobile/` sits on Expo SDK 57 / React 19 and its transitive peer ranges do not always agree. If
 `npm install` there fails on a peer conflict, re-run it as `npm install --legacy-peer-deps`.
 Do not add that flag to `backend/` or `frontend/` — they install clean.
 

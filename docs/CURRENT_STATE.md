@@ -196,7 +196,7 @@ the `users` read 004 narrows. This needs a human; it cannot be done from a Claud
 - **Vishwajeet** (MacBook): the database exclusively, shared backend infra, `posts`, `admin`,
   `products`, `auth`, `messages`, `university`, `academic`, and the mobile app. Only he writes
   files under `supabase/migrations/` and only he runs anything touching production.
-- **Neeraj** (Ubuntu): the website, plus the `user`, `social`, `notifications` and `reports`
+- **Neeraj** (Macbook): the website, plus the `user`, `social`, `notifications` and `reports`
   backend modules.
 
 Authoritative file-by-file map: `backend/CLAUDE.md`. Every file under `backend/src/modules/`

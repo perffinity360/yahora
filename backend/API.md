@@ -368,15 +368,9 @@ or nothing after it).
 visitor. Please reload the page and try again." }` — Supabase rejected the Turnstile token
 (missing, invalid, expired, already used) or could not reach Cloudflare. Matched on GoTrue's
 `captcha_failed` error code, with a message match on *captcha* as a fallback for older builds.
-Checked **before** the 429 branch, so a captcha failure is never reported as a rate limit.
-
-
-The OTP is minted on the **anon-key** client (`supabaseAnon`), not the service-role one. GoTrue
-exempts service-role callers from captcha entirely, so on the service-role client the token was
-forwarded and then ignored, and enabling CAPTCHA protection had no effect at all. Verified
-2026-09-01 — see `docs/CHANGELOG.md` Handoff A. Every limit in the table below still runs on the
-service-role client, and all of them run first. The client should reset the
-widget and let the student retry **immediately** — there is no cooldown to wait out.
+Checked **before** the 429 branch, so a captcha failure is never reported as a rate limit. The
+client should reset the widget and let the student retry **immediately** — there is no cooldown
+to wait out. A rejected token writes no `otp_requests` row, so it costs the student no quota.
 **403:** `{ "error": "Unauthorized Domain. Yahora is not yet available at your university." }`
 **429:** `{ "error": "RATE_LIMITED", "retry_after_seconds": 42, "message": "Too many code requests. Please try again shortly." }`
   — also sets a `Retry-After` header with the same number of seconds. Fired by any of the
@@ -387,6 +381,23 @@ widget and let the student retry **immediately** — there is no cooldown to wai
 **503:** `{ "error": "SERVICE_BUSY", "message": "We are temporarily unable to send login codes. Please try again in a few minutes." }`
   — the circuit breaker. No `retry_after_seconds`. Clients should show a "try again later"
   message, **not** a countdown, and must not retry automatically.
+
+**The OTP is minted on the anon-key client** (`supabaseAnon`), not the service-role one. GoTrue
+exempts service-role callers from captcha entirely, so on the service-role client the token was
+forwarded and then ignored, and enabling CAPTCHA protection had no effect at all. Verified
+2026-09-01 — see `docs/CHANGELOG.md` Handoff A. Every limit in the table below still runs on the
+service-role client, and all of them run first.
+
+**Turnstile keys are per-environment, and sitekey and secret only work as a matching pair.**
+Local development uses Cloudflare's published **dummy** pair — the "always passes" sitekey in
+`frontend/.env`, and the matching dummy secret that local Supabase reads from the root `.env`
+via `supabase/config.toml`. Production uses the **real** pair: the real sitekey in the web
+build, the real secret in the Supabase dashboard. **A dummy sitekey checked against a real
+secret is rejected every time, and so is the reverse** — a mismatched pair fails every request
+here with `400 CAPTCHA_FAILED` and no other symptom, so check the pairing first when local auth
+starts failing for no visible reason. Neither key belongs in this backend: it never holds the
+secret and never mints the token — it forwards `captchaToken` and nothing else. Values are in
+`docs/CHANGELOG.md` Handoff A and `frontend/.env.example`.
 
 **Rate limits.** All four checks run before `signInWithOtp`, so a blocked request sends no
 email and creates no `auth.users` row. Rolling windows throughout — never calendar days.
@@ -442,13 +453,14 @@ limiter. See runbook 2.2.
 `universities` lookup, so a flood costs one indexed count rather than a domain query per
 request. A request with an unknown domain still 403s and, because the ledger row is only
 written after Supabase accepts, never accumulates a count of its own. Calls
-`supabase.auth.signInWithOtp` with `shouldCreateUser: true`, so a valid-domain address is
+`supabaseAnon.auth.signInWithOtp` with `shouldCreateUser: true`, so a valid-domain address is
 created in `auth.users` on first request — `cleanup_unverified_users()` (hourly cron) deletes
-those again after 24h if the code is never verified. Supabase's own rate limit still surfaces
-as a **500**, not a 429 — a client that retries on 500 will keep hitting it. The 403 discloses
-whether a campus is onboarded. A successful send is recorded in `otp_requests`; if that insert
-fails it is logged and the caller still gets the 200, because a failed audit write must not
-break a login.
+those again after 24h if the code is never verified. Supabase's own per-address cooldown is
+mapped to **429 `RATE_LIMITED`** — limit (e) above. It reached the catch-all as a 500 until
+2026-09-01, which made a one-second local cooldown look exactly like the backend being down.
+The 403 discloses whether a campus is onboarded. A successful send is recorded in
+`otp_requests`; if that insert fails it is logged and the caller still gets the 200, because a
+failed audit write must not break a login.
 
 ### POST /api/auth/verify-otp
 **Module:** auth
