@@ -277,6 +277,53 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-12 — Dev API port moved to 5001; macOS AirPlay owns 5000 (Vishwajeet)
+
+### What broke
+On the Mac, the mobile app said **"Yahora is not yet available at your university"** for
+`test@iiitk.ac.in` — a live campus — and **"Request failed (403)"** for Explore Live Demo.
+
+Neither came from this backend. macOS runs an **AirPlay Receiver** (Control Center) that binds
+**port 5000** from boot and answers every request with a bodiless `403 Forbidden`:
+
+```
+$ curl -i http://localhost:5000/api/health
+HTTP/1.1 403 Forbidden
+Server: AirTunes/960.13.1
+```
+
+`backend/.env` was already on `PORT=5001`, and `frontend/.env` already had `VITE_API_PORT=5001`,
+but `mobile/.env` still fell through to the 5000 default — so the app was talking to AirPlay.
+Because a 403 is a real HTTP response and not a connection failure, both clients reported it as
+an application error and it read as a database problem. `iiitk.ac.in` (IIITDM Kurnool) was
+active in `universities` the whole time.
+
+### Changed — the dev API port is now 5001 everywhere
+- `backend/src/server.js` — `PORT` fallback 5000 → **5001**
+- `backend/.env.example` — `PORT=5001`
+- `mobile/src/lib/config.ts` — `EXPO_PUBLIC_API_PORT` default 5000 → **5001**
+- `mobile/.env`, `mobile/.env.example` — pinned to 5001
+
+### 🔴 Neeraj — one thing for you
+`frontend/.env.example` still ships `VITE_API_PORT=5000`. Your own `frontend/.env` is already on
+5001 so nothing is broken for you today, but the next clone off that example hits this exact
+403. Please bump it. `frontend/` is yours — I have not touched it.
+
+### Also changed (mobile only, no API change)
+`mobile/src/lib/api.ts` now sets `fromApi` on thrown errors: true only when the response carried
+an `error`/`message` body, which every `sendError` response does. The login screen checks it
+before translating a status, so a 403 from a proxy, a captive portal or AirPlay can no longer be
+reported as a statement about the student's university — it says "Could not reach the Yahora
+server" instead.
+
+### No migrations, no endpoint or response-shape changes
+`backend/API.md` unchanged — nothing about the contract moved.
+
+### What NOT to do
+Don't "fix" this by turning AirPlay Receiver off and moving back to 5000. It is on by default on
+every Mac and comes back after an OS update. 5001 is the setting.
+
+
 ## 2026-09-08 — 📮 HANDOFF A: Phase 2 complete — OTP limits, Turnstile, migrations 008–012 (Vishwajeet)
 
 Phase 2 wrap-up. The endpoint details are in `backend/API.md` §request-otp and are not repeated

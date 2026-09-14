@@ -76,8 +76,16 @@ like the backend being down. It has already cost an hour once. So:
   is set it is used verbatim — that is how production and EAS builds work.
   Otherwise, in dev, the host is read from `Constants.expoConfig?.hostUri`,
   falling back to `Constants.expoGoConfig?.debuggerHost`; the port is stripped
-  and replaced with **5000** for the API and **54321** for Supabase. The machine
+  and replaced with **5001** for the API and **54321** for Supabase. The machine
   running Metro is the machine running everything else.
+- **The API port is 5001, never 5000.** macOS binds port 5000 to the AirPlay
+  Receiver (Control Center), which holds it from boot and answers every request
+  with a bodiless `403 Forbidden`. That is a real HTTP response, not a
+  connection failure, so it surfaces as an application error — it once showed up
+  as "Yahora is not yet available at your university" for a live campus and
+  "Request failed (403)" on the demo button, and looked like a database problem
+  for as long as it took to `curl` the port. If an auth call fails with a 403
+  that the backend log never recorded, check the port first.
 - **No localhost fallback.** If neither source yields a host, `config.ts` throws
   a readable error telling you to set `EXPO_PUBLIC_API_URL`. Falling back to
   `127.0.0.1` would mean *the phone itself*, which fails confusingly.
@@ -114,7 +122,7 @@ mobile/
    expo/node_modules and can't be resolved from the project root. Do NOT re-add one.)
   app/                              Expo Router routes
     _layout.tsx                     root: GestureHandlerRootView + QueryClient + AuthProvider + routing guard
-    (auth)/                         login (8-digit OTP + demo) · onboarding
+    (auth)/                         login (6-digit OTP + demo) · onboarding
     (tabs)/
       _layout.tsx                   tab bar (Feather icons: shopping-bag / message-square / user)
       index.tsx                     Marketplace: FlashList grid + swipe deck + filters/sort + campus switch

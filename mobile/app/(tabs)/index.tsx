@@ -343,6 +343,7 @@ export default function MarketplaceScreen() {
         visible={campusOpen}
         onClose={() => setCampusOpen(false)}
         currentId={viewedUniversityId}
+        homeId={homeUniversityId}
         onSelect={handleSetUniversity}
       />
       <DemoCampusAlert

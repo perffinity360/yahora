@@ -5,11 +5,15 @@
 // ══════════════════════════════════════════════
 import { supabase } from '../../config/supabase.js';
 
+// Only LIVE campuses. Inactive rows are staged with an unverified domain
+// (Phase 3 runbook §3.3); listing them would put ~100 empty colleges in the
+// campus switcher on web and mobile. Reads universities_is_active_idx.
 export const getUniversities = async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('universities')
             .select('id, name, domain')
+            .eq('is_active', true)
             .order('name');
 
         if (error) throw error;

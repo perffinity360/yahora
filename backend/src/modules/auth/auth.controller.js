@@ -280,17 +280,29 @@ export const requestOtp = async (req, res) => {
             }
         }
 
-        // Check if the domain exists in our universities table
+        // Check if the domain exists in our universities table AND is live.
+        //
+        // is_active = false means the row is staged but its domain is not yet
+        // verified (Phase 3 runbook §3.3). It must be rejected exactly like an
+        // unknown domain — same status, same body, same branch. A distinct
+        // answer for "inactive" would let anyone probing this endpoint list the
+        // colleges we have queued but not launched. Do not split this branch.
         const { data: university, error: uniError } = await supabase
             .from('universities')
             .select('id, name')
             .eq('domain', domain)
+            .eq('is_active', true)
             .single();
 
+        // `error` carries the SENTENCE, not a code, on purpose: the website
+        // prints data.error verbatim for this status, so this keeps the wire
+        // format byte-identical to what both clients already handle.
         if (uniError || !university) {
-            return res.status(403).json({ 
-                error: 'Unauthorized Domain. Yahora is not yet available at your university.' 
-            });
+            return sendError(
+                res,
+                403,
+                'Unauthorized Domain. Yahora is not yet available at your university.',
+            );
         }
 
         // ── Turnstile token (runbook Block E) ────────────────────────────

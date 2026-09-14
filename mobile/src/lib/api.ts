@@ -1,6 +1,12 @@
 import { API_BASE_URL } from './config';
 import { supabase } from './supabase';
 
+/**
+ * `fromApi` distinguishes an error the Yahora backend produced from one an
+ * intermediary produced. Only the former has a meaningful status code.
+ */
+export type ApiError = Error & { status?: number; fromApi?: boolean };
+
 async function request<T>(path: string, init: RequestInit, json = true): Promise<T> {
   const { data } = await supabase.auth.getSession();
   const authHeader: Record<string, string> = data.session
@@ -23,12 +29,24 @@ async function request<T>(path: string, init: RequestInit, json = true): Promise
   const parsed = text ? safeJson(text) : undefined;
 
   if (!response.ok) {
-    const message =
+    // Did THIS backend answer, or did something between us and it? Every error
+    // this API returns carries an `error` field (utils/respond.js sendError).
+    // A status with no such body came from an intermediary — a proxy, a captive
+    // portal, or the macOS AirPlay Receiver squatting on the API port, which
+    // answers every request with a bodiless 403 Forbidden.
+    //
+    // Callers must branch on `fromApi` before trusting a status code, or they
+    // will translate someone else's 403 into a confident statement about the
+    // student's university. That is exactly what happened once already.
+    const bodyMessage =
       (parsed && typeof parsed === 'object' && (parsed as any).error) ||
       (parsed && typeof parsed === 'object' && (parsed as any).message) ||
-      `Request failed (${response.status})`;
-    const err = new Error(message) as Error & { status?: number };
+      null;
+    const err = new Error(
+      bodyMessage || `Request failed (${response.status})`,
+    ) as ApiError;
     err.status = response.status;
+    err.fromApi = Boolean(bodyMessage);
     throw err;
   }
 

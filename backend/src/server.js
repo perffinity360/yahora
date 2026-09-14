@@ -7,7 +7,11 @@ import { startCronJobs } from './utils/cronJobs.js';
 // Load env variables from the backend root
 dotenv.config(); 
 
-const PORT = process.env.PORT || 5000;
+// 5001, not 5000: macOS gives port 5000 to the AirPlay Receiver, which holds
+// it from boot and answers every request with a bodiless 403. Binding would
+// fail with EADDRINUSE here, but the clients never got that far — they talked
+// to AirPlay and reported its 403 as an application error.
+const PORT = process.env.PORT || 5001;
 
 // Bind all interfaces explicitly so phones and other laptops on the LAN can
 // reach port 5000. Node already defaults to the unspecified address when host

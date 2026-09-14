@@ -892,21 +892,21 @@ const Auth = () => {
               ) : (
                 <form onSubmit={handleVerifyOtp}>
                   <p className={styles.subtitle}>
-                    Enter the 8-digit code sent to{" "}
+                    Enter the 6-digit code sent to{" "}
                     <strong style={{ color: "var(--purple-dark)" }}>
                       {email}
                     </strong>
                   </p>
 
-                  <label className={styles.inputLabel}>8-DIGIT VERIFICATION CODE</label>
+                  <label className={styles.inputLabel}>6-DIGIT VERIFICATION CODE</label>
                   <div className={styles.modernInputGroup}>
                     <input
                       type="text"
-                      placeholder="• • • • • • • •"
+                      placeholder="• • • • • •"
                       value={otp}
                       onChange={(e) => setOtp(e.target.value)}
                       required
-                      maxLength={8}
+                      maxLength={6}
                       className={styles.otpInput}
                     />
                     <button

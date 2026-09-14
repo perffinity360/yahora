@@ -18,11 +18,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { DemoModal } from '../../src/components/DemoModal';
+import type { ApiError } from '../../src/lib/api';
+import { TurnstileWebView } from '../../src/components/TurnstileWebView';
+import type { TurnstileHandle } from '../../src/components/TurnstileWebView';
 import { UniversitiesModal } from '../../src/components/UniversitiesModal';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { colors, font, spacing } from '../../src/theme';
 
 type Step = 'email' | 'otp';
+
+// Public by design (it only names the widget) and inlined at bundle time, so
+// restart Metro with `npx expo start -c` after changing it. The SECRET key
+// lives in the Supabase dashboard and never in this app.
+const TURNSTILE_SITE_KEY = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? '';
 
 const HEADING_GRADIENT = [colors.purpleDark, colors.purple, colors.pinkDark] as const;
 const BRAND_GRADIENT = [colors.purple, colors.pinkDark] as const;
@@ -31,7 +39,7 @@ const LOGO = require('../../assets/yahora-logo.png');
 const MARK = require('../../assets/yahora-mark.png');
 
 export default function LoginScreen() {
-  const { requestOtp, verifyOtp, demoLogin } = useAuth();
+  const { requestOtp, verifyOtp, demoLogin, profile } = useAuth();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -45,6 +53,15 @@ export default function LoginScreen() {
 
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  // The Turnstile token for the NEXT request-otp. Single use: cleared and the
+  // widget reset after every attempt. Supabase rejects a tokenless request
+  // once captcha protection is on, so Send Code stays disabled until one lands.
+  const turnstileRef = useRef<TurnstileHandle>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // True when the check cannot run (no network, Cloudflare unreachable, bad
+  // key) — or cannot even start, because this build has no site key.
+  const [captchaFailed, setCaptchaFailed] = useState(!TURNSTILE_SITE_KEY);
 
   const [universitiesOpen, setUniversitiesOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
@@ -77,6 +94,17 @@ export default function LoginScreen() {
     ]).start();
   }, [introLogo, introCopy, introCard]);
 
+  // Drop the spent token and render a fresh widget (runbook D3.2).
+  const resetCaptcha = () => {
+    setCaptchaToken(null);
+    turnstileRef.current?.reset();
+  };
+
+  const retryCaptcha = () => {
+    setCaptchaFailed(false);
+    resetCaptcha();
+  };
+
   const handleRequestOtp = async () => {
     setError(null);
     setInfo(null);
@@ -84,9 +112,15 @@ export default function LoginScreen() {
       setError('Please enter your university email.');
       return;
     }
+    // The keyboard's Send key does not respect the disabled button, so the
+    // token is checked here too. A tokenless request would only earn a 400.
+    if (!captchaToken) {
+      if (!captchaFailed) setInfo('Just a moment, finishing a quick security check.');
+      return;
+    }
     setSending(true);
     try {
-      const res = await requestOtp(email.trim());
+      const res = await requestOtp(email.trim(), captchaToken);
       setStep('otp');
       setInfo(
         res.university
@@ -94,21 +128,40 @@ export default function LoginScreen() {
           : `Code sent to ${email.trim()}.`,
       );
     } catch (e) {
-      const status = (e as { status?: number }).status;
-      if (status === 403) {
+      const { status, fromApi } = e as ApiError;
+      // api.ts puts the backend's `error` field in e.message, which for these
+      // responses is a machine code, not a sentence (backend/API.md).
+      const code = e instanceof Error ? e.message : '';
+      if (!fromApi && status) {
+        // Someone other than our backend answered — see api.ts. Its status says
+        // nothing about this student or their university, so do not translate
+        // it. The common cause is the API port: on macOS the AirPlay Receiver
+        // holds 5000 and 403s everything.
+        setError('Could not reach the Yahora server. Please try again.');
+      } else if (status === 403) {
         setError('Yahora is not yet available at your university.');
+      } else if (code === 'CAPTCHA_FAILED') {
+        // Retryable at once: the reset below has already started a new check.
+        setError('We could not verify that you are a real visitor. Please try again.');
+      } else if (code === 'RATE_LIMITED') {
+        setError('Too many code requests. Please try again shortly.');
+      } else if (code === 'SERVICE_BUSY') {
+        setError("We're having trouble sending codes right now. Please try again in a few minutes.");
       } else {
         setError(e instanceof Error ? e.message : 'Could not send code.');
       }
     } finally {
       setSending(false);
+      // EVERY attempt, success or failure: the token is spent the moment
+      // Supabase sees it, and reusing it makes the second send always fail.
+      resetCaptcha();
     }
   };
 
   const handleVerifyOtp = async () => {
     setError(null);
-    if (otp.length !== 8) {
-      setError('Enter the 8-digit code from your email.');
+    if (otp.length !== 6) {
+      setError('Enter the 6-digit code from your email.');
       return;
     }
     setVerifying(true);
@@ -192,13 +245,59 @@ export default function LoginScreen() {
                         onSubmitEditing={handleRequestOtp}
                         style={styles.pillInput}
                       />
+                      {/* No token, no send — same rule as the web form. */}
                       <GradientButton
                         onPress={handleRequestOtp}
-                        disabled={sending}
+                        disabled={sending || !captchaToken}
                         label={sending ? 'Sending…' : 'Send Code'}
                         busy={sending}
                       />
                     </View>
+
+                    {/* OTP FLOW ONLY — never on demo login. Usually draws
+                        nothing (Managed mode, interaction-only). It lives in
+                        the email step, so "Wrong email? Go back" remounts it
+                        with a fresh widget as well.
+
+                        BELOW the email row, matching the web form
+                        (Auth.jsx): when Cloudflare does want a tap, the
+                        student has already typed an address and the check
+                        reads as the last step before sending, not as a
+                        challenge posted before there is anything to send. */}
+                    {TURNSTILE_SITE_KEY ? (
+                      <TurnstileWebView
+                        ref={turnstileRef}
+                        siteKey={TURNSTILE_SITE_KEY}
+                        onToken={(token) => {
+                          setCaptchaToken(token);
+                          setCaptchaFailed(false);
+                        }}
+                        onExpire={() => setCaptchaToken(null)}
+                        onError={(message) => {
+                          console.warn('[turnstile]', message);
+                          setCaptchaToken(null);
+                          setCaptchaFailed(true);
+                        }}
+                      />
+                    ) : null}
+
+                    {captchaFailed ? (
+                      <>
+                        <InlineMessage
+                          tone="error"
+                          text={
+                            TURNSTILE_SITE_KEY
+                              ? "We couldn't load the security check. Check your connection and try again."
+                              : 'Sign-in is unavailable in this build: the security check is not configured.'
+                          }
+                        />
+                        {TURNSTILE_SITE_KEY ? (
+                          <View style={styles.captchaRetry}>
+                            <PillBtn label="Try again" onPress={retryCaptcha} />
+                          </View>
+                        ) : null}
+                      </>
+                    ) : null}
 
                     {error ? <InlineMessage tone="error" text={error} /> : null}
                     {info && !error ? <InlineMessage tone="success" text={info} /> : null}
@@ -218,21 +317,21 @@ export default function LoginScreen() {
                 ) : (
                   <>
                     <Text style={styles.subtitle}>
-                      Enter the 8-digit code sent to{' '}
+                      Enter the 6-digit code sent to{' '}
                       <Text style={styles.subtitleEmphasis}>{email.trim()}</Text>
                     </Text>
 
-                    <Text style={styles.inputLabel}>8-DIGIT VERIFICATION CODE</Text>
+                    <Text style={styles.inputLabel}>6-DIGIT VERIFICATION CODE</Text>
                     <View style={[styles.pillGroup, otpFocused && styles.pillGroupFocused]}>
                       <TextInput
                         value={otp}
-                        onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, 8))}
+                        onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, 6))}
                         onFocus={() => setOtpFocused(true)}
                         onBlur={() => setOtpFocused(false)}
-                        placeholder="• • • • • • • •"
+                        placeholder="• • • • • •"
                         placeholderTextColor={colors.mutedPlaceholder}
                         keyboardType="number-pad"
-                        maxLength={8}
+                        maxLength={6}
                         editable={!verifying}
                         returnKeyType="done"
                         onSubmitEditing={handleVerifyOtp}
@@ -274,6 +373,11 @@ export default function LoginScreen() {
       <UniversitiesModal
         visible={universitiesOpen}
         onClose={() => setUniversitiesOpen(false)}
+        // Null on this screen in practice — the router guard sends anyone with
+        // a session to (tabs), so nobody signed in reaches the login page. Wired
+        // anyway so the pin is correct the moment this modal is reachable from
+        // somewhere a signed-in student can stand.
+        homeId={profile?.university_id ?? null}
       />
       <DemoModal
         visible={demoOpen}
@@ -634,6 +738,11 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 12,
     letterSpacing: 0.2,
+  },
+
+  captchaRetry: {
+    alignSelf: 'center',
+    marginBottom: spacing.md,
   },
 
   backLink: {
