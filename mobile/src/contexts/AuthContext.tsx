@@ -33,7 +33,7 @@ interface AuthContextValue {
   loading: boolean;
   isDemoUser: boolean;
   onboardingSkipped: boolean;
-  requestOtp: (email: string) => Promise<RequestOtpResponse>;
+  requestOtp: (email: string, captchaToken?: string) => Promise<RequestOtpResponse>;
   verifyOtp: (email: string, otp: string) => Promise<UserProfile>;
   demoLogin: () => Promise<UserProfile>;
   saveProfile: (profile: UserProfile) => Promise<void>;
@@ -104,8 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOnboardingSkipped(value);
   };
 
-  const requestOtp = (email: string) =>
-    api.post<RequestOtpResponse>('/api/auth/request-otp', { email });
+  // captchaToken is the Turnstile token from TurnstileWebView. The backend
+  // forwards it to Supabase untouched (backend/API.md, request-otp); an
+  // undefined token is dropped by JSON.stringify, exactly as before.
+  const requestOtp = (email: string, captchaToken?: string) =>
+    api.post<RequestOtpResponse>('/api/auth/request-otp', { email, captchaToken });
 
   const verifyOtp = async (email: string, otp: string) => {
     const data = await api.post<AuthPayload>('/api/auth/verify-otp', { email, otp });

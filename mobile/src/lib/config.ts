@@ -23,7 +23,13 @@ import Constants from 'expo-constants';
  * silently reads as undefined.
  */
 
-const API_PORT = (process.env.EXPO_PUBLIC_API_PORT ?? '5000').trim() || '5000';
+// 5001, not 5000. On macOS port 5000 belongs to the AirPlay Receiver (Control
+// Center), which binds it on every boot and answers every request with a
+// bodiless 403 Forbidden. That is a real HTTP response, so it does not look
+// like a down server — it surfaces as an app-level permission error instead
+// (a login screen saying the university is not supported, a demo button saying
+// "Request failed (403)"). Must stay in step with backend/.env PORT.
+const API_PORT = (process.env.EXPO_PUBLIC_API_PORT ?? '5001').trim() || '5001';
 const SUPABASE_PORT = '54321';
 
 /** Trim whitespace and any trailing slashes, so callers can append `/api/...`. */

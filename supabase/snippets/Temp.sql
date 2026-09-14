@@ -1,1 +1,2 @@
-select pg_get_functiondef('public.update_product_likes_count'::regproc);
+select name, domain, is_active from public.universities
+where domain = 'iitb.ac.in';
