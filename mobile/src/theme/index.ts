@@ -30,8 +30,21 @@ export const colors = {
   demoCardPinkBg: '#F0DCE2',
 
   // Aurora / glassmorphism surfaces (translucent, intentional rgba)
-  auroraTop: '#FBEFF3',
-  auroraBottom: '#F4E0E4',
+  //
+  // The canvas is a cool pearl, not a blush — the four saturated glows that
+  // used to sit on a pink base read as a festival (four competing hues at
+  // full strength) rather than as one atmosphere.
+  auroraTop: '#F9F7FC',
+  auroraBottom: '#ECE8F5',
+  // Aurora glow tints. Deliberately ONE analogous band (violet ~270deg ->
+  // periwinkle ~225deg -> soft sky ~200deg) so the drifting blobs blend into a
+  // single haze instead of four separate colours. The glow PNGs are a flat RGB
+  // with a radial alpha ramp, so `tintColor` recolours them cleanly and these
+  // are the only values that decide the mood.
+  auroraGlowViolet: '#8A73C9',
+  auroraGlowLilac: '#A98FD6',
+  auroraGlowPeriwinkle: '#6F8FCB',
+  auroraGlowSky: '#7FB2CE',
   // Opaque card surface. Android renders a translucent bg + elevation as a hard
   // square, so cards use this solid colour to keep their rounded corners.
   cardSurface: '#FCF8FC',

@@ -9,8 +9,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,9 +19,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../../src/components/AuroraBackground';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { SearchablePicker } from '../../src/components/SearchablePicker';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useCourses, useSpecializations } from '../../src/hooks/useAcademics';
+import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
 import { api } from '../../src/lib/api';
 import { supabase } from '../../src/lib/supabase';
 import { colors, font, radius, spacing } from '../../src/theme';
@@ -46,6 +46,8 @@ const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { session, profile, isDemoUser, saveProfile, skipOnboarding, signOut } = useAuth();
+
+  const floatingTop = useFloatingTopInset();
 
   const coursesQuery = useCourses();
   const specsQuery = useSpecializations();
@@ -197,10 +199,7 @@ export default function OnboardingScreen() {
       <AuroraBackground />
 
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoider style={styles.flex}>
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
@@ -399,7 +398,7 @@ export default function OnboardingScreen() {
               </Pressable>
             </View>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAvoider>
 
         {/* Rendered last + raised so it stays above the form's elevated card. */}
         <Pressable
@@ -408,7 +407,7 @@ export default function OnboardingScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Back to login"
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
         >
           {goingBack ? (
             <ActivityIndicator size="small" color={colors.purpleDark} />
@@ -430,8 +429,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   backBtn: {
+    // `top` is applied inline from useFloatingTopInset(): an absolutely
+    // positioned child ignores the padding SafeAreaView adds, so a static
+    // `top` here slides under the status bar in full-screen mode.
     position: 'absolute',
-    top: spacing.sm,
     left: spacing.lg,
     zIndex: 20,
     width: 42,
@@ -455,7 +456,10 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
+    // Clears the floating back chip (inset + spacing.sm + its 42pt height)
+    // so the heading never sits under it.
+    paddingTop: spacing.xl + spacing.lg,
+    paddingBottom: spacing.xl,
   },
   formWrapper: {
     width: '100%',

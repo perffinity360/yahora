@@ -19,6 +19,7 @@ import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { ProductCard } from '../../src/components/ProductCard';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
 import { usePublicProfile } from '../../src/hooks/usePublicProfile';
 import { hrefWithFrom } from '../../src/lib/nav';
@@ -56,6 +57,7 @@ export default function PublicProfileScreen() {
   const toggleSave = useToggleSave(['publicProfile', profileUserId]);
 
   const { width } = useWindowDimensions();
+  const floatingTop = useFloatingTopInset();
   const cardWidth = (width - SCREEN_PAD * 2 - GRID_GAP) / 2;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -174,7 +176,7 @@ export default function PublicProfileScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
         >
           <Feather name="arrow-left" size={22} color={colors.purpleDark} />
         </Pressable>
@@ -338,8 +340,10 @@ const styles = StyleSheet.create({
   },
 
   backBtn: {
+    // `top` is applied inline from useFloatingTopInset(): an absolutely
+    // positioned child ignores the padding SafeAreaView adds, so a static
+    // `top` here slides under the status bar in full-screen mode.
     position: 'absolute',
-    top: spacing.sm,
     left: spacing.lg,
     zIndex: 20,
     width: 42,

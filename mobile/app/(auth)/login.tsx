@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { DemoModal } from '../../src/components/DemoModal';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import type { ApiError } from '../../src/lib/api';
 import { TurnstileWebView } from '../../src/components/TurnstileWebView';
 import type { TurnstileHandle } from '../../src/components/TurnstileWebView';
@@ -197,177 +198,183 @@ export default function LoginScreen() {
       <AuroraBackground />
 
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          automaticallyAdjustKeyboardInsets
-        >
-          <View style={styles.formWrapper}>
-            <Animated.View style={[styles.logoWrap, rise(introLogo, 22)]}>
-              <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-            </Animated.View>
+        {/* The card fits the screen exactly, so the ScrollView has no overflow
+            of its own — without this the email row just sits under the keyboard
+            with nothing to scroll. KeyboardAvoider explains why the core
+            avoiding view is not enough on Android. */}
+        <KeyboardAvoider style={styles.flex}>
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.formWrapper}>
+              <Animated.View style={[styles.logoWrap, rise(introLogo, 22)]}>
+                <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+              </Animated.View>
 
-            <Animated.View style={rise(introCopy, 18)}>
-              <GradientHeading text="Keep the story going." />
+              <Animated.View style={rise(introCopy, 18)}>
+                <GradientHeading text="Keep the story going." />
 
-              <Text style={styles.tagline}>
-                Find, share, and pass on the things that made campus home, with the
-                students right beside you.
-              </Text>
-            </Animated.View>
+                <Text style={styles.tagline}>
+                  Find, share, and pass on the things that made campus home, with the
+                  students right beside you.
+                </Text>
+              </Animated.View>
 
-            <Animated.View style={[styles.cardWrap, rise(introCard, 26, true)]}>
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Join Yahora</Text>
+              <Animated.View style={[styles.cardWrap, rise(introCard, 26, true)]}>
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Join Yahora</Text>
 
-                {step === 'email' ? (
-                  <>
-                    <Text style={styles.subtitle}>
-                      Enter your university email to get started
-                    </Text>
+                  {step === 'email' ? (
+                    <>
+                      <Text style={styles.subtitle}>
+                        Enter your university email to get started
+                      </Text>
 
-                    <Text style={styles.inputLabel}>UNIVERSITY EMAIL ADDRESS</Text>
-                    <View style={[styles.pillGroup, emailFocused && styles.pillGroupFocused]}>
-                      <TextInput
-                        value={email}
-                        onChangeText={setEmail}
-                        onFocus={() => setEmailFocused(true)}
-                        onBlur={() => setEmailFocused(false)}
-                        placeholder="you@university.edu"
-                        placeholderTextColor={colors.mutedPlaceholder}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        autoComplete="email"
-                        autoCorrect={false}
-                        editable={!sending}
-                        returnKeyType="send"
-                        onSubmitEditing={handleRequestOtp}
-                        style={styles.pillInput}
-                      />
-                      {/* No token, no send — same rule as the web form. */}
-                      <GradientButton
-                        onPress={handleRequestOtp}
-                        disabled={sending || !captchaToken}
-                        label={sending ? 'Sending…' : 'Send Code'}
-                        busy={sending}
-                      />
-                    </View>
-
-                    {/* OTP FLOW ONLY — never on demo login. Usually draws
-                        nothing (Managed mode, interaction-only). It lives in
-                        the email step, so "Wrong email? Go back" remounts it
-                        with a fresh widget as well.
-
-                        BELOW the email row, matching the web form
-                        (Auth.jsx): when Cloudflare does want a tap, the
-                        student has already typed an address and the check
-                        reads as the last step before sending, not as a
-                        challenge posted before there is anything to send. */}
-                    {TURNSTILE_SITE_KEY ? (
-                      <TurnstileWebView
-                        ref={turnstileRef}
-                        siteKey={TURNSTILE_SITE_KEY}
-                        onToken={(token) => {
-                          setCaptchaToken(token);
-                          setCaptchaFailed(false);
-                        }}
-                        onExpire={() => setCaptchaToken(null)}
-                        onError={(message) => {
-                          console.warn('[turnstile]', message);
-                          setCaptchaToken(null);
-                          setCaptchaFailed(true);
-                        }}
-                      />
-                    ) : null}
-
-                    {captchaFailed ? (
-                      <>
-                        <InlineMessage
-                          tone="error"
-                          text={
-                            TURNSTILE_SITE_KEY
-                              ? "We couldn't load the security check. Check your connection and try again."
-                              : 'Sign-in is unavailable in this build: the security check is not configured.'
-                          }
+                      <Text style={styles.inputLabel}>UNIVERSITY EMAIL ADDRESS</Text>
+                      <View style={[styles.pillGroup, emailFocused && styles.pillGroupFocused]}>
+                        <TextInput
+                          value={email}
+                          onChangeText={setEmail}
+                          onFocus={() => setEmailFocused(true)}
+                          onBlur={() => setEmailFocused(false)}
+                          placeholder="you@university.edu"
+                          placeholderTextColor={colors.mutedPlaceholder}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                          autoCorrect={false}
+                          editable={!sending}
+                          returnKeyType="send"
+                          onSubmitEditing={handleRequestOtp}
+                          style={styles.pillInput}
                         />
-                        {TURNSTILE_SITE_KEY ? (
-                          <View style={styles.captchaRetry}>
-                            <PillBtn label="Try again" onPress={retryCaptcha} />
-                          </View>
-                        ) : null}
-                      </>
-                    ) : null}
+                        {/* No token, no send — same rule as the web form. */}
+                        <GradientButton
+                          onPress={handleRequestOtp}
+                          disabled={sending || !captchaToken}
+                          label={sending ? 'Sending…' : 'Send Code'}
+                          busy={sending}
+                        />
+                      </View>
 
-                    {error ? <InlineMessage tone="error" text={error} /> : null}
-                    {info && !error ? <InlineMessage tone="success" text={info} /> : null}
+                      {/* OTP FLOW ONLY — never on demo login. Usually draws
+                          nothing (Managed mode, interaction-only). It lives in
+                          the email step, so "Wrong email? Go back" remounts it
+                          with a fresh widget as well.
 
-                    <View style={styles.pillRow}>
-                      <PillBtn
-                        label="See Supported Universities"
-                        onPress={() => setUniversitiesOpen(true)}
-                      />
-                      <PillBtn
-                        label="Explore Live Demo"
-                        leading="✦"
-                        onPress={() => setDemoOpen(true)}
-                      />
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.subtitle}>
-                      Enter the 6-digit code sent to{' '}
-                      <Text style={styles.subtitleEmphasis}>{email.trim()}</Text>
-                    </Text>
+                          BELOW the email row, matching the web form
+                          (Auth.jsx): when Cloudflare does want a tap, the
+                          student has already typed an address and the check
+                          reads as the last step before sending, not as a
+                          challenge posted before there is anything to send. */}
+                      {TURNSTILE_SITE_KEY ? (
+                        <TurnstileWebView
+                          ref={turnstileRef}
+                          siteKey={TURNSTILE_SITE_KEY}
+                          onToken={(token) => {
+                            setCaptchaToken(token);
+                            setCaptchaFailed(false);
+                          }}
+                          onExpire={() => setCaptchaToken(null)}
+                          onError={(message) => {
+                            console.warn('[turnstile]', message);
+                            setCaptchaToken(null);
+                            setCaptchaFailed(true);
+                          }}
+                        />
+                      ) : null}
 
-                    <Text style={styles.inputLabel}>6-DIGIT VERIFICATION CODE</Text>
-                    <View style={[styles.pillGroup, otpFocused && styles.pillGroupFocused]}>
-                      <TextInput
-                        value={otp}
-                        onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, 6))}
-                        onFocus={() => setOtpFocused(true)}
-                        onBlur={() => setOtpFocused(false)}
-                        placeholder="• • • • • •"
-                        placeholderTextColor={colors.mutedPlaceholder}
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        editable={!verifying}
-                        returnKeyType="done"
-                        onSubmitEditing={handleVerifyOtp}
-                        style={[styles.pillInput, styles.otpInput]}
-                      />
-                      <GradientButton
-                        onPress={handleVerifyOtp}
-                        disabled={verifying}
-                        label={verifying ? 'Verifying…' : 'Verify'}
-                        busy={verifying}
-                      />
-                    </View>
+                      {captchaFailed ? (
+                        <>
+                          <InlineMessage
+                            tone="error"
+                            text={
+                              TURNSTILE_SITE_KEY
+                                ? "We couldn't load the security check. Check your connection and try again."
+                                : 'Sign-in is unavailable in this build: the security check is not configured.'
+                            }
+                          />
+                          {TURNSTILE_SITE_KEY ? (
+                            <View style={styles.captchaRetry}>
+                              <PillBtn label="Try again" onPress={retryCaptcha} />
+                            </View>
+                          ) : null}
+                        </>
+                      ) : null}
 
-                    {error ? <InlineMessage tone="error" text={error} /> : null}
-                    {info && !error ? <InlineMessage tone="success" text={info} /> : null}
+                      {error ? <InlineMessage tone="error" text={error} /> : null}
+                      {info && !error ? <InlineMessage tone="success" text={info} /> : null}
 
-                    <Pressable
-                      onPress={goBackToEmail}
-                      style={({ pressed }) => [styles.backLink, pressed && styles.backLinkPressed]}
-                    >
-                      <Text style={styles.backLinkText}>← Wrong email? Go back</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
+                      <View style={styles.pillRow}>
+                        <PillBtn
+                          label="See Supported Universities"
+                          onPress={() => setUniversitiesOpen(true)}
+                        />
+                        <PillBtn
+                          label="Explore Live Demo"
+                          leading="✦"
+                          onPress={() => setDemoOpen(true)}
+                        />
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.subtitle}>
+                        Enter the 6-digit code sent to{' '}
+                        <Text style={styles.subtitleEmphasis}>{email.trim()}</Text>
+                      </Text>
 
-              <View style={styles.floatingIcon} pointerEvents="none">
-                <View style={styles.floatingIconInner}>
-                  <Image source={MARK} style={styles.floatingIconImg} resizeMode="contain" />
+                      <Text style={styles.inputLabel}>6-DIGIT VERIFICATION CODE</Text>
+                      <View style={[styles.pillGroup, otpFocused && styles.pillGroupFocused]}>
+                        <TextInput
+                          value={otp}
+                          onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, 6))}
+                          onFocus={() => setOtpFocused(true)}
+                          onBlur={() => setOtpFocused(false)}
+                          placeholder="• • • • • •"
+                          placeholderTextColor={colors.mutedPlaceholder}
+                          keyboardType="number-pad"
+                          maxLength={6}
+                          editable={!verifying}
+                          returnKeyType="done"
+                          onSubmitEditing={handleVerifyOtp}
+                          style={[styles.pillInput, styles.otpInput]}
+                        />
+                        <GradientButton
+                          onPress={handleVerifyOtp}
+                          disabled={verifying}
+                          label={verifying ? 'Verifying…' : 'Verify'}
+                          busy={verifying}
+                        />
+                      </View>
+
+                      {error ? <InlineMessage tone="error" text={error} /> : null}
+                      {info && !error ? <InlineMessage tone="success" text={info} /> : null}
+
+                      <Pressable
+                        onPress={goBackToEmail}
+                        style={({ pressed }) => [styles.backLink, pressed && styles.backLinkPressed]}
+                      >
+                        <Text style={styles.backLinkText}>← Wrong email? Go back</Text>
+                      </Pressable>
+                    </>
+                  )}
                 </View>
-              </View>
-            </Animated.View>
 
-            <Text style={styles.footerNote}>Because every item has a memory.</Text>
-          </View>
-        </ScrollView>
+                <View style={styles.floatingIcon} pointerEvents="none">
+                  <View style={styles.floatingIconInner}>
+                    <Image source={MARK} style={styles.floatingIconImg} resizeMode="contain" />
+                  </View>
+                </View>
+              </Animated.View>
+
+              <Text style={styles.footerNote}>Because every item has a memory.</Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoider>
       </SafeAreaView>
 
       <UniversitiesModal
@@ -501,6 +508,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.auroraBottom,
   },
   safe: { flex: 1 },
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',

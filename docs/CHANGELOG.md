@@ -277,6 +277,54 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-14 — Mobile: Android edge-to-edge fixes + calmer aurora (Vishwajeet)
+
+Mobile only. No backend, no schema, no endpoint or response-shape change — nothing for Neeraj
+to consume. Written down because two of these are general Android-15 traps that the web app's
+equivalents will not hit, but the next mobile screen will.
+
+### Android 15 draws every app edge to edge, and that broke two things
+
+Reproduces only with the phone in full-screen / gesture navigation. Three-button phones keep
+the old non-edge-to-edge window and show neither bug, which is why it looked device-specific.
+
+1. **Floating back/share chips sat on top of the status bar.** They are
+   `position: 'absolute'` inside a `<SafeAreaView edges={['top', …]}>`, and an absolutely
+   positioned child is laid out against its parent's *padding box* — so `SafeAreaView`'s inset
+   padding does nothing for it. Fixed with `useFloatingTopInset()`
+   (`src/hooks/useFloatingTopInset.ts`), which adds the inset back explicitly; it is a no-op
+   when `insets.top` is 0. Applied on sell, edit-profile, onboarding, public profile and
+   product detail. **Any new absolutely positioned top-edge control needs this hook.**
+2. **The keyboard covered the login email field with nothing to scroll.** An edge-to-edge
+   window no longer honours `adjustResize`; it keeps full height and the IME arrives as an
+   inset. `KeyboardAvoidingView` reads the keyboard's `screenY` off the window's *visible
+   display frame*, which is exactly what stops shrinking — so it silently pads by zero. Every
+   screen now uses `KeyboardAvoider` (`src/components/KeyboardAvoider.tsx`), which measures its
+   own bottom edge with `measureInWindow` and pads by how far the keyboard reaches past it.
+   Zero when the window did resize, so no double-counting; iOS still delegates to
+   `KeyboardAvoidingView`. **Use it instead of `KeyboardAvoidingView` on new screens.**
+
+### Dashboard photo did not change after an avatar upload
+
+`useAvatarActions` invalidated `['dashboard', userId]` and waited for the refetch, but the
+dashboard header renders `useDashboard().data.profile.avatar_url`, so the old photo stayed up
+for a whole round trip — and stayed forever if that refetch was slow, offline or failed. The
+upload response already carries the new URL, so it is now written into the `dashboard` and
+`publicProfile` caches with `setQueryData` first, then revalidated.
+
+### Login background
+
+The four saturated glows (purple/pink/violet/blue) on a blush base read as a Holi poster. Now
+one analogous band — violet → lilac → periwinkle → soft sky — at roughly half the opacity over
+a cool pearl base. The glow PNG is a flat RGB with a radial alpha ramp, so all four blobs are
+the same asset recoloured with `tintColor`; the palette lives in `src/theme` as
+`auroraGlow*`. `assets/glow-{pink,violet,blue}.png` are now unreferenced.
+
+### What NOT to do yet
+- `mobile/app.json`'s splash `backgroundColor` moved to `#ECE8F5` to match. That is a native
+  config value — it only takes effect after a rebuild, not on a Metro reload.
+
+
 ## 2026-09-12 — Dev API port moved to 5001; macOS AirPlay owns 5000 (Vishwajeet)
 
 ### What broke

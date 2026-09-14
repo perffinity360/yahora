@@ -6,8 +6,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,10 +16,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../src/components/AuroraBackground';
+import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { SearchablePicker } from '../src/components/SearchablePicker';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useCourses, useSpecializations } from '../src/hooks/useAcademics';
 import { useDashboard } from '../src/hooks/useDashboard';
+import { useFloatingTopInset } from '../src/hooks/useFloatingTopInset';
 import { api } from '../src/lib/api';
 import { colors, font, radius, spacing } from '../src/theme';
 import type { UserProfile } from '../src/types';
@@ -54,6 +54,7 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { profile: authProfile, saveProfile } = useAuth();
+  const floatingTop = useFloatingTopInset();
   const userId = authProfile?.id;
 
   // Prefer the dashboard payload (fresh from the server) over the cached auth
@@ -155,10 +156,7 @@ export default function EditProfileScreen() {
       <AuroraBackground />
 
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoider style={styles.flex}>
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
@@ -299,7 +297,7 @@ export default function EditProfileScreen() {
               </Pressable>
             </View>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAvoider>
 
         {/* Rendered last + raised so it stays above the form's elevated card. */}
         <Pressable
@@ -308,7 +306,7 @@ export default function EditProfileScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Back to dashboard"
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
         >
           <Feather name="arrow-left" size={22} color={colors.purpleDark} />
         </Pressable>
@@ -326,8 +324,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   backBtn: {
+    // `top` is applied inline from useFloatingTopInset(): an absolutely
+    // positioned child ignores the padding SafeAreaView adds, so a static
+    // `top` here slides under the status bar in full-screen mode.
     position: 'absolute',
-    top: spacing.sm,
     left: spacing.lg,
     zIndex: 20,
     width: 42,
@@ -351,7 +351,10 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
+    // Clears the floating back chip (inset + spacing.sm + its 42pt height)
+    // so the heading never sits under it.
+    paddingTop: spacing.xl + spacing.lg,
+    paddingBottom: spacing.xl,
   },
   formWrapper: {
     width: '100%',

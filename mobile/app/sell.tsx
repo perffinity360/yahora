@@ -9,8 +9,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,9 +20,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../src/components/AuroraBackground';
+import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { ProductCard } from '../src/components/ProductCard';
 import { PickerOption, SearchablePicker } from '../src/components/SearchablePicker';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useFloatingTopInset } from '../src/hooks/useFloatingTopInset';
 import { useProduct } from '../src/hooks/useProduct';
 import { api } from '../src/lib/api';
 import { toUploadFile } from '../src/lib/upload';
@@ -75,6 +75,7 @@ export default function SellScreen() {
   const editProduct = productQuery.data;
 
   const { width } = useWindowDimensions();
+  const floatingTop = useFloatingTopInset();
   const cardOuter = Math.min(width - SCREEN_PAD * 2, CARD_MAX_W);
   const tile = Math.floor((cardOuter - CARD_PAD * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS);
   const previewWidth = Math.min(width * 0.6, 230);
@@ -236,10 +237,7 @@ export default function SellScreen() {
       <AuroraBackground />
 
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoider style={styles.flex}>
           {showPrefillLoader ? (
             <View style={styles.stateWrap}>
               <ActivityIndicator size="large" color={colors.purple} />
@@ -523,7 +521,7 @@ export default function SellScreen() {
               </View>
             </ScrollView>
           )}
-        </KeyboardAvoidingView>
+        </KeyboardAvoider>
 
         {/* Rendered last + raised so it stays above the elevated form card. */}
         <Pressable
@@ -532,7 +530,7 @@ export default function SellScreen() {
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Back to dashboard"
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
         >
           <Feather name="arrow-left" size={22} color={colors.purpleDark} />
         </Pressable>
@@ -576,8 +574,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   backBtn: {
+    // `top` is applied inline from useFloatingTopInset(): an absolutely
+    // positioned child ignores the padding SafeAreaView adds, so a static
+    // `top` here slides under the status bar in full-screen mode.
     position: 'absolute',
-    top: spacing.sm,
     left: spacing.lg,
     zIndex: 20,
     width: 42,
@@ -602,7 +602,10 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: SCREEN_PAD,
-    paddingVertical: spacing.xl,
+    // Clears the floating back chip (inset + spacing.sm + its 42pt height)
+    // so the heading never sits under it.
+    paddingTop: spacing.xl + spacing.lg,
+    paddingBottom: spacing.xl,
   },
   formWrapper: {
     width: '100%',
