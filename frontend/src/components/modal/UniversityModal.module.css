@@ -133,3 +133,54 @@
   color: #888;
   padding: 20px 0;
 }
+
+/* Pinned "Your campus" section, above the search. Its bottom border is the
+   divider between the pinned entry and the full list. */
+.pinnedSection {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--pink-light);
+  flex-shrink: 0;
+}
+
+.pinnedLabel {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--purple);
+}
+
+/* Layered on .universityItem: reset the <button> and mark it as the student's own. */
+.pinnedItem {
+  width: 100%;
+  margin-bottom: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--pink-bg);
+  border-color: var(--purple-light);
+}
+
+/* A long campus name would otherwise squeeze the pin icon, and a long domain
+   would push the tick out of the card. */
+.pinnedItem .uniIcon {
+  flex-shrink: 0;
+}
+
+.pinnedItem .uniDetails {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pinnedItem:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
+.pinnedCheck {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--purple);
+}
