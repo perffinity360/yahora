@@ -148,14 +148,40 @@ routes `23505`/`23503` through `mapDbError`. The rest of Part 1 still hand-rolls
 middleware (e.g. multer rejecting a 6th file) falls through to Express's default handler,
 which responds with an **HTML** body, not JSON.
 
-**CORS** branches on `NODE_ENV`.
+**CORS** branches on `NODE_ENV`. **Production is an explicit allowlist — the wildcard is
+gone.** It previously answered every origin with `Access-Control-Allow-Origin: *`, which let
+any website on the internet call this API from a logged-in student's browser and read the
+reply; that made the Phase 2 Turnstile and rate-limiting work bypassable from any page.
 
-- **Production** (`NODE_ENV === 'production'`): all origins, all the time —
-  `Access-Control-Allow-Origin: *`. Unchanged from the previous bare `cors()`.
-- **Development** (anything else): only origins whose hostname is `localhost`,
-  `127.0.0.1`, `::1`, or in a private range (`10.x`, `192.168.x`, `172.16–31.x`),
-  on any port. The origin is reflected rather than `*`. Anything else is refused
-  the CORS headers.
+A request with **no `Origin` header is always allowed, in both environments.** The Expo app,
+`curl`, Postman and server-to-server calls send none, because CORS is a browser mechanism and
+they are not browsers — there is no calling page whose access could be restricted. They are
+protected by the auth token instead. Removing this check would break the mobile app entirely.
+
+- **Production** (`NODE_ENV === 'production'`): an origin is allowed only if it matches
+  `ALLOWED_ORIGINS` as an **exact string** — scheme + host + port, no trailing slash, no
+  wildcard, no regex. That list is `PRODUCTION_ORIGINS` (hardcoded in `app.js`) plus the
+  comma-separated `WEB_ORIGINS` env var, if set. The matched origin is reflected.
+  ⚠ **`PRODUCTION_ORIGINS` is currently empty**, carrying a `TODO` — the deployed frontend's
+  domain is not recorded anywhere in this repo. Until it is filled in, or `WEB_ORIGINS` is set
+  on the deploy, **every browser request from the hosted frontend is refused.** Non-browser
+  clients, the Expo app included, are unaffected.
+- **Development** (anything else): the same allowlist, which additionally contains
+  `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost:5173` and
+  `http://127.0.0.1:5173` — **plus** any origin whose hostname is `localhost`, `127.0.0.1`,
+  `::1`, or in a private range (`10.x`, `192.168.x`, `172.16–31.x`), on any port. That last
+  rule is what lets a phone or a second laptop on the Wi-Fi reach the dev server, which is how
+  the Expo app is tested. It is **never** consulted when `NODE_ENV=production`.
+
+**A refused origin still gets HTTP 200** (or the route's normal status) with **no**
+`Access-Control-Allow-Origin` header — the browser then blocks the calling page from reading
+the response. There is no 500 and no error body: refusal is invisible to non-browser callers
+and enforced entirely by the browser, which is where CORS lives.
+
+`credentials: true` is set, so responses carry `Access-Control-Allow-Credentials: true`. No
+current client sends cookies — both web and mobile authenticate with a bearer token — but note
+that this is why the wildcard could never come back: browsers reject `*` on a credentialed
+response.
 
 `allowedHeaders` is `Content-Type, Authorization, X-Device-Id` in **both**
 environments. `X-Device-Id` is not a CORS-safelisted header, so without it every
@@ -832,10 +858,11 @@ Path params are camelCase (`:userId`); query params and body fields are snake_ca
 
 ### GET /api/user/:userId/dashboard
 **Module:** user
-**Auth:** none — any caller can read any user's full private dashboard.
+**Auth:** **`requireAuth` — own dashboard only.** `:userId` must equal the caller's own id;
+any other value is `403 FORBIDDEN`. (Was unauthenticated until 09 Sep 2026.)
 **Content-Type:** n/a (no body)
 **Path:**
-  - userId: uuid, required
+  - userId: uuid, required — must be the caller's own id
 **200:**
 ```json
 {
@@ -857,6 +884,8 @@ Path params are camelCase (`:userId`); query params and body fields are snake_ca
                                 "image_urls": ["string"] } } ]
 }
 ```
+**401:** `{ "error": "UNAUTHORIZED" }` — missing, malformed, or rejected bearer token.
+**403:** `{ "error": "FORBIDDEN" }` — `:userId` is not the caller's own id.
 **500:** `{ "error": "Failed to fetch dashboard data." }` — **including when the user does not
 exist**, because the profile fetch uses `.single()`.
 **Notes:** The `profile` object is genuinely inconsistent and worth reading twice. The join
@@ -875,33 +904,57 @@ rather than appearing as `null`.
 
 ### PUT /api/user/:userId/profile
 **Module:** user
-**Auth:** none — no ownership check whatsoever.
+**Auth:** **`requireAuth`. The row written is always the caller's own** — the actor is
+`req.user.id` and **`:userId` is ignored entirely**, so the path param cannot select a
+victim. (Was unauthenticated with a full `req.body` pass-through until 09 Sep 2026.)
 **Content-Type:** application/json
 **Path:**
-  - userId: uuid, required
-**Body:** **Unvalidated pass-through.** The controller does `const updates = req.body` and
-hands the entire object to `.update()`. There is no allow-list and no field validation, so
-any writable `users` column can be set: `university_id` (moves a user to another campus,
-defeating multi-tenant isolation), `is_profile_complete`, `full_name`, `bio` (the 250-char
-check from onboarding is **not** applied here), `avatar_url`, `qualification`, `course_id`,
-`specialization_id`, `year_of_study`, even `id`.
+  - userId: uuid, required — **ignored by the handler**; kept so the URL shape is unchanged.
+    Send the caller's own id.
+**Body:** **Allow-listed.** Only these seven keys are copied out of the body; every other key
+is **ignored in silence** (no error, so an older client keeps working):
+
+  - full_name: string
+  - bio: string \| null — the 250-char check from onboarding is **not** applied here
+  - avatar_url: string \| null — `null` clears the avatar
+  - qualification: string
+  - course_id: uuid
+  - specialization_id: uuid
+  - year_of_study: string
+
+  Presence is tested with `hasOwnProperty`, so an explicit `null` is written rather than
+  dropped. Not writable through this endpoint, each for its own reason: `username` (use
+  [PATCH /api/users/me/username](#patch-apiusersmeusername)), `has_password` (password
+  endpoints only), `university_id` (**changing it would move a student to another campus and
+  defeat tenant isolation**), `is_profile_complete` (onboarding only), `id` and `created_at`
+  (never writable).
 **200:** `{ "message": "Profile updated successfully!", "userProfile": { "<users row>": "..." } }`
-**500:** `{ "error": "Failed to update profile." }` — a key that is not a column produces a
-PostgREST schema-cache error and lands here.
+  — a body with no allow-listed key at all is **not** an error: the current row is read back
+  and returned in this same envelope.
+**401:** `{ "error": "UNAUTHORIZED" }` — missing, malformed, or rejected bearer token.
+**500:** `{ "error": "Failed to update profile." }`
 **Notes:** Returns the row under `userProfile`, matching `verify-otp` and `onboarding`. This
-endpoint can also set `avatar_url` directly to an arbitrary string, bypassing the upload and
-old-file cleanup in [POST /api/user/:userId/avatar](#post-apiuseruseridavatar).
+endpoint can still set `avatar_url` directly to an arbitrary string, bypassing the upload and
+old-file cleanup in [POST /api/user/:userId/avatar](#post-apiuseruseridavatar) — but only on
+the caller's own row.
+
+There is **no 403**: because `:userId` is ignored rather than compared, a caller who passes
+someone else's id updates their own row. That is deliberate — it removes the victim-selection
+parameter completely instead of validating it.
 
 ### POST /api/user/:userId/avatar
 **Module:** user
-**Auth:** none
+**Auth:** **`requireAuth`. Always writes the caller's own avatar** — the actor is `req.user.id`
+and **`:userId` is ignored entirely**, including in the storage object name, so one user
+cannot overwrite another's file. (Was unauthenticated until 09 Sep 2026.)
 **Content-Type:** multipart/form-data
 **Path:**
-  - userId: uuid, required
+  - userId: uuid, required — **ignored by the handler**; kept so the URL shape is unchanged.
 **Body:**
   - avatar: File, required — **exactly one** file, field name `avatar` (`upload.single`)
 **200:** `{ "message": "Avatar updated successfully!", "avatar_url": "string" }`
 **400:** `{ "error": "No image file provided." }` — when the `avatar` field is absent.
+**401:** `{ "error": "UNAUTHORIZED" }` — missing, malformed, or rejected bearer token.
 **500:** `{ "error": "Failed to update avatar." }`
 **Notes:** No MIME-type check, no size limit, no image validation — multer buffers whatever
 arrives into memory and it is uploaded with the client's own `Content-Type`. A file sent
@@ -919,7 +972,8 @@ every other user-mutating endpoint.
 
 ### GET /api/user/:userId/public
 **Module:** user
-**Auth:** none
+**Auth:** none — **deliberately public**, and reviewed 09 Sep 2026: the projection is an
+explicit column list with no email and no other non-public field. Do not add auth here.
 **Content-Type:** n/a (no body)
 **Path:**
   - userId: uuid, required — whose profile to read
@@ -954,6 +1008,12 @@ every other user-mutating endpoint.
 keys are **absent entirely**, not `false`. Treat `undefined` as `false` on the client.
 
 There is no campus check: any user can read any other user's public profile across campuses.
+
+⚠ **Open issue — `user_id` is an unauthenticated query param.** The visitor is named by the
+query string, not by a token, so any caller can pass *any* uuid and read back that person's
+`is_liked` / `is_saved` state for this seller's listings. It is a small leak (a third party's
+like/save flags, nothing else) and fixing it means either `optionalAuth` or dropping the
+param, both of which change the contract. **Not changed — awaiting a decision.**
 
 ---
 

@@ -1,6 +1,6 @@
 # Yahora Design System — Mobile App (DESIGN.md)
 
-> **How this file is used:** This is the canonical design source for the Yahora mobile repo (Expo SDK 56, TypeScript, Expo Router).
+> **How this file is used:** This is the canonical design source for the Yahora mobile repo (Expo SDK 57, TypeScript, Expo Router).
 > Add this line to CLAUDE.md: `Before ANY UI work, read DESIGN.md fully and follow it. Its tokens are canonical.`
 > If existing code conflicts with these tokens, flag the conflict — never silently invent a third value.
 > Hex values are the proposed v1 identity (shared with the web repo); once tuned by Vishwajeet/Neeraj, this file wins.

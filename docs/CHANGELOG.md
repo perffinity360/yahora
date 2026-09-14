@@ -118,7 +118,7 @@ cd frontend && npm install && cd ..
 cd mobile   && npm install && cd ..
 ```
 
-`mobile/` sits on Expo SDK 56 / React 19 and its transitive peer ranges do not always agree. If
+`mobile/` sits on Expo SDK 57 / React 19 and its transitive peer ranges do not always agree. If
 `npm install` there fails on a peer conflict, re-run it as `npm install --legacy-peer-deps`.
 Do not add that flag to `backend/` or `frontend/` — they install clean.
 
@@ -491,38 +491,45 @@ because it is the reason a mobile build against production looks broken and is n
 ## 2026-09-04 — Launch blockers written up in PRE_LAUNCH_CHECKLIST.md (Vishwajeet)
 
 ### What changed
-`docs/PRE_LAUNCH_CHECKLIST.md` is no longer only about email capacity. It now opens with a
-**"Launch blockers — as of 4 Sep 2026"** list holding all five known blockers; the existing
-OTP/email content stayed exactly as it was and became "blocker 1 in detail". No code changed.
+- Production answered **every** origin with `Access-Control-Allow-Origin: *`. Any website on
+  the internet could call this API from a logged-in student's browser and read the reply,
+  which made the Phase 2 Turnstile and rate-limiting work bypassable from any page.
+- It is now an exact-string allowlist: `ALLOWED_ORIGINS` = `PRODUCTION_ORIGINS` (in `app.js`)
+  + the comma-separated `WEB_ORIGINS` env var +, in development only, the local origins below.
+- `credentials: true` added. `allowedHeaders` unchanged — `X-Device-Id` still listed.
+- A refused origin now gets a normal response with **no** `Access-Control-Allow-Origin` header,
+  so the browser blocks the read. No 500, no stack trace in the logs.
+- See API.md, "CORS" in Part 1, for the full rules.
 
-### The four new items
-2. 🚨 **Production CORS answers every origin.** `backend/src/app.js:69` returns `'*'` when
-   `NODE_ENV=production`. Not session-hijackable (bearer tokens, not cookies), but any page
-   can drive `/api/auth/request-otp`, which undercuts Blocks D and E. Fix is an explicit
-   production allowlist containing the Netlify domain. **`allowedHeaders` at line 83 is
-   already correct — do not touch it.**
-3. **Community posts cannot be commented on.** `public.comments` has `product_id` and no
-   `post_id`, and no post-comment table exists. Found while seeding demo engagement. Needs a
-   migration + UI; Phase 3 scope.
-4. **`docs/DESIGN.md` describes a rebrand that was never adopted.** Both `CLAUDE.md` files
-   tell Claude Code to read it before any UI work, and Phase 3 is all UI. Adopt it or retract
-   it — otherwise every Phase 3 session starts from a false premise.
-5. **Prod/local divergence, one instance, already fixed.** On 3 Sep production had
-   `yahoo.com` as IIT Tirupati's domain and `gmail.com` as NIT Delhi's. `handle_new_user`
-   assigns a university by email domain, so any gmail signup would have been enrolled as an
-   NIT Delhi student. Corrected in the dashboard.
+### ⚠ ACTION REQUIRED BEFORE THE NEXT PRODUCTION DEPLOY — Vishwajeet
+**`PRODUCTION_ORIGINS` is empty and marked TODO.** The deployed frontend's domain is not in
+this repo anywhere — `frontend/netlify.toml` has no domain, there is no `.netlify/state.json`,
+no env var names one — and I would not guess it. **Until you fill that array or set
+`WEB_ORIGINS` on the Render deploy, every browser request from the hosted site will be refused.**
+The Expo app is NOT affected (see below). Ping me the domain and I'll put it in the file.
 
-### Neeraj — what this means for you
-- **Blocker 4 is yours to weigh in on** before Phase 3 UI starts. Don't build against
-  DESIGN.md until it's adopted or retracted.
-- **Blocker 3 will need a migration request** if the community feed lands in your scope.
-- Blocker 2 is a backend/infra fix (Vishwajeet). Nothing for you to change.
+### What is NOT affected
+- **The mobile app.** `if (!origin) return callback(null, true)` is the first check and is
+  unchanged in both environments: Expo, curl, Postman and server-to-server calls send no
+  `Origin` header, because CORS is a browser mechanism. Do not remove that line.
+- **LAN dev testing.** `isLocalNetworkOrigin` (loopback + `10.x` / `192.168.x` / `172.16–31.x`,
+  any port) is intact, but is now consulted **only** when `NODE_ENV !== 'production'`. A phone
+  or second laptop on the Wi-Fi still reaches the dev server.
 
-### What NOT to do yet
-Nothing here has been fixed. Do not assume the CORS allowlist exists, and do not write
-`post_id` into any query — the column does not exist.
+### One change beyond the brief
+The dev allowlist includes `localhost:3000` / `127.0.0.1:3000` as well as `:5173`. **3000 is
+this repo's actual Vite port** (`vite.config.js` defaults `VITE_DEV_PORT` to 3000, strictPort
+on); 5173 is Vite's stock default and is kept as a fallback. If you run a per-developer port,
+put your origin in `WEB_ORIGINS` rather than editing `app.js`.
 
----
+### How I tested it
+Extracted the real CORS block from `app.js` and drove it through `cors` on an ephemeral server.
+Verified: no-Origin allowed in dev **and** prod; `localhost:3000`/`:5173`, `192.168.1.42:8081`,
+`10.0.0.7:3001`, `172.20.5.5:3000`, `[::1]:3000` all reflected in dev; `evil.com` and
+`10.0.0.1.evil.com` (anchor-bypass attempt) refused in dev; in production `192.168.1.42:3000`,
+`localhost:3000`, `evil.com` and a trailing-slash variant of an allowlisted origin all refused,
+the exact allowlisted origin reflected, and the `OPTIONS` preflight returning 204 with
+`Content-Type,Authorization,X-Device-Id`. Not verified in a browser or against production.
 
 
 ## 2026-09-03 — Seed users: six prefixed test accounts in seed.sql (Vishwajeet)
