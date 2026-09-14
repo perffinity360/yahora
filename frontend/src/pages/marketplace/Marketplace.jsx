@@ -39,6 +39,7 @@ import {
   ShoppingBag,
   PartyPopper,
   Globe2,
+  House,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 
@@ -300,16 +301,67 @@ const SwipeCard = memo(function SwipeCard({
   );
 });
 
-function UniSwitcher({ current, universities, onSelect, onClose }) {
+function UniSwitcher({ current, universities, homeUniversityId, onSelect, onClose }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   useBodyScrollLock(true);
 
+  // The student's own campus is pinned ABOVE the search box, so typing can never
+  // filter away the one entry they most want to get back to. No home campus
+  // (null university_id, or an id not in the list) means no pinned section.
+  const homeUniversity = homeUniversityId
+    ? universities.find((u) => u.id === homeUniversityId)
+    : null;
+
   const filteredUniversities = universities.filter(
     (u) =>
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.domain.toLowerCase().includes(searchQuery.toLowerCase()),
+      u.id !== homeUniversity?.id &&
+      (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.domain.toLowerCase().includes(searchQuery.toLowerCase())),
   );
+
+  // Selecting goes through onSelect (handleSetUniversity), so the demo
+  // restriction applies to the pinned entry exactly as it does to the list.
+  const renderUniItem = (u) => {
+    const isActive = current.id === u.id;
+    // The campus the student signed in with keeps its own look whichever
+    // campus they are viewing; the active styles layer on top of it.
+    const isHome = u.id === homeUniversity?.id;
+
+    return (
+      <button
+        key={u.id}
+        className={`${styles.uniItem} ${isActive ? styles.uniItemActive : ""} ${isHome ? styles.uniItemHome : ""}`}
+        aria-current={isActive ? "true" : undefined}
+        onClick={() => {
+          onSelect(u);
+          onClose();
+        }}
+      >
+        <span
+          className={styles.uniItemDot}
+          style={{
+            background: isActive ? "var(--purple)" : isHome ? "var(--pink)" : "#ddd",
+          }}
+        />
+        <div style={{ textAlign: "left" }}>
+          <div className={styles.uniItemName}>{u.name}</div>
+          <div className={styles.uniItemDomain}>{u.domain}</div>
+          {isHome && (
+            <span className={styles.uniHomeBadge}>
+              <House size={11} strokeWidth={2.5} aria-hidden="true" />
+              Home campus
+            </span>
+          )}
+        </div>
+        {isActive && (
+          <span className={styles.uniItemCheck}>
+            <Check size={13} strokeWidth={3} />
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <div className={styles.uniOverlay} onClick={onClose}>
@@ -320,6 +372,13 @@ function UniSwitcher({ current, universities, onSelect, onClose }) {
             <X size={16} strokeWidth={2.5} />
           </button>
         </div>
+
+        {homeUniversity && (
+          <div className={styles.uniPinned}>
+            <div className={styles.uniPinnedLabel}>Your campus</div>
+            {renderUniItem(homeUniversity)}
+          </div>
+        )}
 
         <div style={{ padding: "0 1rem 1rem 1rem" }}>
           <div
@@ -350,32 +409,7 @@ function UniSwitcher({ current, universities, onSelect, onClose }) {
 
         <div className={styles.uniList}>
           {filteredUniversities.length > 0 ? (
-            filteredUniversities.map((u) => (
-              <button
-                key={u.id}
-                className={`${styles.uniItem} ${current.id === u.id ? styles.uniItemActive : ""}`}
-                onClick={() => {
-                  onSelect(u);
-                  onClose();
-                }}
-              >
-                <span
-                  className={styles.uniItemDot}
-                  style={{
-                    background: current.id === u.id ? "var(--purple)" : "#ddd",
-                  }}
-                />
-                <div style={{ textAlign: "left" }}>
-                  <div className={styles.uniItemName}>{u.name}</div>
-                  <div className={styles.uniItemDomain}>{u.domain}</div>
-                </div>
-                {current.id === u.id && (
-                  <span className={styles.uniItemCheck}>
-                    <Check size={16} strokeWidth={2.5} />
-                  </span>
-                )}
-              </button>
-            ))
+            filteredUniversities.map(renderUniItem)
           ) : (
             <div
               style={{ padding: "2rem", textAlign: "center", color: "#6b7280" }}
@@ -1052,6 +1086,7 @@ export default function Marketplace() {
         <UniSwitcher
           current={university}
           universities={universities}
+          homeUniversityId={homeUniversityId}
           onSelect={handleSetUniversity}
           onClose={() => setShowUniModal(false)}
         />
