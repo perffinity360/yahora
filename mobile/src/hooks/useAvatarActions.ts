@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { toUploadFile } from '../lib/upload';
-import type { UserProfile } from '../types';
+import type { DashboardData, PublicProfileData, UserProfile } from '../types';
 
 interface AvatarUploadResponse {
   message: string;
@@ -27,8 +27,29 @@ export function useAvatarActions(userId: string | null | undefined) {
 
   const syncAvatar = async (avatarUrl: string | null) => {
     if (profile) await saveProfile({ ...profile, avatar_url: avatarUrl });
-    await queryClient.invalidateQueries({ queryKey: ['dashboard', userId] });
-    await queryClient.invalidateQueries({ queryKey: ['publicProfile', userId] });
+
+    // Write the new URL straight into the cached payloads first.
+    //
+    // The dashboard renders `useDashboard().data.profile.avatar_url`, NOT the
+    // AuthContext profile — so until that query's data changes, the header
+    // keeps drawing the old photo no matter what the mutation returned. Waiting
+    // on the invalidation below leaves the old photo on screen for a whole
+    // round trip, and if that refetch is slow, fails, or the screen is offline,
+    // it never lands at all and the upload looks like it did nothing.
+    //
+    // The backend already told us the new URL, so there is nothing to wait for.
+    // Patch both cached payloads, then revalidate.
+    queryClient.setQueryData<DashboardData>(['dashboard', userId], (prev) =>
+      prev ? { ...prev, profile: { ...prev.profile, avatar_url: avatarUrl } } : prev,
+    );
+    queryClient.setQueryData<PublicProfileData>(['publicProfile', userId], (prev) =>
+      prev ? { ...prev, profile: { ...prev.profile, avatar_url: avatarUrl } } : prev,
+    );
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['dashboard', userId] }),
+      queryClient.invalidateQueries({ queryKey: ['publicProfile', userId] }),
+    ]);
   };
 
   const uploadAvatar = useMutation({

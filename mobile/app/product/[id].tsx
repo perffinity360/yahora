@@ -8,8 +8,6 @@ import {
   Alert,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -24,6 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Avatar } from '../../src/components/Avatar';
 import { CommentSection, MAX_COMMENT_LENGTH } from '../../src/components/CommentThread';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { formatPrice } from '../../src/components/ProductCard';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -46,6 +45,7 @@ function formatDate(iso: string): string {
 export default function ProductDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const floatingTop = insets.top + spacing.sm;
   const { width } = useWindowDimensions();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const productId = typeof id === 'string' ? id : undefined;
@@ -83,13 +83,10 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={styles.root}>
-      {/* The avoiding view sits at the very top of the screen (frame origin 0,0)
-          so its keyboard maths need no vertical offset; the composer docked at
-          its bottom edge then always clears the keyboard. */}
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/* Wraps the SafeAreaView, not the other way round, so the comment
+          composer docked at its bottom edge clears the keyboard. KeyboardAvoider
+          measures its own bottom edge, so nesting it here needs no offset. */}
+      <KeyboardAvoider style={styles.flex}>
         <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
           {showSkeleton ? (
             <DetailSkeleton galleryHeight={Math.min(width, 460)} />
@@ -128,7 +125,7 @@ export default function ProductDetailScreen() {
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            style={({ pressed }) => [styles.topBtn, styles.topBtnLeft, pressed && styles.topBtnPressed]}
+            style={({ pressed }) => [styles.topBtn, styles.topBtnLeft, { top: floatingTop }, pressed && styles.topBtnPressed]}
           >
             <Feather name="arrow-left" size={22} color={colors.purpleDark} />
           </Pressable>
@@ -138,13 +135,13 @@ export default function ProductDetailScreen() {
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Share this item"
-              style={({ pressed }) => [styles.topBtn, styles.topBtnRight, pressed && styles.topBtnPressed]}
+              style={({ pressed }) => [styles.topBtn, styles.topBtnRight, { top: floatingTop }, pressed && styles.topBtnPressed]}
             >
               <Feather name="share-2" size={19} color={colors.purpleDark} />
             </Pressable>
           ) : null}
         </SafeAreaView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoider>
     </View>
   );
 }
@@ -570,8 +567,10 @@ const styles = StyleSheet.create({
 
   /* Floating top controls */
   topBtn: {
+    // `top` is applied inline from the safe-area inset: an absolutely
+    // positioned child ignores the padding SafeAreaView adds, so a static
+    // `top` here slides under the status bar in full-screen mode.
     position: 'absolute',
-    top: spacing.sm,
     zIndex: 20,
     width: 42,
     height: 42,

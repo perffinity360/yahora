@@ -8,9 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRealtime } from '../../src/contexts/RealtimeContext';
@@ -253,10 +252,7 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoider style={styles.flex}>
         <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
           <ConnectionBanner />
 
@@ -470,7 +466,7 @@ export default function ChatScreen() {
             </Pressable>
           </View>
         </SafeAreaView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoider>
     </View>
   );
 }

@@ -305,19 +305,72 @@ const MESSAGES = [
  *   niet.co.in            → niet
  *   nitdelhi.ac.in        → nitdelhi
  *   students.nitdelhi.edu → nitdelhi
+ *   mail.mcgill.ca        → mcgill
+ *   uni.sydney.edu.au     → sydney
  *
  * Generic trailing labels (ac, co, edu, in, …) are dropped and the LAST
  * remaining label is used, which is the institution's own label in every
- * Indian academic domain shape we have. The result is stripped to [a-z0-9], so
- * it can never begin with a separator — that is what makes joining it on with
- * a '.' safe under the "no two separators adjacent" rule.
+ * academic domain shape we have. The result is stripped to [a-z0-9], so it can
+ * never begin with a separator — that is what makes joining it on with a '.'
+ * safe under the "no two separators adjacent" rule.
+ *
+ * GENERIC_DOMAIN_LABELS must list the country codes of the OVERSEAS campuses in
+ * the table too, not just the Indian ones. A missing code is not a small bug:
+ * 'ca' left out makes mail.mcgill.ca and student.ubc.ca both reduce to the slug
+ * 'ca', and the run dies on the collision check below.
  */
 const GENERIC_DOMAIN_LABELS = new Set([
-  'ac', 'co', 'edu', 'org', 'com', 'net', 'gov', 'in', 'uk', 'us',
+  // Second-level and generic top-level labels.
+  'ac', 'co', 'edu', 'org', 'com', 'net', 'gov',
+  // Country codes. Every country represented in the universities table needs
+  // its code here — add one whenever a campus from a new country is seeded.
+  'in',  // India
+  'ae',  // United Arab Emirates
+  'au',  // Australia
+  'ca',  // Canada
+  'ch',  // Switzerland
+  'de',  // Germany
+  'fr',  // France
+  'hk',  // Hong Kong
+  'ie',  // Ireland
+  'jp',  // Japan
+  'my',  // Malaysia
+  'nz',  // New Zealand
+  'sg',  // Singapore
+  'uk',  // United Kingdom
+  'us',  // United States
+  'za',  // South Africa
+]);
+
+/**
+ * Domains the rule above cannot tell apart, resolved by hand.
+ *
+ * One institution can own two student domains — Manchester issues separate
+ * undergraduate and postgraduate addresses — and both reduce to the same
+ * institution label. There is no derivation that separates them, so the slug is
+ * written out here instead. Keys are full domains, lowercase; values are
+ * checked against the same rules as a derived slug.
+ */
+const SLUG_OVERRIDES = new Map([
+  ['student.manchester.ac.uk',  'manchesterug'],
+  ['postgrad.manchester.ac.uk', 'manchesterpg'],
 ]);
 
 function universitySlug(domain) {
-  const labels = String(domain).toLowerCase().split('.').filter(Boolean);
+  const normalised = String(domain).toLowerCase();
+
+  const override = SLUG_OVERRIDES.get(normalised);
+  if (override) {
+    if (!/^[a-z0-9][a-z0-9]*$/.test(override) || override.length > SLUG_MAX_LEN) {
+      throw new Error(
+        `SLUG_OVERRIDES entry "${override}" for ${normalised} is not a legal slug: ` +
+        `must be 1–${SLUG_MAX_LEN} characters of a–z and 0–9 only.`
+      );
+    }
+    return override;
+  }
+
+  const labels = normalised.split('.').filter(Boolean);
   const meaningful = labels.filter((l) => !GENERIC_DOMAIN_LABELS.has(l));
   const chosen = meaningful.length ? meaningful[meaningful.length - 1] : labels[0] || '';
   return chosen.replace(/[^a-z0-9]/g, '').slice(0, SLUG_MAX_LEN);
@@ -415,6 +468,14 @@ async function listAllAuthUsers() {
 
 const emailDomain = (email) => String(email || '').toLowerCase().split('@')[1] || '';
 
+/**
+ * How many handles to put in one PostgREST `.in()` filter. The filter travels
+ * in the URL, so the whole list has to fit inside the server's URL limit; 100
+ * handles is roughly 2.6 KB of query string, comfortably under it, and keeps
+ * the number of round trips small.
+ */
+const HANDLE_QUERY_BATCH = 100;
+
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
@@ -484,7 +545,9 @@ async function seedLocal() {
       throw new Error(
         `"${p.university.name}" (${p.university.domain}) and ` +
         `"${slugOwners.get(p.slug).name}" (${slugOwners.get(p.slug).domain}) ` +
-        `both reduce to the username slug "${p.slug}". Handles would collide.`
+        `both reduce to the username slug "${p.slug}". Handles would collide. ` +
+        `Add a country code to GENERIC_DOMAIN_LABELS if one is missing, or give ` +
+        `each domain its own slug in SLUG_OVERRIDES.`
       );
     }
     slugOwners.set(p.slug, p.university);
@@ -495,12 +558,21 @@ async function seedLocal() {
   // than a raw 23505 halfway through the write.
   const wantedHandles = allAccounts.map((a) => a.username);
 
-  const { data: reserved, error: reservedErr } = await supabase
-    .from('reserved_usernames')
-    .select('username')
-    .in('username', wantedHandles);
-  if (reservedErr) throw reservedErr;
-  if (reserved?.length) {
+  // Asked in batches. PostgREST takes .in() as a query string, and six handles
+  // per campus across a hundred-plus campuses is several hundred names in one
+  // GET — past the URL limit, where the server answers 414 'URI too long'
+  // instead of the reserved-name answer we came for.
+  const reserved = [];
+  for (let i = 0; i < wantedHandles.length; i += HANDLE_QUERY_BATCH) {
+    const batch = wantedHandles.slice(i, i + HANDLE_QUERY_BATCH);
+    const { data, error } = await supabase
+      .from('reserved_usernames')
+      .select('username')
+      .in('username', batch);
+    if (error) throw error;
+    reserved.push(...(data ?? []));
+  }
+  if (reserved.length) {
     throw new Error(
       `These seeded handles are in reserved_usernames: ${reserved.map((r) => r.username).join(', ')}`
     );
