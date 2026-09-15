@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { avatarHue, initialsOf } from '../lib/avatar';
+import { resolveMediaUrl } from '../lib/config';
 import { colors, font } from '../theme';
 
 /**
@@ -20,9 +21,15 @@ export function Avatar({
 }) {
   const dims = { width: size, height: size, borderRadius: size / 2 };
 
-  if (uri) {
+  // An uploaded photo's URL is minted by the backend against its own
+  // SUPABASE_URL, which is loopback in local dev and unreachable from a phone.
+  // resolveMediaUrl points it back at this device's dev host; anything already
+  // reachable passes through untouched. See src/lib/config.ts.
+  const src = resolveMediaUrl(uri);
+
+  if (src) {
     return (
-      <Image source={{ uri }} style={[styles.avatar, dims]} contentFit="cover" transition={180} />
+      <Image source={{ uri: src }} style={[styles.avatar, dims]} contentFit="cover" transition={180} />
     );
   }
   return (

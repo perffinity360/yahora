@@ -578,6 +578,125 @@ selects `id, name, domain` — the flag filters, it is not returned. No client n
 - Don't build against `posts` — the table exists, there is still no backend `posts` module.
 
 
+## 2026-09-15 — Phase 4 V-C: cursor pagination in get_user_inbox() (Vishwajeet)
+
+📮 **HANDOFF — Neeraj, this one changes behaviour BEFORE your controller change lands.** The
+function the inbox endpoint calls now returns 20 conversations by default instead of all of
+them. Read "What NOT to do yet" before you start N-C.
+
+### Migrations applied
+
+- `20260915070505_inbox_pagination.sql` — **written and replayed locally. NOT applied to
+  production.** Vishwajeet runs anything that touches production; this entry exists so you know
+  the file is on `main` and what it does.
+
+`get_user_inbox` now takes a limit and a cursor:
+
+```sql
+get_user_inbox(
+  p_user_id uuid,
+  p_limit   int         default 20,   -- clamped to 1..50 inside the function
+  p_cursor  timestamptz default null  -- null = newest page
+)
+```
+
+- Ordered by the conversation's last message time, **descending**.
+- `p_cursor` returns conversations whose last message is **strictly older** than the cursor, so
+  the value to send back is the `last_message_time` of the last row you received.
+- `p_limit` is clamped server-side: `100000` → 50, `0` or `-1` → 1, `null` → 20. Do not rely on
+  the client to cap it (plan §0.5.4).
+
+**The old one-argument signature is gone**, and that is deliberate rather than incidental.
+`CREATE OR REPLACE` only replaces a function with the same argument list, so adding two
+defaulted parameters would have left *both* versions in the catalogue — and then every existing
+one-argument call fails with `function get_user_inbox(uuid) is not unique`. That was reproduced
+on a local database before the migration was written, not guessed. The migration drops the old
+signature and creates the new one in the same transaction.
+
+### New endpoints
+
+**None.** No route was added, removed, or renamed. `GET /api/messages/inbox/:userId` is
+unchanged — I did not touch `messages.controller.js`, which is your change to make.
+
+### Changed endpoints (BREAKING — in one specific sense)
+
+Nothing about the HTTP contract changed, and no response shape changed: all **nine** return
+columns are identical in name, order and type, because both your inbox and the mobile inbox
+read them by name.
+
+⚠ **But an unchanged caller now gets 20 conversations instead of all of them.** The controller
+still calls `supabase.rpc('get_user_inbox', { p_user_id })` with one argument, which now picks
+up `p_limit = 20`. Verified over PostgREST: that call still returns **200** with all nine
+columns — it just returns at most 20 rows.
+
+So between this migration and your N-C controller change, a student with more than 20
+conversations sees only the newest 20 in their inbox. Nothing errors, nothing is deleted, and
+every older conversation is still readable through `GET /api/messages/history` — the list is
+just short. Same shape of break the runbook calls out for `GET /api/products` in N-B: the
+backend can page before the client can.
+
+If that gap matters for a demo this week, say so and I will raise the default; the default is
+one number in one function.
+
+### New fields on existing responses
+
+**None.** No column added, none renamed, none retyped.
+
+### Test data
+
+Nothing seeded by this migration. `supabase db reset` replays all **15** migrations cleanly,
+ending at `20260915070505_inbox_pagination`.
+
+Verified locally after the reset:
+
+- catalogue: exactly one `get_user_inbox`, `security invoker`, `search_path = public, pg_temp`,
+  and the same grant set the old signature had (PUBLIC, postgres, anon, authenticated,
+  service_role) — a dropped function takes its grants and its `proconfig` with it, so both are
+  restated in the migration;
+- all nine return columns unchanged;
+- limit and cursor against seeded demo data: `limit 1` returns the newest conversation, and
+  passing its `last_message_time` back as the cursor returns the next one;
+- the 50 cap, against 72 synthetic conversations in a rolled-back transaction: `limit 100000`
+  and `limit 51` both return exactly 50;
+- two consecutive pages of 5 have **zero** overlapping conversations and are strictly
+  descending;
+- over PostgREST, both the one-argument call (what the backend sends today) and the full
+  three-argument call return 200;
+- the V-A endpoint suite re-run end to end: **35 assertions, still passing**.
+
+### What NOT to do yet
+
+- **Don't build a cursor out of anything but `last_message_time`.** It is the only ordering key
+  the function exposes. Send back the `last_message_time` of the last row you rendered,
+  verbatim — do not round it, reformat it, or subtract a millisecond.
+- **Don't expect a `next_cursor` from the database.** The function returns rows, not an
+  envelope. Building the `sendPage()` envelope — and deciding that a short page means the end —
+  is the controller's job, i.e. yours.
+- **Don't add a second `ORDER BY` in the controller.** The function already orders by
+  `last_message_time DESC` with `product_id, contact_id` as a deterministic tiebreak. Re-sorting
+  the page in JavaScript will silently break paging.
+- ⚠ **Known edge case, not fixed:** the cursor is a timestamp, and `<` is strict. If two
+  conversations share a `last_message_time` to the microsecond *and* land on a page boundary,
+  the second can be skipped. Real messages get `now()` per insert so this effectively cannot
+  happen; bulk-seeded data is where you might see it. Fixing it properly means a composite
+  cursor, which would change the return columns — a separate decision, and it needs your input
+  since your client carries the cursor.
+
+### Could this fail against existing rows?
+
+**No.** The migration reads no rows and writes none: no table DDL, no constraint, no index, no
+backfill, no type change — only `DROP FUNCTION` and `CREATE FUNCTION`, whose success depends on
+the catalogue and not on the contents of `messages`, `users` or `products`. It behaves
+identically on an empty local database and on production's 141 messages.
+
+The one non-row risk is a `DROP FUNCTION` dependency: if any view, function or default
+expression depended on `get_user_inbox(uuid)`, the drop would fail and abort the transaction.
+Nothing does — the only caller is the Express backend over PostgREST, which is not a catalogue
+dependency. The migration relies on `RESTRICT` (the default) rather than `CASCADE` exactly so
+that this fails loudly instead of quietly dropping a dependent object, should that ever change.
+
+---
+
 ## 2026-09-XX — Phase 4 V-A: auth on nine write endpoints (Vishwajeet)
 
 📮 **HANDOFF — Neeraj, read the BREAKING section before your next frontend push.** Six of the

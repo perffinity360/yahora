@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
+import { resolveMediaUrl } from '../../src/lib/config';
+import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRealtime } from '../../src/contexts/RealtimeContext';
@@ -64,7 +66,9 @@ export default function MessagesScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+    <View style={styles.root}>
+      <ScreenGradient />
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ConnectionBanner />
 
       <View style={styles.header}>
@@ -137,7 +141,8 @@ export default function MessagesScreen() {
           refreshControl={refreshControl}
         />
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -178,7 +183,12 @@ function ConversationRow({
 
         <View style={styles.productChip}>
           {row.product_image ? (
-            <Image source={{ uri: row.product_image }} style={styles.productThumb} contentFit="cover" />
+            <Image
+              // Loopback-safe in local dev; see src/lib/config.ts.
+              source={{ uri: resolveMediaUrl(row.product_image) ?? row.product_image }}
+              style={styles.productThumb}
+              contentFit="cover"
+            />
           ) : (
             <View style={[styles.productThumb, styles.productThumbFallback]}>
               <Feather name="image" size={9} color={colors.mutedPlaceholder} />
@@ -246,7 +256,9 @@ function InboxSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: colors.appBgBottom },
+  // The root holds the gradient; the safe area sits transparently on top of it.
+  safe: { flex: 1 },
 
   header: {
     paddingHorizontal: spacing.lg,

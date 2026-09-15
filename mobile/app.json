@@ -33,7 +33,7 @@
           "image": "./assets/adaptive-foreground.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ECE8F5"
+          "backgroundColor": "#F4E0E4"
         }
       ],
       "expo-image",

@@ -1,20 +1,23 @@
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Easing,
   Image,
+  Keyboard,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { DemoModal } from '../../src/components/DemoModal';
@@ -35,6 +38,9 @@ const TURNSTILE_SITE_KEY = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY?.trim() ??
 
 const HEADING_GRADIENT = [colors.purpleDark, colors.purple, colors.pinkDark] as const;
 const BRAND_GRADIENT = [colors.purple, colors.pinkDark] as const;
+
+/** Breathing room left between the field being typed into and the keyboard. */
+const REVEAL_GAP = 20;
 
 const LOGO = require('../../assets/yahora-logo.png');
 const MARK = require('../../assets/yahora-mark.png');
@@ -66,6 +72,90 @@ export default function LoginScreen() {
 
   const [universitiesOpen, setUniversitiesOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
+
+  // ── Keeping the field you are typing in above the keyboard ───────────────
+  //
+  // KeyboardAvoider shrinks this screen to the space left over by the keyboard,
+  // which gives the ScrollView something to scroll. It does not decide WHERE to
+  // scroll to, and React Native's own "reveal the focused input" only lifts the
+  // field until its bottom edge is level with the fold — which on this card
+  // left the email row half-covered, because the row's rounded pill and its
+  // Send Code button extend below that edge.
+  //
+  // So the scrolling is done here: measure the row in window coordinates, work
+  // out how far it reaches past the top of the keyboard, and scroll exactly
+  // that much plus a gap. Window coordinates are the point — they are true
+  // whether or not the avoiding padding has landed yet, and on Android in
+  // edge-to-edge mode (where the keyboard is an inset and the window never
+  // shrinks) they are the only reading that stays honest.
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  const scrollRef = useRef<ScrollView>(null);
+  /** Live scroll offset — ScrollView has no getter, so onScroll keeps it. */
+  const scrollY = useRef(0);
+  /** Window y of the keyboard's top edge. 0 when there is no keyboard. */
+  const keyboardTop = useRef(0);
+  /** Whichever row is being typed into, so the listener knows what to lift. */
+  const focusedRow = useRef<RefObject<View | null> | null>(null);
+  const emailRow = useRef<View>(null);
+  const otpRow = useRef<View>(null);
+
+  const revealFocusedRow = useCallback(() => {
+    const row = focusedRow.current?.current;
+    if (!row || keyboardTop.current === 0) return;
+
+    row.measureInWindow((_x, y, _w, height) => {
+      if (!Number.isFinite(y) || !Number.isFinite(height)) return;
+      const hidden = y + height + REVEAL_GAP - keyboardTop.current;
+      // Only ever scroll down to uncover. Scrolling back up when the row is
+      // already clear would fight the student if they had scrolled deliberately.
+      if (hidden > 1) {
+        scrollRef.current?.scrollTo({ y: scrollY.current + hidden, animated: true });
+      }
+    });
+  }, []);
+
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      // Android: derive the keyboard's top edge the same way KeyboardAvoider
+      // does, from the IME height, because `screenY` is measured against the
+      // visible display frame and an edge-to-edge window never shrinks that.
+      // iOS reports screenY correctly.
+      keyboardTop.current =
+        Platform.OS === 'android'
+          ? windowHeight - (e.endCoordinates.height + insets.bottom)
+          : e.endCoordinates.screenY;
+      setKeyboardOpen(true);
+      // One beat for the avoiding padding and the taller content to land, so
+      // the measurement reads the final layout rather than the previous one.
+      if (revealTimer.current) clearTimeout(revealTimer.current);
+      revealTimer.current = setTimeout(revealFocusedRow, 80);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardTop.current = 0;
+      setKeyboardOpen(false);
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+      if (revealTimer.current) clearTimeout(revealTimer.current);
+    };
+  }, [insets.bottom, windowHeight, revealFocusedRow]);
+
+  /** Called from a field's onFocus: remember the row, then lift it. */
+  const focusRow = useCallback(
+    (row: RefObject<View | null>) => {
+      focusedRow.current = row;
+      // Already-open keyboard (switching fields) needs no wait; a closed one is
+      // handled by the keyboardDidShow listener above.
+      if (keyboardTop.current !== 0) revealFocusedRow();
+    },
+    [revealFocusedRow],
+  );
 
   // Staggered entrance for the content groups.
   const introLogo = useRef(new Animated.Value(0)).current;
@@ -195,7 +285,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
-      <AuroraBackground />
+      <AuroraBackground variant="signin" />
 
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
         {/* The card fits the screen exactly, so the ScrollView has no overflow
@@ -204,9 +294,20 @@ export default function LoginScreen() {
             avoiding view is not enough on Android. */}
         <KeyboardAvoider style={styles.flex}>
           <ScrollView
-            contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
+            ref={scrollRef}
+            contentContainerStyle={[styles.scroll, keyboardOpen && styles.scrollKeyboardOpen]}
+            // "always", not "handled": with "handled" a tap on any empty part of
+            // the screen closed the keyboard, which is exactly what someone does
+            // when they mean to nudge the card up a little.
+            keyboardShouldPersistTaps="always"
+            // "none", not "on-drag": dragging is how you scroll, and dismissing
+            // the keyboard mid-scroll re-expands the screen under the finger and
+            // throws away what was being typed into view.
+            keyboardDismissMode="none"
+            onScroll={(e) => {
+              scrollY.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.formWrapper}>
@@ -234,13 +335,19 @@ export default function LoginScreen() {
                       </Text>
 
                       <Text style={styles.inputLabel}>UNIVERSITY EMAIL ADDRESS</Text>
-                      <View style={[styles.pillGroup, emailFocused && styles.pillGroupFocused]}>
+                      <View
+                        ref={emailRow}
+                        style={[styles.pillGroup, emailFocused && styles.pillGroupFocused]}
+                      >
                         <TextInput
                           value={email}
                           onChangeText={setEmail}
-                          onFocus={() => setEmailFocused(true)}
+                          onFocus={() => {
+                            setEmailFocused(true);
+                            focusRow(emailRow);
+                          }}
                           onBlur={() => setEmailFocused(false)}
-                          placeholder="you@university.edu"
+                          placeholder="you@uni.edu"
                           placeholderTextColor={colors.mutedPlaceholder}
                           keyboardType="email-address"
                           autoCapitalize="none"
@@ -328,11 +435,17 @@ export default function LoginScreen() {
                       </Text>
 
                       <Text style={styles.inputLabel}>6-DIGIT VERIFICATION CODE</Text>
-                      <View style={[styles.pillGroup, otpFocused && styles.pillGroupFocused]}>
+                      <View
+                        ref={otpRow}
+                        style={[styles.pillGroup, otpFocused && styles.pillGroupFocused]}
+                      >
                         <TextInput
                           value={otp}
                           onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, 6))}
-                          onFocus={() => setOtpFocused(true)}
+                          onFocus={() => {
+                            setOtpFocused(true);
+                            focusRow(otpRow);
+                          }}
                           onBlur={() => setOtpFocused(false)}
                           placeholder="• • • • • •"
                           placeholderTextColor={colors.mutedPlaceholder}
@@ -505,7 +618,9 @@ function InlineMessage({ tone, text }: { tone: 'error' | 'success'; text: string
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.auroraBottom,
+    // Matches the sign-in aurora's last stop, so an overscroll or a frame
+    // before the gradient paints shows the same colour rather than white.
+    backgroundColor: colors.signinBottom,
   },
   safe: { flex: 1 },
   flex: { flex: 1 },
@@ -514,6 +629,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
+  },
+  // Scroll room while the keyboard is up. The reveal above can only scroll if
+  // there is somewhere to scroll TO, and the footer note is only a few points
+  // below the card — without this the last field on the card cannot be lifted
+  // clear no matter how the overlap is measured.
+  scrollKeyboardOpen: {
+    paddingBottom: 160,
   },
   formWrapper: {
     width: '100%',

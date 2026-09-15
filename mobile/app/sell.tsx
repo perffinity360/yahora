@@ -28,6 +28,7 @@ import { useFloatingTopInset } from '../src/hooks/useFloatingTopInset';
 import { useProduct } from '../src/hooks/useProduct';
 import { api } from '../src/lib/api';
 import { toUploadFile } from '../src/lib/upload';
+import { resolveMediaUrl } from '../src/lib/config';
 import { colors, font, radius, spacing } from '../src/theme';
 import type { ProductCardItem } from '../src/types';
 
@@ -302,7 +303,10 @@ export default function SellScreen() {
                         {existingImages.map((uri, idx) => (
                           <View key={uri} style={[styles.tile, { width: tile, height: tile }]}>
                             <Image
-                              source={{ uri }}
+                              // Loopback-safe in local dev; see src/lib/config.ts.
+                              // Display only — the edit PUT never sends image_urls
+                              // back, so this host can't reach the database.
+                              source={{ uri: resolveMediaUrl(uri) ?? uri }}
                               style={styles.tileImg}
                               contentFit="cover"
                               transition={200}
