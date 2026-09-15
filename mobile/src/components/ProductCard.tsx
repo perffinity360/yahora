@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
+import { resolveMediaUrl } from '../lib/config';
 import { colors, conditionColors, font, radius, spacing } from '../theme';
 import type { ProductCardItem } from '../types';
 
@@ -113,7 +114,10 @@ function ProductCardBase({
   sellerAvatarUrl,
   showManageActions,
 }: ProductCardProps) {
-  const image = product.image_urls?.[0];
+  // Listing photos are minted by the backend against its own SUPABASE_URL,
+  // which is loopback in local dev and unreachable from a phone — the tile just
+  // renders its grey placeholder. Same fix as avatars; see src/lib/config.ts.
+  const image = resolveMediaUrl(product.image_urls?.[0]);
   const cond =
     (product.condition && conditionColors[product.condition as keyof typeof conditionColors]) ||
     FALLBACK_CONDITION;

@@ -17,11 +17,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { ProductCard } from '../../src/components/ProductCard';
+import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
 import { usePublicProfile } from '../../src/hooks/usePublicProfile';
+import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { PublicListing, PublicProfile } from '../../src/types';
@@ -89,6 +91,7 @@ export default function PublicProfileScreen() {
 
   return (
     <View style={styles.root}>
+      <ScreenGradient />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -188,6 +191,8 @@ export default function PublicProfileScreen() {
 /* ────────────────────────── Read-only header ────────────────────────── */
 function Header({ profile }: { profile: PublicProfile }) {
   const initials = initialsOf(profile.full_name);
+  // Uploaded avatars carry a loopback URL in local dev; see src/lib/config.ts.
+  const avatarSrc = resolveMediaUrl(profile.avatar_url);
   const since = memberSince(profile.created_at);
   // Same order as the dashboard: row 1 = Qualification | Current Year,
   // row 2 = Course | Specialization (the 2-col grid wraps left→right).
@@ -215,9 +220,9 @@ function Header({ profile }: { profile: PublicProfile }) {
           style={styles.avatarRing}
         >
           <View style={styles.avatarInner}>
-            {profile.avatar_url ? (
+            {avatarSrc ? (
               <Image
-                source={{ uri: profile.avatar_url }}
+                source={{ uri: avatarSrc }}
                 style={styles.avatarImg}
                 contentFit="cover"
                 transition={220}
@@ -331,7 +336,7 @@ function ListingsSkeleton({ cardWidth }: { cardWidth: number }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.appBgBottom,
   },
   safe: { flex: 1 },
   scroll: {

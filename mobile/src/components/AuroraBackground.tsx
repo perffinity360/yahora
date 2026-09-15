@@ -4,22 +4,40 @@ import { Animated, Easing, StyleSheet, useWindowDimensions, View } from 'react-n
 
 import { colors } from '../theme';
 
-// One asset, four tints. The glow PNGs are a flat RGB with a radial alpha
-// ramp, so `tintColor` recolours them exactly — which means the palette lives
-// in `src/theme`, not in four separate image files.
-const GLOW = require('../../assets/glow-purple.png');
+const GLOW_PURPLE = require('../../assets/glow-purple.png');
+const GLOW_VIOLET = require('../../assets/glow-violet.png');
+const GLOW_PINK = require('../../assets/glow-pink.png');
+const GLOW_BLUE = require('../../assets/glow-blue.png');
+
+type Variant = 'blush' | 'signin';
 
 /**
  * Full-screen animated aurora: a soft base gradient with four drifting,
  * breathing colour glows. Native-driven and non-interactive, so drop it behind
- * any screen's content. Shared by the login and onboarding screens.
+ * any screen's content.
  *
- * The tints are ONE analogous band (violet -> lilac -> periwinkle -> soft sky)
- * at low opacity. The earlier version put saturated purple, pink, violet and
- * blue on a blush base; four unrelated hues at full strength read as a festival
- * backdrop rather than as weather, which is not the tone the sign-in wants.
+ * TWO VARIANTS, because one background was being asked to do two jobs:
+ *
+ *   'blush'  (default) — the shared canvas behind onboarding, sell and
+ *            edit-profile. Unchanged from the original: four saturated glows on
+ *            a warm blush base.
+ *
+ *   'signin' — login only. The same four glows, larger and stronger, on a
+ *            deeper three-stop base. A sign-in screen is one card in a lot of
+ *            empty space, so it can carry colour that a screen full of form
+ *            fields cannot.
+ *
+ * ⚠ These were briefly collapsed into a single desaturated "calm" version —
+ * a cool near-white base with four low-opacity analogous tints. It made every
+ * screen look unfinished rather than calm. If a screen needs a different mood,
+ * add a variant here; do not retune the shared one.
  */
-export function AuroraBackground() {
+export function AuroraBackground({ variant = 'blush' }: { variant?: Variant } = {}) {
+  return variant === 'signin' ? <SigninAurora /> : <BlushAurora />;
+}
+
+/** The shared canvas: onboarding, sell, edit-profile. */
+function BlushAurora() {
   const { width, height } = useWindowDimensions();
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -30,36 +48,36 @@ export function AuroraBackground() {
         style={StyleSheet.absoluteFill}
       />
       <AuroraBlob
-        tint={colors.auroraGlowLilac}
-        size={width * 1.15}
-        baseOpacity={0.34}
-        position={{ top: -height * 0.12, left: -width * 0.34 }}
+        source={GLOW_PURPLE}
+        size={width * 1.05}
+        baseOpacity={0.6}
+        position={{ top: -height * 0.1, left: -width * 0.32 }}
         amplitude={26}
         duration={12000}
       />
       <AuroraBlob
-        tint={colors.auroraGlowPeriwinkle}
-        size={width * 1.0}
-        baseOpacity={0.28}
-        position={{ top: height * 0.04, right: -width * 0.36 }}
+        source={GLOW_PINK}
+        size={width * 0.95}
+        baseOpacity={0.55}
+        position={{ top: height * 0.02, right: -width * 0.34 }}
         amplitude={30}
         duration={10500}
         delay={400}
       />
       <AuroraBlob
-        tint={colors.auroraGlowViolet}
-        size={width * 0.9}
-        baseOpacity={0.22}
-        position={{ top: height * 0.42, left: -width * 0.36 }}
+        source={GLOW_VIOLET}
+        size={width * 0.85}
+        baseOpacity={0.42}
+        position={{ top: height * 0.4, left: -width * 0.34 }}
         amplitude={22}
         duration={13500}
         delay={900}
       />
       <AuroraBlob
-        tint={colors.auroraGlowSky}
-        size={width * 1.2}
-        baseOpacity={0.26}
-        position={{ bottom: -height * 0.14, right: -width * 0.3 }}
+        source={GLOW_BLUE}
+        size={width * 1.1}
+        baseOpacity={0.5}
+        position={{ bottom: -height * 0.12, right: -width * 0.28 }}
         amplitude={28}
         duration={11500}
         delay={200}
@@ -68,8 +86,70 @@ export function AuroraBackground() {
   );
 }
 
+/**
+ * Login only.
+ *
+ * The composition is built around the card, which sits in the middle of the
+ * screen: pink and purple crown it from the top corners, violet pools under it,
+ * and a cool blue keeps the bottom from going muddy where two warm hues meet.
+ * Everything is bigger and further off-screen than in the blush variant, so
+ * what shows is the soft middle of each glow rather than its edge.
+ */
+function SigninAurora() {
+  const { width, height } = useWindowDimensions();
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <LinearGradient
+        colors={[colors.signinTop, colors.signinMid, colors.signinBottom]}
+        // Pale through the top half — see the palette note in src/theme: the
+        // headline and tagline are dark text and need the light half, and the
+        // contrast numbers there assume this stop position.
+        locations={[0, 0.5, 1]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <AuroraBlob
+        source={GLOW_PINK}
+        size={width * 1.25}
+        baseOpacity={0.62}
+        position={{ top: -height * 0.16, left: -width * 0.42 }}
+        amplitude={28}
+        duration={12500}
+      />
+      <AuroraBlob
+        source={GLOW_PURPLE}
+        size={width * 1.15}
+        baseOpacity={0.5}
+        position={{ top: -height * 0.06, right: -width * 0.4 }}
+        amplitude={32}
+        duration={11000}
+        delay={400}
+      />
+      <AuroraBlob
+        source={GLOW_VIOLET}
+        size={width * 1.3}
+        baseOpacity={0.55}
+        position={{ bottom: -height * 0.18, left: -width * 0.36 }}
+        amplitude={24}
+        duration={14000}
+        delay={900}
+      />
+      <AuroraBlob
+        source={GLOW_BLUE}
+        size={width * 1.0}
+        baseOpacity={0.38}
+        position={{ bottom: -height * 0.08, right: -width * 0.34 }}
+        amplitude={30}
+        duration={12000}
+        delay={200}
+      />
+    </View>
+  );
+}
+
 function AuroraBlob({
-  tint,
+  source,
   size,
   position,
   baseOpacity,
@@ -77,7 +157,7 @@ function AuroraBlob({
   duration = 11000,
   delay = 0,
 }: {
-  tint: string;
+  source: number;
   size: number;
   position: Record<string, number>;
   baseOpacity: number;
@@ -111,10 +191,7 @@ function AuroraBlob({
 
   return (
     <Animated.Image
-      source={GLOW}
-      // tintColor is a paint-only prop, so it never invalidates the native
-      // driver's hold on opacity/transform below.
-      tintColor={tint}
+      source={source}
       style={[
         styles.blob,
         position,

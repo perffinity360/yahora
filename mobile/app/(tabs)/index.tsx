@@ -20,6 +20,7 @@ import { CampusSwitcherModal } from '../../src/components/CampusSwitcherModal';
 import { DemoCampusAlert } from '../../src/components/DemoCampusAlert';
 import { FilterSheet } from '../../src/components/FilterSheet';
 import { ProductCard } from '../../src/components/ProductCard';
+import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { SwipeDeck } from '../../src/components/SwipeDeck';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -148,7 +149,9 @@ export default function MarketplaceScreen() {
       : 'Be the first to list something!';
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+    <View style={styles.root}>
+      <ScreenGradient />
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {/* Header — campus branding + switch + filters. */}
       <View style={styles.header}>
         <Pressable
@@ -351,7 +354,8 @@ export default function MarketplaceScreen() {
         onClose={() => setDemoAlertOpen(false)}
         onSignUp={handleDemoSignUp}
       />
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -408,8 +412,10 @@ function FeedState({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.appBgBottom,
   },
+  // The root holds the gradient; the safe area sits transparently on top of it.
+  safe: { flex: 1 },
 
   /* Header */
   header: {

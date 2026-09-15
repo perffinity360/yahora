@@ -21,6 +21,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import { resolveMediaUrl } from '../../src/lib/config';
+import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRealtime } from '../../src/contexts/RealtimeContext';
@@ -252,6 +254,7 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.root}>
+      <ScreenGradient />
       <KeyboardAvoider style={styles.flex}>
         <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
           <ConnectionBanner />
@@ -296,7 +299,12 @@ export default function ChatScreen() {
                 style={({ pressed }) => [styles.productStrip, pressed && styles.productStripPressed]}
               >
                 {productImage ? (
-                  <Image source={{ uri: productImage }} style={styles.productThumb} contentFit="cover" />
+                  <Image
+                    // Loopback-safe in local dev; see src/lib/config.ts.
+                    source={{ uri: resolveMediaUrl(productImage) ?? productImage }}
+                    style={styles.productThumb}
+                    contentFit="cover"
+                  />
                 ) : (
                   <View style={[styles.productThumb, styles.productThumbFallback]}>
                     <Feather name="image" size={9} color={colors.mutedPlaceholder} />
@@ -677,7 +685,7 @@ function ChatState({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: colors.appBgBottom },
   flex: { flex: 1 },
 
   /* Header */
