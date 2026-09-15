@@ -277,6 +277,307 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-15 — 📮 Phase 4 Block N-B: cursor pagination on the marketplace feed and the comments list (Neeraj, in Vishwajeet's module)
+
+📮 **HANDOFF — Vishwajeet, the mobile app breaks on both of these until Phase 5.** Two response
+envelopes changed. Nothing about an individual listing or an individual comment changed. Read
+"Changed endpoints (BREAKING)" before your next mobile push.
+
+**Ownership:** `products/` is yours. This is the Phase 4 loan recorded in the
+[ownership-loan entry](#2026-09-15--ownership-loan-neeraj-writes-the-pagination-read-handlers-in-products-and-messages-phase-4-only-neeraj)
+— READ handlers only. `products.routes.js` is untouched, no route path moved, and none of the
+nine write handlers you rewrote in Block V-A were opened. `respond.js` is untouched; `sendPage`
+is imported, not reimplemented.
+
+`.range()` had **zero call sites** in this repo and every list endpoint returned every matching
+row. These are the first two that do not.
+
+### Migrations applied
+
+**None.** No schema change, no RLS change, no trigger change, no index added. This block is two
+read handlers plus `backend/API.md`.
+
+> ⚠️ **One index is worth considering before real traffic, and it is your call because it is a
+> migration.** The comments page orders by `(created_at DESC, id DESC)` filtered on
+> `product_id` + `parent_comment_id IS NULL`. On the current data volume Postgres will
+> seq-scan and not care. A composite index on `comments (product_id, created_at DESC, id DESC)`
+> is the one that would matter later. I have not written it — `supabase/migrations/` is yours.
+
+### New endpoints
+
+**None.** Both endpoints already existed; both keep their paths and their methods.
+
+### Changed endpoints (BREAKING)
+
+**1. `GET /api/products` — a client that used to receive every listing on the campus now
+receives 20.**
+
+That is the headline. A caller sending no `limit` and no `cursor` — which is what both clients
+do today — gets the **newest 20 listings** and nothing else. On the local seed that is
+invisible, because the demo campus has 11 available listings and 11 is fewer than 20. On a
+campus with 300 listings the other 280 are behind `next_cursor` and **a client that ignores it
+will never show them.** The clients get infinite scroll in **Phase 5**; until then the web and
+mobile marketplaces show the first page only.
+
+| | Before | After |
+|---|---|---|
+| Envelope | `{ "products": [ ... ] }` | `{ "items": [ ... ], "next_cursor": "..." }` |
+| Rows returned | every `status = 'available'` row on the campus | `limit`, default **20**, max **50** |
+| Cursor | — | `created_at` timestamp, opaque to the client |
+
+- **The key changed from `products` to `items`.** This is the §0.F contract question that
+  API.md flagged as unresolved ("`items` vs named keys"); it is resolved in favour of `items`
+  and API.md now records that. `frontend/.../Marketplace.jsx:563-564` and
+  `mobile/app/(tabs)/index.tsx:69` + `mobile/src/hooks/useProductActions.ts:29-30` read
+  `.products` and will read `undefined`. Not fixed here — `frontend/` and `mobile/` are out of
+  this block's scope.
+- **The shape of an individual listing is unchanged**, `seller` join and `is_liked` /
+  `is_saved` included.
+
+**2. `GET /api/products/:id` — `product.comments` was an array and is now an object.**
+
+| | Before | After |
+|---|---|---|
+| `product.comments` | `[ {comment}, ... ]` | `{ "items": [ {comment}, ... ], "next_cursor": "..." }` |
+| Rows returned | every comment on the listing | the newest **20 top-level** comments **plus all their descendants** |
+
+- `frontend/.../ProductDetail.jsx:378-380` and `mobile/.../CommentThread.tsx:78-80` call
+  `.filter()` straight on `product.comments`. They need `product.comments.items`. Phase 5.
+- **The shape of an individual comment is unchanged**, `user` join and `user_vote` included.
+
+**Neither parameter is required anywhere.** `limit` and `cursor` are optional on both
+endpoints, and `next_cursor` is purely additive.
+
+### New fields on existing responses
+
+- `next_cursor` on `GET /api/products` — a `created_at` timestamp, or `null` at the end.
+- `product.comments.next_cursor` on `GET /api/products/:id` — a **base64url** string, or
+  `null`.
+- `limit` and `cursor` query parameters on both.
+
+**⚠️ The two cursors are different types and are NOT interchangeable.** Feeding a comments
+cursor to the feed, or the reverse, is a 400. Send back whatever `next_cursor` you were given,
+verbatim; never build one, never parse one — the comment encoding is not a contract.
+
+Why they differ: the feed's cursor is a bare `created_at` because listings are created one at
+a time by a human pressing a button, so a microsecond tie is not realistic. Comments are
+**bulk-inserted by `seedLocal.js`**, so ties are normal, and a timestamp-only cursor on a tie
+either drops the rest of the tied group or serves it forever. The comment cursor is therefore
+compound — `created_at|id`, base64url-encoded so the client never assembles one.
+
+### Test data
+
+No seed script changed and no data was added to any shared database. Verified against the
+**local** stack only, by importing the two handlers and calling them with stubbed `req`/`res`:
+
+- **Feed:** 11 available listings. No params → 11 items, `next_cursor: null`. Walked the whole
+  feed at `limit=2` → 11 rows, 0 duplicates, identical order to the unpaginated response.
+  `limit=abc` → 20, `limit=0` and `limit=-1` → 1, `limit=100000` → 50.
+- **Comments, the case that matters:** temporarily inserted 9 top-level comments arranged as
+  **three groups of three sharing an exact microsecond timestamp**, plus replies on the oldest
+  parent. Paged at `limit=2`, `3` and `4`: all 9 top-level in exact order, **0 duplicates,
+  0 orphans, every comment seen**, including where a tie group straddled a page boundary.
+- **Depth:** a 4-level reply chain arrives intact on the page carrying its top-level ancestor.
+- **Bad cursors:** truncated base64, a wrong-shaped payload, a non-uuid id, and a cursor
+  crafted to carry PostgREST filter syntax all return **400 INVALID_FORMAT**. None reach the
+  database.
+- **All temporary rows were deleted afterwards.** The local `comments` table is back to its
+  original 8 rows and `comments_count` drift across all 24 products is **0** (the counter
+  trigger is symmetric). One unavoidable local-only side effect: `products.views` on the seed
+  listing `…0008` went up, because `getProductById` increments it on every call.
+
+Nothing was run against production.
+
+### What NOT to do yet
+
+- **Do not point either client at `next_cursor` yet.** Infinite scroll is Phase 5 on both
+  surfaces. Reading the first page is the correct interim behaviour; a half-wired loop that
+  appends without deduping is worse than no pagination.
+- **Do not build a cursor by hand**, and do not decode one to "just read the timestamp". The
+  comment cursor's encoding is deliberately opaque and will change.
+- **Do not add `.range()` or `OFFSET` anywhere as a shortcut.** `OFFSET 100000` makes Postgres
+  discard 100,000 rows before returning anything, and on a `created_at DESC` feed one new
+  listing between two requests shifts every later page.
+- **Do not copy the feed's timestamp cursor onto a new list endpoint without checking whether
+  its rows can tie.** Anything a script inserts in bulk needs the compound form.
+- **`GET /api/users/search` still returns `{ users: [...] }`** and is unpaginated. It is capped
+  at 50 inside the RPC so it is not a DoS, but it is now the one Part 1 list that does not
+  match the envelope. It is in my module; I will bring it across when that module is next open.
+- **`GET /api/messages/*` is untouched** — separate block, and yours to review the same way.
+
+
+## 2026-09-15 — 🤝 OWNERSHIP LOAN: Neeraj writes the pagination READ handlers in `products/` and `messages/` (Phase 4 only) (Neeraj)
+
+**This entry exists so nobody has to reconstruct the reasoning from a PR diff later.** It
+records a temporary, scoped exception to the ownership map — not a change to it.
+
+### What the exception is
+
+For **Phase 4 only**, Neeraj writes the cursor pagination in the **READ handlers** of:
+
+- `backend/src/modules/products/`
+- `backend/src/modules/messages/`
+
+`backend/CLAUDE.md` lists both modules as **Vishwajeet's**, and every file in them carries an
+`OWNER: VISHWAJEET` banner. Those banners are correct and are **not** being changed. This is a
+loan, agreed for one phase, on a named set of handlers.
+
+### Why the work has to move, and why this is the smallest way to do it
+
+Pagination is Phase 4's cross-cutting item — `.range()` still has **zero** call sites across
+`backend/src`, `frontend/src`, `mobile/src` and `mobile/app` (re-verified 15 Sep; see
+`docs/CURRENT_STATE.md`). The list endpoints that need it live in `products` and `messages`,
+but the consumers that have to change with them — the marketplace feed, the inbox, the chat
+scrollback — are all on the web, which is Neeraj's. Splitting a cursor contract across two
+developers in two sessions that cannot see each other is how response shapes drift.
+
+### The rules this runs under
+
+- **Vishwajeet reviews the PRs.** Build plan **rule 10**. Nothing in `products/` or
+  `messages/` merges without his review, exception or not.
+- **Vishwajeet's Block V-A lands first.** It already has — commit `660c012`, merged 15 Sep,
+  which is what put `requireAuth` on eleven write endpoints and moved `GET /api/products` and
+  `GET /api/products/:id` onto `optionalAuth`. Neeraj starts on top of that, so **the two of us
+  are never in the same file on the same day.**
+- **READ handlers only.** The write paths in both modules stay Vishwajeet's, including the ones
+  V-A just rewrote. If pagination turns out to need a write-path change, that is a request to
+  him, not a thing to do in passing.
+- **No `OWNER:` banner is edited**, and `backend/CLAUDE.md` is not edited.
+
+### Scope in time
+
+**Phase 4 only.** From **Phase 5 onward the ownership map is unchanged** — `products` and
+`messages` are Vishwajeet's in full, and the next change to a READ handler in either module is
+his unless a new loan is written down here the same way.
+
+### What NOT to do yet
+
+Don't paginate from the client side against an unpaginated endpoint as a stopgap. A
+`limit`/`cursor` the server does not honour reads as working on 11 seed rows and falls over on
+real traffic, which is the exact failure this phase exists to prevent.
+
+
+## 2026-09-15 — 🧾 RECONSTRUCTED AFTER THE FACT: Phase 3 complete — launch blockers (Vishwajeet + Neeraj)
+
+> ⚠️ **THIS IS NOT A CONTEMPORANEOUS RECORD.** Phase 3 landed between **10 and 14 September
+> 2026** and no handoff entry was ever written for it. This entry was assembled on **15 Sep
+> 2026** by reading the commits (`3757be0`, `537fa69`, `7b5750c`, `bbe2263`, merges `b60069f`,
+> `d00b4fc`, `974c406`), the diffs, `docs/PHASE_3_RUNBOOK.md` and the working tree — **not**
+> from anyone's memory of doing the work. Treat the *code* claims as verified against the repo
+> and anything about **production** as unverified: nothing here was checked against the live
+> database or the hosted site.
+>
+> **Related damage, found while writing this.** The 2026-09-10 CORS entry (Neeraj's, part of
+> this phase) was destroyed in merge `e5fcc73` — its body was spliced under the **2026-09-04**
+> heading, overwriting that entry. Both have been restored in this same commit. See the note on
+> each.
+
+Phase 3 was "close the launch blockers". The runbook is `docs/PHASE_3_RUNBOOK.md` (v1.0,
+8 Sep) and the work split is its Part 4: universities, mobile CAPTCHA and the OTP length to
+Vishwajeet; the unauthenticated write holes and CORS to Neeraj; the campus switcher to both.
+
+### Migrations applied
+
+- **`20260910171153_universities_expansion.sql`** — migration **013**, and the fourteenth file
+  in `supabase/migrations/`. Two things, neither of which turns on a single new campus:
+  1. `public.universities` gains `is_active boolean not null default true`, plus a partial
+     index `universities_is_active_idx on (is_active) where is_active = true`.
+  2. **112 `(name, domain, is_active)` value rows** across five `insert` blocks — IITs, NITs,
+     IIITs, GFTIs, large private universities, some overseas — **every one `is_active =
+     false`**. The migration header says "~100"; the verified line count is 112.
+- `default true` looks backwards and is deliberate: the eight rows already in the table are
+  live campuses with real students, and a default of `false` would have deactivated all eight
+  the instant the migration applied. New rows opt **out** explicitly instead.
+- Every insert carries `on conflict (domain) do nothing`, so the migration only ever INSERTs —
+  it never updates or overwrites an existing row, even where a domain already exists.
+- ⚠️ **Applied to production: `[not verified]`.** This entry was reconstructed from the repo;
+  there is no record in `docs/` of when or whether 013 was pushed.
+
+### New endpoints
+
+**None.** Phase 3 added no routes. Every change below is to an endpoint that already existed.
+
+### Changed endpoints (BREAKING)
+
+| Endpoint | Change | Breaking? |
+|---|---|---|
+| `PUT /api/user/:userId/profile` | `requireAuth` added (`user.routes.js:43`). Handler now takes `req.user.id` and **ignores `req.params.userId`**, and runs the body through `pickAllowedProfileFields()` — an allow-list using `hasOwnProperty`, so `null` still clears a field and unknown keys are dropped in silence. | **Yes** — 401 without a token. Was the worst hole in the backend: no auth at all, `req.body` spread wholesale into `.update()`, so a known UUID rewrote any student's row including `username`, `has_password` and `university_id`. |
+| `GET /api/user/:userId/dashboard` | `requireAuth`; 403 unless the path param equals the token's id. | **Yes** — 401/403. |
+| `POST /api/user/:userId/avatar` | `requireAuth` in front of multer. | **Yes** — 401. |
+| `GET /api/universities` | Now `.eq('is_active', true)`. | **No** shape change; the list gets **shorter**, not longer. Without it the campus switcher would show ~100 empty colleges. |
+| `POST /api/auth/request-otp` | Domain lookup gains `.eq('is_active', true)`, and the failure path moved to `sendError()`. | **No** wire change — deliberately byte-identical. An inactive domain returns **exactly** the unknown-domain 403 and sentence, so the endpoint cannot be probed to enumerate staged colleges. **Do not split that branch.** |
+| **CORS**, all endpoints (`backend/src/app.js`) | Production returned `Access-Control-Allow-Origin: *` to every origin. Replaced with an exact-string allowlist: `PRODUCTION_ORIGINS` + the `WEB_ORIGINS` env var + local origins in dev only. `credentials: true` added. | **Yes, for the hosted website.** See the ACTION REQUIRED below. Mobile is unaffected — `if (!origin) return callback(null, true)` is the first check in both environments, because CORS is a browser mechanism. |
+
+**OTP length: 8 digits → 6.** `supabase/config.toml` `otp_length = 6` (both auth blocks) and
+`frontend/src/pages/auth/Auth.jsx` `maxLength={6}` with the label and placeholder to match.
+Not an API change — the length comes from GoTrue, not from our code.
+
+**Dev API port 5000 → 5001** (`backend/src/server.js`). macOS gives port 5000 to the AirPlay
+Receiver, which holds it from boot and answers with a bodiless 403. Its own entry is
+[2026-09-12](#2026-09-12--dev-api-port-moved-to-5001-macos-airplay-owns-5000-vishwajeet).
+
+### 🔴 ACTION REQUIRED BEFORE THE NEXT PRODUCTION DEPLOY
+
+**`PRODUCTION_ORIGINS` in `backend/src/app.js:53` is still empty.** It was empty when the CORS
+allowlist landed on 10 Sep and it is empty today. Until it is filled, or `WEB_ORIGINS` is set
+on the Render deploy, **every browser request from the hosted site is refused.** The domain is
+not recorded anywhere in this repo. This is the single thing in Phase 3 that is not finished.
+
+### New fields on existing responses
+
+**None on the wire.** `universities.is_active` is a new **column**, but `getUniversities` still
+selects `id, name, domain` — the flag filters, it is not returned. No client needs a change.
+
+### Test data
+
+- The 112 rows above are **staged, not live**: all `is_active = false`, so none of them can be
+  signed up against and none appear in the campus switcher. Nothing about local seeding changed
+  in this phase — no `seed.sql` or `seedDemo.js` edit is in any Phase 3 commit.
+- Activating a campus is a **manual, one-at-a-time** flip after the domain is verified. The
+  reason is in the migration header: on 3 Sep production held `gmail.com` as NIT Delhi's domain
+  and `yahoo.com` as IIT Tirupati's, which put every Gmail address on earth one signup away
+  from being an NIT Delhi student. One wrong character in that file does it again.
+- ⚠️ `docs/YAHORA_BUILD_PLAN.md` says Phase 3 shipped **`scripts/verify-domains.sh`** (MX
+  records + a public-provider blocklist). **That file does not exist.** `backend/scripts/`
+  holds `diagnose-token.mjs`, `schema-drift.mjs`, `seedDemo.js`, `seedLocal.js` and
+  `verify-block-f.mjs`. Verify domains by hand — runbook §3.4 — until someone writes it.
+
+### Mobile and web, non-API
+
+- **Mobile Turnstile** — `mobile/src/components/TurnstileWebView.tsx` (new, 286 lines).
+  Turnstile has no native React Native component, so it runs inside a WebView and posts the
+  token out via `window.ReactNativeWebView.postMessage`. This is what unblocked mobile login
+  against production.
+- **Home campus pinned** to the top of the campus switcher on both surfaces —
+  `frontend/src/components/modal/UniversityModal.jsx` and `Marketplace.jsx` (`7b5750c`,
+  Neeraj), `mobile/src/components/CampusSwitcherModal.tsx` and `UniversitiesModal.tsx`
+  (`bbe2263`, Vishwajeet).
+- **`docs/DESIGN.md`** — the rebrand that was never adopted. The runbook §1.1 recommended
+  retracting it, and the build plan records it as resolved. **`docs/DESIGN.md` is indeed gone
+  from the repo — but `frontend/DESIGN.md` and `mobile/DESIGN.md` both still exist**, and
+  `frontend/CLAUDE.md` §16 still says "read DESIGN.md fully" and points at
+  `src/styles/tokens.css`, **which does not exist** (the real tokens are in
+  `src/styles/global.css`). The retraction was not finished. Not fixed here — `frontend/` is
+  Neeraj's and this entry is a record, not a change.
+
+### What NOT to do yet
+
+- **Do not deploy the hosted website** until `PRODUCTION_ORIGINS` or `WEB_ORIGINS` is set. It
+  will come up and every API call from the browser will be refused.
+- **Do not activate a university** by flipping `is_active` without verifying the domain first,
+  and do not "correct" a domain in the migration that merely looks like a typo. The file's §5
+  lists real near-collisions — `iitk.ac.in` / `iiitk.ac.in`, `ntu.edu.sg` / `ntu.ac.uk` /
+  `ntu.edu.tw`, `snu.ac.kr` / `snu.edu.in`. Editing one into the other silently merges two
+  universities into one campus.
+- **Do not split the `request-otp` 403 branch** to say "inactive" instead of "unknown". That
+  turns the endpoint into a list of colleges we have queued but not launched.
+- **Do not assume the 6-digit OTP is live on production.** `supabase/config.toml` is the
+  **local** stack's config; production's OTP length is a dashboard setting. `[not verified]`
+- **`frontend/CLAUDE.md` still says the OTP is 8 digits** (§13 Known Gotchas, and §6 step 2).
+  It is 6. That file is Neeraj's and is outside the scope of the change that found this.
+- Don't build against `posts` — the table exists, there is still no backend `posts` module.
+
+
 ## 2026-09-XX — Phase 4 V-A: auth on nine write endpoints (Vishwajeet)
 
 📮 **HANDOFF — Neeraj, read the BREAKING section before your next frontend push.** Six of the
@@ -629,6 +930,59 @@ Don't "fix" this by turning AirPlay Receiver off and moving back to 5000. It is 
 every Mac and comes back after an OS update. 5001 is the setting.
 
 
+## 2026-09-10 — CORS: production wildcard replaced with an explicit allowlist (Neeraj, in Vishwajeet's area)
+
+> 🔧 **RESTORED 15 Sep 2026.** This entry was written in commit `3757be0` and then lost in
+> merge `e5fcc73` — its body was spliced under the 2026-09-04 heading and the heading itself
+> disappeared. Restored verbatim from `3757be0`; nothing has been edited. The ACTION
+> REQUIRED below was still outstanding on 15 Sep: `PRODUCTION_ORIGINS` in `app.js:53` is
+> empty.
+
+**`backend/src/app.js` is Vishwajeet's frozen file — I edited it with his go-ahead.** Only the
+CORS block changed. No route mount, no middleware order, nothing else in the file was touched.
+
+### What changed
+- Production answered **every** origin with `Access-Control-Allow-Origin: *`. Any website on
+  the internet could call this API from a logged-in student's browser and read the reply,
+  which made the Phase 2 Turnstile and rate-limiting work bypassable from any page.
+- It is now an exact-string allowlist: `ALLOWED_ORIGINS` = `PRODUCTION_ORIGINS` (in `app.js`)
+  + the comma-separated `WEB_ORIGINS` env var +, in development only, the local origins below.
+- `credentials: true` added. `allowedHeaders` unchanged — `X-Device-Id` still listed.
+- A refused origin now gets a normal response with **no** `Access-Control-Allow-Origin` header,
+  so the browser blocks the read. No 500, no stack trace in the logs.
+- See API.md, "CORS" in Part 1, for the full rules.
+
+### ⚠ ACTION REQUIRED BEFORE THE NEXT PRODUCTION DEPLOY — Vishwajeet
+**`PRODUCTION_ORIGINS` is empty and marked TODO.** The deployed frontend's domain is not in
+this repo anywhere — `frontend/netlify.toml` has no domain, there is no `.netlify/state.json`,
+no env var names one — and I would not guess it. **Until you fill that array or set
+`WEB_ORIGINS` on the Render deploy, every browser request from the hosted site will be refused.**
+The Expo app is NOT affected (see below). Ping me the domain and I'll put it in the file.
+
+### What is NOT affected
+- **The mobile app.** `if (!origin) return callback(null, true)` is the first check and is
+  unchanged in both environments: Expo, curl, Postman and server-to-server calls send no
+  `Origin` header, because CORS is a browser mechanism. Do not remove that line.
+- **LAN dev testing.** `isLocalNetworkOrigin` (loopback + `10.x` / `192.168.x` / `172.16–31.x`,
+  any port) is intact, but is now consulted **only** when `NODE_ENV !== 'production'`. A phone
+  or second laptop on the Wi-Fi still reaches the dev server.
+
+### One change beyond the brief
+The dev allowlist includes `localhost:3000` / `127.0.0.1:3000` as well as `:5173`. **3000 is
+this repo's actual Vite port** (`vite.config.js` defaults `VITE_DEV_PORT` to 3000, strictPort
+on); 5173 is Vite's stock default and is kept as a fallback. If you run a per-developer port,
+put your origin in `WEB_ORIGINS` rather than editing `app.js`.
+
+### How I tested it
+Extracted the real CORS block from `app.js` and drove it through `cors` on an ephemeral server.
+Verified: no-Origin allowed in dev **and** prod; `localhost:3000`/`:5173`, `192.168.1.42:8081`,
+`10.0.0.7:3001`, `172.20.5.5:3000`, `[::1]:3000` all reflected in dev; `evil.com` and
+`10.0.0.1.evil.com` (anchor-bypass attempt) refused in dev; in production `192.168.1.42:3000`,
+`localhost:3000`, `evil.com` and a trailing-slash variant of an allowlisted origin all refused,
+the exact allowlisted origin reflected, and the `OPTIONS` preflight returning 204 with
+`Content-Type,Authorization,X-Device-Id`. Not verified in a browser or against production.
+
+
 ## 2026-09-08 — 📮 HANDOFF A: Phase 2 complete — OTP limits, Turnstile, migrations 008–012 (Vishwajeet)
 
 Phase 2 wrap-up. The endpoint details are in `backend/API.md` §request-otp and are not repeated
@@ -795,46 +1149,46 @@ because it is the reason a mobile build against production looks broken and is n
 
 ## 2026-09-04 — Launch blockers written up in PRE_LAUNCH_CHECKLIST.md (Vishwajeet)
 
+> 🔧 **RESTORED 15 Sep 2026.** The body of this entry was overwritten in merge `e5fcc73`
+> (14 Sep) with the text of the 2026-09-10 CORS entry, leaving this heading attached to the
+> wrong content and misattributing Neeraj's CORS work to Vishwajeet. The original body below
+> is restored verbatim from commit `dcdc035`. Nothing in it has been edited or updated —
+> read it as the 4 Sep snapshot it is. Blocker 2 (CORS) was fixed on 10 Sep; blocker 4
+> (DESIGN.md) was resolved in Phase 3.
+
 ### What changed
-- Production answered **every** origin with `Access-Control-Allow-Origin: *`. Any website on
-  the internet could call this API from a logged-in student's browser and read the reply,
-  which made the Phase 2 Turnstile and rate-limiting work bypassable from any page.
-- It is now an exact-string allowlist: `ALLOWED_ORIGINS` = `PRODUCTION_ORIGINS` (in `app.js`)
-  + the comma-separated `WEB_ORIGINS` env var +, in development only, the local origins below.
-- `credentials: true` added. `allowedHeaders` unchanged — `X-Device-Id` still listed.
-- A refused origin now gets a normal response with **no** `Access-Control-Allow-Origin` header,
-  so the browser blocks the read. No 500, no stack trace in the logs.
-- See API.md, "CORS" in Part 1, for the full rules.
+`docs/PRE_LAUNCH_CHECKLIST.md` is no longer only about email capacity. It now opens with a
+**"Launch blockers — as of 4 Sep 2026"** list holding all five known blockers; the existing
+OTP/email content stayed exactly as it was and became "blocker 1 in detail". No code changed.
 
-### ⚠ ACTION REQUIRED BEFORE THE NEXT PRODUCTION DEPLOY — Vishwajeet
-**`PRODUCTION_ORIGINS` is empty and marked TODO.** The deployed frontend's domain is not in
-this repo anywhere — `frontend/netlify.toml` has no domain, there is no `.netlify/state.json`,
-no env var names one — and I would not guess it. **Until you fill that array or set
-`WEB_ORIGINS` on the Render deploy, every browser request from the hosted site will be refused.**
-The Expo app is NOT affected (see below). Ping me the domain and I'll put it in the file.
+### The four new items
+2. 🚨 **Production CORS answers every origin.** `backend/src/app.js:69` returns `'*'` when
+   `NODE_ENV=production`. Not session-hijackable (bearer tokens, not cookies), but any page
+   can drive `/api/auth/request-otp`, which undercuts Blocks D and E. Fix is an explicit
+   production allowlist containing the Netlify domain. **`allowedHeaders` at line 83 is
+   already correct — do not touch it.**
+3. **Community posts cannot be commented on.** `public.comments` has `product_id` and no
+   `post_id`, and no post-comment table exists. Found while seeding demo engagement. Needs a
+   migration + UI; Phase 3 scope.
+4. **`docs/DESIGN.md` describes a rebrand that was never adopted.** Both `CLAUDE.md` files
+   tell Claude Code to read it before any UI work, and Phase 3 is all UI. Adopt it or retract
+   it — otherwise every Phase 3 session starts from a false premise.
+5. **Prod/local divergence, one instance, already fixed.** On 3 Sep production had
+   `yahoo.com` as IIT Tirupati's domain and `gmail.com` as NIT Delhi's. `handle_new_user`
+   assigns a university by email domain, so any gmail signup would have been enrolled as an
+   NIT Delhi student. Corrected in the dashboard.
 
-### What is NOT affected
-- **The mobile app.** `if (!origin) return callback(null, true)` is the first check and is
-  unchanged in both environments: Expo, curl, Postman and server-to-server calls send no
-  `Origin` header, because CORS is a browser mechanism. Do not remove that line.
-- **LAN dev testing.** `isLocalNetworkOrigin` (loopback + `10.x` / `192.168.x` / `172.16–31.x`,
-  any port) is intact, but is now consulted **only** when `NODE_ENV !== 'production'`. A phone
-  or second laptop on the Wi-Fi still reaches the dev server.
+### Neeraj — what this means for you
+- **Blocker 4 is yours to weigh in on** before Phase 3 UI starts. Don't build against
+  DESIGN.md until it's adopted or retracted.
+- **Blocker 3 will need a migration request** if the community feed lands in your scope.
+- Blocker 2 is a backend/infra fix (Vishwajeet). Nothing for you to change.
 
-### One change beyond the brief
-The dev allowlist includes `localhost:3000` / `127.0.0.1:3000` as well as `:5173`. **3000 is
-this repo's actual Vite port** (`vite.config.js` defaults `VITE_DEV_PORT` to 3000, strictPort
-on); 5173 is Vite's stock default and is kept as a fallback. If you run a per-developer port,
-put your origin in `WEB_ORIGINS` rather than editing `app.js`.
+### What NOT to do yet
+Nothing here has been fixed. Do not assume the CORS allowlist exists, and do not write
+`post_id` into any query — the column does not exist.
 
-### How I tested it
-Extracted the real CORS block from `app.js` and drove it through `cors` on an ephemeral server.
-Verified: no-Origin allowed in dev **and** prod; `localhost:3000`/`:5173`, `192.168.1.42:8081`,
-`10.0.0.7:3001`, `172.20.5.5:3000`, `[::1]:3000` all reflected in dev; `evil.com` and
-`10.0.0.1.evil.com` (anchor-bypass attempt) refused in dev; in production `192.168.1.42:3000`,
-`localhost:3000`, `evil.com` and a trailing-slash variant of an allowlisted origin all refused,
-the exact allowlisted origin reflected, and the `OPTIONS` preflight returning 204 with
-`Content-Type,Authorization,X-Device-Id`. Not verified in a browser or against production.
+---
 
 
 ## 2026-09-03 — Seed users: six prefixed test accounts in seed.sql (Vishwajeet)
