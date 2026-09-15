@@ -93,3 +93,45 @@ export const API_BASE_URL = resolveApiUrl();
 export const SUPABASE_URL = resolveSupabaseUrl();
 
 export const SUPABASE_ANON_KEY = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+
+/**
+ * Loopback hosts, anchored to the start of a URL so only the authority matches
+ * and never a path segment. `localhost` is included for the case where someone
+ * sets SUPABASE_URL to it; `[::1]` is bracketed the way a URL carries IPv6.
+ */
+const LOOPBACK_ORIGIN = /^(https?:\/\/)(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\])(?=[:/?#]|$)/i;
+
+/**
+ * Make an image URL minted by the backend reachable from this device.
+ *
+ * WHY THIS EXISTS. Uploaded photos — avatars and listing images — are stored in
+ * Supabase Storage, and the backend hands back the URL that
+ * `supabase.storage.getPublicUrl()` builds. That URL is built from the
+ * backend's OWN `SUPABASE_URL`, which in local dev is `http://127.0.0.1:54321`
+ * — correct for the server, because the server and Supabase are the same
+ * machine, and useless on a phone, where 127.0.0.1 is the phone itself.
+ *
+ * The symptom is not an error. `expo-image` simply never resolves the request,
+ * so the avatar stays an empty circle and the full-screen viewer opens on a
+ * dark scrim with nothing in it — which reads as "the upload did not work"
+ * even though the file uploaded fine and the row was updated. Seeded accounts
+ * hide it, because their photos are Unsplash URLs that load anywhere.
+ *
+ * So: any loopback origin is rewritten to the dev host this app already
+ * resolves for the API and Supabase, keeping the port and path. Everything
+ * else — Unsplash, a real Supabase project, a CDN — is returned untouched, and
+ * in a production build there is no dev host and nothing is rewritten. That
+ * makes this a no-op everywhere except the one place it is needed.
+ *
+ * `backend/CLAUDE.md` names this caveat under "Networking"; the backend cannot
+ * fix it alone, because it does not know what address the phone can reach it on.
+ */
+export function resolveMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (!LOOPBACK_ORIGIN.test(url)) return url;
+
+  const host = getDevHost();
+  if (!host) return url;
+
+  return url.replace(LOOPBACK_ORIGIN, `$1${host}`);
+}

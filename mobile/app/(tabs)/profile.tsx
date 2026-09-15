@@ -7,7 +7,6 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -22,11 +21,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AvatarSheet } from '../../src/components/AvatarSheet';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { formatPrice, ProductCard } from '../../src/components/ProductCard';
+import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
+import { ZoomableImageViewer } from '../../src/components/ZoomableImageViewer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useAvatarActions } from '../../src/hooks/useAvatarActions';
 import { useDashboard } from '../../src/hooks/useDashboard';
 import { useDashboardActions } from '../../src/hooks/useDashboardActions';
+import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { DashboardProfile, ProductListing, Purchase } from '../../src/types';
@@ -153,12 +155,16 @@ export default function ProfileScreen() {
     ]);
 
   const profile = data?.profile;
+  // Reachable-from-this-device avatar URL; see src/lib/config.ts. Used by the
+  // full-screen viewer below — the header card resolves its own.
+  const avatarSrc = resolveMediaUrl(profile?.avatar_url);
   const listings = data?.listings ?? [];
   const purchases = data?.purchases ?? [];
   const showSkeleton = isLoading && !profile;
 
   return (
     <View style={styles.root}>
+      <ScreenGradient />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -315,32 +321,14 @@ export default function ProfileScreen() {
           onClose={() => setAvatarSheetOpen(false)}
         />
 
-        <Modal
-          visible={imageViewerOpen && !!profile?.avatar_url}
-          transparent
-          animationType="fade"
-          statusBarTranslucent
-          onRequestClose={() => setImageViewerOpen(false)}
-        >
-          <Pressable
-            style={styles.viewerOverlay}
-            onPress={() => setImageViewerOpen(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Close photo"
-          >
-            {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                style={styles.viewerImage}
-                contentFit="contain"
-                transition={180}
-              />
-            ) : null}
-            <View style={styles.viewerClose}>
-              <Feather name="x" size={22} color={colors.white} />
-            </View>
-          </Pressable>
-        </Modal>
+        {/* Pinch, drag, double-tap. The viewer owns its own gesture root —
+            see the note in ZoomableImageViewer about Modals on Android. */}
+        <ZoomableImageViewer
+          visible={imageViewerOpen}
+          uri={avatarSrc}
+          onClose={() => setImageViewerOpen(false)}
+          accessibilityLabel={`${profile?.full_name ?? 'Your'} profile photo`}
+        />
       </SafeAreaView>
     </View>
   );
@@ -366,7 +354,11 @@ function ProfileHeader({
   onEditPhoto: () => void;
   avatarBusy: boolean;
 }) {
-  const avatar = profile?.avatar_url;
+  // Uploaded avatars carry a loopback URL in local dev (the backend mints them
+  // from its own SUPABASE_URL), which a phone cannot fetch — the circle just
+  // stays empty. resolveMediaUrl repoints it at this device's dev host and
+  // leaves every other URL alone. See src/lib/config.ts.
+  const avatar = resolveMediaUrl(profile?.avatar_url);
   const initials = initialsOf(profile?.full_name);
   // 2-column grid (wraps left→right): row 1 = Qualification | Current Year,
   // row 2 = Course | Specialization.
@@ -665,7 +657,7 @@ function ListingsSkeleton({ cardWidth }: { cardWidth: number }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.appBgBottom,
   },
   safe: { flex: 1 },
   scroll: {
@@ -1148,29 +1140,5 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 
-  /* Enlarged photo viewer */
-  viewerOverlay: {
-    flex: 1,
-    backgroundColor: colors.viewerScrim,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  viewerImage: {
-    width: '90%',
-    aspectRatio: 1,
-    maxHeight: '80%',
-    borderRadius: 24,
-  },
-  viewerClose: {
-    position: 'absolute',
-    top: spacing.xl * 1.5,
-    right: spacing.lg,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.viewerCloseBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  /* The enlarged photo viewer lives in ZoomableImageViewer, styles included. */
 });

@@ -24,6 +24,8 @@ import { Avatar } from '../../src/components/Avatar';
 import { CommentSection, MAX_COMMENT_LENGTH } from '../../src/components/CommentThread';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { formatPrice } from '../../src/components/ProductCard';
+import { resolveMediaUrl } from '../../src/lib/config';
+import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useAddComment } from '../../src/hooks/useComments';
@@ -83,6 +85,7 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={styles.root}>
+      <ScreenGradient />
       {/* Wraps the SafeAreaView, not the other way round, so the comment
           composer docked at its bottom edge clears the keyboard. KeyboardAvoider
           measures its own bottom edge, so nesting it here needs no offset. */}
@@ -267,7 +270,8 @@ function Content({
               }
               renderItem={({ item }) => (
                 <Image
-                  source={{ uri: item }}
+                  // Loopback-safe in local dev; see src/lib/config.ts.
+                  source={{ uri: resolveMediaUrl(item) ?? item }}
                   style={{ width, height: galleryHeight }}
                   contentFit="cover"
                   transition={220}
@@ -561,7 +565,7 @@ function ErrorState({ onRetry, onBack }: { onRetry: () => void; onBack: () => vo
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1, backgroundColor: colors.appBgBottom },
   flex: { flex: 1 },
   safe: { flex: 1 },
 
