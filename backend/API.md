@@ -63,12 +63,17 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 - Never use page numbers or `OFFSET`. `OFFSET 100000` makes Postgres discard 100,000 rows
   before returning anything, and rows shift under the reader between pages.
 
-> ⚠️ **`items` vs named keys — unresolved.** `sendPage()` emits `items`, and §0.5.2 says
-> "every list endpoint returns this shape". But the plan's own worked examples use named
-> keys: `{ "users": [...] }` in §3.2 and `{ "notifications": [...] }` in §5.3. Both cannot
-> be right. Each list entry below documents the key the plan literally shows, and flags the
-> conflict. **Resolve this at the §0.F Step 5 contract review, before anyone writes a
-> client** — it touches every list screen on both surfaces.
+> ✅ **`items` vs named keys — RESOLVED 2026-09-15 (Phase 4 Block N-B): the key is `items`.**
+> `sendPage()` emits `items` and §0.5.2 says "every list endpoint returns this shape"; the
+> plan's worked examples (`{ "users": [...] }` in §3.2, `{ "notifications": [...] }` in §5.3)
+> are superseded. A list does not get a named key because a caller that already knows which
+> endpoint it called does not learn anything from one.
+>
+> **Migrated so far:** `GET /api/products` (was `{ "products": [...] }`) and the nested
+> comments list in `GET /api/products/:id` (was a bare array). **Not yet migrated:**
+> `GET /api/users/search` still returns `{ "users": [...] }` and is unpaginated — it is
+> capped at 50 inside the RPC, so it is not a DoS, but it is now the one list in Part 1 that
+> does not match this envelope. Bring it across when that module is next opened.
 
 ### Error codes used anywhere in this API
 
@@ -1065,24 +1070,48 @@ browsing of the marketplace is deliberate. (`?user_id=` chose the viewer until 1
 **Content-Type:** n/a (no body)
 **Query:**
   - university_id: uuid, required
+  - limit: integer, optional — default **20**, capped at **50**, floored at **1**
+  - cursor: **timestamp** (`created_at` of the last item of the previous page), optional
   - user_id: uuid — ⚠️ **no longer read.** Ignored in silence; the viewer is the token holder,
     or nobody. Two call sites still send it: `frontend/.../Marketplace.jsx` and
     `mobile/src/hooks/useMarketplace.ts`
 **200:**
 ```json
 {
-  "products": [ { "<products row>": "... every column ...",
-                  "seller": { "id": "uuid", "full_name": "string", "avatar_url": "string" },
-                  "is_liked": false,
-                  "is_saved": false } ]
+  "items": [ { "<products row>": "... every column ...",
+               "seller": { "id": "uuid", "full_name": "string", "avatar_url": "string" },
+               "is_liked": false,
+               "is_saved": false } ],
+  "next_cursor": "2026-09-14T11:37:40.203488+00:00"
 }
 ```
 **400:** `{ "error": "university_id query parameter is required." }`
+**400:** `{ "error": "INVALID_FORMAT", "message": "cursor must be the next_cursor value from a
+previous response." }` — a `cursor` that is not parseable as a timestamp. Without this guard it
+would reach `.lt()` and Postgres would raise 22007, surfacing as a 500 on a bad request.
 **500:** `{ "error": "Failed to fetch marketplace feed." }` — a `university_id` that is not a
 valid UUID lands here (Postgres cast error), not in the 400.
 **Notes:** Filtered to `status = 'available'`, ordered `created_at` descending.
-**No pagination, no limit, no cursor** — the entire campus feed is returned in one response,
-including every `image_urls` array. This is the endpoint most likely to hurt on mobile.
+
+**📄 Cursor-paginated since 2026-09-15 (Phase 4 Block N-B).** Previously the entire campus
+feed came back in one response, every `image_urls` array included.
+
+- **⚠️ BREAKING: the envelope key changed from `products` to `items`.** The shape of an
+  individual listing is unchanged. See "The list envelope".
+- **The cursor is a bare `created_at` timestamp** — not the opaque compound cursor
+  `GET /api/products/:id` uses for comments. **The two are not interchangeable.** Send back
+  `next_cursor` verbatim; never build one.
+- A plain timestamp is safe here because listings are created one at a time by a human
+  pressing a button, so two sharing a timestamp to the microsecond is not a realistic case.
+  Comments are bulk-inserted by `seedLocal.js` and are, which is why that endpoint differs.
+- `next_cursor: null` means end of list and is the **only** end-of-list signal. A page with
+  fewer than `limit` rows is *not* one, and a page with exactly `limit` rows may still be the
+  last — in that case `next_cursor` is non-null and the following request returns `items: []`.
+- `limit` is parsed defensively: `limit=abc` → 20, `limit=0` and `limit=-1` → 1,
+  `limit=100000` → 50. Same rule as `GET /api/users/search`.
+- `?cursor=` (empty) and a repeated `?cursor=a&cursor=b` both mean "first page" rather than
+  400 — far more likely a client building a URL badly than an attack, and page one is the
+  answer that cannot be wrong.
 
 `is_liked` / `is_saved` are attached only when the caller **is signed in** *and* the result set
 is non-empty; otherwise the keys are absent, not `false`. Treat `undefined` as `false` on the
@@ -1147,6 +1176,9 @@ returns 401.** (`?user_id=` chose the viewer until 15 Sep 2026.)
 **Path:**
   - id: uuid, required
 **Query:**
+  - limit: integer, optional — default **20**, capped at **50**, floored at **1**.
+    **Counts top-level comments only** (see below); the listing itself is one row.
+  - cursor: **opaque string** (base64url), optional. From `product.comments.next_cursor`.
   - user_id: uuid — ⚠️ **no longer read.** Ignored in silence; the viewer is the token holder,
     or nobody. Three call sites still send it: `frontend/.../ProductDetail.jsx`,
     `mobile/src/hooks/useProductDetail.ts` and `mobile/src/hooks/useProduct.ts`
@@ -1157,24 +1189,59 @@ returns 401.** (`?user_id=` chose the viewer until 15 Sep 2026.)
     "<products row>": "... every column ...",
     "seller": { "id": "uuid", "full_name": "string", "avatar_url": "string",
                 "qualification": "string", "year_of_study": "string" },
-    "comments": [ { "id": "uuid", "content": "string", "created_at": "timestamptz",
-                    "upvotes": 0, "downvotes": 0, "parent_comment_id": "uuid|null",
-                    "user": { "id": "uuid", "full_name": "string", "avatar_url": "string" },
-                    "user_vote": 0 } ],
+    "comments": {
+      "items": [ { "id": "uuid", "content": "string", "created_at": "timestamptz",
+                   "upvotes": 0, "downvotes": 0, "parent_comment_id": "uuid|null",
+                   "user": { "id": "uuid", "full_name": "string", "avatar_url": "string" },
+                   "user_vote": 0 } ],
+      "next_cursor": "MjAyNi0wOC0zMVQxNjoxMzoxMi4yMDM0ODgrMDA6MDB8ZTEwMDAwMDAt..."
+    },
     "is_liked": false,
     "is_saved": false
   }
 }
 ```
+**400:** `{ "error": "INVALID_FORMAT", "message": "cursor must be the next_cursor value from a
+previous response." }` — any `cursor` that does not decode to `timestamp|uuid` with both halves
+valid. Truncated base64, a wrong-shaped payload, a non-uuid id and a cursor crafted to carry
+PostgREST filter syntax all land here. **Never a 500, and never interpolated into the query.**
 **500:** `{ "error": "Failed to fetch product details." }` — **a product that does not exist
 returns 500, not 404**, because of `.single()`. So does a non-UUID id.
 **Notes:** **Every call increments `views`** via the `increment_product_views` RPC — including
 the seller viewing their own listing, and including refreshes. The counter is a view count in
 name only. (Contrast `/meta`, which was split out precisely to avoid this.)
 
-`comments` is a **flat** list — replies are not nested; nest client-side on
-`parent_comment_id`. Ordered `created_at` **descending** (newest first), which means replies
-can appear before their parents. There is no depth limit in the API.
+**📄 `comments` is cursor-paginated since 2026-09-15 (Phase 4 Block N-B).**
+
+- **⚠️ BREAKING: `product.comments` was a bare array and is now `{ items, next_cursor }`.**
+  The shape of an individual comment is unchanged.
+- `comments.items` is still a **flat** list — replies are not nested; nest client-side on
+  `parent_comment_id`. Still ordered `created_at` **descending** (newest first), which means a
+  reply can still appear before its parent. There is no depth limit in the API.
+- **`limit` counts TOP-LEVEL comments, and every reply to the parents on the page is returned
+  with them.** A page of `limit=20` can therefore carry more than 20 items. This is deliberate:
+  both clients thread with `comments.filter(c => !c.parent_comment_id)` and
+  `comments.filter(c => c.parent_comment_id === parentId)`, so a reply whose parent landed on a
+  later page would match neither filter and be rendered **nowhere** — paginating the flat list
+  would delete replies from the UI rather than defer them. Paging by parent makes that
+  impossible: a reply is on the same page as its parent or on neither.
+- `next_cursor` is derived from the last **top-level** comment on the page.
+- **The cursor is an opaque base64url string, NOT a timestamp** — unlike
+  [`GET /api/products`](#get-apiproducts). **The two cursors are not interchangeable.** It
+  encodes `created_at|id` because `created_at` alone is not unique here: `seedLocal.js`
+  bulk-inserts comments, so several sharing a timestamp to the microsecond is normal, and a
+  timestamp-only cursor on a tie either drops the rest of the tied group or serves it forever.
+  Send `next_cursor` back verbatim; **never construct or parse one** — the encoding is not a
+  contract and will change.
+- **Nesting depth is still unbounded, and descendants are still returned in full.** The page
+  carries every descendant of its top-level comments, not just direct replies — `addComment`
+  does not cap depth and no trigger raises `NESTED_REPLY_NOT_ALLOWED` (the code exists in
+  `respond.js`'s raise list but no migration defines it), so a depth-4 reply is legal and
+  arrives with its top-level ancestor. The walk is capped at 10 levels as a stop against a
+  pathological thread; beyond that the deepest replies are truncated rather than the request
+  failing.
+- `limit` parsing and the `?cursor=` / repeated-cursor rules are identical to
+  [`GET /api/products`](#get-apiproducts).
 
 `is_liked` / `is_saved` / `user_vote` appear only when the caller **is signed in**. `user_vote`
 is `1`, `-1`, or `0` (`0` meaning no vote), and is set on every comment; the whole block is
@@ -1409,8 +1476,8 @@ V-A, which fixed identity only. See `docs/CHANGELOG.md`.
 `parent_comment_id` is **not** checked against the same product, and nesting depth is
 unlimited — a reply can point at a comment on a different product entirely.
 
-The returned `comment` shape matches the entries in `GET /api/products/:id` exactly, except
-that `user_vote` is absent. `comments_count` on the product is maintained by the
+The returned `comment` shape matches the entries in `GET /api/products/:id`'s
+`product.comments.items` exactly, except that `user_vote` is absent. `comments_count` on the product is maintained by the
 `trg_update_comments_count` trigger and is not returned here.
 
 ### POST /api/products/comments/:commentId/vote
