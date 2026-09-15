@@ -8,7 +8,16 @@ import { sendError, mapDbError } from '../../utils/respond.js';
 
 export const createProduct = async (req, res) => {
     try {
-        const { seller_id, title, description, price, category, location, condition } = req.body;
+        // 🔒 IDENTITY (Phase 4 Block V-A). `seller_id` was a body field on an
+        // unauthenticated route, so anyone could publish a listing under any
+        // student's name — with that student's campus stamped on it, their face
+        // on the card, and their inbox receiving the buyers.
+        //
+        // The seller is the token holder. A `seller_id` in the body is ignored
+        // in silence: both clients still send one today, and rejecting it would
+        // only tell an attacker the parameter used to work.
+        const seller_id = req.user.id;
+        const { title, description, price, category, location, condition } = req.body;
         const files = req.files;
 
         if (!files || files.length === 0) {
@@ -18,7 +27,10 @@ export const createProduct = async (req, res) => {
             return res.status(400).json({ error: 'Title, price, and category are required.' });
         }
 
-        // 1. Securely fetch the user's university_id to enforce multi-tenant isolation
+        // 1. Securely fetch the user's university_id to enforce multi-tenant
+        // isolation. This is now the AUTHENTICATED seller's row: it used to be
+        // whichever id the body claimed, so the campus stamped on the listing
+        // was chosen by the caller as surely as the seller was.
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('university_id')
@@ -252,7 +264,23 @@ export const deleteProduct = async (req, res) => {
 
 export const getProducts = async (req, res) => {
     try {
-        const { university_id, user_id } = req.query;
+        const { university_id } = req.query;
+
+        // 🔒 VIEWER (Phase 4 Block V-A follow-up). Was `req.query.user_id` — the
+        // caller named whose like/save flags came back, so anyone could pass any
+        // uuid and read a third party's `is_liked` / `is_saved` across a whole
+        // campus feed. The viewer comes from the token now, and a `user_id` in
+        // the query string is ignored in silence: five client call sites across
+        // web and mobile still send it, and rejecting it would break them for no
+        // security gain — exactly the treatment `toggleLikeProduct` gives a
+        // `user_id` in the body.
+        //
+        // optionalAuth, NOT requireAuth. Anonymous browsing of the marketplace
+        // is a deliberate feature, so `req.user` is `null` for a signed-out
+        // caller and `?.` is load-bearing rather than defensive. An anonymous
+        // viewer gets the listings with no flags attached, which is correct —
+        // see the `if (viewerId)` guard below.
+        const viewerId = req.user?.id;
 
         if (!university_id) {
             return res.status(400).json({ error: 'university_id query parameter is required.' });
@@ -272,13 +300,13 @@ export const getProducts = async (req, res) => {
         if (error) throw error;
 
         // 2. If a user is logged in, attach their specific 'liked' and 'saved' statuses
-        if (user_id && products.length > 0) {
+        if (viewerId && products.length > 0) {
             const productIds = products.map(p => p.id);
             
             // Run both queries in parallel for performance
             const [likesRes, savesRes] = await Promise.all([
-                supabase.from('product_likes').select('product_id').eq('user_id', user_id).in('product_id', productIds),
-                supabase.from('product_saves').select('product_id').eq('user_id', user_id).in('product_id', productIds)
+                supabase.from('product_likes').select('product_id').eq('user_id', viewerId).in('product_id', productIds),
+                supabase.from('product_saves').select('product_id').eq('user_id', viewerId).in('product_id', productIds)
             ]);
 
             // Convert to Sets for instant O(1) lookups
@@ -301,7 +329,15 @@ export const getProducts = async (req, res) => {
 export const getProductById = async (req, res) => {
     try {
         const { id } = req.params;
-        const { user_id } = req.query; 
+
+        // 🔒 VIEWER (Phase 4 Block V-A follow-up). Same fix as `getProducts`
+        // above, and this handler leaked one field more: `comment_votes` told
+        // the caller how any named student had voted on every comment on the
+        // listing. Viewer comes from the token; a `user_id` in the query string
+        // is ignored in silence, because both clients still send one.
+        //
+        // optionalAuth, so a signed-out caller reads the listing with no flags.
+        const viewerId = req.user?.id;
 
         // 1. Fetch Product + Seller + ALL Comments (Notice the explicit !comments_user_id_fkey)
         const { data: product, error } = await supabase
@@ -326,11 +362,11 @@ export const getProductById = async (req, res) => {
         if (error) throw error;
 
         // 2. Fetch user's specific interaction states
-        if (user_id) {
+        if (viewerId) {
             const [likesRes, savesRes, votesRes] = await Promise.all([
-                supabase.from('product_likes').select('product_id').eq('user_id', user_id).eq('product_id', id).single(),
-                supabase.from('product_saves').select('product_id').eq('user_id', user_id).eq('product_id', id).single(),
-                supabase.from('comment_votes').select('comment_id, vote_value').eq('user_id', user_id).in('comment_id', product.comments.map(c => c.id))
+                supabase.from('product_likes').select('product_id').eq('user_id', viewerId).eq('product_id', id).single(),
+                supabase.from('product_saves').select('product_id').eq('user_id', viewerId).eq('product_id', id).single(),
+                supabase.from('comment_votes').select('comment_id, vote_value').eq('user_id', viewerId).in('comment_id', product.comments.map(c => c.id))
             ]);
 
             product.is_liked = !!likesRes.data;
@@ -530,7 +566,14 @@ export const toggleSaveProduct = async (req, res) => {
 export const addComment = async (req, res) => {
     try {
         const { id: product_id } = req.params;
-        const { user_id, content, parent_comment_id } = req.body;
+
+        // 🔒 IDENTITY (Phase 4 Block V-A). `user_id` came from the body on an
+        // unauthenticated route, so any caller could put words under any
+        // student's name and avatar on a public listing. Same treatment as
+        // like/save: the actor is the token holder and a `user_id` in the body
+        // is ignored in silence.
+        const user_id = req.user.id;
+        const { content, parent_comment_id } = req.body;
 
         const { data: user, error: userError } = await supabase
             .from('users')
@@ -568,7 +611,14 @@ export const addComment = async (req, res) => {
 export const toggleCommentVote = async (req, res) => {
     try {
         const { commentId } = req.params;
-        const { user_id, vote_value } = req.body; // Expects 1 (upvote) or -1 (downvote)
+
+        // 🔒 IDENTITY (Phase 4 Block V-A). Was `req.body.user_id`, handed
+        // straight to the RPC as `p_user_id` — the vote is stored per user, so a
+        // forged id let one caller cast, flip and withdraw votes on behalf of
+        // every student on campus. The actor is the token holder; a `user_id` in
+        // the body is ignored in silence.
+        const user_id = req.user.id;
+        const { vote_value } = req.body; // Expects 1 (upvote) or -1 (downvote)
 
         if (![1, -1].includes(vote_value)) {
             return res.status(400).json({ error: 'Invalid vote value. Must be 1 or -1.' });
@@ -590,10 +640,64 @@ export const toggleCommentVote = async (req, res) => {
     }
 };
 
+/**
+ * 🔒 Guard for the two status endpoints (Phase 4 Block V-A).
+ *
+ * The same ownership check `updateProduct` and `deleteProduct` already run,
+ * factored out because /sold and /available need it identically. Status IS the
+ * listing — marking someone else's item sold takes it out of the marketplace,
+ * and marking it available again resurrects it and destroys its purchase
+ * history — so these two need exactly the check the `PUT` has.
+ *
+ * Returns `true` when the response has already been sent and the caller must
+ * return immediately; `false` when the caller owns the listing and may proceed.
+ */
+async function blockNonOwner(req, res, productId, label, failureMessage) {
+    const { data: existing, error: lookupError } = await supabase
+        .from('products')
+        .select('seller_id')
+        .eq('id', productId)
+        .maybeSingle();
+
+    // maybeSingle, not single: "no such listing" is a 404, not a 500.
+    if (lookupError) {
+        console.error(`${label} Error (ownership lookup):`, lookupError);
+        sendError(res, 500, 'INTERNAL_ERROR', { message: failureMessage });
+        return true;
+    }
+
+    if (!existing) {
+        sendError(res, 404, 'NOT_FOUND', {
+            message: 'That listing no longer exists.',
+        });
+        return true;
+    }
+
+    if (existing.seller_id !== req.user.id) {
+        sendError(res, 403, 'FORBIDDEN', {
+            message: 'You can only change the status of your own listings.',
+        });
+        return true;
+    }
+
+    return false;
+}
+
 export const markProductAsSold = async (req, res) => {
    try {
        const { id } = req.params;
+
+       // `buyer_id` STAYS a body field. It names the other party to the sale,
+       // not the actor, so it is a parameter rather than a claim of identity —
+       // the seller is the one telling us who bought it. Only the actor moved
+       // to the token.
        const { buyer_id } = req.body;
+
+       // 🔒 OWNERSHIP (Phase 4 Block V-A). This route had no auth and no owner
+       // check: any caller who knew a uuid could mark any listing on any campus
+       // sold, which removes it from the marketplace and from every /public
+       // profile. A competitor could clear a campus in an afternoon.
+       if (await blockNonOwner(req, res, id, 'Mark Sold', 'Failed to mark product as sold.')) return;
 
        // 1. Update the product status to 'sold'
        const { data: product, error: updateError } = await supabase
@@ -627,6 +731,12 @@ export const markProductAsSold = async (req, res) => {
 export const markProductAsAvailable = async (req, res) => {
    try {
        const { id } = req.params;
+
+       // 🔒 OWNERSHIP (Phase 4 Block V-A). Same check as /sold, and the damage
+       // here is not symmetric: step 2 below deletes EVERY `purchases` row for
+       // the product, so an unauthenticated call destroyed purchase history
+       // that nothing can reconstruct.
+       if (await blockNonOwner(req, res, id, 'Mark Available', 'Failed to mark product as available.')) return;
 
        // 1. Update the product status back to 'available'
        const { data: product, error: updateError } = await supabase

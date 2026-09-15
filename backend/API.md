@@ -75,8 +75,8 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | Code | HTTP | Raised by | Extra fields |
 |---|---|---|---|
 | `UNAUTHORIZED` | 401 | `requireAuth` — missing or invalid Bearer token | — |
-| `FORBIDDEN` | 403 | **Live.** `PUT`/`DELETE /api/products/:id` — caller is not the listing's `seller_id`; `GET /api/messages/history` — caller is not one of the two parties in the thread | `message` |
-| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save` — no such listing; also `/like`,`/save` when the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
+| `FORBIDDEN` | 403 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/sold`,`/available` — caller is not the listing's `seller_id`; `GET /api/messages/history` — caller is not one of the two parties in the thread; `GET /api/messages/inbox/:userId` — `:userId` is not the caller; `POST /api/messages/send` — sender and receiver are not on the same campus (a `NULL` campus on either side counts as a mismatch); `GET /api/user/:userId/dashboard` — `:userId` is not the caller (that one carries no `message`) | `message` |
+| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save`,`/sold`,`/available` — no such listing; also `/like`,`/save` when the caller has no `public.users` row. `POST /api/messages/send` — no such `receiver_id`, or the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
 | `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical | — |
 | `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like` and `/save` — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
 | `INVALID_PRICE` | 400 | **Live.** `PUT /api/products/:id` — `price` was supplied but does not parse to a finite number `>= 0`. Only raised when the key is present; an absent `price` is simply left alone | `message` |
@@ -123,14 +123,41 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 These apply to **every route that exists today** and are not repeated in each entry. None of
 them apply to Part 2, which is specified the way it should be, not the way Part 1 is.
 
-**There is almost no authentication in this backend — one route now has it.**
-`POST /api/auth/onboarding` is behind `requireAuth` as of CC-4 and takes the caller's id from
-`req.user.id` only. **Every other endpoint is still `Auth: none`**, and the caller's identity
-is whatever `user_id` / `userId` / `seller_id` / `sender_id` they put in the body, params or
-query string. There is no ownership check on any other write, so any caller can still edit or
-delete any product, overwrite any profile, or send a message as any user. Closing the rest is
-§1.6 / CC-6 — the full inventory is in `docs/CURRENT_STATE.md` item 4 and the CC-4 audit list
-in `docs/CHANGELOG.md`.
+**Every write endpoint in this backend now requires authentication.** As of Phase 4 Block V-A
+(2026-09-14) the retrofit that began with CC-4 is complete: `requireAuth` is on every route
+that changes data, and on every route that returns data private to one student. **Identity
+always comes from `req.user.id`** — a `user_id` / `userId` / `seller_id` / `sender_id` in the
+body, path or query string is either **ignored in silence** (writes, so an older client keeps
+working) or **compared to the token and refused with 403** (reads, where silently answering
+about a different user would be worse than an error). Each entry says which.
+
+**What is still `Auth: none` — every one of them a read, every one deliberate:**
+
+- the three product reads, `GET /api/products`, `/api/products/:id` and `/api/products/:id/meta`
+  — cross-campus browsing is a product decision, and the [like/save
+  guard](#post-apiproductsidlike) is what stops browsing becoming interaction. The first two
+  now carry **`optionalAuth`**: still no token required, still never a 401, but a token that is
+  present makes the caller the viewer whose `is_liked` / `is_saved` / `user_vote` come back;
+- [`GET /api/user/:userId/public`](#get-apiuseruseridpublic) — a public profile page, reviewed
+  09 Sep 2026, whose projection is an explicit non-sensitive column list;
+- the reference data the signup form needs before an account exists:
+  `GET /api/academic/courses`, `/api/academic/specializations`, `GET /api/universities`;
+- `GET /api/health` and `GET /`;
+- the `auth` module itself, which is how a caller obtains a token in the first place.
+
+**Every other route needs a Bearer token.**
+
+**`optionalAuth` is the third state, and it is not a weaker `requireAuth`.** Five routes use it
+— `GET /api/products`, `GET /api/products/:id`, `GET /api/users/username-available`,
+`/username-suggestions` and `/by-username/:username`. It **never rejects**: `req.user` is the
+auth user when a valid token is present and `null` for a missing, malformed or expired one, and
+the request continues either way. Handlers branch on `req.user?.id` and must render something
+sensible for a caller who does not exist. Use it wherever a response is *personalised* but not
+*private*.
+
+⚠ **`docs/CURRENT_STATE.md` (25 Aug) still lists items 1 and 2 as open.** It is stale: item 1
+(`PUT /api/users/:userId/profile`) was fixed in Phase 3, and item 2 — the rest of the CC-4
+audit — is what Block V-A closed. This file and the code are the current record.
 
 **The Supabase client uses the service-role key** (`backend/src/config/supabase.js`),
 so every query bypasses RLS. RLS is not a backstop for this path.
@@ -1012,8 +1039,13 @@ There is no campus check: any user can read any other user's public profile acro
 ⚠ **Open issue — `user_id` is an unauthenticated query param.** The visitor is named by the
 query string, not by a token, so any caller can pass *any* uuid and read back that person's
 `is_liked` / `is_saved` state for this seller's listings. It is a small leak (a third party's
-like/save flags, nothing else) and fixing it means either `optionalAuth` or dropping the
-param, both of which change the contract. **Not changed — awaiting a decision.**
+like/save flags, nothing else).
+
+**The decision has since been made, and the same bug was fixed this way on `GET /api/products`
+and `GET /api/products/:id` on 15 Sep 2026:** add `optionalAuth`, take the viewer from
+`req.user?.id`, and **ignore the `user_id` param in silence** rather than removing it, so the
+client call sites that still send it keep working. **This endpoint has not been changed yet** —
+`OWNER: Neeraj`, handed to him separately. Copy the pattern from `getProducts`.
 
 ---
 
@@ -1026,11 +1058,16 @@ buffered in process memory with no size limit.
 
 ### GET /api/products
 **Module:** products
-**Auth:** none
+**Auth:** **`optionalAuth` — works signed in or signed out.** A valid Bearer token makes the
+caller the **viewer** and attaches `is_liked` / `is_saved`; no token (or a bad or expired one)
+is simply anonymous and the response carries neither key. **Never returns 401** — anonymous
+browsing of the marketplace is deliberate. (`?user_id=` chose the viewer until 15 Sep 2026.)
 **Content-Type:** n/a (no body)
 **Query:**
   - university_id: uuid, required
-  - user_id: uuid, optional — the viewer, used to attach interaction state
+  - user_id: uuid — ⚠️ **no longer read.** Ignored in silence; the viewer is the token holder,
+    or nobody. Two call sites still send it: `frontend/.../Marketplace.jsx` and
+    `mobile/src/hooks/useMarketplace.ts`
 **200:**
 ```json
 {
@@ -1047,12 +1084,22 @@ valid UUID lands here (Postgres cast error), not in the 400.
 **No pagination, no limit, no cursor** — the entire campus feed is returned in one response,
 including every `image_urls` array. This is the endpoint most likely to hurt on mobile.
 
-`is_liked` / `is_saved` are attached only when `user_id` is present **and** the result set is
-non-empty; otherwise the keys are absent, not `false`. They are computed with two extra
-queries run in parallel and matched in memory via `Set`.
+`is_liked` / `is_saved` are attached only when the caller **is signed in** *and* the result set
+is non-empty; otherwise the keys are absent, not `false`. Treat `undefined` as `false` on the
+client — an anonymous browse never carries them. They are computed with two extra queries run in
+parallel and matched in memory via `Set`.
+
+**🔒 The viewer comes from the token (Phase 4 Block V-A follow-up, fixed 2026-09-15).** `user_id`
+was an unauthenticated query param naming *whose* interaction state to return, so any caller
+could pass any uuid and read back that student's like and save flags across a whole campus feed.
+It is `req.user?.id` now. The param is **ignored in silence rather than rejected**, and the
+route keeps `optionalAuth` rather than `requireAuth`, so no existing client breaks: one that
+still sends `?user_id=` gets its own flags if it sent a token, and no flags if it did not.
 
 `university_id` is taken from the caller, not from the caller's own record, so passing
-another campus's id returns that campus's feed. Campus isolation is not enforced here.
+another campus's id returns that campus's feed. Campus isolation is not enforced here — and
+note it is not enforced by the token either: a signed-in student browsing another campus gets
+that campus's listings with their own (empty) flags attached.
 
 ### GET /api/products/:id/meta
 **Module:** products
@@ -1072,7 +1119,12 @@ another campus's id returns that campus's feed. Campus isolation is not enforced
 ```
 **404:** `{ "error": "Product not found." }`
 **500:** `{ "error": "Failed to fetch product meta." }`
-**Notes:** Built for Open Graph link previews. **The only route in the codebase that returns
+**Notes:** **No `optionalAuth`, deliberately.** Its two neighbours gained it on 15 Sep 2026 so
+a viewer could be established from the token; this one personalises nothing — four public fields
+for a link-preview card — so there is no viewer to establish, and a token check would be dead
+weight on the one route crawlers hit repeatedly.
+
+Built for Open Graph link previews. **The only route in the codebase that returns
 a 404** — its guard is `if (error || !product)`, so even a malformed (non-UUID) id yields 404
 rather than 500.
 
@@ -1087,12 +1139,17 @@ is not swallowed as an id segment.
 
 ### GET /api/products/:id
 **Module:** products
-**Auth:** none
+**Auth:** **`optionalAuth` — works signed in or signed out.** A valid Bearer token makes the
+caller the **viewer** and attaches `is_liked` / `is_saved` plus each comment's `user_vote`; no
+token (or a bad or expired one) is simply anonymous and none of those keys appear. **Never
+returns 401.** (`?user_id=` chose the viewer until 15 Sep 2026.)
 **Content-Type:** n/a (no body)
 **Path:**
   - id: uuid, required
 **Query:**
-  - user_id: uuid, optional — the viewer
+  - user_id: uuid — ⚠️ **no longer read.** Ignored in silence; the viewer is the token holder,
+    or nobody. Three call sites still send it: `frontend/.../ProductDetail.jsx`,
+    `mobile/src/hooks/useProductDetail.ts` and `mobile/src/hooks/useProduct.ts`
 **200:**
 ```json
 {
@@ -1119,19 +1176,29 @@ name only. (Contrast `/meta`, which was split out precisely to avoid this.)
 `parent_comment_id`. Ordered `created_at` **descending** (newest first), which means replies
 can appear before their parents. There is no depth limit in the API.
 
-`is_liked` / `is_saved` / `user_vote` appear only when `user_id` is supplied. `user_vote` is
-`1`, `-1`, or `0` (`0` meaning no vote), and is set on every comment; the whole block is
-skipped without `user_id`, so the keys are then absent.
+`is_liked` / `is_saved` / `user_vote` appear only when the caller **is signed in**. `user_vote`
+is `1`, `-1`, or `0` (`0` meaning no vote), and is set on every comment; the whole block is
+skipped for an anonymous caller, so the keys are then absent. Treat `undefined` as "no
+interaction" on the client.
+
+**🔒 The viewer comes from the token (Phase 4 Block V-A follow-up, fixed 2026-09-15).** Same fix
+as [`GET /api/products`](#get-apiproducts), and this endpoint leaked one field more: the
+`comment_votes` read told the caller **how any named student had voted on every comment** on the
+listing, not just their like and save flags. All three now come from `req.user?.id`; `?user_id=`
+is ignored in silence and the route keeps `optionalAuth`, so no existing client breaks.
 
 The seller projection here (5 fields) differs from the one in `GET /api/products` (3 fields).
 
 ### POST /api/products
 **Module:** products
-**Auth:** none — `seller_id` is a body field, so a caller can list a product as any user.
+**Auth:** **`requireAuth`. The seller is always the caller** — `seller_id` is `req.user.id` and
+a `seller_id` in the body is **ignored in silence**. (Was unauthenticated, with `seller_id` as
+a body field, until 14 Sep 2026.)
 **Content-Type:** multipart/form-data
 **Body:**
   - images: File[], required, **max 5**, field name `images` (`upload.array('images', 5)`)
-  - seller_id: uuid, required in practice — **not** covered by the validation check
+  - seller_id: uuid — ⚠️ **no longer read.** A body carrying one is ignored; the listing is
+    always created under the token holder. Both clients still send it today
   - title: string, required — DB max 255
   - price: string→number, required — coerced with `Number(price)`
   - category: string, required — DB max 100, free text, no enum
@@ -1143,12 +1210,21 @@ The seller projection here (5 fields) differs from the one in `GET /api/products
 **400:** `{ "error": "At least one image is required." }` — checked **first**, before the
 title/price/category check.
 **400:** `{ "error": "Title, price, and category are required." }`
-**500:** `{ "error": "Failed to create product listing." }` — also the response when
-`seller_id` is missing or unknown (thrown internally as `'Seller not found.'`, but that string
-is only logged, never returned), and when `Number(price)` is `NaN`.
-**Notes:** `university_id` is **derived from the seller's record**, not accepted from the
-client — the one place campus isolation is actually enforced on write. `status` is forced to
-`'available'`; `sold_to` is never written by any endpoint.
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**500:** `{ "error": "Failed to create product listing." }` — also the response when the caller
+has no `public.users` row (thrown internally as `'Seller not found.'`, but that string is only
+logged, never returned), and when `Number(price)` is `NaN`.
+**🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `seller_id` was a body field
+on an open route, so anyone could publish a listing under any student's name — with that
+student's campus stamped on it, their face on the card, and their inbox receiving the buyers.
+**Notes:** `university_id` is **derived from the seller's record** — now the *authenticated*
+seller's, so it is finally the control it was described as: previously the row it read was the
+same id the caller had just made up. `status` is forced to `'available'`; `sold_to` is never
+written by any endpoint.
+
+`requireAuth` runs **before** multer, so a caller with no token is refused on the headers alone
+and their upload is never buffered into process memory. The object name is still
+`<seller_id>-<Date.now()>-<random>.<ext>`, where `seller_id` is now the token holder.
 
 Images upload **sequentially** to the `products` bucket as
 `<seller_id>-<Date.now()>-<random>.<ext>`, `upsert: false`. There is no MIME or size
@@ -1293,12 +1369,15 @@ back through the `is_saved` flag on the feed, product detail, and public-profile
 
 ### POST /api/products/:id/comments
 **Module:** products
-**Auth:** none — `user_id` is a body field, so a caller can comment as anyone.
+**Auth:** **`requireAuth`. The author is always the caller** — `user_id` is `req.user.id` and a
+`user_id` in the body is **ignored in silence**. (Was unauthenticated, with `user_id` as a body
+field, until 14 Sep 2026.)
 **Content-Type:** application/json
 **Path:**
   - id: uuid, required — becomes `product_id`
 **Body:**
-  - user_id: uuid, required
+  - user_id: uuid — ⚠️ **no longer read.** Ignored; the comment is always authored by the token
+    holder. The web app still sends it today
   - content: string, required — **no length limit enforced** in code or schema (`text`)
   - parent_comment_id: uuid, optional — stored as `null` when falsy
 **201:**
@@ -1310,13 +1389,22 @@ back through the `is_saved` flag on the feed, product detail, and public-profile
                "user": { "id": "uuid", "full_name": "string", "avatar_url": "string" } }
 }
 ```
-**500:** `{ "error": "Failed to post comment." }` — also the response for an unknown
-`user_id` (internally `'User not found.'`) and for a missing `content` (`NOT NULL` violation).
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**500:** `{ "error": "Failed to post comment." }` — also the response when the caller has no
+`public.users` row (internally `'User not found.'`) and for a missing `content` (`NOT NULL`
+violation).
+**🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `user_id` was a body field on
+an open route, so any caller could put words under any student's name and avatar on a public
+listing.
 **Notes:** There is **no validation of `content` at all** — an empty string `""` satisfies
 `NOT NULL` and is accepted, as is a comment of unbounded length.
 
 `university_id` is copied from the **commenter's** record, not the product's, so a
-cross-campus comment is filed under the commenter's campus.
+cross-campus comment is filed under the commenter's campus. ⚠ **There is still no campus check
+here.** `/like` and `/save` refuse a cross-campus interaction with
+`CROSS_CAMPUS_INTERACTION_BLOCKED`; commenting does not, so a student can still comment on
+another campus's listing — as themselves, now, but across the boundary. Out of scope for Block
+V-A, which fixed identity only. See `docs/CHANGELOG.md`.
 
 `parent_comment_id` is **not** checked against the same product, and nesting depth is
 unlimited — a reply can point at a comment on a different product entirely.
@@ -1327,16 +1415,24 @@ that `user_vote` is absent. `comments_count` on the product is maintained by the
 
 ### POST /api/products/comments/:commentId/vote
 **Module:** products
-**Auth:** none — `user_id` is a body field.
+**Auth:** **`requireAuth`. The voter is always the caller** — `p_user_id` is `req.user.id` and a
+`user_id` in the body is **ignored in silence**. (Was unauthenticated, with `user_id` as a body
+field, until 14 Sep 2026.)
 **Content-Type:** application/json
 **Path:**
   - commentId: uuid, required
 **Body:**
-  - user_id: uuid, required
+  - user_id: uuid — ⚠️ **no longer read.** Ignored; the vote is always cast by the token holder.
+    The web app still sends it today
   - vote_value: number, required — must be exactly `1` or `-1`
 **200:** `{ "message": "Vote registered successfully" }`
 **400:** `{ "error": "Invalid vote value. Must be 1 or -1." }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **500:** `{ "error": "Failed to register vote." }`
+**🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `user_id` went straight to the
+RPC as `p_user_id`. A vote is stored per user, so a forged id let one caller cast, flip and
+withdraw votes on behalf of every student on campus — and because the RPC is a three-state
+toggle, repeating a call silently *removed* the victim's real vote.
 **Notes:** Path is `/api/products/comments/...` — a comment resource living under the products
 prefix, and the only route in the module whose first segment is not `:id`.
 
@@ -1351,19 +1447,35 @@ set.
 new `upvotes` / `downvotes`. The counts are maintained by the `trg_update_comment_votes`
 trigger. A client must predict the new state locally or refetch the product.
 
-`user_id` is not validated before the RPC; a bad one surfaces as a 500.
+The caller's id no longer needs validating before the RPC — it comes from a verified token, so
+it is always a real `auth.users` id. A caller with no `public.users` row still surfaces as a
+500 from the RPC's own foreign key.
 
 ### POST /api/products/:id/sold
 **Module:** products
-**Auth:** none — **no ownership check**. Any caller can mark any product sold.
+**Auth:** **`requireAuth`** — and the caller must be the listing's `seller_id`. (Was
+unauthenticated with no ownership check until 14 Sep 2026.)
 **Content-Type:** application/json
 **Path:**
   - id: uuid, required
 **Body:**
-  - buyer_id: uuid, optional — when present, a `purchases` row is recorded
+  - buyer_id: uuid, optional — when present, a `purchases` row is recorded. **Still a body
+    field, deliberately:** it names the other party to the sale, not the actor. The seller is
+    the one telling us who bought it
 **200:** `{ "message": "Product marked as sold", "product": { "<products row>": "..." } }`
-**500:** `{ "error": "Failed to mark product as sold." }`
-**Notes:** Sets `status = 'sold'`. The product then disappears from `GET /api/products` and
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "FORBIDDEN", "message": "You can only change the status of your own
+  listings." }` — the caller is not the `seller_id`
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to mark product as sold." }` — from the
+  ownership lookup. A failure in the status update itself still returns the older hand-rolled
+  `{ "error": "Failed to mark product as sold." }`
+**🔒 Ownership is enforced (Phase 4 Block V-A, fixed 2026-09-14).** The same check
+[`PUT /api/products/:id`](#put-apiproductsid) runs, factored into a shared helper. Status *is*
+the listing: any caller who knew a uuid could take any item on any campus out of the
+marketplace, and off every `/public` profile, in one unauthenticated request.
+**Notes:** **Marking an id that does not exist now returns 404, not 200.** The ownership lookup
+runs first and cannot find a row to authorise. Sets `status = 'sold'`. The product then disappears from `GET /api/products` and
 from `/public` listings, but still appears in the owner's `/dashboard`.
 
 **The `purchases` insert is fire-and-forget**: its error is logged to the server console and
@@ -1377,13 +1489,24 @@ The `products.sold_to` column is never written by this or any other endpoint.
 
 ### POST /api/products/:id/available
 **Module:** products
-**Auth:** none — **no ownership check**.
+**Auth:** **`requireAuth`** — and the caller must be the listing's `seller_id`. (Was
+unauthenticated with no ownership check until 14 Sep 2026.)
 **Content-Type:** n/a — the body is ignored
 **Path:**
   - id: uuid, required
 **200:** `{ "message": "Product marked as available", "product": { "<products row>": "..." } }`
-**500:** `{ "error": "Failed to mark product as available." }`
-**Notes:** The inverse of `/sold`: sets `status = 'available'` and **deletes every
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "FORBIDDEN", "message": "You can only change the status of your own
+  listings." }` — the caller is not the `seller_id`
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to mark product as available." }` — from
+  the ownership lookup; a failure in the status update itself still returns the older
+  hand-rolled `{ "error": "Failed to mark product as available." }`
+**🔒 Ownership is enforced (Phase 4 Block V-A, fixed 2026-09-14).** Same check as `/sold`, and the
+damage was not symmetric: this endpoint **deletes every `purchases` row for the product**, so an
+unauthenticated call destroyed purchase history that nothing can reconstruct.
+**Notes:** **Marking an id that does not exist now returns 404, not 200.** The inverse of
+`/sold`: sets `status = 'available'` and **deletes every
 `purchases` row for that product** — not just the one from the most recent sale. If the item
 was sold and re-listed more than once, all purchase history for it is destroyed. Like the
 insert in `/sold`, the delete error is logged and ignored, so a 200 does not prove it
@@ -1407,10 +1530,12 @@ over Supabase Realtime directly; these endpoints are the write path and the back
 
 ### GET /api/messages/inbox/:userId
 **Module:** messages
-**Auth:** none — any caller can read any user's inbox.
+**Auth:** **`requireAuth` — own inbox only.** `:userId` must equal the caller's own id; any
+other value is `403 FORBIDDEN`. (Was unauthenticated until 14 Sep 2026.)
 **Content-Type:** n/a (no body)
 **Path:**
-  - userId: uuid, required
+  - userId: uuid, required — must be the caller's own id. **Kept in the URL on purpose**: both
+    clients build this path, so it is compared to the token rather than removed
 **200:**
 ```json
 {
@@ -1420,8 +1545,18 @@ over Supabase Realtime directly; these endpoints are the write path and the back
                "unread_count": 0 } ]
 }
 ```
-**500:** `{ "error": "Failed to fetch inbox." }` — including for a non-UUID `userId`.
-**Notes:** Entirely delegated to the `get_user_inbox(p_user_id)` RPC. One row per
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "FORBIDDEN", "message": "You can only read your own inbox." }` — `:userId`
+  is not the caller's own id
+**500:** `{ "error": "Failed to fetch inbox." }` — a non-UUID `userId` now fails the 403 check
+  first, so this is no longer reachable that way.
+**🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** This returned whichever
+inbox the URL named: every conversation, contact name, last message and unread count of any
+student on any campus, to a caller with no account. Unlike the write endpoints in this block —
+which ignore a caller-supplied id in silence — a mismatch here is a **403**: silently answering
+with the caller's own inbox would make a confused client look like it was working.
+**Notes:** Entirely delegated to the `get_user_inbox(p_user_id)` RPC, now called with
+`req.user.id`. One row per
 `(product, contact)` pair, latest message first. Falls back to `[]`, so an empty inbox is 200
 with an empty array, not an error.
 
@@ -1479,23 +1614,47 @@ Reading history does **not** mark anything read; that requires a separate
 
 ### POST /api/messages/send
 **Module:** messages
-**Auth:** none — `sender_id` is a body field, so a caller can send a message **as any user**.
+**Auth:** **`requireAuth`. The sender is always the caller** — `sender_id` is `req.user.id` and
+a `sender_id` in the body is **ignored in silence**. Sender and receiver must be on the same
+campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 2026.)
 **Content-Type:** application/json
 **Body:**
-  - sender_id: uuid, required
-  - receiver_id: uuid, required
+  - sender_id: uuid — ⚠️ **no longer read.** Ignored; the message is always sent by the token
+    holder. Both clients still send it today
+  - receiver_id: uuid, required — must exist and be on the caller's campus
   - product_id: uuid, required
   - content: string, required — no length limit
 **201:** `{ "message": { "<messages row>": "..." } }`
-**500:** `{ "error": "Failed to send message." }` — also the response for an unknown
-`sender_id` (internally `'User not found.'`) and for missing `content`.
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "FORBIDDEN", "message": "You can only message students on your own
+  campus." }` — sender and receiver are on different campuses. **A `NULL` `university_id` on
+  either side counts as a mismatch**, not a pass: "I could not establish that you share a
+  campus" fails closed. `handle_new_user` (migration 005) writes `NULL` when the email domain
+  is unknown; no account created through `request-otp` is affected
+**404:** `{ "error": "NOT_FOUND", "message": "That student no longer exists." }` — no
+  `public.users` row for `receiver_id`. This used to be a 500 from the foreign key
+**404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }` — the
+  *caller* has no `public.users` row
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to send message." }` — the campus
+  lookup failed, including when `receiver_id` is absent or not a uuid
+**500:** `{ "error": "Failed to send message." }` — the older hand-rolled body, still returned
+  when the insert itself fails (e.g. missing `content`)
+**🔒 Identity and campus are enforced (Phase 4 Block V-A, fixed 2026-09-14).** This was the worst
+of the nine: `sender_id` came from the body on an open route, so anyone could put a message in
+a real student's thread under a real student's name — a forgery that is persistent and, once in
+the table, indistinguishable from a genuine message. The campus check that was already here
+validated **nothing**, because it read the *claimed* sender's row: the id it checked was the id
+the caller had just made up. It now reads the authenticated sender, and the receiver's campus is
+compared to it — a check that did not exist before in any form, so a cross-campus DM was
+possible even for an honest client.
 **Notes:** Here `message` is the **row object**; on nearly every other endpoint `message` is a
 human-readable status string. Do not write a shared client helper that assumes one or the
 other.
 
-`university_id` is taken from the **sender's** record. `is_read` is set `false` explicitly;
-`is_delivered` falls to the column default `false`. Nothing verifies that sender and receiver
-share a campus, that the product exists, or that the receiver is the product's seller.
+`university_id` is taken from the **authenticated sender's** record. `is_read` is set `false`
+explicitly; `is_delivered` falls to the column default `false`. Sender and receiver are now
+verified to share a campus; nothing still verifies that the product exists, that it belongs to
+that campus, or that the receiver is the product's seller.
 
 **Demo auto-responder.** After the 201 is already sent, the controller checks whether the
 sender's university domain is `demo.yahora.com`. If so, it looks up the receiver's
@@ -1511,33 +1670,50 @@ that reply as a message **from the receiver to the sender**. Consequences worth 
 
 ### PUT /api/messages/read
 **Module:** messages
-**Auth:** none
+**Auth:** **`requireAuth`. The reader is always the caller** — `userId` is `req.user.id` and a
+`userId` in the body is **ignored in silence**. (Was unauthenticated until 14 Sep 2026.)
 **Content-Type:** application/json
 **Body:**
-  - userId: uuid, required — the **receiver** (the person doing the reading)
-  - contactId: uuid, required — the sender whose messages are being marked
+  - userId: uuid — ⚠️ **no longer read.** Ignored; the receiver is always the token holder. The
+    web app and mobile both still send it today
+  - contactId: uuid, required — the sender whose messages are being marked. **Still a body
+    field, correctly:** it names *which thread*, not who is reading
   - productId: uuid, required — the thread
 **200:** `{ "success": true }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **500:** `{ "error": "Failed to update read status." }`
+**🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `userId` is the receiver, and
+it came from the body, so any caller could clear the unread badge on any student's threads —
+making a message that was never seen look read, to both parties.
 **Notes:** One of only two endpoints returning `{ success: true }` rather than a `message`
 string — a third response convention in the same API.
 
-Marks messages **addressed to `userId` from `contactId` on `productId`** where
+Marks messages **addressed to the caller from `contactId` on `productId`** where
 `is_read = false`, setting **both** `is_read: true` and `is_delivered: true` (a message read
 must have been delivered). Direction matters: this cannot mark your own sent messages read.
 
 **Returns 200 even when zero rows matched** — no row count is checked, so success does not
-mean anything was updated. Missing params reach Postgres as invalid UUIDs → 500.
+mean anything was updated. A client that sends someone else's `userId` now gets a 200 that
+marked nothing, rather than marking their threads. Missing `contactId` / `productId` still
+reach Postgres as invalid UUIDs → 500.
 
 ### PUT /api/messages/deliver
 **Module:** messages
-**Auth:** none — any caller can mark any user's messages delivered.
+**Auth:** **`requireAuth`. The receiver is always the caller** — `userId` is `req.user.id` and a
+`userId` in the body is **ignored in silence**. (Was unauthenticated until 14 Sep 2026.)
 **Content-Type:** application/json
 **Body:**
-  - userId: uuid, required — the receiver
+  - userId: uuid — ⚠️ **no longer read.** Ignored; the receiver is always the token holder. Both
+    clients still send it today
 **200:** `{ "success": true }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **500:** `{ "error": "Failed to update delivery status." }`
-**Notes:** **Global, not per-thread.** Marks *every* undelivered message addressed to `userId`
+**🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** This one is global rather than
+per-thread, which made it the widest blast radius of the four message endpoints: a single
+unauthenticated call marked *every* undelivered message addressed to a named student as
+delivered, destroying the "not yet delivered" state across all of their conversations at once,
+with nothing to reconstruct it from.
+**Notes:** **Global, not per-thread.** Marks *every* undelivered message addressed to the caller
 as `is_delivered: true`, across every conversation and every product. Intended to be called
 once on app foreground.
 
@@ -2616,10 +2792,15 @@ The existing `posts` table has only `author_id`, `university_id`, `content` (max
 `image_url` — migration 007 drops `image_url` and adds nine columns. Nothing reads or writes
 it today.
 
-**Shared infrastructure that now exists but nothing calls yet.** `utils/respond.js`,
+**Shared infrastructure, and what actually uses it.** `utils/respond.js`,
 `utils/notify.js`, `middleware/requireAuth.js` and `middleware/optionalAuth.js` were built in
-Phase 0 and are used by **zero** endpoints — Part 1 predates them, Part 2 is unwritten. The
-first Part 2 endpoint to land is also the first real test of them.
+Phase 0 for Part 2, but the Part 1 security retrofit reached them first: `requireAuth` is now
+on **every write endpoint outside the `auth` module** (whose routes are how a caller obtains a
+token in the first place) and `optionalAuth` on the five routes that behave differently for a
+signed-in caller without requiring one. `sendError` is used throughout `products` and `messages`
+and in the retrofitted `user` handlers; the remaining Part 1 handlers still hand-roll their
+bodies. `notify()` is the one piece still called by nothing — `public.notifications` does not
+exist until migration 006, so every call would be a logged no-op anyway.
 
 **Left over from Part 1, unrelated to the plan:**
 
@@ -2630,8 +2811,11 @@ first Part 2 endpoint to land is also the first real test of them.
 - **`decrement_product_likes` / `increment_product_likes` RPCs** — superseded by the
   `trg_update_likes_count` trigger; no caller remains.
 
-**The §0.5.4 security checklist currently fails on every Part 1 endpoint**: no auth, no
-ownership verification, no campus match on read, no `limit` validation anywhere, and raw error
-strings in place of `mapDbError()`. Part 2 is specified to pass it. The three worst Part 1
-holes — anyone can edit any listing, cross-campus likes, and the open storage bucket — are
-fixed in §1.6 during Phase 1.
+**The §0.5.4 security checklist against Part 1, as of Block V-A (14 Sep 2026).** The first
+three items now pass: every write requires auth, every write on a listing verifies ownership,
+and campus is checked on product interactions and on `POST /api/messages/send`. What still
+fails: **`limit` is validated nowhere** — no Part 1 endpoint accepts one, so every list returns
+the whole table (the pagination retrofit is a separate block, owned by Neeraj); most handlers
+still return **raw error strings instead of `mapDbError()`**; and `can_view_social_content()` /
+`is_blocked_pair()` do not exist yet, so nothing calls them. Part 2 is specified to pass the
+whole list.

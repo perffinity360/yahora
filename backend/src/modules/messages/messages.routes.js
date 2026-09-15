@@ -9,22 +9,32 @@ import requireAuth from '../../middleware/requireAuth.js';
 
 const router = express.Router();
 
-router.get('/inbox/:userId', getInbox);
+// 🔒 requireAuth on EVERY route in this module (Phase 4 Block V-A).
+//
+// Four of the five took the acting user from the request — `:userId` in the
+// path on /inbox, `sender_id` / `userId` in the body on the other three — so a
+// caller with no account at all could read any student's inbox, send a message
+// that appeared to come from a real student, or mark someone else's threads
+// read. The actor is now `req.user.id` and nothing else; a caller-supplied id
+// is IGNORED IN SILENCE rather than rejected, because both clients still send
+// one today and a 400 would break them for no security gain.
+//
+// The path parameter on /inbox stays in the URL — both clients build it — but
+// the handler compares it to the token and returns 403 rather than trusting it.
+//
+// ⚠️ BREAKING for the web app: frontend/ sends no Authorization header on
+// /inbox, /send, /read or /deliver yet and gets 401 until it does. Mobile
+// attaches a token to every request (mobile/src/lib/api.ts) and is unaffected.
+// See docs/CHANGELOG.md.
+router.get('/inbox/:userId', requireAuth, getInbox);
 
-// 🔒 requireAuth (CURRENT_STATE item 3). The handler verifies that req.user.id
-// is one of the two parties in the thread, which is only meaningful once the
-// token has been verified — without it req.user is undefined and every read of
-// a legitimate conversation would be rejected.
-//
-// ⚠️ BREAKING for the web app: frontend/src/pages/messages/Messages.jsx sends
-// no Authorization header on this call yet. Mobile already does.
-//
-// NOTE: /inbox/:userId, /send, /read and /deliver still take their actor from
-// the request and are NOT fixed here — deliberately out of scope for this
-// change. They are items 11-13 of the CC-4 audit in docs/CHANGELOG.md.
+// getChatHistory verifies that req.user.id is one of the two parties in the
+// thread, which is only meaningful once the token has been verified — without
+// requireAuth, req.user is undefined and every read of a legitimate
+// conversation would be rejected.
 router.get('/history', requireAuth, getChatHistory);
-router.post('/send', sendMessage);
-router.put('/read', markAsRead);
-router.put('/deliver', markAsDelivered);
+router.post('/send', requireAuth, sendMessage);
+router.put('/read', requireAuth, markAsRead);
+router.put('/deliver', requireAuth, markAsDelivered);
 
 export default router;

@@ -25,10 +25,28 @@ const isUuid = (value) => typeof value === 'string' && UUID_RE.test(value);
 // 1. Get the Inbox Summary (Calls our new RPC)
 export const getInbox = async (req, res) => {
     try {
+        // 🔒 IDENTITY (Phase 4 Block V-A). This route had no auth at all and the
+        // inbox it returned was whichever uuid was in the URL — every
+        // conversation, contact name and last message of any student on any
+        // campus, to anyone who could guess or scrape an id.
+        //
+        // The path param is KEPT, not removed: both clients build the URL and
+        // the path must not change. It is compared to the token instead of
+        // trusted, which is the difference between a parameter and a claim.
+        //
+        // Compared rather than ignored (the `updateProfile` treatment) because
+        // this handler reads rather than writes: ignoring a mismatched id would
+        // silently answer with the caller's OWN inbox, and a client asking for
+        // someone else's is confused, not merely out of date. It should hear so.
         const { userId } = req.params;
+        if (userId !== req.user.id) {
+            return sendError(res, 403, 'FORBIDDEN', {
+                message: 'You can only read your own inbox.',
+            });
+        }
 
         const { data, error } = await supabase.rpc('get_user_inbox', {
-            p_user_id: userId
+            p_user_id: req.user.id
         });
 
         if (error) throw error;
@@ -97,16 +115,68 @@ export const getChatHistory = async (req, res) => {
 // 3. Send a Message
 export const sendMessage = async (req, res) => {
     try {
-        const { sender_id, receiver_id, product_id, content } = req.body;
+        // 🔒 IDENTITY (Phase 4 Block V-A). `sender_id` used to come from the
+        // body, so an unauthenticated caller could post a message that arrived
+        // in a real student's thread under a real student's name — the worst of
+        // the nine holes in this block, because the forgery is persistent and
+        // indistinguishable from a genuine message once it is in the table.
+        //
+        // The sender is the token holder. A `sender_id` in the body is ignored
+        // in silence; both clients still send one today.
+        const sender_id = req.user.id;
+        const { receiver_id, product_id, content } = req.body;
 
-        // Fetch university_id to strictly enforce campus isolation
-        const { data: user, error: userError } = await supabase
-            .from('users')
-            .select('university_id')
-            .eq('id', sender_id)
-            .single();
+        // 🔒 CAMPUS (Phase 4 Block V-A). The lookup below used to read the
+        // CLAIMED sender's row and stamp that campus on the message, so it
+        // validated nothing: the id it checked was the same id the caller had
+        // just made up. It now reads the AUTHENTICATED sender.
+        //
+        // The receiver is checked too, which is new. Reading the sender's campus
+        // only decides what to stamp on the row; it never asked whether the two
+        // people share one. Yahora's rule is that a conversation lives inside a
+        // campus, and without this check the cross-campus browse that
+        // `getProducts` allows turned into a cross-campus DM.
+        //
+        // Both reads are independent, so they cost one round trip rather than
+        // two. maybeSingle, not single: a missing row is a 404 here, not a 500.
+        const [senderRes, receiverRes] = await Promise.all([
+            supabase.from('users').select('university_id').eq('id', sender_id).maybeSingle(),
+            supabase.from('users').select('university_id').eq('id', receiver_id).maybeSingle(),
+        ]);
 
-        if (userError || !user) throw new Error('User not found.');
+        if (senderRes.error || receiverRes.error) {
+            console.error('Send Message Error (campus lookup):', senderRes.error || receiverRes.error);
+            return sendError(res, 500, 'INTERNAL_ERROR', {
+                message: 'Failed to send message.',
+            });
+        }
+
+        const user = senderRes.data;
+
+        if (!user) {
+            return sendError(res, 404, 'NOT_FOUND', {
+                message: 'No profile exists for this account.',
+            });
+        }
+
+        if (!receiverRes.data) {
+            return sendError(res, 404, 'NOT_FOUND', {
+                message: 'That student no longer exists.',
+            });
+        }
+
+        // A NULL on either side is a mismatch, not a pass — same rule as
+        // `blockCrossCampusInteraction` in the products module. `handle_new_user`
+        // (migration 005) writes university_id NULL when the email domain is
+        // unknown, and "I could not establish you are on the same campus" must
+        // fail closed. No real student is affected: every account created
+        // through requestOtp has a validated domain and therefore a campus.
+        if (!user.university_id || !receiverRes.data.university_id
+            || user.university_id !== receiverRes.data.university_id) {
+            return sendError(res, 403, 'FORBIDDEN', {
+                message: 'You can only message students on your own campus.',
+            });
+        }
 
         const { data: message, error } = await supabase
             .from('messages')
@@ -189,7 +259,16 @@ export const sendMessage = async (req, res) => {
 // 4. Mark Messages as Read
 export const markAsRead = async (req, res) => {
     try {
-        const { userId, contactId, productId } = req.body;
+        // 🔒 IDENTITY (Phase 4 Block V-A). `userId` is the RECEIVER — the person
+        // doing the reading — and it came from the body, so any caller could
+        // clear the unread badge on any student's threads. It is the token
+        // holder now; a `userId` in the body is ignored in silence.
+        //
+        // `contactId` and `productId` still come from the body and still should:
+        // they name WHICH thread to mark, not who is marking it, and the update
+        // is anchored to `receiver_id = req.user.id` either way.
+        const userId = req.user.id;
+        const { contactId, productId } = req.body;
         const { error } = await supabase
             .from('messages')
             .update({ is_read: true, is_delivered: true }) // <-- added is_delivered: true
@@ -208,7 +287,12 @@ export const markAsRead = async (req, res) => {
 
 export const markAsDelivered = async (req, res) => {
     try {
-        const { userId } = req.body;
+        // 🔒 IDENTITY (Phase 4 Block V-A). Was `req.body.userId`, and this one is
+        // global rather than per-thread — a single call marked every undelivered
+        // message addressed to any named student as delivered, destroying the
+        // "not yet delivered" state across all of their conversations at once.
+        // The receiver is the token holder; a `userId` in the body is ignored.
+        const userId = req.user.id;
         // Marks all messages sent TO this user as delivered (because they just opened the app)
         const { error } = await supabase
             .from('messages')

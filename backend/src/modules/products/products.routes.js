@@ -8,20 +8,45 @@ import express from 'express';
 import multer from 'multer';
 import { createProduct, updateProduct, deleteProduct, getProducts, getProductById, getProductMeta, toggleLikeProduct, toggleSaveProduct, addComment, toggleCommentVote, markProductAsSold, markProductAsAvailable } from './products.controller.js';
 import requireAuth from '../../middleware/requireAuth.js';
+import optionalAuth from '../../middleware/optionalAuth.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // READ routes (Open to cross-campus browsing)
-router.get('/', getProducts);
+//
+// 🔓 optionalAuth on the two that personalise their response (Phase 4 Block V-A
+// follow-up). Both attached `is_liked` / `is_saved` — and `/:id` also each
+// comment's `user_vote` — for whichever uuid the caller put in `?user_id=`, so
+// any caller could read a third party's like, save and vote state. The viewer
+// is `req.user?.id` now; the query param is ignored in silence, because five
+// client call sites across web and mobile still send it.
+//
+// optionalAuth, NOT requireAuth: these two stay callable with no token at all.
+// Anonymous browsing of the marketplace is a deliberate feature — a 401 here
+// would empty the logged-out landing page — so the middleware sets req.user to
+// null rather than rejecting, and the handlers simply attach no flags.
+router.get('/', optionalAuth, getProducts);
 // Must precede '/:id' so 'meta' isn't swallowed as an id segment.
+//
+// /meta stays fully anonymous: it is the Open Graph card for link previews, its
+// projection is four public fields, and it personalises nothing. There is no
+// viewer for optionalAuth to establish.
 router.get('/:id/meta', getProductMeta);
-router.get('/:id', getProductById);
+router.get('/:id', optionalAuth, getProductById);
 
 // POST /api/products
 // upload.array('images', 5) means we accept an array of files under the field name 'images', max 5.
-router.post('/', upload.array('images', 5), createProduct);
 //
+// 🔒 requireAuth (Phase 4 Block V-A). `seller_id` was a body field on an open
+// route, so anyone could publish a listing under any student's name. The seller
+// is req.user.id now; a body `seller_id` is ignored in silence.
+//
+// Order matters: requireAuth runs BEFORE multer. A rejected caller is turned
+// away on the headers alone, without buffering five images into process memory
+// first — multer has no size limit here (see API.md).
+router.post('/', requireAuth, upload.array('images', 5), createProduct);
+
 // 🔒 requireAuth on both (plan §1.6 Bug 1). These handlers now compare the
 // listing's seller_id to req.user.id, and req.user only exists if the token was
 // verified. Without the middleware the ownership check would read `undefined`
@@ -42,11 +67,24 @@ router.post('/:id/like', requireAuth, toggleLikeProduct);
 router.post('/:id/save', requireAuth, toggleSaveProduct);
 
 // <-- Q&A / COMMENT ROUTES -->
-router.post('/:id/comments', addComment);
-router.post('/comments/:commentId/vote', toggleCommentVote);
+//
+// 🔒 requireAuth (Phase 4 Block V-A). Both took the actor from `req.body.user_id`
+// on an open route: anyone could post a comment under any student's name, or
+// cast, flip and withdraw that student's votes. Actor is req.user.id now.
+//
+// ⚠️ BREAKING for the web app: frontend/src/pages/product/ProductDetail.jsx
+// sends no Authorization header on either call yet. Mobile already does.
+router.post('/:id/comments', requireAuth, addComment);
+router.post('/comments/:commentId/vote', requireAuth, toggleCommentVote);
 
 // 2. Add the new route under the sold route
-router.post('/:id/sold', markProductAsSold);
-router.post('/:id/available', markProductAsAvailable);
+//
+// 🔒 requireAuth + an ownership check in the handler (Phase 4 Block V-A). These
+// had neither: any caller who knew a listing's uuid could mark it sold — taking
+// it out of the marketplace — or mark it available again, which deletes every
+// `purchases` row for it. Only the seller may change their own listing's status.
+// Both clients already send a token here, so this pair is not breaking.
+router.post('/:id/sold', requireAuth, markProductAsSold);
+router.post('/:id/available', requireAuth, markProductAsAvailable);
 
 export default router;

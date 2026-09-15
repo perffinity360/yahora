@@ -277,6 +277,263 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-XX — Phase 4 V-A: auth on nine write endpoints (Vishwajeet)
+
+📮 **HANDOFF — Neeraj, read the BREAKING section before your next frontend push.** Six of the
+nine calls below are made by `frontend/` today **without** an `Authorization` header. They start
+returning 401 the moment this merges. Mobile is unaffected — `mobile/src/lib/api.ts` attaches a
+token to every request.
+
+Nine endpoints in `products` and `messages` took the acting user's identity from the request
+body or the URL, and seven of them had no authentication at all. A caller with no account could
+send a message that appeared to come from a real student, list an item under someone else's
+name, comment as anyone, or mark any listing on any campus sold. All nine now take the actor
+from `req.user.id` and nothing else, following the `updateProfile` pattern from Phase 3.
+
+**Followed up on 15 Sep** with the same fix applied to two *reads* — `GET /api/products` and
+`GET /api/products/:id` — which named the viewer with a `?user_id=` query param. Those two use
+`optionalAuth` and are **not breaking**; see the second table under "Changed endpoints".
+
+### Migrations applied
+
+**None.** No schema change, no RLS change, no trigger change. This block is controller and
+route code only — plus `backend/API.md`, which is part of the change, not a follow-up.
+
+### New endpoints
+
+**None.** No route path changed, no route was added or removed. Both clients keep calling the
+same URLs.
+
+### Changed endpoints (BREAKING)
+
+#### The nine writes — BREAKING
+
+**All nine now require a Bearer token. Without one they return `401 UNAUTHORIZED`.**
+
+| Endpoint | Was | Now | Web app sends a token today? |
+|---|---|---|---|
+| `GET /api/messages/inbox/:userId` | open; `:userId` chose the inbox | `requireAuth`; `:userId` must equal the caller → else **403** | ❌ **breaks** |
+| `POST /api/messages/send` | open; `sender_id` from body | `requireAuth`; sender is the token. **Campus check added** → **403** | ❌ **breaks** |
+| `PUT /api/messages/read` | open; `userId` from body | `requireAuth`; reader is the token | ❌ **breaks** |
+| `PUT /api/messages/deliver` | open; `userId` from body | `requireAuth`; receiver is the token | ❌ **breaks** |
+| `POST /api/products` | open; `seller_id` from body | `requireAuth`; seller is the token | ✅ already does |
+| `POST /api/products/:id/comments` | open; `user_id` from body | `requireAuth`; author is the token | ❌ **breaks** |
+| `POST /api/products/comments/:commentId/vote` | open; `user_id` from body | `requireAuth`; voter is the token | ❌ **breaks** |
+| `POST /api/products/:id/sold` | open, no owner check | `requireAuth` + **ownership** → **403** | ✅ already does |
+| `POST /api/products/:id/available` | open, no owner check | `requireAuth` + **ownership** → **403** | ✅ already does |
+
+**The six call sites in `frontend/` that need an `Authorization` header added** (I did not touch
+them — `frontend/` is yours):
+
+- `src/pages/messages/Messages.jsx` — inbox fetch (~:546), `/messages/send` (~:885), and the
+  three `/messages/read` calls (~:441, ~:707, ~:794)
+- `src/pages/dashboard/Dashboard.jsx` — inbox fetch (~:628)
+- `src/components/navbar/navbar.jsx` — both `/messages/deliver` calls (~:192, ~:236)
+- `src/pages/product/ProductDetail.jsx` — `/comments` (~:266) and `/comments/:id/vote` (~:322)
+
+`Sell.jsx` and the `/sold` + `/available` calls in `Dashboard.jsx` already send
+`Bearer ${localStorage.getItem("yahora_session")}` — copy that line.
+
+**Bodies do not need changing.** A `sender_id` / `seller_id` / `user_id` / `userId` in the body
+is now **ignored in silence**, not rejected — deliberately, so both clients keep working while
+you catch up. Send it or don't; the token decides. The one exception is
+`GET /api/messages/inbox/:userId`, where the path param is **compared** to the token and a
+mismatch is a 403: it is a read, and silently answering with the caller's own inbox would make
+a confused client look like it was working. Keep passing the signed-in user's own id there.
+
+**Two new 403s that are not about the token:**
+
+- `POST /api/messages/send` → `{ "error": "FORBIDDEN", "message": "You can only message students
+  on your own campus." }`. The campus check that was already in this handler validated nothing:
+  it read the *claimed* sender's row, which was the id the caller had just made up. It now reads
+  the authenticated sender, and the **receiver's campus is compared to it** — a check that did
+  not exist before in any form. A `NULL` `university_id` on either side counts as a mismatch,
+  matching `blockCrossCampusInteraction` in products.
+- `POST /api/products/:id/sold` and `/available` → `{ "error": "FORBIDDEN", "message": "You can
+  only change the status of your own listings." }`, plus a **404** on an id that does not exist
+  (both used to return 200 for an unknown id, since the update simply matched zero rows).
+
+`POST /api/messages/send` also gains a **404** for an unknown `receiver_id`, which used to be a
+500 from the foreign key.
+
+#### Follow-up: two reads — NOT breaking
+
+Added 15 Sep, same block. Two of the three unauthenticated reads flagged at the bottom of this
+entry are now fixed. **Nothing breaks: no client change is needed, now or later.**
+
+| Endpoint | Was | Now |
+|---|---|---|
+| `GET /api/products` | open; `?user_id=` named the viewer | **`optionalAuth`**; viewer is `req.user?.id`, `?user_id=` ignored in silence |
+| `GET /api/products/:id` | open; `?user_id=` named the viewer | same, and it also covers each comment's `user_vote` |
+
+**`optionalAuth`, not `requireAuth`, and the distinction is the whole point.** Anonymous
+browsing of the marketplace is a deliberate feature — a logged-out visitor must still see the
+campus feed and a listing page. `optionalAuth` never rejects: `req.user` is the auth user when a
+valid token is present and `null` otherwise, and a **bad or expired token is treated as
+anonymous, not as a 401**. Neither endpoint can return 401.
+
+**What changes for a caller:**
+
+- **Signed in** (any client sending `Authorization`) — identical response to before, provided it
+  was passing its own id in `?user_id=`, which both clients do. It may keep sending the param;
+  it is ignored.
+- **Signed out** — `is_liked`, `is_saved` and `user_vote` are **absent** from the response.
+  They were already absent whenever `?user_id=` was omitted, so this is the existing
+  "treat `undefined` as false" contract, not a new one. The only behaviour that disappears is
+  the one nobody should have been relying on: passing *someone else's* uuid and getting their
+  flags back.
+
+⚠ **`frontend/` note, Neeraj — no action required, but worth knowing.** Your marketplace and
+product-detail fetches currently send `?user_id=` with **no** `Authorization` header
+(`Marketplace.jsx:559`, `ProductDetail.jsx:123`). They keep working and keep returning 200, but
+they now come back **without** `is_liked` / `is_saved` / `user_vote` — so hearts and bookmarks
+render empty until the page adds the header. The fix is the same one-line header the `/sold` and
+`/available` calls in `Dashboard.jsx` already use. Not urgent and not breaking, but it is a
+visible difference in the UI, so it should not arrive as a surprise.
+
+**Why this is the right shape:** `user_id` on a read is the same bug as `sender_id` on a write —
+identity supplied by the caller — but the blast radius is a third party's like/save/vote flags,
+not a forged message. So it gets the same treatment (ignore the param in silence, take identity
+from the token) without the 401 that would break anonymous browsing.
+
+### New fields on existing responses
+
+**None.** Every 2xx response shape is byte-identical. The only new response bodies are the error
+shapes above, all of them existing codes from `utils/respond.js` — `UNAUTHORIZED`, `FORBIDDEN`,
+`NOT_FOUND`, `INTERNAL_ERROR`. No new error code was invented.
+
+Note for the campus failure on `/send` I used **`FORBIDDEN`**, not the `CROSS_CAMPUS_INTERACTION_BLOCKED`
+that `/like` and `/save` return for the same *kind* of failure. Two codes for one concept is a
+wart; if your UI wants to special-case campus mismatches, say so and I will align them in one
+pass rather than guessing which way.
+
+### Test data
+
+Nothing seeded, nothing migrated — `seedLocal.js` and `seedDemo.js` are unchanged.
+
+Verified against local Supabase with three seeded accounts (two on IIT Kanpur, one on IIT
+Bombay), **35 assertions, all passing**:
+
+- all nine endpoints return **401** with no `Authorization` header;
+- a forged `sender_id` / `seller_id` / `user_id` in the body is ignored — the row lands under
+  the **token holder** every time (checked on the message row, the product row, the comment
+  author and the `comment_votes` row);
+- inbox: own id 200, another student's id 403;
+- `/send`: same campus 201, other campus 403, unknown receiver 404;
+- `/sold` and `/available`: own listing 200, another student's listing 403, unknown id 404;
+- unchanged routes still behave — `GET /api/products` and `GET /api/products/:id` are still open,
+  `GET /api/messages/history` still 401s without a token.
+
+The 15 Sep follow-up adds **18 more assertions**, also all passing, and the 35 above were re-run
+against the final code as a regression:
+
+- both reads still answer **200 with no token**, and a **bad token is treated as anonymous, not
+  401**;
+- anonymous + `?user_id=<someone else>` returns **no** `is_liked` / `is_saved` / `user_vote` —
+  the leak is closed;
+- signed in as B with `?user_id=A`, the response carries **B's** flags and **B's** comment vote
+  (`0`), not A's (`1`) — the param is ignored;
+- signed in as A with no param at all, A's own like, save and vote come back correctly;
+- `GET /api/products/:id/meta` is untouched and still fully anonymous.
+
+### What NOT to do yet
+
+- **Don't add pagination to anything here.** `GET /api/messages/inbox/:userId` still returns
+  every conversation and `getChatHistory` still returns an entire thread. That is your block, not
+  mine — I deliberately left both untouched so we don't collide.
+- **Don't treat a 403 as "log the user out".** All three 403s here mean "that is not yours",
+  not "your token is bad". Only 401 means re-authenticate.
+- **⚠ Merge-conflict warning, and it is a real one.** `PHASE_4_RUNBOOK.md` §"Block N-B" says
+  Neeraj and I are safe in `products.controller.js` because *"he goes first and you touch
+  different functions"*. The 15 Sep follow-up breaks that assumption: it edits `getProducts`
+  and `getProductById` — **exactly the two functions N-B adds pagination to**. The edits are
+  small and at the top of each handler (one destructure becomes `req.user?.id`, and three
+  `.eq('user_id', …)` call sites take the new variable), so a conflict is resolvable rather
+  than dangerous, but it will not auto-merge cleanly. **Neeraj: `git merge main` before you
+  start N-B, and if you are already mid-block, rebase rather than resolving by hand at the
+  end.** My fault for landing a second change in your files after the runbook drew the line —
+  it is here rather than in a WhatsApp message because this file is the record.
+- **Don't assume commenting is campus-checked.** It is not. `POST /:id/comments` still lets a
+  student comment on another campus's listing — as themselves now, but across the boundary,
+  where `/like` and `/save` refuse. Fixing it changes behaviour the clients may rely on for
+  cross-campus browsing, so it needs a product decision first, not a patch.
+- **Don't build a UI that relies on `GET /api/user/:userId/public?user_id=` for anyone but the
+  signed-in user.** That read still names the viewer with an unauthenticated query param — see
+  the note below. The two product reads that had the same bug were fixed on 15 Sep.
+
+### ⚠ One unauthenticated read still open — `GET /api/user/:userId/public?user_id=`
+
+Three reads named the viewer with an unauthenticated query param. **Two are fixed** (see the
+follow-up table above). **One is left, and it is Neeraj's file:**
+
+| Endpoint | Owner | Status |
+|---|---|---|
+| `GET /api/products?user_id=` | Vishwajeet | ✅ fixed 15 Sep — `optionalAuth`, viewer from the token, param ignored |
+| `GET /api/products/:id?user_id=` | Vishwajeet | ✅ fixed 15 Sep — same, plus each comment's `user_vote` |
+| `GET /api/user/:userId/public?user_id=` | **Neeraj** | ⬜ **open** — same bug, one seller's listings |
+
+**The decision is made, so this is now a copy job rather than a design question:** add
+`optionalAuth` to the route, take the viewer from `req.user?.id`, leave every `if (user_id)`
+guard in place reading the new variable, and **ignore the query param in silence** — do not
+remove it, because client call sites still send it. `getProducts` in
+`backend/src/modules/products/products.controller.js` is the worked example, and `API.md` records
+the pattern under both product entries.
+
+`user.controller.js` is `OWNER: Neeraj`, so I have not touched it. Handed over separately.
+
+---
+
+## 2026-09-14 — seedLocal.js: overseas campuses broke handle generation (Vishwajeet)
+
+Local dev tooling only. No migration, no endpoint, no response-shape change. Matters to Neeraj
+only because `node backend/scripts/seedLocal.js` refused to run at all until now — if you tried
+it and gave up, it works again.
+
+### What broke
+
+`seedLocal.js` builds every seeded handle as `<student>.<campus-slug>`, and the slug comes from
+the university's domain: drop the generic labels (`ac`, `co`, `edu`, `in`, …), keep the last one
+left. That rule was written when the table held Indian domains only. The universities expansion
+added overseas campuses, and their country codes were not in the generic list — so
+`mail.mcgill.ca` and `student.ubc.ca` both reduced to the slug `ca`, and the pre-flight check
+killed the run:
+
+```
+❌ Seed failed: Invalid seeded username "aditya.rao.ca" for Aditya Rao at student.ubc.ca:
+   collides with Aditya Rao at mail.mcgill.ca
+```
+
+Same shape for `.ch`, `.hk` and `.au`. Nothing was written — the check runs before the first
+insert — so there was no half-seeded database to clean up.
+
+### Fixes
+
+1. **`GENERIC_DOMAIN_LABELS` now carries country codes**, one per line with the country named.
+   Add the code whenever a campus from a new country is seeded, or that country's campuses all
+   collapse onto each other.
+2. **`SLUG_OVERRIDES`, a new hand-written map**, for domains no rule can separate. Manchester
+   issues undergraduate and postgraduate addresses (`student.` / `postgrad.manchester.ac.uk`)
+   and both reduce to `manchester`; they are now `manchesterug` and `manchesterpg`. Override
+   values are validated against the same slug rules, so a bad one fails loudly.
+3. **The reserved-username pre-flight is batched** (100 handles per request). 116 campuses × 6
+   students is 696 names in one PostgREST `.in()` filter, which travels in the URL — the server
+   answered `414 URI too long` instead of the reserved-name answer. That failure was hiding
+   behind the collision above.
+
+### Test data
+
+Seeds clean: 696 students · 928 products · 1276 likes · 696 saves · 696 messages across 116
+universities. Still idempotent — ran it twice end to end. Shared password unchanged
+(`LocalSeed123!`). The demo tenant is untouched; `seedDemo.js` still owns it.
+
+### What NOT to do yet
+
+Don't assume a campus slug is stable if you hard-code one in a test fixture. Adding a domain
+that collides with an existing slug is the one thing that changes an existing handle, via a new
+`SLUG_OVERRIDES` entry. Read the slug out of the seed output rather than pasting it.
+
+---
+
 ## 2026-09-14 — Mobile: Android edge-to-edge fixes + calmer aurora (Vishwajeet)
 
 Mobile only. No backend, no schema, no endpoint or response-shape change — nothing for Neeraj
