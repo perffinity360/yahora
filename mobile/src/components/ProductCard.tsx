@@ -27,6 +27,18 @@ export function formatPrice(value: number): string {
 }
 
 /** Compact relative time ("5m ago"), falling back to a date past a month. */
+/**
+ * Ceiling on the OS font-size multiplier for the card's dense rows.
+ *
+ * A phone set to "large text" scales every Text by up to 1.3x here and well
+ * past 2x at the extremes. The stats row is four items across half a screen,
+ * so that is the setting that decides whether the timestamp fits. 1.3 keeps
+ * the accessibility win and stops the row from outgrowing the card; the title,
+ * price and body text are deliberately NOT capped, because they have room to
+ * grow and are what someone raising their font size actually wants bigger.
+ */
+const DENSE_TEXT_SCALE_CAP = 1.3;
+
 export function timeAgo(iso: string): string {
   if (!iso) return 'Just now';
   const then = new Date(iso).getTime();
@@ -182,7 +194,9 @@ function ProductCardBase({
           <View style={styles.statsRow}>
             <View style={styles.stat}>
               <Feather name="eye" size={13} color={colors.mutedText} />
-              <Text style={styles.statText}>{product.views ?? 0}</Text>
+              <Text style={styles.statText} maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}>
+                {product.views ?? 0}
+              </Text>
             </View>
             <Pressable
               style={styles.stat}
@@ -193,15 +207,24 @@ function ProductCardBase({
               accessibilityLabel={liked ? 'Unlike' : 'Like'}
             >
               <Feather name="heart" size={13} color={liked ? colors.pinkDark : colors.mutedText} />
-              <Text style={[styles.statText, liked && styles.statTextLiked]}>
+              <Text
+                style={[styles.statText, liked && styles.statTextLiked]}
+                maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}
+              >
                 {product.likes_count ?? 0}
               </Text>
             </Pressable>
             <View style={styles.stat}>
               <Feather name="message-circle" size={13} color={colors.mutedText} />
-              <Text style={styles.statText}>{product.comments_count ?? 0}</Text>
+              <Text style={styles.statText} maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}>
+                {product.comments_count ?? 0}
+              </Text>
             </View>
-            <Text style={styles.time} numberOfLines={1}>
+            <Text
+              style={styles.time}
+              numberOfLines={1}
+              maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}
+            >
               {timeAgo(product.created_at)}
             </Text>
           </View>
@@ -379,13 +402,24 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    // 8, not 10. Four items plus three gaps have to fit the card's inner width,
+    // and that width varies with the device: the same 2-column grid is ~10dp
+    // narrower per card on an OPPO K14 than on a POCO X2, which was enough to
+    // push the timestamp off the edge.
+    gap: 8,
     marginTop: 2,
   },
   stat: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    // ⚠ React Native defaults flex children to flexShrink: 0 — the opposite of
+    // the web. Without this the row simply overflows the card and whatever sits
+    // last (the timestamp) is clipped, with no ellipsis and no warning. The
+    // counts are short, so shrinking these three costs nothing in practice; it
+    // just gives the row somewhere to give.
+    flexShrink: 1,
+    minWidth: 0,
   },
   statText: {
     fontFamily: font.family.semibold,
@@ -400,6 +434,9 @@ const styles = StyleSheet.create({
     fontFamily: font.family.regular,
     fontSize: 10.5,
     color: colors.mutedLabel,
+    // Never shrink and never wrap: this is the element that was being cut off.
+    // It keeps its measured width and the stats to its left yield instead.
+    flexShrink: 0,
   },
 
   // Engagement toolbar (2 icons) — left-aligned with a gap.

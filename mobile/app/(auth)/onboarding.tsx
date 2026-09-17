@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -20,16 +20,47 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import { MIN_PASSWORD_LENGTH, PasswordField } from '../../src/components/PasswordField';
 import { SearchablePicker } from '../../src/components/SearchablePicker';
+import { UsernameField, type UsernameStatus } from '../../src/components/UsernameField';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useCourses, useSpecializations } from '../../src/hooks/useAcademics';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
 import { api } from '../../src/lib/api';
 import { supabase } from '../../src/lib/supabase';
 import { colors, font, radius, spacing } from '../../src/theme';
-import type { UserProfile } from '../../src/types';
+import type { UsernameSuggestions, UserProfile } from '../../src/types';
 
 const BRAND_GRADIENT = [colors.purple, colors.pinkDark] as const;
+
+/** Debounce on the name field before asking for handle suggestions. */
+const SUGGEST_DEBOUNCE_MS = 400;
+
+/**
+ * Readable copy for the codes POST /api/auth/onboarding can return.
+ *
+ * This mapping is not cosmetic. `src/lib/api.ts` puts the response's `error`
+ * field into `Error.message`, and that field is a machine code — so without
+ * this a student who picks a short password is shown the literal text
+ * "WEAK_PASSWORD".
+ *
+ * USERNAME_TAKEN and USERNAME_RESERVED share a sentence on purpose: the server
+ * distinguishes them, but telling a student which handles are *reserved* hands
+ * anyone probing a map of the reserved list (backend/API.md).
+ */
+const SUBMIT_ERROR_COPY: Record<string, string> = {
+  WEAK_PASSWORD: `Choose a password of at least ${MIN_PASSWORD_LENGTH} characters that is not your username.`,
+  COMMON_PASSWORD: 'That password is too common. Please choose another.',
+  USERNAME_TAKEN: 'That username is taken. Try another.',
+  USERNAME_RESERVED: 'That username is taken. Try another.',
+  INVALID_FORMAT: 'That username is not valid. Use letters, numbers, dots, dashes or underscores.',
+  MISSING_FIELDS: 'Please fill in all required fields.',
+  CONTENT_TOO_LONG: 'One of your answers is too long. Please shorten it.',
+  INTERNAL_ERROR: 'Something went wrong on our side. Please try again.',
+};
+
+/** True for the codes that are about the username rather than the password. */
+const USERNAME_ERRORS = new Set(['USERNAME_TAKEN', 'USERNAME_RESERVED', 'INVALID_FORMAT']);
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 const QUALIFICATIONS = [
@@ -65,6 +96,28 @@ export default function OnboardingScreen() {
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '');
 
+  // Username: the value lives here, the availability check lives in the field.
+  const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
+  const [usernameServerError, setUsernameServerError] = useState<string | null>(null);
+  /** Alternatives the availability check offers when a handle is unavailable. */
+  const [serverSuggestions, setServerSuggestions] = useState<string[]>([]);
+  /** Handles derived from the typed name, before anything is unavailable. */
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+
+  // Passwords live in component state and nowhere else: never AsyncStorage,
+  // never a log line, never anything that outlives this screen (plan rule 14).
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  /**
+   * Whether Save has been pressed at least once. Gates the summary above the
+   * button: nobody wants to be told what is missing from a form they have only
+   * just opened.
+   */
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
   const [nameFocused, setNameFocused] = useState(false);
   const [bioFocused, setBioFocused] = useState(false);
 
@@ -75,6 +128,110 @@ export default function OnboardingScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const busy = saving || skipping;
+
+  /**
+   * Three handles derived from the name, so nobody has to invent one.
+   *
+   * Same 400ms debounce and same monotonic request id as the availability check
+   * in UsernameField, for the same reason: a burst of keystrokes produces
+   * several requests, and the slow one must not overwrite the fast one.
+   */
+  const suggestRequestId = useRef(0);
+
+  useEffect(() => {
+    const name = fullName.trim();
+    if (name.length < 2) {
+      setNameSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const id = ++suggestRequestId.current;
+      api
+        .get<UsernameSuggestions>(`/api/users/username-suggestions?name=${encodeURIComponent(name)}`)
+        .then((data) => {
+          if (id !== suggestRequestId.current) return;
+          const list = Array.isArray(data?.suggestions) ? data.suggestions : [];
+          setNameSuggestions(list.filter(Boolean).slice(0, 3));
+        })
+        .catch(() => {
+          if (id !== suggestRequestId.current) return;
+          // Suggestions are a convenience. Failing to fetch them is not an
+          // error the student needs to see or act on.
+          setNameSuggestions([]);
+        });
+    }, SUGGEST_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [fullName]);
+
+  /**
+   * Which three chips to show. The server's alternatives win when it has any,
+   * because at that point the student needs a handle that is actually free —
+   * not three more derived from their name that may be taken as well.
+   */
+  const suggestions = serverSuggestions.length > 0 ? serverSuggestions : nameSuggestions;
+
+  /**
+   * Live mismatch feedback, as the web does it: the moment there is something in
+   * the confirm box that does not match, say so. Waiting for submit means being
+   * told at the end of the form about a typo made at the start — and with the
+   * characters hidden, that is the one field nobody can re-read to check.
+   * Computed, never stored: a second copy of the password in state is a second
+   * place it can leak from.
+   */
+  const liveMismatch =
+    confirmPassword.length > 0 && password !== confirmPassword
+      ? 'Both passwords must match.'
+      : null;
+
+  /**
+   * The names of the fields currently showing an error.
+   *
+   * Every field-level message is rendered under its own input, which is right
+   * — but the Save button is at the bottom of a long form, so by the time it is
+   * pressed the offending field is usually off-screen. Pressing Save then looks
+   * like nothing happened at all. This is what the summary just above the
+   * button lists, so the student knows both THAT something failed and WHERE.
+   */
+  /**
+   * Required fields still blank. Named rather than counted: "please fill in all
+   * required fields" on a form this long is a puzzle, and the four academic
+   * pickers all look filled-in-ish when they are not.
+   *
+   * Recomputed every render rather than captured at submit, so the list shrinks
+   * as the student fills things in instead of going stale the moment they fix
+   * the first one.
+   */
+  const missingFields = submitAttempted
+    ? ([
+        !fullName.trim() ? 'Full name' : null,
+        !qualification ? 'Qualification' : null,
+        !courseId ? 'Course' : null,
+        !yearOfStudy ? 'Year of study' : null,
+        !specializationId ? 'Specialization' : null,
+        !username.trim() ? 'Username' : null,
+        password.length < MIN_PASSWORD_LENGTH ? 'Password' : null,
+      ].filter(Boolean) as string[])
+    : [];
+
+  const fieldIssues = Array.from(
+    new Set(
+      [
+        ...missingFields,
+        usernameServerError ? 'Username' : null,
+        passwordError ? 'Password' : null,
+        confirmError || liveMismatch ? 'Confirm password' : null,
+      ].filter(Boolean) as string[],
+    ),
+  );
+
+  const applySuggestion = (handle: string) => {
+    // Setting the value is enough: UsernameField's check keys off it, so this
+    // re-runs availability for the chosen handle on its own.
+    setUsername(handle);
+    setUsernameServerError(null);
+  };
 
   const handleBack = async () => {
     if (busy || goingBack) return;
@@ -158,8 +315,39 @@ export default function OnboardingScreen() {
 
   const handleSubmit = async () => {
     setError(null);
+    setUsernameServerError(null);
+    setPasswordError(null);
+    setConfirmError(null);
+    setSubmitAttempted(true);
+
     if (!fullName.trim() || !qualification || !courseId || !yearOfStudy || !specializationId) {
       setError('Please fill in all required fields.');
+      return;
+    }
+
+    // ── Username ──────────────────────────────────────────────────────────
+    // Required by the backend since Phase 4; without it onboarding 400s and
+    // there is no way past it inside the app.
+    const handle = username.trim();
+    if (!handle) {
+      setUsernameServerError('Pick a username to finish signing up.');
+      return;
+    }
+    if (usernameStatus === 'invalid' || usernameStatus === 'taken' || usernameStatus === 'reserved') {
+      setUsernameServerError('Choose a different username to continue.');
+      return;
+    }
+    // 'checking' and 'unknown' are allowed through on purpose. The server
+    // checks again and owns the answer; blocking here would strand anyone whose
+    // check is slow or offline on a handle that is probably fine.
+
+    // ── Password ──────────────────────────────────────────────────────────
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setConfirmError('Both passwords must match.');
       return;
     }
 
@@ -175,6 +363,8 @@ export default function OnboardingScreen() {
         '/api/auth/onboarding',
         {
           userId,
+          username: handle,
+          password,
           full_name: fullName.trim(),
           avatar_url: avatarUrl || null,
           qualification,
@@ -187,7 +377,21 @@ export default function OnboardingScreen() {
       // Routing guard sees is_profile_complete and moves into the tabs.
       await saveProfile(data.userProfile);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save profile.');
+      // NOTHING is cleared here. Every field keeps what was typed — being made
+      // to retype a whole profile because one handle was taken is the worst
+      // possible end to a signup, and the password fields are the ones a
+      // student is least likely to retype correctly.
+      const code = e instanceof Error ? e.message : '';
+      const copy = SUBMIT_ERROR_COPY[code];
+
+      if (copy && USERNAME_ERRORS.has(code)) {
+        // Put it under the field it is about, not in the banner at the top.
+        setUsernameServerError(copy);
+      } else if (copy && (code === 'WEAK_PASSWORD' || code === 'COMMON_PASSWORD')) {
+        setPasswordError(copy);
+      } else {
+        setError(copy ?? (e instanceof Error && e.message ? e.message : 'Failed to save profile.'));
+      }
     } finally {
       setSaving(false);
     }
@@ -301,6 +505,84 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
 
+                {/* Username — required by POST /api/auth/onboarding. */}
+                <View style={styles.group}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>USERNAME</Text>
+                    <Text style={styles.required}> *</Text>
+                  </View>
+                  <UsernameField
+                    value={username}
+                    onChangeText={setUsername}
+                    onStatusChange={setUsernameStatus}
+                    onSuggestions={setServerSuggestions}
+                    serverError={usernameServerError}
+                    editable={!busy}
+                  />
+
+                  {suggestions.length > 0 ? (
+                    <View style={styles.suggestionRow}>
+                      {suggestions.map((handle) => (
+                        <Pressable
+                          key={handle}
+                          onPress={() => applySuggestion(handle)}
+                          disabled={busy}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Use the username ${handle}`}
+                          style={({ pressed }) => [
+                            styles.suggestionChip,
+                            pressed && styles.suggestionChipPressed,
+                          ]}
+                        >
+                          <Text style={styles.suggestionText} numberOfLines={1}>
+                            @{handle}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Password — also required since Phase 4. It is what lets a
+                    student sign in later without waiting for an emailed code. */}
+                <View style={styles.group}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>PASSWORD</Text>
+                    <Text style={styles.required}> *</Text>
+                  </View>
+                  <PasswordField
+                    value={password}
+                    onChangeText={(next) => {
+                      setPassword(next);
+                      setPasswordError(null);
+                    }}
+                    placeholder="At least 8 characters"
+                    error={passwordError}
+                    hint={`Use ${MIN_PASSWORD_LENGTH} characters or more.`}
+                    editable={!busy}
+                    accessibilityLabel="Password"
+                  />
+                </View>
+
+                <View style={styles.group}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.label}>CONFIRM PASSWORD</Text>
+                    <Text style={styles.required}> *</Text>
+                  </View>
+                  <PasswordField
+                    value={confirmPassword}
+                    onChangeText={(next) => {
+                      setConfirmPassword(next);
+                      setConfirmError(null);
+                    }}
+                    placeholder="Type it again"
+                    error={confirmError ?? liveMismatch}
+                    editable={!busy}
+                    returnKeyType="done"
+                    accessibilityLabel="Confirm password"
+                  />
+                </View>
+
                 {/* Section 2: Academic Details */}
                 <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
                   Academic Details
@@ -374,6 +656,22 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
+
+              {/* ABOVE the button, not below it.
+                  Below, it appeared in space the student could not see without
+                  scrolling further down — so pressing Save looked like it did
+                  nothing at all. Above, it PUSHES the button down as it appears,
+                  which lands it exactly where the eye already is. */}
+              {fieldIssues.length > 0 ? (
+                <View style={styles.summary}>
+                  <Feather name="alert-circle" size={15} color={colors.errorText} />
+                  <Text style={styles.summaryText}>
+                    {fieldIssues.length === 1
+                      ? `Check the ${fieldIssues[0].toLowerCase()} field above.`
+                      : `Check these fields above: ${fieldIssues.join(', ').toLowerCase()}.`}
+                  </Text>
+                </View>
+              ) : null}
 
               <Pressable
                 onPress={handleSubmit}
@@ -504,6 +802,26 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    backgroundColor: colors.errorBg,
+  },
+  summaryText: {
+    flexShrink: 1,
+    fontFamily: font.family.medium,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.errorText,
+  },
+
   banner: {
     backgroundColor: colors.errorBg,
     borderRadius: 12,
@@ -606,6 +924,30 @@ const styles = StyleSheet.create({
 
   group: {
     marginBottom: spacing.md,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingLeft: spacing.xs,
+  },
+  suggestionChip: {
+    flexShrink: 1,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 3,
+    borderRadius: 999,
+    backgroundColor: colors.pinkLight,
+    borderWidth: 1,
+    borderColor: colors.inputBorderFocus,
+  },
+  suggestionChipPressed: {
+    backgroundColor: colors.demoCardPinkBg,
+  },
+  suggestionText: {
+    fontFamily: font.family.semibold,
+    fontSize: 12.5,
+    color: colors.purple,
   },
   labelRow: {
     flexDirection: 'row',

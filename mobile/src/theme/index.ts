@@ -42,6 +42,26 @@ export const colors = {
   // Measured across the whole ramp: mutedText never drops below 4.51:1. If you
   // want more presence, push SATURATION or widen the hue travel. Do not lower
   // lightness — #ECE4FF, only four steps darker, already fails at 4.41:1.
+  // ── MESSAGES, ported from the web so the two clients look like one product ──
+  //
+  // frontend/src/pages/messages/Messages.module.css is the source of truth for
+  // these four values; if it changes, change them here too.
+  //
+  // Inbox list = `.inboxSidebar`, a 170deg three-stop ramp with a magenta glow
+  // off the top-right and a pink one off the bottom-left.
+  inboxTop: '#FDF8FF',
+  inboxMid: '#F8F0FF',
+  inboxBottom: '#FFF4F9',
+  // Chat thread = `.messagesContainer`, a lavender ground carrying a purple
+  // glow at the top-left and a blue one at the bottom-right. Noticeably deeper
+  // than any other canvas in the app, and deliberately so: the bubbles are what
+  // should read as raised, which needs a ground dark enough to lift off.
+  //
+  // The web also lays a fine dot grain over this. There is no grain here — it
+  // would mean shipping a tiled asset for an effect that is nearly invisible at
+  // phone density, so the ground and the glows carry the look on their own.
+  chatCanvas: '#EDE6F5',
+
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
   appBgBottom: '#F1E6FF',
