@@ -624,12 +624,24 @@ export default function Dashboard() {
    setSoldModal({ isOpen: true, product, buyers: [], loading: true });
    try {
      const userId = localStorage.getItem("yahora_user_id");
+     // 🔒 requireAuth since Block V-A — without the token this was a silent 401
+     // and the buyer list came back empty, which reads as "nobody messaged me".
+     const token = localStorage.getItem("yahora_session");
+     // 📄 `{ items, next_cursor }` since Block N-C; the key was `inbox`.
+     //
+     // limit=50 is the server cap, asked for explicitly because this list is
+     // then FILTERED down to one product: at the default of 20 a seller with
+     // many conversations could page past the buyer they are looking for and be
+     // told nobody had enquired. 50 makes that far less likely but does not
+     // remove it — the real fix is an endpoint that filters by product server
+     // side, which is Phase 5 work and needs Vishwajeet.
      const res = await fetch(
-       `${API_BASE_URL}/messages/inbox/${userId}`,
+       `${API_BASE_URL}/messages/inbox/${userId}?limit=50`,
+       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
      );
      const result = await res.json();
 
-     const productChats = (result.inbox || []).filter(
+     const productChats = (result.items || []).filter(
        (chat) => chat.product_id === product.id,
      );
 

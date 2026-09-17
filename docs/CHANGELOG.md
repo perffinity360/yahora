@@ -277,6 +277,135 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-15 — 📮 Phase 4 Block N-C: cursor pagination on the inbox and chat history; search envelope renamed (Neeraj, in Vishwajeet's module)
+
+📮 **HANDOFF — Vishwajeet, three envelope keys changed and the mobile app reads all three.**
+`inbox` → `items`, `messages` → `items`, `users` → `items`. No row shape changed anywhere.
+
+**Ownership:** `messages/` is yours; this is the Phase 4 loan, READ handlers only.
+`messages.routes.js` untouched, no path moved, and `sendMessage` / `markAsRead` /
+`markAsDelivered` were not opened. `respond.js` untouched. **No SQL written and no migration
+created** — your `get_user_inbox` migration from V-C is consumed as-is.
+
+### Migrations applied
+
+**None by me.** This block depends on yours — `20260915070505_inbox_pagination.sql` — which was
+already on `main` and live locally when I started. Confirmed the three-parameter signature and
+that `p_cursor` is `last_message_time` before writing any JavaScript.
+
+> ⚠️ **One check to be aware of:** on macOS, `grep -rn "get_user_inbox" supabase/migrations/ |
+> tail -2` returns the **2026-08-08 grants**, not your new definition — BSD `grep -r` does not
+> sort its output. Anyone following that instruction literally would conclude the migration was
+> missing. Use `| sort | tail` or grep the file directly.
+
+> 🔴 **MIGRATION REQUEST — `search_users()` is broken and has been for a month.** See the
+> defect note under "Changed endpoints". I have not written the fix: SQL is yours.
+
+### New endpoints
+
+**None.** All three endpoints already existed; all three keep their paths and methods.
+
+### Changed endpoints (BREAKING)
+
+**1. `GET /api/messages/inbox/:userId` — `{ inbox: [...] }` → `{ items, next_cursor }`.**
+
+Default 20 conversations. Your V-C migration already changed the row count on 15 Sep; this
+change is the envelope and the `limit`/`cursor` pass-through. The nine RPC columns are
+unchanged in name, order and type.
+
+- Cursor is a bare `last_message_time` timestamp — the only key the RPC exposes.
+- The RPC clamps `p_limit` itself, so the controller's parse is belt to your braces.
+- Your known tie edge case is documented in API.md as inherited and unfixed. It needs a
+  composite cursor, which changes the RPC's return columns — your call, and I have not touched
+  it.
+
+**2. `GET /api/messages/history` — `{ messages: [...] }` → `{ items, next_cursor }`.**
+
+Default 20 messages. **`items` is still ordered oldest-first**, so no rendering loop changes —
+only the key, and the row count.
+
+⚠️ **The paging direction is the opposite of the render order, and this is the part to read
+before touching it.** A chat renders oldest-first, but opening a thread shows the NEWEST
+messages and scrolling UP loads older ones. So the query runs `created_at DESC`, takes `limit`,
+and the array is **reversed** before sending. **Page 1 is the end of the conversation, not the
+beginning.** `next_cursor` is the **oldest** message on the page — `items[0]` after the
+reverse. Prepend each new page above the last.
+
+**3. `GET /api/users/search` — `{ users: [...] }` → `{ items: [...], next_cursor: null }`.**
+
+**No cursor parameter, and `next_cursor` is always `null`.** Search is the one list in this API
+exempt from cursor pagination, and API.md now says why in its own entry rather than leaving it
+to be read as an oversight: `search_users()` orders by an exact-match flag, then same-campus,
+then a trigram similarity **rank** — all computed per query, none stored or indexed, so there
+is nothing for a cursor to seek into. Fixed top-N, capped at 50. A `cursor` param is ignored,
+not rejected.
+
+> 🚨 **PRE-EXISTING DEFECT, NOT CAUSED BY THIS CHANGE AND NOT FIXED: this endpoint returns 500
+> for every query that reaches the RPC.** `search_users()` declares column 3 as
+> `full_name text`, but `public.users.full_name` is `character varying(255)` and the body
+> selects it uncast. Postgres raises
+> `42804 — Returned type character varying(255) does not match expected type text in column 3`.
+>
+> Reproduced by calling the RPC **directly over PostgREST with no backend involved**, so it is
+> not a controller bug. It has been broken since migration 005 (15 Aug) and nobody noticed
+> because **no client calls this endpoint** — `grep -rn "users/search"` across `frontend/`,
+> `mobile/` and the repo finds only backend code and documentation.
+>
+> The fix is a migration — cast `u.full_name::text` in the function body, or redeclare the
+> output column as `varchar`. **I have not written it; SQL is yours.** Neeraj is filing the
+> migration request.
+
+### New fields on existing responses
+
+- `next_cursor` on all three: a `last_message_time` timestamp (inbox), a **base64url** opaque
+  string (history), and always `null` (search).
+- `limit` and `cursor` query parameters on inbox and history. Search takes `limit` only.
+
+⚠️ **There are now three cursor types in this API and none are interchangeable.** Feeding one
+endpoint's cursor to another is a 400. Products feed → `created_at` timestamp; product comments
+→ base64url `created_at|id`; inbox → `last_message_time` timestamp; chat history → base64url
+`created_at|id`. Send back whatever `next_cursor` you were given, verbatim.
+
+### Test data
+
+Nothing seeded permanently, nothing run against production. Verified against the **local** stack
+by importing the handlers and calling them with stubbed `req`/`res`:
+
+- **Inbox:** `limit=abc` → 20, `0`/`-1` → 1, `100000` → 50. Cursor walk at `limit=1` returned
+  every conversation once, in the same order as the unpaginated call. Bad cursor → 400. The
+  403 own-inbox guard still fires for another user's id.
+- **History, the case that matters:** temporarily inserted **12 messages arranged as four
+  groups of three sharing an exact microsecond timestamp**. Paged at `limit` 2, 3 and 5 —
+  prepending each page reassembled all 18 messages in the exact order of the unpaginated
+  thread, **0 duplicates**, every page individually ascending. Verified `next_cursor` decodes
+  to the page's **oldest** message, not its newest.
+- **Guards on `/history` unchanged:** non-uuid → 400, non-participant → 403, malformed cursor →
+  400, and a cursor crafted to carry PostgREST filter syntax → 400 without reaching the query.
+- **Two stacked `.or()` filters** (participant pair + cursor) were checked against the database
+  to confirm PostgREST **ANDs** them: the participant filter still holds and no foreign rows
+  leak. That was verified, not assumed.
+- **Search:** the guard paths (`MISSING_FIELDS` on blank or absent `q`) are unchanged. The
+  success path could not be exercised — see the defect above.
+- **All 12 temporary messages were deleted afterwards**; the local `messages` table is back to
+  734 rows with no test content remaining.
+
+### What NOT to do yet
+
+- **Do not point any client at `next_cursor` yet.** Infinite scroll is Phase 5. Note that until
+  the clients are updated to read `items`, the inbox and chat show **nothing** rather than one
+  page — the key changed.
+- **Do not use `GET /api/users/search` for anything** until the RPC is fixed. It returns 500.
+- **Do not "fix" the chat by reversing on the client** or by sorting the page in JavaScript.
+  The server hands back ascending rows already; re-sorting a page silently breaks paging, the
+  same trap your V-C note calls out for the inbox.
+- **Do not build a cursor by hand**, and do not decode one to read the timestamp.
+- **Do not copy the five pagination helpers a third time.** They are duplicated **verbatim** in
+  `products.controller.js` and `messages.controller.js` because the only place they could be
+  shared is `utils/respond.js`, which is frozen and yours. If a third module needs them, that
+  is the signal to add `utils/pagination.js` — your call. Any fix to one copy must be applied
+  to the other in the same commit; both carry a comment saying so.
+
+
 ## 2026-09-15 — 📮 Phase 4 Block N-B: cursor pagination on the marketplace feed and the comments list (Neeraj, in Vishwajeet's module)
 
 📮 **HANDOFF — Vishwajeet, the mobile app breaks on both of these until Phase 5.** Two response
