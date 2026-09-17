@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -22,14 +23,41 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { DemoModal } from '../../src/components/DemoModal';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import { PasswordField } from '../../src/components/PasswordField';
 import type { ApiError } from '../../src/lib/api';
 import { TurnstileWebView } from '../../src/components/TurnstileWebView';
 import type { TurnstileHandle } from '../../src/components/TurnstileWebView';
 import { UniversitiesModal } from '../../src/components/UniversitiesModal';
-import { useAuth } from '../../src/contexts/AuthContext';
+import { useAuth, type PasswordLoginError } from '../../src/contexts/AuthContext';
 import { colors, font, spacing } from '../../src/theme';
 
 type Step = 'email' | 'otp';
+type Tab = 'otp' | 'password';
+
+/** Same key the web uses, so the two clients describe the same preference. */
+const AUTH_TAB_KEY = 'yahora_auth_tab';
+
+/**
+ * THE ONLY failure sentence this screen shows for a password attempt.
+ *
+ * Wrong password, unknown username, unknown email and an account with no
+ * password set all return one identical response from the API — same status,
+ * same code, same wording — and backend/API.md is explicit that a client must
+ * not try to be more helpful. Any variation, even in phrasing, lets someone
+ * test identifiers to learn which are real; on a campus app that also answers
+ * "is this specific classmate on Yahora?", which is a harassment precursor.
+ *
+ * New-user guidance lives in permanent helper text under the form instead,
+ * where it is read BEFORE an attempt is wasted rather than after.
+ */
+const INVALID_CREDENTIALS_MESSAGE = 'Incorrect username or password. Please try again.';
+
+/** m:ss for the lockout countdown. */
+const formatWait = (totalSeconds: number) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
 
 // Public by design (it only names the widget) and inlined at bundle time, so
 // restart Metro with `npx expo start -c` after changing it. The SECRET key
@@ -46,7 +74,7 @@ const LOGO = require('../../assets/yahora-logo.png');
 const MARK = require('../../assets/yahora-mark.png');
 
 export default function LoginScreen() {
-  const { requestOtp, verifyOtp, demoLogin, profile } = useAuth();
+  const { requestOtp, verifyOtp, loginWithPassword, demoLogin, profile } = useAuth();
 
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
@@ -73,6 +101,91 @@ export default function LoginScreen() {
   const [universitiesOpen, setUniversitiesOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
 
+  /* ── Tabs ──────────────────────────────────────────────────────────────
+     Defaults to OTP and is corrected once AsyncStorage answers, rather than
+     rendering nothing while we wait: a blank card on app open is worse than a
+     card that settles on the other tab a frame later. */
+  const [tab, setTab] = useState<Tab>('otp');
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(AUTH_TAB_KEY)
+      .then((saved) => {
+        if (active && saved === 'password') setTab('password');
+      })
+      .catch(() => {
+        // Remembering a tab is a convenience; failing to read it is not worth
+        // telling anyone about.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const switchTab = (next: Tab) => {
+    setTab(next);
+    setError(null);
+    setInfo(null);
+    AsyncStorage.setItem(AUTH_TAB_KEY, next).catch(() => {});
+  };
+
+  /* ── Password sign-in ──────────────────────────────────────────────────
+     The password lives in state for as long as this screen does and nowhere
+     else: never AsyncStorage, never a log line (plan rule 14). */
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [identifierFocused, setIdentifierFocused] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  /** Seconds left on an identifier lockout. 0 means not locked. */
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+
+  // One tick drives the countdown. It re-renders only while a lockout is
+  // running, so there is no timer alive on an idle screen.
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const timer = setTimeout(() => setLockoutSeconds((secs) => Math.max(secs - 1, 0)), 1000);
+    return () => clearTimeout(timer);
+  }, [lockoutSeconds]);
+
+  const handlePasswordLogin = async () => {
+    if (signingIn || lockoutSeconds > 0) return;
+    setPasswordError(null);
+
+    const handle = identifier.trim();
+    // Trimmed, but NOT validated as an email — a username is equally valid
+    // here, and the server lowercases and resolves either.
+    if (!handle || !password) {
+      setPasswordError(INVALID_CREDENTIALS_MESSAGE);
+      return;
+    }
+
+    setSigningIn(true);
+    try {
+      await loginWithPassword(handle, password);
+      // The routing guard takes it from here, exactly as it does after an OTP.
+    } catch (e) {
+      const { status, fromApi, retryAfterSeconds } = e as PasswordLoginError;
+
+      if (!fromApi) {
+        // Somebody OTHER than our backend answered. Its status says nothing
+        // about this student's credentials, and translating it into "incorrect
+        // password" sends them off resetting a password that was never wrong.
+        setPasswordError('Could not reach the Yahora server. Please try again.');
+      } else if (status === 429) {
+        // The one failure that is genuinely different, because no attempt is
+        // being accepted either way and the student needs to know to wait.
+        setLockoutSeconds(retryAfterSeconds && retryAfterSeconds > 0 ? retryAfterSeconds : 900);
+        setPasswordError(null);
+      } else {
+        // Everything else. One sentence, no branching — see the constant.
+        setPasswordError(INVALID_CREDENTIALS_MESSAGE);
+      }
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   // ── Keeping the field you are typing in above the keyboard ───────────────
   //
   // KeyboardAvoider shrinks this screen to the space left over by the keyboard,
@@ -91,6 +204,15 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // The bottom inset as it is with the keyboard CLOSED. Once the IME is up
+  // Android gives it that inset and `insets.bottom` reads 0, so measuring it
+  // inside keyboardDidShow puts the keyboard's top edge a navigation-bar's
+  // height too low and the reveal below under-scrolls by the same amount.
+  // KeyboardAvoider latches the same value for the same reason — the two have
+  // to agree on where the keyboard starts or they fight each other.
+  const restingBottomInset = useRef(insets.bottom);
+  if (insets.bottom > 0) restingBottomInset.current = insets.bottom;
 
   const scrollRef = useRef<ScrollView>(null);
   /** Live scroll offset — ScrollView has no getter, so onScroll keeps it. */
@@ -127,7 +249,7 @@ export default function LoginScreen() {
       // iOS reports screenY correctly.
       keyboardTop.current =
         Platform.OS === 'android'
-          ? windowHeight - (e.endCoordinates.height + insets.bottom)
+          ? windowHeight - (e.endCoordinates.height + restingBottomInset.current)
           : e.endCoordinates.screenY;
       setKeyboardOpen(true);
       // One beat for the avoiding padding and the taller content to land, so
@@ -144,7 +266,7 @@ export default function LoginScreen() {
       hide.remove();
       if (revealTimer.current) clearTimeout(revealTimer.current);
     };
-  }, [insets.bottom, windowHeight, revealFocusedRow]);
+  }, [windowHeight, revealFocusedRow]);
 
   /** Called from a field's onFocus: remember the row, then lift it. */
   const focusRow = useCallback(
@@ -328,7 +450,119 @@ export default function LoginScreen() {
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>Join Yahora</Text>
 
+                  {/* Segmented control. The labels are fixed copy from runbook
+                      §0.6 — "College Email & OTP", not just "Email": students
+                      think of it as their college ID.
+
+                      Hidden once a code has been sent. Mid-OTP the card is a
+                      one-way step with its own "wrong email? go back", and a
+                      tab bar there invites an accidental tap that throws away
+                      a code the student is holding in another app. */}
                   {step === 'email' ? (
+                    <View style={styles.tabBar} accessibilityRole="tablist">
+                      {([
+                        ['otp', 'College Email & OTP'],
+                        ['password', 'Username & Password'],
+                      ] as const).map(([key, label]) => {
+                        const active = tab === key;
+                        return (
+                          <Pressable
+                            key={key}
+                            onPress={() => switchTab(key)}
+                            accessibilityRole="tab"
+                            accessibilityState={{ selected: active }}
+                            style={({ pressed }) => [
+                              styles.tabBtn,
+                              active && styles.tabBtnActive,
+                              pressed && !active && styles.tabBtnPressed,
+                            ]}
+                          >
+                            <Text
+                              numberOfLines={1}
+                              style={[styles.tabText, active && styles.tabTextActive]}
+                            >
+                              {label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
+                  {step === 'email' && tab === 'password' ? (
+                    <>
+                      <Text style={styles.subtitle}>
+                        Enter the username and password you chose at signup
+                      </Text>
+
+                      <Text style={styles.inputLabel}>USERNAME OR EMAIL</Text>
+                      <View
+                        style={[styles.pillGroup, identifierFocused && styles.pillGroupFocused]}
+                      >
+                        <TextInput
+                          value={identifier}
+                          onChangeText={setIdentifier}
+                          onFocus={() => setIdentifierFocused(true)}
+                          onBlur={() => setIdentifierFocused(false)}
+                          placeholder="rahul.sharma"
+                          placeholderTextColor={colors.mutedPlaceholder}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          autoComplete="username"
+                          textContentType="username"
+                          editable={!signingIn && lockoutSeconds === 0}
+                          returnKeyType="next"
+                          style={styles.pillInput}
+                        />
+                      </View>
+
+                      <View style={styles.passwordWrap}>
+                        <PasswordField
+                          value={password}
+                          onChangeText={(next) => {
+                            setPassword(next);
+                            setPasswordError(null);
+                          }}
+                          placeholder="Your password"
+                          autoComplete="current-password"
+                          textContentType="password"
+                          returnKeyType="go"
+                          onSubmitEditing={handlePasswordLogin}
+                          editable={!signingIn && lockoutSeconds === 0}
+                          accessibilityLabel="Password"
+                        />
+                      </View>
+
+                      {/* The lockout outranks the credential message: while it
+                          is running no attempt is being accepted either way. */}
+                      {lockoutSeconds > 0 ? (
+                        <InlineMessage
+                          tone="error"
+                          text={`Too many attempts. Try again in ${formatWait(lockoutSeconds)}.`}
+                        />
+                      ) : passwordError ? (
+                        <InlineMessage tone="error" text={passwordError} />
+                      ) : null}
+
+                      <View style={styles.signInRow}>
+                        <GradientButton
+                          onPress={handlePasswordLogin}
+                          disabled={signingIn || lockoutSeconds > 0}
+                          label={signingIn ? 'Signing in…' : 'Sign in'}
+                          busy={signingIn}
+                        />
+                      </View>
+
+                      {/* Permanent, not an error state. A new student sees how
+                          to sign up BEFORE wasting an attempt — and this is the
+                          only place that guidance can live, because the failure
+                          message is deliberately identical for every cause. */}
+                      <Text style={styles.helperNote}>
+                        New to Yahora? Use the College Email &amp; OTP tab to create your
+                        account.
+                      </Text>
+                    </>
+                  ) : step === 'email' ? (
                     <>
                       <Text style={styles.subtitle}>
                         Enter your university email to get started
@@ -731,6 +965,60 @@ const styles = StyleSheet.create({
     color: colors.blackSoft,
     marginBottom: spacing.xs,
   },
+  /* Segmented tab control */
+  tabBar: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    borderRadius: 999,
+    backgroundColor: colors.inputBg,
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 38,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 999,
+  },
+  tabBtnActive: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.inputBorderFocus,
+  },
+  tabBtnPressed: {
+    backgroundColor: colors.pinkLight,
+  },
+  tabText: {
+    fontFamily: font.family.semibold,
+    // 11.5 so both labels hold on one line at 375pt. "College Email & OTP" is
+    // fixed copy, so the type gives way rather than the words.
+    fontSize: 11.5,
+    color: colors.mutedText,
+  },
+  tabTextActive: {
+    fontFamily: font.family.bold,
+    color: colors.purple,
+  },
+
+  passwordWrap: {
+    marginTop: spacing.sm + 2,
+  },
+  signInRow: {
+    marginTop: spacing.md,
+    alignSelf: 'center',
+  },
+  helperNote: {
+    fontFamily: font.family.regular,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    color: colors.mutedText,
+    marginTop: spacing.md,
+  },
+
   subtitle: {
     fontFamily: font.family.regular,
     textAlign: 'center',

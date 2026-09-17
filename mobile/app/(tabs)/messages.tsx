@@ -67,7 +67,7 @@ export default function MessagesScreen() {
 
   return (
     <View style={styles.root}>
-      <ScreenGradient />
+      <ScreenGradient variant="inbox" />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ConnectionBanner />
 
@@ -256,7 +256,7 @@ function InboxSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.appBgBottom },
+  root: { flex: 1, backgroundColor: colors.inboxBottom },
   // The root holds the gradient; the safe area sits transparently on top of it.
   safe: { flex: 1 },
 

@@ -66,6 +66,39 @@ export interface ProductComment {
  * plus the joined seller, the comment thread, and the viewer's interaction
  * state. Superset of `Product`, so it slots into `ProductCardItem` too.
  */
+/**
+ * The backend's cursor-paginated list envelope — `sendPage()` in
+ * backend/src/utils/respond.js, as of Phase 4 Block N-B (2026-09-15).
+ *
+ * This is a WIRE type. It should not travel further than the hook that fetched
+ * it: hooks in src/hooks unwrap it and cache the plain array, so screens and
+ * components never have to know which endpoints are paged. When Phase 5 adds
+ * infinite scroll, `next_cursor` is read in those same hooks.
+ */
+/**
+ * `GET /api/users/username-available`. `available: true` comes back on its own;
+ * a refusal carries the reason and up to three alternatives.
+ *
+ * `reason` is a LABEL for a decision the database already made, not a second
+ * opinion (backend/API.md). Note TAKEN and RESERVED must render the SAME
+ * sentence to a student — see UsernameField.
+ */
+export interface UsernameAvailability {
+  available: boolean;
+  reason?: 'TAKEN' | 'RESERVED' | 'INVALID_FORMAT' | 'RECENTLY_RELEASED';
+  suggestions?: string[];
+}
+
+/** `GET /api/users/username-suggestions?name=` */
+export interface UsernameSuggestions {
+  suggestions: string[];
+}
+
+export interface Paged<T> {
+  items: T[];
+  next_cursor: string | null;
+}
+
 export interface ProductDetailData extends Product {
   seller: {
     id: string;
@@ -74,10 +107,23 @@ export interface ProductDetailData extends Product {
     qualification: string | null;
     year_of_study: string | null;
   };
+  /**
+   * Unwrapped by `useProductDetail` / `useProduct`. On the wire this is
+   * `Paged<ProductComment>` — see `ProductDetailWire` below.
+   */
   comments: ProductComment[];
   is_liked?: boolean;
   is_saved?: boolean;
 }
+
+/**
+ * `GET /api/products/:id` exactly as it comes off the wire. The only difference
+ * from `ProductDetailData` is `comments`, which N-B turned from an array into a
+ * paged envelope. Used only by the two hooks that unwrap it.
+ */
+export type ProductDetailWire = Omit<ProductDetailData, 'comments'> & {
+  comments?: Paged<ProductComment> | null;
+};
 
 /**
  * A product row as returned by the dashboard / public-profile endpoints. It is

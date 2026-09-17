@@ -57,6 +57,7 @@ const EMOJI_TABS = [
 
 type ChatRow =
   | { kind: 'day'; key: string; label: string }
+  | { kind: 'unread'; key: string; count: number }
   | {
       kind: 'msg';
       key: string;
@@ -212,6 +213,29 @@ export default function ChatScreen() {
     else router.replace(MESSAGES_HREF);
   };
 
+  /* ── "N unread messages" divider (web parity: Messages.jsx unreadMarker) ──
+     Pinned at open time, NOT derived from is_read on every render. Opening the
+     thread fires PUT /messages/read within a second or two, which flips every
+     is_read to true — a derived marker would appear and then vanish while you
+     were still looking for where you left off, which is the one moment it is
+     for. Pinned, it stays put until you leave the thread. */
+  const unreadPinned = useRef(false);
+  const [unreadMarker, setUnreadMarker] = useState<{ firstId: string; count: number } | null>(null);
+
+  // A different conversation is a different marker.
+  useEffect(() => {
+    unreadPinned.current = false;
+    setUnreadMarker(null);
+  }, [contactId, productId]);
+
+  useEffect(() => {
+    if (unreadPinned.current || thread.length === 0) return;
+    unreadPinned.current = true;
+
+    const unread = thread.filter((m) => m.sender_id !== myId && m.is_read === false);
+    if (unread.length > 0) setUnreadMarker({ firstId: unread[0].id, count: unread.length });
+  }, [thread, myId]);
+
   /* ── Rows: day separators + grouping, built oldest-first then reversed
         because the list is inverted (index 0 renders at the bottom). ────── */
   const rows = useMemo<ChatRow[]>(() => {
@@ -223,6 +247,10 @@ export default function ChatScreen() {
       if (!previous || formatDayLabel(previous.created_at) !== day) {
         out.push({ kind: 'day', key: `day-${day}-${message.id}`, label: day });
       }
+      // Above the first message they had not read, below everything they had.
+      if (unreadMarker && message.id === unreadMarker.firstId) {
+        out.push({ kind: 'unread', key: `unread-${message.id}`, count: unreadMarker.count });
+      }
       out.push({
         kind: 'msg',
         key: message.id,
@@ -233,7 +261,7 @@ export default function ChatScreen() {
       });
     });
     return out.reverse();
-  }, [thread, myId]);
+  }, [thread, myId, unreadMarker]);
 
   const canSend = !!draft.trim() && !!contactId && !!productId;
 
@@ -254,7 +282,7 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.root}>
-      <ScreenGradient />
+      <ScreenGradient variant="chat" />
       <KeyboardAvoider style={styles.flex}>
         <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
           <ConnectionBanner />
@@ -374,6 +402,8 @@ export default function ChatScreen() {
               renderItem={({ item }) =>
                 item.kind === 'day' ? (
                   <DaySeparator label={item.label} />
+                ) : item.kind === 'unread' ? (
+                  <UnreadDivider count={item.count} />
                 ) : (
                   <MessageBubble
                     message={item.message}
@@ -592,6 +622,23 @@ function DaySeparator({ label }: { label: string }) {
   );
 }
 
+/**
+ * "3 unread messages" — the line you scroll back up to find. Pink rather than
+ * the day separator's hairline grey, because it marks your place rather than
+ * dividing time, and the two must not read as the same thing.
+ */
+function UnreadDivider({ count }: { count: number }) {
+  return (
+    <View style={styles.unreadSeparator}>
+      <View style={styles.unreadLine} />
+      <Text style={styles.unreadLabel}>
+        {count} unread message{count > 1 ? 's' : ''}
+      </Text>
+      <View style={styles.unreadLine} />
+    </View>
+  );
+}
+
 /* ────────────────────────── Typing ────────────────────────── */
 function TypingBubble({ name, avatar }: { name: string; avatar: string | null }) {
   return (
@@ -685,7 +732,7 @@ function ChatState({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.appBgBottom },
+  root: { flex: 1, backgroundColor: colors.chatCanvas },
   flex: { flex: 1 },
 
   /* Header */
@@ -851,6 +898,21 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   dayLine: { flex: 1, height: 1, backgroundColor: colors.hairline },
+
+  unreadSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginVertical: spacing.sm + 2,
+  },
+  unreadLine: { flex: 1, height: 1, backgroundColor: colors.inputBorderFocus },
+  unreadLabel: {
+    fontFamily: font.family.bold,
+    fontSize: 10.5,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.pinkDark,
+  },
   dayLabel: {
     fontFamily: font.family.bold,
     fontSize: 10,

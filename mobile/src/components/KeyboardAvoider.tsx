@@ -55,6 +55,25 @@ export function KeyboardAvoider({
   const { height: windowHeight } = useWindowDimensions();
   const [overlap, setOverlap] = useState(0);
 
+  /**
+   * The bottom system-bar inset as measured WHILE THE KEYBOARD WAS CLOSED.
+   *
+   * This is the fix for a composer that still sat half under the keyboard. When
+   * the IME opens, Android hands its inset to the keyboard and
+   * `useSafeAreaInsets().bottom` collapses to 0 — so reading it inside the
+   * keyboardDidShow handler, which is what this used to do, added back nothing.
+   * `endCoordinates.height` excludes the navigation bar, so the padding came out
+   * short by exactly that bar's height: about 48dp, which on the chat screen is
+   * roughly half the composer. It looked like the avoider was ignoring the
+   * keyboard, when it was really just under-measuring it by a fixed amount.
+   *
+   * Latching the last non-zero value keeps a number that is still true while the
+   * keyboard is up, because the bar has not gone anywhere — it is underneath the
+   * keyboard.
+   */
+  const restingBottomInset = useRef(insets.bottom);
+  if (insets.bottom > 0) restingBottomInset.current = insets.bottom;
+
   const viewRef = useRef<View>(null);
   // Refs, not state: these are inputs to the calculation and each lands on its
   // own native event. Only the result is allowed to cause a render.
@@ -88,8 +107,10 @@ export function KeyboardAvoider({
     const shown = Keyboard.addListener('keyboardDidShow', (e) => {
       // Android reports the IME height with the system-bar inset already taken
       // off; add it back so this is the distance from the window's bottom edge,
-      // which is what `gapBelow` is measured against.
-      keyboardInset.current = e.endCoordinates.height + insets.bottom;
+      // which is what `gapBelow` is measured against. The resting inset, not
+      // `insets.bottom` — by the time this fires, that has already collapsed to
+      // 0 and would add back nothing. See the note on restingBottomInset.
+      keyboardInset.current = e.endCoordinates.height + restingBottomInset.current;
       measure();
     });
     const hidden = Keyboard.addListener('keyboardDidHide', () => {
@@ -100,7 +121,7 @@ export function KeyboardAvoider({
       shown.remove();
       hidden.remove();
     };
-  }, [insets.bottom, measure, recompute]);
+  }, [measure, recompute]);
 
   if (Platform.OS !== 'android') {
     return (
