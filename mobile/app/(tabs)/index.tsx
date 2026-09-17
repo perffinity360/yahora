@@ -1,8 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -137,6 +137,9 @@ export default function MarketplaceScreen() {
     [router, toggleLike, toggleSave],
   );
 
+  // Drives the grid's scroll position when the sort order changes.
+  const gridRef = useRef<FlashListRef<MarketplaceProduct>>(null);
+
   const emptyTitle = filters.search.trim()
     ? `No results for "${filters.search.trim()}"`
     : filters.showWishlist
@@ -241,7 +244,16 @@ export default function MarketplaceScreen() {
             return (
               <Pressable
                 key={s.key}
-                onPress={() => setActiveSort(s.key)}
+                onPress={() => {
+                  setActiveSort(s.key);
+                  // Back to the top. The offset someone is at belongs to the
+                  // ORDER they were reading: keeping it after a re-sort drops
+                  // them into the middle of a list they have not seen the start
+                  // of, which reads as "the button did nothing". Unconditional
+                  // rather than guarded on `s.key !== activeSort` — re-tapping
+                  // the active chip is usually someone trying to get back up.
+                  gridRef.current?.scrollToOffset({ offset: 0, animated: true });
+                }}
                 style={[styles.sortChip, active && styles.sortChipActive]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
@@ -316,6 +328,7 @@ export default function MarketplaceScreen() {
         </ScrollView>
       ) : (
         <FlashList
+          ref={gridRef}
           data={displayProducts}
           keyExtractor={(item) => item.id}
           numColumns={2}
@@ -335,7 +348,7 @@ export default function MarketplaceScreen() {
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         >
           <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGradient}>
-            <Feather name="plus" size={20} color={colors.white} />
+            <Feather name="plus" size={17} color={colors.white} />
             <Text style={styles.fabText}>List an item</Text>
           </LinearGradient>
         </Pressable>
@@ -694,14 +707,17 @@ const styles = StyleSheet.create({
   fabGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    height: 52,
-    paddingHorizontal: spacing.lg,
+    // Trimmed from 52/lg/14 — it was sitting over two rows of cards and reading
+    // as the loudest thing on a screen whose job is the listings. 44 is still
+    // over the 44dp minimum touch target, so nothing is harder to hit.
+    gap: spacing.xs + 2,
+    height: 44,
+    paddingHorizontal: spacing.md,
     borderRadius: 999,
   },
   fabText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.white,
   },
 });

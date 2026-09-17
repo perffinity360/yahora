@@ -3,7 +3,8 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { api } from '../lib/api';
+import { api, type ApiError } from '../lib/api';
+import { API_BASE_URL } from '../lib/config';
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../types';
 
@@ -15,6 +16,13 @@ interface RequestOtpResponse {
   message: string;
   university: string;
 }
+
+/**
+ * What `loginWithPassword` throws. Everything `ApiError` carries, plus the
+ * lockout's remaining seconds — the one field this endpoint returns that the
+ * shared wrapper cannot pass on.
+ */
+export type PasswordLoginError = ApiError & { retryAfterSeconds?: number };
 
 interface AuthPayload {
   message: string;
@@ -35,6 +43,7 @@ interface AuthContextValue {
   onboardingSkipped: boolean;
   requestOtp: (email: string, captchaToken?: string) => Promise<RequestOtpResponse>;
   verifyOtp: (email: string, otp: string) => Promise<UserProfile>;
+  loginWithPassword: (identifier: string, password: string) => Promise<UserProfile>;
   demoLogin: () => Promise<UserProfile>;
   saveProfile: (profile: UserProfile) => Promise<void>;
   skipOnboarding: () => Promise<void>;
@@ -110,6 +119,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const requestOtp = (email: string, captchaToken?: string) =>
     api.post<RequestOtpResponse>('/api/auth/request-otp', { email, captchaToken });
 
+  /**
+   * Username-or-email + password sign-in (Block V-D).
+   *
+   * Everything after the request is IDENTICAL to verifyOtp below, and that is by
+   * design rather than by coincidence: backend/API.md specifies this endpoint's
+   * 200 as byte-identical to verify-otp's precisely so both share one storage
+   * path. If one of them ever changes, change both.
+   *
+   * ── WHY THIS DOES NOT USE `api.post` ──────────────────────────────────────
+   * A 429 here carries `retry_after_seconds`, computed per-identifier — a
+   * student 40 seconds from unlocking is told 40, not the 900 cap. `api.ts`
+   * keeps only `error`, `status` and `fromApi` from a failed response and
+   * discards the rest of the body, so going through it would mean showing
+   * everybody the worst case.
+   *
+   * This is the one endpoint where doing the fetch here costs nothing else:
+   * it is how a caller GETS a token, so the auth header `api.ts` exists to
+   * attach would be empty anyway. The error shaping below mirrors `api.ts`
+   * exactly — same `status`, same `fromApi` rule — so callers can branch on
+   * them the same way.
+   */
+  const loginWithPassword = async (identifier: string, password: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      // The password is in this body and nowhere else — never stored, never
+      // logged, not even on the failure path below (plan rule 14).
+      body: JSON.stringify({ identifier, password }),
+    });
+
+    const text = await response.text();
+    let parsed: unknown;
+    try {
+      parsed = text ? JSON.parse(text) : undefined;
+    } catch {
+      parsed = undefined;
+    }
+    const body = (parsed ?? {}) as Record<string, unknown>;
+
+    if (!response.ok) {
+      // `fromApi` false means something BETWEEN us and the backend answered — a
+      // proxy, a captive portal, the macOS AirPlay Receiver on the API port —
+      // and its status says nothing about this student's credentials.
+      const code = (body.error as string) || (body.message as string) || null;
+      const err = new Error(
+        code || `Request failed (${response.status})`,
+      ) as PasswordLoginError;
+      err.status = response.status;
+      err.fromApi = Boolean(code);
+
+      const retry = Number(body.retry_after_seconds);
+      if (Number.isFinite(retry) && retry > 0) err.retryAfterSeconds = Math.ceil(retry);
+      throw err;
+    }
+
+    const data = body as unknown as AuthPayload;
+    await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+    await saveProfile(data.userProfile);
+    await setDemoFlag(false);
+    await setSkippedFlag(false);
+    return data.userProfile;
+  };
+
   const verifyOtp = async (email: string, otp: string) => {
     const data = await api.post<AuthPayload>('/api/auth/verify-otp', { email, otp });
     await supabase.auth.setSession({
@@ -156,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardingSkipped,
       requestOtp,
       verifyOtp,
+      loginWithPassword,
       demoLogin,
       saveProfile,
       skipOnboarding,

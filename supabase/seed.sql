@@ -815,3 +815,270 @@ select pg_temp.seed_pending_user('b0000000-0000-4000-8000-000000000014', 'v-test
 
 -- NIT Delhi
 select pg_temp.seed_pending_user('b0000000-0000-4000-8000-000000000017', 'n-test3@nitdelhi.ac.in', 'password123', 'N Test Three', 'a0000000-0000-4000-8000-000000000004');
+
+
+-- ============ Layer 6: bulk listings for the two primary test campuses ======
+-- IIITDM Kurnool and NIET Greater Noida each end up with 24 AVAILABLE listings.
+--
+-- WHY 24 AND NOT 12. `GET /api/products` is cursor-paginated as of Phase 4
+-- Block N-B: it returns 20 rows and a `next_cursor`. A campus with fewer than 21
+-- listings can never produce a second page, so paging is untestable on it — the
+-- feed looks identical whether the client handles the cursor or ignores it
+-- entirely. 24 leaves a full first page plus a short second one, which is also
+-- the shape that exercises "a short page means the end".
+--
+-- These two campuses specifically because they are the ones with log-in-able
+-- seeded accounts (test@iiitk.ac.in, test@niet.co.in and the v-/n- pairs).
+--
+-- This block sits at the END of the file on purpose: every seller below is a
+-- Layer 5 test account, and those rows do not exist until a few lines above.
+-- Moving this block earlier is a foreign-key violation, not a style choice.
+--
+-- Conventions carried over from the blocks above:
+--   · CAMPUS ISOLATION. Every seller's university_id equals the row's.
+--   · likes_count / comments_count are omitted — triggers own them.
+--   · created_at is spread over today / this week / this month / older so the
+--     "Posting date" filter chips all have something behind them.
+--   · All eight MARKETPLACE_CATEGORIES and all five MARKETPLACE_CONDITIONS
+--     appear, including 'Poor', which nothing else in the seed uses.
+--   · placehold.co images rather than Unsplash ones. The note above Layer 4
+--     warns that a swapped photo makes the feed lie about what is in the
+--     picture; a placeholder cannot, and 29 listings is too many to match by
+--     hand.
+
+insert into public.products
+  (id, seller_id, university_id, title, description, price, category,
+   image_urls, status, location, condition, views, created_at)
+values
+  ('e0000000-0000-4000-8000-000000000025',
+   'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001',
+   'Logitech MX Master 3 Wireless Mouse',
+   'Bought for a design elective, used it for one semester. Scroll wheel and side buttons all work, USB receiver and cable in the box.',
+   3200.00, 'Electronics & Tech',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block B, Room 214', 'Like New', 132, now() - interval '2 hours'),
+
+  ('e0000000-0000-4000-8000-000000000026',
+   'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001',
+   'Cotton Formal Shirts — set of 3, size M',
+   'Wore these for placement season. White, sky blue and light grey, all washed and pressed. No stains or missing buttons.',
+   900.00, 'Clothing & Accessories',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block B, Room 214', 'Good', 74, now() - interval '9 days'),
+
+  ('e0000000-0000-4000-8000-000000000027',
+   'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001',
+   'Bajaj 1.5L Electric Kettle',
+   'Boils fast and the auto cut-off still works. Used it for tea and instant noodles through third year. Leaving it behind after graduation.',
+   650.00, 'Appliances',
+   array['https://placehold.co/600x400'],
+   'available', 'Girls Hostel, Block C', 'Good', 96, now() - interval '1 day'),
+
+  ('e0000000-0000-4000-8000-000000000028',
+   'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001',
+   'Anti-slip Yoga Mat with 3 resistance bands',
+   'Bought in a fitness phase that lasted about six weeks. Mat has no tears and the bands have never been stretched to their limit.',
+   750.00, 'Sports & Fitness',
+   array['https://placehold.co/600x400'],
+   'available', 'Girls Hostel, Block C', 'Mint', 58, now() - interval '26 days'),
+
+  ('e0000000-0000-4000-8000-000000000029',
+   'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001',
+   'Steel Almirah — 4 shelves, lockable',
+   'Standard hostel almirah. One dent on the side panel, lock and key both work. Buyer arranges to move it, it is heavy.',
+   2400.00, 'Furniture & Decor',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block A, Room 106', 'Fair', 121, now() - interval '40 days'),
+
+  ('e0000000-0000-4000-8000-000000000030',
+   'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001',
+   'Engineering Drawing Kit — full set',
+   'Drafter, compass box, set squares and the drawing board. Used for one semester of the first-year drawing course. Board has a few pin marks.',
+   400.00, 'Books & Study Materials',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block A, Room 106', 'Good', 63, now() - interval '4 days'),
+
+  ('e0000000-0000-4000-8000-000000000031',
+   'b0000000-0000-4000-8000-000000000006', 'a0000000-0000-4000-8000-000000000001',
+   'Redmi 20000mAh Power Bank',
+   'Charges a phone about four times on a full cycle. Both USB ports work, cable included. No swelling.',
+   1150.00, 'Electronics & Tech',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block B, Room 118', 'Like New', 187, now() - interval '7 hours'),
+
+  ('e0000000-0000-4000-8000-000000000032',
+   'b0000000-0000-4000-8000-000000000006', 'a0000000-0000-4000-8000-000000000001',
+   'Acoustic Guitar with padded bag',
+   'Learned three chords and gave up. Strings were changed last month, tuner in the front pocket of the bag.',
+   4500.00, 'Miscellaneous',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block B, Room 118', 'Good', 154, now() - interval '14 days'),
+
+  ('e0000000-0000-4000-8000-000000000033',
+   'b0000000-0000-4000-8000-000000000008', 'a0000000-0000-4000-8000-000000000001',
+   'Clamp-on LED Study Lamp',
+   'Clamps to a hostel desk or a bed frame. Three brightness levels, gooseneck holds its position. Barely used.',
+   550.00, 'Furniture & Decor',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block D, Room 402', 'Mint', 41, now() - interval '3 days'),
+
+  ('e0000000-0000-4000-8000-000000000034',
+   'b0000000-0000-4000-8000-000000000008', 'a0000000-0000-4000-8000-000000000001',
+   'Badminton Racket Pair with shuttles',
+   'Two rackets, both restrung this semester, plus a tube of six shuttles. Grips are fresh.',
+   1400.00, 'Sports & Fitness',
+   array['https://placehold.co/600x400'],
+   'available', 'Sports Complex, near Court 3', 'Good', 108, now() - interval '21 days'),
+
+  ('e0000000-0000-4000-8000-000000000035',
+   'b0000000-0000-4000-8000-000000000012', 'a0000000-0000-4000-8000-000000000001',
+   'Padded Winter Jacket — size L',
+   'Warm enough for a Kurnool December, which is not saying much, but it also survived a trip north. Zip runs smoothly, hood detaches.',
+   1200.00, 'Clothing & Accessories',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block D, Room 219', 'Like New', 67, now() - interval '11 days'),
+
+  ('e0000000-0000-4000-8000-000000000036',
+   'b0000000-0000-4000-8000-000000000012', 'a0000000-0000-4000-8000-000000000001',
+   'Godrej 45L Mini Fridge',
+   'Hostel-sized fridge, cools well. Door seal is worn at one corner so it needs a firm push to shut. Priced for it.',
+   3900.00, 'Appliances',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block D, Room 219', 'Fair', 203, now() - interval '63 days'),
+
+  ('e0000000-0000-4000-8000-000000000037',
+   'b0000000-0000-4000-8000-000000000015', 'a0000000-0000-4000-8000-000000000001',
+   'DSA textbook set — Cormen, Karumanchi, Sedgewick',
+   'Three books that got me through DSA and the placement season. Highlighting in the Karumanchi, the other two are clean.',
+   850.00, 'Books & Study Materials',
+   array['https://placehold.co/600x400'],
+   'available', 'Central Library, Reading Room 2', 'Good', 145, now() - interval '6 days'),
+
+  ('e0000000-0000-4000-8000-000000000038',
+   'b0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002',
+   'Dell 24-inch IPS Monitor',
+   'Second screen for my laptop through third year. No dead pixels, HDMI and VGA both tested. Stand and power brick included.',
+   7200.00, 'Electronics & Tech',
+   array['https://placehold.co/600x400'],
+   'available', 'Girls Hostel, NIET Campus', 'Good', 264, now() - interval '5 hours'),
+
+  ('e0000000-0000-4000-8000-000000000039',
+   'b0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002',
+   'Ergonomic Office Chair with lumbar support',
+   'Height adjustable, the recline lock works and all five castors roll. Fabric is clean. Too big to take home on the train.',
+   3100.00, 'Furniture & Decor',
+   array['https://placehold.co/600x400'],
+   'available', 'Girls Hostel, NIET Campus', 'Like New', 178, now() - interval '2 days'),
+
+  ('e0000000-0000-4000-8000-000000000040',
+   'b0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002',
+   'Kurti set — 3 pieces, size M',
+   'Worn a handful of times for fest days. All three washed, no fading, no loose stitching.',
+   1100.00, 'Clothing & Accessories',
+   array['https://placehold.co/600x400'],
+   'available', 'Girls Hostel, NIET Campus', 'Good', 82, now() - interval '17 days'),
+
+  ('e0000000-0000-4000-8000-000000000041',
+   'b0000000-0000-4000-8000-000000000005', 'a0000000-0000-4000-8000-000000000002',
+   'Studds Full-Face Helmet — ISI marked, size M',
+   'Bought it with my scooter and never dropped it. Visor is clear with no scratches. Inner padding is removable and was washed last week.',
+   900.00, 'Vehicles & Bikes',
+   array['https://placehold.co/600x400'],
+   'available', 'NIET Parking Lot B', 'Like New', 139, now() - interval '1 day'),
+
+  ('e0000000-0000-4000-8000-000000000042',
+   'b0000000-0000-4000-8000-000000000005', 'a0000000-0000-4000-8000-000000000002',
+   'Skateboard — maple deck',
+   'Learned on it in second year. Deck has the usual scuffs, bearings spin fine, grip tape still grips.',
+   2200.00, 'Sports & Fitness',
+   array['https://placehold.co/600x400'],
+   'available', 'NIET Parking Lot B', 'Fair', 91, now() - interval '35 days'),
+
+  ('e0000000-0000-4000-8000-000000000043',
+   'b0000000-0000-4000-8000-000000000005', 'a0000000-0000-4000-8000-000000000002',
+   'Casio Digital Watch',
+   'Alarm, stopwatch and backlight all work. Battery changed two months ago. Strap has no cracks.',
+   1300.00, 'Miscellaneous',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 2, Common Room', 'Good', 57, now() - interval '8 days'),
+
+  ('e0000000-0000-4000-8000-000000000044',
+   'b0000000-0000-4000-8000-000000000007', 'a0000000-0000-4000-8000-000000000002',
+   'Apple iPad 9th Gen — 64GB, Wi-Fi',
+   'Used it for lecture notes and PDFs. Screen has a protector on from day one and no dents on the back. Charger included, no pencil.',
+   19500.00, 'Electronics & Tech',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 1, Room 305', 'Good', 412, now() - interval '3 hours'),
+
+  ('e0000000-0000-4000-8000-000000000045',
+   'b0000000-0000-4000-8000-000000000007', 'a0000000-0000-4000-8000-000000000002',
+   'Induction Cooktop — 1800W',
+   'Hostel cooking, one pan at a time. Touch panel responds properly, no burn marks on the glass top.',
+   1600.00, 'Appliances',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 1, Room 305', 'Good', 118, now() - interval '12 days'),
+
+  ('e0000000-0000-4000-8000-000000000046',
+   'b0000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-000000000002',
+   'Mechanical Keyboard — blue switches',
+   'Loud, which is why my roommate is glad I am selling it. All keys register, keycaps have no shine yet. Detachable cable.',
+   2700.00, 'Electronics & Tech',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 2, Room 118', 'Like New', 231, now() - interval '4 days'),
+
+  ('e0000000-0000-4000-8000-000000000047',
+   'b0000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-000000000002',
+   'Aptitude and Reasoning prep set',
+   'R.S. Aggarwal plus two company-specific books. Worked through about half of the first one, pencil only.',
+   600.00, 'Books & Study Materials',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 2, Room 118', 'Good', 88, now() - interval '23 days'),
+
+  ('e0000000-0000-4000-8000-000000000048',
+   'b0000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-000000000002',
+   'Trekking Backpack — 50L',
+   'Two treks and a lot of weekend trips. One external strap is frayed but everything closes. Rain cover included.',
+   1900.00, 'Miscellaneous',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 2, Room 118', 'Good', 166, now() - interval '47 days'),
+
+  ('e0000000-0000-4000-8000-000000000049',
+   'b0000000-0000-4000-8000-000000000013', 'a0000000-0000-4000-8000-000000000002',
+   'Wooden Study Desk',
+   'Solid desk with one drawer that runs smoothly. Surface has some pen marks near the edge. Buyer collects from the ground floor.',
+   2600.00, 'Furniture & Decor',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 3, Room 007', 'Good', 149, now() - interval '6 days'),
+
+  ('e0000000-0000-4000-8000-000000000050',
+   'b0000000-0000-4000-8000-000000000013', 'a0000000-0000-4000-8000-000000000002',
+   'Running Shoes — UK size 9',
+   'Ran in these for one season, then switched brands. Soles have even wear, no separation. Washed before listing.',
+   1450.00, 'Clothing & Accessories',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 3, Room 007', 'Like New', 73, now() - interval '19 days'),
+
+  ('e0000000-0000-4000-8000-000000000051',
+   'b0000000-0000-4000-8000-000000000013', 'a0000000-0000-4000-8000-000000000002',
+   'Orient Table Fan — 400mm',
+   'Three speeds, oscillation works. Grille has a small bend from a fall that does not touch the blades.',
+   1200.00, 'Appliances',
+   array['https://placehold.co/600x400'],
+   'available', 'Hostel Block 3, Room 007', 'Fair', 102, now() - interval '30 days'),
+
+  ('e0000000-0000-4000-8000-000000000052',
+   'b0000000-0000-4000-8000-000000000016', 'a0000000-0000-4000-8000-000000000002',
+   'Bicycle Repair Toolkit',
+   'Puncture kit, tyre levers, allen keys and a mini pump in a pouch. Everything is there, the pump needs a firm push.',
+   750.00, 'Vehicles & Bikes',
+   array['https://placehold.co/600x400'],
+   'available', 'NIET Cycle Stand', 'Good', 61, now() - interval '9 days'),
+
+  ('e0000000-0000-4000-8000-000000000053',
+   'b0000000-0000-4000-8000-000000000016', 'a0000000-0000-4000-8000-000000000002',
+   'Cricket Bat — English willow',
+   'Knocked in properly but it has seen four seasons. Toe is chipped and the grip needs replacing. Cheap for someone who wants a net bat.',
+   3400.00, 'Sports & Fitness',
+   array['https://placehold.co/600x400'],
+   'available', 'NIET Sports Ground', 'Poor', 127, now() - interval '52 days')
+on conflict do nothing;
