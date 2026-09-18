@@ -556,12 +556,29 @@ export default function Marketplace() {
         const params = new URLSearchParams({ university_id: university.id });
         if (currentUserId) params.append("user_id", currentUserId);
 
-        const response = await fetch(`${API_BASE_URL}/products?${params.toString()}`);
+        // 🔒 The viewer comes from the TOKEN since Block V-A — `?user_id=` above
+        // is still sent but ignored server-side. Without this header a signed-in
+        // student gets no `is_liked` / `is_saved`, so every heart renders empty
+        // however many listings they have actually liked.
+        const token = localStorage.getItem("yahora_session");
+        const response = await fetch(
+          `${API_BASE_URL}/products?${params.toString()}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
         const data = await response.json();
 
         if (response.ok) {
-          setProducts(data.products);
-          setSwipeDeck([...data.products].reverse());
+          // 📄 `{ items, next_cursor }` since Phase 4 Block N-B — the key was
+          // `products`. `items` is the newest page only (20 by default), not
+          // the whole campus feed; infinite scroll arrives in Phase 5, so
+          // `data.next_cursor` is deliberately ignored here for now.
+          //
+          // `?? []` rather than `data.items`: a non-ok body or a shape change
+          // used to reach `[...undefined]` and throw "data.products is not
+          // iterable", which killed the render and left the page blank.
+          const items = data.items ?? [];
+          setProducts(items);
+          setSwipeDeck([...items].reverse());
         } else {
           console.error("Failed to fetch products:", data.error);
         }

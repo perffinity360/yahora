@@ -639,7 +639,23 @@ export const searchUsers = async (req, res) => {
     // trigram rank. Do NOT re-sort here; §2.5 of the plan relies on that order.
     // No matches is an empty array with 200, never a 404: "nobody by that name"
     // is a successful search, and a 404 would make clients render an error.
-    return res.json({ users: data ?? [] });
+    //
+    // 📄 `{ items, next_cursor }` (Phase 4 Block N-C). The key was `users`; the
+    // row shape is unchanged.
+    //
+    // `next_cursor` is ALWAYS null, and this endpoint deliberately takes no
+    // `cursor` parameter — it is the one list in the API exempt from cursor
+    // pagination (plan §0.8). `search_users()` orders by an exact-match flag,
+    // then same-campus, then a trigram similarity rank: all three are computed
+    // per query against the search term, so there is no stored, indexed column
+    // for a cursor to seek into. A cursor would have to re-rank every candidate
+    // row on every page to find its place, which is the table scan pagination
+    // exists to avoid. It is a fixed top-N instead, capped at 50.
+    //
+    // The key is still `items` so that one client-side helper can read every
+    // list in this API; `next_cursor: null` is the honest answer to "is there
+    // more" — there is not, by design. Narrow the query to see different rows.
+    return res.json({ items: data ?? [], next_cursor: null });
   } catch (error) {
     return mapDbError(res, error);
   }
