@@ -18,6 +18,14 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 
+/**
+ * 🔒 Every /api/messages/* route went behind `requireAuth` in Phase 4 Block V-A
+ * (docs/CHANGELOG.md, 2026-09-14). Read at call time rather than captured once:
+ * the session can be replaced by a re-login while this component is mounted,
+ * and a stale token is a 401 that shows up as an empty inbox, not as an error.
+ */
+const authHeaderToken = () => localStorage.getItem("yahora_session");
+
 
 /* Which conversation this student had open last. Written on every chat select,
    read back on mount — so stepping out to the Marketplace and coming back
@@ -440,7 +448,10 @@ export default function Messages() {
     // from `is_read` — see the note on that state.
     fetch(`${API_BASE_URL}/messages/read`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
+      },
       body: JSON.stringify({
         userId: myId,
         contactId: chat.contact_id,
@@ -544,9 +555,14 @@ export default function Messages() {
       try {
         const res = await fetch(
           `${API_BASE_URL}/messages/inbox/${currentUserId}`,
+          {
+            headers: authHeaderToken()
+              ? { Authorization: `Bearer ${authHeaderToken()}` }
+              : {},
+          },
         );
         const data = await res.json();
-        let fetchedInbox = data.inbox || [];
+        let fetchedInbox = data.items || [];
 
         let paramUserId = deepLinkRef.current.user;
         let paramProductId = deepLinkRef.current.product;
@@ -672,7 +688,7 @@ export default function Messages() {
       }
 
       const data = await res.json();
-      const history = data.messages || [];
+      const history = data.items || [];
       openingIdsRef.current = new Set(history.map((m) => m.id));
       setMessages(history);
 
@@ -706,7 +722,10 @@ export default function Messages() {
       if (chat.unread_count > 0) {
         await fetch(`${API_BASE_URL}/messages/read`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
+          },
           body: JSON.stringify({
             userId: currentUserId,
             contactId: chat.contact_id,
@@ -793,7 +812,10 @@ export default function Messages() {
                   // genuinely read the moment it lands, and gets no divider.
                   fetch(`${API_BASE_URL}/messages/read`, {
                     method: "PUT",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
+                    },
                     body: JSON.stringify({
                       userId: myId,
                       contactId: newMsg.sender_id,
@@ -884,7 +906,10 @@ export default function Messages() {
     try {
       const res = await fetch(`${API_BASE_URL}/messages/send`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
+        },
         body: JSON.stringify({
           sender_id: currentUserId,
           receiver_id: activeChat.contact_id,

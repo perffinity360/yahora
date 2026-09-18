@@ -69,11 +69,11 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 > are superseded. A list does not get a named key because a caller that already knows which
 > endpoint it called does not learn anything from one.
 >
-> **Migrated so far:** `GET /api/products` (was `{ "products": [...] }`) and the nested
-> comments list in `GET /api/products/:id` (was a bare array). **Not yet migrated:**
-> `GET /api/users/search` still returns `{ "users": [...] }` and is unpaginated — it is
-> capped at 50 inside the RPC, so it is not a DoS, but it is now the one list in Part 1 that
-> does not match this envelope. Bring it across when that module is next opened.
+> **Every list in Part 1 now uses it.** `GET /api/products` and the nested comments list in
+> `GET /api/products/:id` (Block N-B); `GET /api/messages/inbox/:userId` and
+> `GET /api/messages/history` (Block N-C); `GET /api/users/search` (Block N-C, envelope only —
+> it is **exempt from cursors** and always returns `next_cursor: null`, for the reason given
+> in its own entry).
 
 ### Error codes used anywhere in this API
 
@@ -1623,18 +1623,25 @@ other value is `403 FORBIDDEN`. (Was unauthenticated until 14 Sep 2026.)
 **Path:**
   - userId: uuid, required — must be the caller's own id. **Kept in the URL on purpose**: both
     clients build this path, so it is compared to the token rather than removed
+**Query:**
+  - limit: integer, optional — default **20**, capped at **50**, floored at **1**. Clamped a
+    second time inside the RPC, which is where the cap is actually guaranteed
+  - cursor: **timestamp** (`last_message_time` of the last row of the previous page), optional
 **200:**
 ```json
 {
-  "inbox": [ { "contact_id": "uuid", "contact_name": "string", "contact_avatar": "string",
+  "items": [ { "contact_id": "uuid", "contact_name": "string", "contact_avatar": "string",
                "product_id": "uuid", "product_title": "string", "product_image": "string",
                "last_message": "string", "last_message_time": "timestamptz",
-               "unread_count": 0 } ]
+               "unread_count": 0 } ],
+  "next_cursor": "2026-09-14T11:37:40.203488+00:00"
 }
 ```
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **403:** `{ "error": "FORBIDDEN", "message": "You can only read your own inbox." }` — `:userId`
   is not the caller's own id
+**400:** `{ "error": "INVALID_FORMAT", "message": "cursor must be the next_cursor value from a
+  previous response." }` — a `cursor` that is not parseable as a timestamp
 **500:** `{ "error": "Failed to fetch inbox." }` — a non-UUID `userId` now fails the 403 check
   first, so this is no longer reachable that way.
 **🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** This returned whichever
@@ -1642,10 +1649,25 @@ inbox the URL named: every conversation, contact name, last message and unread c
 student on any campus, to a caller with no account. Unlike the write endpoints in this block —
 which ignore a caller-supplied id in silence — a mismatch here is a **403**: silently answering
 with the caller's own inbox would make a confused client look like it was working.
-**Notes:** Entirely delegated to the `get_user_inbox(p_user_id)` RPC, now called with
-`req.user.id`. One row per
+**Notes:** Entirely delegated to the
+`get_user_inbox(p_user_id, p_limit, p_cursor)` RPC, called with `req.user.id`. One row per
 `(product, contact)` pair, latest message first. Falls back to `[]`, so an empty inbox is 200
 with an empty array, not an error.
+
+**📄 Cursor-paginated since 2026-09-15** (RPC in Block V-C, controller in Block N-C).
+
+- **⚠️ BREAKING: the envelope key changed from `inbox` to `items`.** The nine RPC columns are
+  unchanged in name, order and type.
+- **The cursor is a bare `last_message_time` timestamp** — not the opaque compound cursor
+  `GET /api/messages/history` uses. **The two are not interchangeable.** The RPC exposes no
+  tiebreaker column to seek on, so a plain timestamp is the only cursor it can take.
+- ⚠️ **Known edge case, inherited from the RPC and not fixed:** the cursor comparison is
+  strict `<`. If two conversations share a `last_message_time` to the microsecond *and* land
+  on a page boundary, the second can be skipped. Real messages get `now()` per insert so this
+  effectively cannot happen; bulk-seeded data is where it would show. Fixing it means a
+  composite cursor, which changes the RPC's return columns — a migration, and a joint decision.
+- The RPC clamps `p_limit` itself (`100000` → 50, `0`/`-1` → 1, `null` → 20), so the cap holds
+  even for a caller that reaches the RPC another way.
 
 `product_image` is `image_urls[1]` in Postgres — the **first** element (Postgres arrays are
 1-indexed), matching `image_urls[0]` in JS.
@@ -1666,14 +1688,40 @@ Field names here (`contact_*`, `product_title`, `product_image`) are unique to t
   - userId: uuid, required — **validated**, must be a canonical 8-4-4-4-12 uuid
   - contactId: uuid, required — **validated**
   - productId: uuid, required — **validated**
-**200:** `{ "messages": [ { "<messages row>": "..." } ] }` — full rows, ordered `created_at`
-**ascending** (oldest first, for chat rendering).
+  - limit: integer, optional — default **20**, capped at **50**, floored at **1**
+  - cursor: **opaque string** (base64url), optional. From the previous response's
+    `next_cursor`. **Not the same type as the inbox cursor**
+**200:** `{ "items": [ { "<messages row>": "..." } ], "next_cursor": "MjAyNi0wOS0..." }` —
+full rows, ordered `created_at` **ascending** (oldest first, for chat rendering).
 **400:** `{ "error": "INVALID_FORMAT", "message": "userId, contactId and productId must all be
   valid UUIDs." }` — any of the three missing or malformed. This used to be a **500**.
+**400:** `{ "error": "INVALID_FORMAT", "message": "cursor must be the next_cursor value from a
+  previous response." }` — a `cursor` that does not decode to `timestamp|uuid` with both halves
+  valid. Includes one crafted to carry PostgREST filter syntax; it never reaches the query.
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **403:** `{ "error": "FORBIDDEN", "message": "You can only read conversations you are part
   of." }` — the caller is neither `userId` nor `contactId`
 **500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to fetch messages." }`
+
+**📄 Cursor-paginated since 2026-09-15 (Phase 4 Block N-C). The paging direction is the
+OPPOSITE of the render order — read this before touching either.**
+
+- **⚠️ BREAKING: the envelope key changed from `messages` to `items`.** The row shape is
+  unchanged, and `items` is **still ordered oldest-first**, exactly as before. A client's
+  rendering loop does not change; only the key it reads and the number of rows it gets.
+- **A chat renders oldest-first, but pages newest-first.** Opening a thread shows the NEWEST
+  messages; scrolling UP loads OLDER ones. So the server queries `created_at DESC`, takes
+  `limit` rows, and **reverses the array** before sending, so the client still receives
+  ascending rows. Page 1 is therefore the *end* of the conversation, not the beginning.
+- **`next_cursor` is the OLDEST message on the page** — `items[0]` after the reverse, not the
+  last element. Send it back to load the page of messages immediately *before* this one.
+  Prepend each new page above the last.
+- **The cursor is an opaque base64url string encoding `created_at|id`**, because the seed
+  scripts bulk-insert messages and ties on `created_at` are normal. Send `next_cursor` back
+  verbatim; never build or parse one — the encoding is not a contract.
+- `limit` parsing and the `?cursor=` / repeated-cursor rules match
+  [`GET /api/products`](#get-apiproducts).
+- The participation check and `requireAuth` are unchanged and still run **before** any of this.
 
 **🔒 Filter injection is fixed (CURRENT_STATE item 3, fixed 2026-08-23).** `userId` and
 `contactId` are string-interpolated into a PostgREST `.or()` filter **expression**:
@@ -1981,8 +2029,8 @@ accidentally with `courseName`.
 **Query:**
   - q: string, required — the search term
   - limit: int, optional, default 20, **cap at 50**
-**200:** rows of `{ "id", "username", "full_name", "avatar_url", "university_name",
-"is_same_campus", "rank" }` — envelope unresolved, see the TODO below
+**200:** `{ "items": [ { "id", "username", "full_name", "avatar_url", "university_name",
+"is_same_campus", "rank" } ], "next_cursor": null }` — `next_cursor` is **always** `null`
 **401:** `{ "error": "UNAUTHORIZED" }`
 **Enforced by:** `search_users(p_query, p_viewer, p_limit)` — prefix match via the
 `users_username_prefix_idx` (`text_pattern_ops`) plus trigram fuzzy match on username and
@@ -1990,13 +2038,38 @@ full name. Ordering is fixed inside the RPC: exact match first, then same-campus
 similarity `rank`. **Do not re-sort in JavaScript** — §2.5 relies on the backend order.
 **Notes:** `p_viewer` is what makes `is_same_campus` meaningful, so pass `req.user.id`. Fuzzy
 matching means "rahl" still finds "rahul". Clients debounce 300ms (§2.5).
-**TODO — ambiguous in plan:** **this list is not cursor-paginated and cannot be.** §3.2 says
-"use cursor pagination for **every** list in this project: followers, following, feeds,
-replies, notifications, **search**" — but `search_users()` takes only `p_limit`, has no cursor
-parameter, and is ordered by a computed `rank` that no index can seek into. **Is search
-exempt (a fixed top-N with no `next_cursor`), or does the RPC need a cursor parameter?**
-**TODO — ambiguous in plan:** no envelope is specified. `{ "users": [...] }` matches the
-sibling social endpoints; `{ "items": [...] }` matches `sendPage`. Pick one.
+**✅ RESOLVED 2026-09-15 (Phase 4 Block N-C) — both TODOs that stood here.**
+
+**1. Search is EXEMPT from cursor pagination, deliberately — this is not an oversight.**
+§3.2 says "use cursor pagination for **every** list in this project: followers, following,
+feeds, replies, notifications, **search**". Search is the one list where that is not possible.
+A cursor works by seeking into a stored, indexed ordering; `search_users()` orders by an
+exact-match flag, then same-campus, then a **trigram similarity rank** — all three computed per
+query against the search term, so none of them exists in any index to seek into. A cursor would
+have to re-rank every candidate row on every page just to find its place, which is precisely
+the full scan that pagination exists to avoid. So it is a **fixed top-N**: `limit` (default 20,
+cap 50), no `cursor` parameter, and `next_cursor` **always `null`**. To see different rows,
+narrow the query — that is what a search box is for.
+
+**2. The envelope is `{ items, next_cursor }`,** matching every other list in this API, so one
+client-side helper reads them all. `next_cursor: null` is the honest answer to "is there more":
+there is not, by design. A `cursor` query parameter is **ignored**, not rejected.
+
+⚠️ **BREAKING:** the key was `{ "users": [...] }` until 2026-09-15. No client read it — see
+"Known defect" below.
+
+> 🚨 **KNOWN DEFECT, PRE-EXISTING AND UNFIXED — this endpoint returns 500 for every query
+> that reaches the RPC.** `search_users()` declares its third output column as `full_name text`
+> but `public.users.full_name` is `character varying(255)`, and the function body selects it
+> with no cast. PostgreSQL rejects the mismatch:
+> `42804 — Returned type character varying(255) does not match expected type text in column 3`.
+> Reproduced 2026-09-15 by calling the RPC directly over PostgREST with no backend involved, so
+> it is not a controller bug and the envelope rename above did not cause it. It has presumably
+> been broken since migration 005 (15 Aug) and went unnoticed because **no client calls this
+> endpoint** — the only references anywhere are backend code and docs. Fixing it needs a
+> migration (cast `u.full_name::text` in the function body, or redeclare the column as
+> `varchar`), which is Vishwajeet's to write. Until then, treat the contract above as what this
+> endpoint *will* return, not what it returns today.
 
 ### PATCH /api/users/me/username   `OWNER: Neeraj`  `PHASE 1`
 **Module:** user

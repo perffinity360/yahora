@@ -178,6 +178,9 @@ function Navbar() {
 
   useEffect(() => {
     const userId = localStorage.getItem("yahora_user_id");
+    // 🔒 PUT /messages/deliver went behind requireAuth in Phase 4 Block V-A.
+    // Without this header it is a silent 401 and delivery ticks never turn.
+    const token = localStorage.getItem("yahora_session");
     if (!isAuthenticated || !userId) {
       setUnreadCount(0);
       return;
@@ -191,7 +194,10 @@ function Navbar() {
 
     fetch(`${API_BASE_URL}/messages/deliver`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ userId }),
     });
 
@@ -235,7 +241,10 @@ function Navbar() {
           setUnreadCount((prev) => prev + 1);
           fetch(`${API_BASE_URL}/messages/deliver`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
             body: JSON.stringify({ userId }),
           });
         },

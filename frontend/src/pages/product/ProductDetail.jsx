@@ -124,7 +124,14 @@ export default function ProductDetail() {
     const fetchData = async () => {
       try {
         const url = `${API_BASE_URL}/products/${id}${currentUserId ? `?user_id=${currentUserId}` : ""}`;
-        const response = await fetch(url);
+        // 🔒 The viewer comes from the TOKEN since Block V-A — `?user_id=` in
+        // the url above is still sent but ignored server-side. Without this
+        // header a signed-in student gets no `is_liked` / `is_saved` and no
+        // `user_vote` on any comment, so their own votes render as unvoted.
+        const token = localStorage.getItem("yahora_session");
+        const response = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         const data = await response.json();
         if (response.ok) setProduct(data.product);
 
@@ -266,9 +273,15 @@ export default function ProductDetail() {
     if (!content.trim() || !currentUserId) return;
     setIsSubmittingComment(true);
     try {
+      // 🔒 requireAuth since Phase 4 Block V-A — the actor is the token, and a
+      // `user_id` in the body is ignored. Without this header: silent 401.
+      const token = localStorage.getItem("yahora_session");
       const response = await fetch(`${API_BASE_URL}/products/${id}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           user_id: currentUserId,
           content,
@@ -279,10 +292,16 @@ export default function ProductDetail() {
       if (response.ok) {
         setProduct((prev) => ({
           ...prev,
-          comments: [
-            { ...data.comment, user_vote: 0 },
-            ...(prev.comments || []),
-          ],
+          // Keep the `{ items, next_cursor }` envelope intact — replacing it
+          // with a bare array here would break the tree helpers below on the
+          // very next render.
+          comments: {
+            ...prev.comments,
+            items: [
+              { ...data.comment, user_vote: 0 },
+              ...(prev.comments?.items ?? []),
+            ],
+          },
         }));
         setCommentText("");
         setReplyText("");
@@ -299,7 +318,7 @@ export default function ProductDetail() {
   const handleVote = async (commentId, voteValue) => {
     if (!currentUserId) return alert("Please log in to vote.");
     setProduct((prev) => {
-      const newComments = prev.comments.map((c) => {
+      const newComments = (prev.comments?.items ?? []).map((c) => {
         if (c.id !== commentId) return c;
         let up = c.upvotes,
           down = c.downvotes,
@@ -319,12 +338,17 @@ export default function ProductDetail() {
         }
         return { ...c, upvotes: up, downvotes: down, user_vote: uv };
       });
-      return { ...prev, comments: newComments };
+      return { ...prev, comments: { ...prev.comments, items: newComments } };
     });
     try {
+      // 🔒 requireAuth since Phase 4 Block V-A. See handlePostComment above.
+      const token = localStorage.getItem("yahora_session");
       await fetch(`${API_BASE_URL}/products/comments/${commentId}/vote`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ user_id: currentUserId, vote_value: voteValue }),
       });
     } catch {
@@ -377,10 +401,17 @@ export default function ProductDetail() {
   };
 
   /* ── Comment tree helpers ── */
-  const topLevelComments =
-    product?.comments?.filter((c) => !c.parent_comment_id) || [];
+  // 📄 `product.comments` became `{ items, next_cursor }` in Phase 4 Block N-B;
+  // it was a bare array. The threading below is unchanged — the server still
+  // sends a flat list, newest first, and every reply on the page arrives with
+  // its parent, so no reply can be orphaned by pagination.
+  //
+  // Only the newest 20 top-level comments come back. "Load older comments" is
+  // Phase 5 work; `product.comments.next_cursor` is what it will page on.
+  const commentItems = product?.comments?.items ?? [];
+  const topLevelComments = commentItems.filter((c) => !c.parent_comment_id);
   const getReplies = (parentId) =>
-    product?.comments?.filter((c) => c.parent_comment_id === parentId) || [];
+    commentItems.filter((c) => c.parent_comment_id === parentId);
 
   /* ── Loading / Error states ── */
   if (loading)
@@ -402,7 +433,7 @@ export default function ProductDetail() {
     actualHomeUniId && product.university_id !== actualHomeUniId;
   const condCfg =
     CONDITION_CONFIG[product.condition] ?? CONDITION_CONFIG["Good"];
-  const totalComments = product.comments?.length || 0;
+  const totalComments = product.comments?.items?.length || 0;
 
   return (
     <div className={styles.root}>

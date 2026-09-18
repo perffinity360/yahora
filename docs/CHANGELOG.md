@@ -277,104 +277,134 @@ diff that was never the problem.
 
 ## Entries
 
-## 2026-09-17 — Onboarding could lock a student out of their own new account (Vishwajeet)
+## 2026-09-15 — 📮 Phase 4 Block N-C: cursor pagination on the inbox and chat history; search envelope renamed (Neeraj, in Vishwajeet's module)
 
-📮 **HANDOFF — Neeraj, this touched `frontend/` (one comment) and it affects your onboarding
-page's behaviour. Read "What NOT to do yet".**
+📮 **HANDOFF — Vishwajeet, three envelope keys changed and the mobile app reads all three.**
+`inbox` → `items`, `messages` → `items`, `users` → `items`. No row shape changed anywhere.
 
-A failed onboarding destroyed the student's session, so every retry was a 401 they could do
-nothing about. Found while chasing a raw `INVALID_REFERENCE` on the phone; the reference was a
-symptom, the lockout was the bug.
+**Ownership:** `messages/` is yours; this is the Phase 4 loan, READ handlers only.
+`messages.routes.js` untouched, no path moved, and `sendMessage` / `markAsRead` /
+`markAsDelivered` were not opened. `respond.js` untouched. **No SQL written and no migration
+created** — your `get_user_inbox` migration from V-C is consumed as-is.
 
 ### Migrations applied
 
-**None.** No schema change. Controller, two clients, and this file.
+**None by me.** This block depends on yours — `20260915070505_inbox_pagination.sql` — which was
+already on `main` and live locally when I started. Confirmed the three-parameter signature and
+that `p_cursor` is `last_message_time` before writing any JavaScript.
+
+> ⚠️ **One check to be aware of:** on macOS, `grep -rn "get_user_inbox" supabase/migrations/ |
+> tail -2` returns the **2026-08-08 grants**, not your new definition — BSD `grep -r` does not
+> sort its output. Anyone following that instruction literally would conclude the migration was
+> missing. Use `| sort | tail` or grep the file directly.
+
+> 🔴 **MIGRATION REQUEST — `search_users()` is broken and has been for a month.** See the
+> defect note under "Changed endpoints". I have not written the fix: SQL is yours.
 
 ### New endpoints
 
-**None.** No route added, removed or renamed.
+**None.** All three endpoints already existed; all three keep their paths and methods.
 
-### Changed endpoints (BREAKING — in one narrow sense)
+### Changed endpoints (BREAKING)
 
-**`POST /api/auth/onboarding` now returns a new error before it touches the password.**
+**1. `GET /api/messages/inbox/:userId` — `{ inbox: [...] }` → `{ items, next_cursor }`.**
 
-| | Before | After |
-|---|---|---|
-| bad `course_id` / `specialization_id` | `400 INVALID_REFERENCE` from a `23503`, **after** the password was set | `400 INVALID_REFERENCE` with a `message`, **before** the password is set |
-| caller's session after that failure | **access token AND refresh token both revoked** | both still valid |
-| what the student could do next | nothing — every retry 401s | re-pick and submit again |
+Default 20 conversations. Your V-C migration already changed the row count on 15 Sep; this
+change is the envelope and the `limit`/`cursor` pass-through. The nine RPC columns are
+unchanged in name, order and type.
 
-The code is the same; **when** it is raised is what changed, and it now carries a `message`
-("That course or specialization no longer exists. Please pick it again.") where before it was a
-bare `mapDbError` code.
+- Cursor is a bare `last_message_time` timestamp — the only key the RPC exposes.
+- The RPC clamps `p_limit` itself, so the controller's parse is belt to your braces.
+- Your known tie edge case is documented in API.md as inherited and unfixed. It needs a
+  composite cursor, which changes the RPC's return columns — your call, and I have not touched
+  it.
 
-**Why the session died.** `supabase.auth.admin.updateUserById(userId, { password })` revokes
-every GoTrue session for that user — including the one that authorised the request in flight,
-and its refresh token, so there is no self-healing. The two foreign keys were validated only by
-the profile `UPDATE` in step 3, which runs *after* that. So a stale id produced an error message
-telling the student to fix a dropdown, on a screen where every attempt to fix it was a 401.
+**2. `GET /api/messages/history` — `{ messages: [...] }` → `{ items, next_cursor }`.**
 
-Reproduced, not theorised:
+Default 20 messages. **`items` is still ordered oldest-first**, so no rendering loop changes —
+only the key, and the row count.
 
-```
-token after sign-in                 -> 200 still valid
-failed onboarding: 400 INVALID_REFERENCE
-token after the FAILED onboarding   -> 401 DEAD
-refresh token                       -> REVOKED
-```
+⚠️ **The paging direction is the opposite of the render order, and this is the part to read
+before touching it.** A chat renders oldest-first, but opening a thread shows the NEWEST
+messages and scrolling UP loads older ones. So the query runs `created_at DESC`, takes `limit`,
+and the array is **reversed** before sending. **Page 1 is the end of the conversation, not the
+beginning.** `next_cursor` is the **oldest** message on the page — `items[0]` after the
+reverse. Prepend each new page above the last.
 
-and after the fix:
+**3. `GET /api/users/search` — `{ users: [...] }` → `{ items: [...], next_cursor: null }`.**
 
-```
-failed onboarding: 400 INVALID_REFERENCE
-access token      : 200=before  ->  200=after (survived)
-refresh token     : still works
-```
+**No cursor parameter, and `next_cursor` is always `null`.** Search is the one list in this API
+exempt from cursor pagination, and API.md now says why in its own entry rather than leaving it
+to be read as an oversight: `search_users()` orders by an exact-match flag, then same-campus,
+then a trigram similarity **rank** — all computed per query, none stored or indexed, so there
+is nothing for a cursor to seek into. Fixed top-N, capped at 50. A `cursor` param is ignored,
+not rejected.
 
-**How a student reached it at all:** both clients cache the academic lists, and a
-`supabase db reset` regenerates every course and specialization uuid — `seed.sql`'s fixed
-`c0000000-…` ids lose the `on conflict` to rows an earlier migration already inserted, so
-B.Tech's real id changes on every reset. The phone was posting pre-reset ids. Dev-only as a
-*cause*; the lockout it triggered was not.
+> 🚨 **PRE-EXISTING DEFECT, NOT CAUSED BY THIS CHANGE AND NOT FIXED: this endpoint returns 500
+> for every query that reaches the RPC.** `search_users()` declares column 3 as
+> `full_name text`, but `public.users.full_name` is `character varying(255)` and the body
+> selects it uncast. Postgres raises
+> `42804 — Returned type character varying(255) does not match expected type text in column 3`.
+>
+> Reproduced by calling the RPC **directly over PostgREST with no backend involved**, so it is
+> not a controller bug. It has been broken since migration 005 (15 Aug) and nobody noticed
+> because **no client calls this endpoint** — `grep -rn "users/search"` across `frontend/`,
+> `mobile/` and the repo finds only backend code and documentation.
+>
+> The fix is a migration — cast `u.full_name::text` in the function body, or redeclare the
+> output column as `varchar`. **I have not written it; SQL is yours.** Neeraj is filing the
+> migration request.
 
 ### New fields on existing responses
 
-`INVALID_REFERENCE` from this endpoint now carries `message`. Purely additive.
+- `next_cursor` on all three: a `last_message_time` timestamp (inbox), a **base64url** opaque
+  string (history), and always `null` (search).
+- `limit` and `cursor` query parameters on inbox and history. Search takes `limit` only.
+
+⚠️ **There are now three cursor types in this API and none are interchangeable.** Feeding one
+endpoint's cursor to another is a 400. Products feed → `created_at` timestamp; product comments
+→ base64url `created_at|id`; inbox → `last_message_time` timestamp; chat history → base64url
+`created_at|id`. Send back whatever `next_cursor` you were given, verbatim.
 
 ### Test data
 
-Nothing seeded. Verified against the local stack, both paths, before and after:
+Nothing seeded permanently, nothing run against production. Verified against the **local** stack
+by importing the handlers and calling them with stubbed `req`/`res`:
 
-- successful onboarding: 200, response carries a `session`, old token correctly revoked;
-- failed onboarding: 400, **access and refresh tokens both survive**;
-- the other five failure codes unchanged (`WEAK_PASSWORD`, `COMMON_PASSWORD`, password = username,
-  `USERNAME_TAKEN`, `INVALID_FORMAT`) — re-run after the change;
-- probe accounts deleted afterwards.
+- **Inbox:** `limit=abc` → 20, `0`/`-1` → 1, `100000` → 50. Cursor walk at `limit=1` returned
+  every conversation once, in the same order as the unpaginated call. Bad cursor → 400. The
+  403 own-inbox guard still fires for another user's id.
+- **History, the case that matters:** temporarily inserted **12 messages arranged as four
+  groups of three sharing an exact microsecond timestamp**. Paged at `limit` 2, 3 and 5 —
+  prepending each page reassembled all 18 messages in the exact order of the unpaginated
+  thread, **0 duplicates**, every page individually ascending. Verified `next_cursor` decodes
+  to the page's **oldest** message, not its newest.
+- **Guards on `/history` unchanged:** non-uuid → 400, non-participant → 403, malformed cursor →
+  400, and a cursor crafted to carry PostgREST filter syntax → 400 without reaching the query.
+- **Two stacked `.or()` filters** (participant pair + cursor) were checked against the database
+  to confirm PostgREST **ANDs** them: the participant filter still holds and no foreign rows
+  leak. That was verified, not assumed.
+- **Search:** the guard paths (`MISSING_FIELDS` on blank or absent `q`) are unchanged. The
+  success path could not be exercised — see the defect above.
+- **All 12 temporary messages were deleted afterwards**; the local `messages` table is back to
+  734 rows with no test content remaining.
 
 ### What NOT to do yet
 
-- **Don't add validation to `completeOnboarding` below step 2.** Everything that can fail on the
-  caller's input has to be checked above the password change or it re-creates this exact bug.
-  There is a comment at that line and a note in API.md saying so.
-- **Neeraj — your onboarding page was already correct here and I did not change its logic.** It
-  adopts `data.session` on success and redirects to `/auth` on a 401. The one thing I edited is a
-  **comment** above that adopt-branch which said *"The endpoint returns no new session today"*.
-  That is false — it does, and has since Phase 3 — and the comment made the branch look like dead
-  code someone could safely delete. Deleting it would sign a student out the instant signup
-  succeeded. Nothing else in `frontend/` was touched.
-- **Don't rely on the mobile fix having been there before.** `mobile/app/(auth)/onboarding.tsx`
-  was **not** adopting the returned session, so a new student was landing in the app on a revoked
-  token. The marketplace still rendered (that route is `optionalAuth`), which is why it went
-  unnoticed — the dashboard and messages would have 401'd. Fixed.
+- **Do not point any client at `next_cursor` yet.** Infinite scroll is Phase 5. Note that until
+  the clients are updated to read `items`, the inbox and chat show **nothing** rather than one
+  page — the key changed.
+- **Do not use `GET /api/users/search` for anything** until the RPC is fixed. It returns 500.
+- **Do not "fix" the chat by reversing on the client** or by sorting the page in JavaScript.
+  The server hands back ascending rows already; re-sorting a page silently breaks paging, the
+  same trap your V-C note calls out for the inbox.
+- **Do not build a cursor by hand**, and do not decode one to read the timestamp.
+- **Do not copy the five pagination helpers a third time.** They are duplicated **verbatim** in
+  `products.controller.js` and `messages.controller.js` because the only place they could be
+  shared is `utils/respond.js`, which is frozen and yours. If a third module needs them, that
+  is the signal to add `utils/pagination.js` — your call. Any fix to one copy must be applied
+  to the other in the same commit; both carry a comment saying so.
 
-### Could this fail against existing rows?
-
-**No.** No schema change, no data written by the fix. The new check is two indexed `select id`
-lookups on `courses` / `specializations` per onboarding call, on the rare path. The foreign-key
-constraints still exist and are still what guarantee integrity — the check only decides *when*
-the caller finds out, which a constraint cannot do.
-
----
 
 ## 2026-09-15 — 📮 Phase 4 Block N-B: cursor pagination on the marketplace feed and the comments list (Neeraj, in Vishwajeet's module)
 
