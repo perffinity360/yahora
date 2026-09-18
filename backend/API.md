@@ -86,7 +86,7 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like` and `/save` — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
 | `INVALID_PRICE` | 400 | **Live.** `PUT /api/products/:id` — `price` was supplied but does not parse to a finite number `>= 0`. Only raised when the key is present; an absent `price` is simply left alone | `message` |
 | `DUPLICATE` | 400 | `mapDbError` — Postgres `23505` unique violation | — |
-| `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation | — |
+| `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation. Also raised **deliberately** by `POST /api/auth/onboarding` when `course_id` / `specialization_id` names a missing row, so the failure lands before the password change | `message` (onboarding only) |
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
 | `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
@@ -568,6 +568,11 @@ is `req.user.id` from the verified token and nothing else.
 **400:** `{ "error": "WEAK_PASSWORD", "message": "..." }` — under 8 characters, identical to the
   chosen username, or rejected by GoTrue's own policy
 **400:** `{ "error": "COMMON_PASSWORD", "message": "..." }`
+**400:** `{ "error": "INVALID_REFERENCE", "message": "That course or specialization no longer
+  exists. Please pick it again." }` — `course_id` or `specialization_id` names a row that is not
+  there. **Checked explicitly, before the password is set** (17 Sep 2026) — see the note below;
+  it used to surface as a `23503` from the profile UPDATE, by which point the caller's session
+  was already destroyed
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }` — the
   token is valid but no `public.users` row exists. Near-impossible with `on_auth_user_created`
@@ -578,6 +583,21 @@ is `req.user.id` from the verified token and nothing else.
 from the body on a route with no middleware, so anyone who knew a UUID could complete or
 overwrite that student's profile. Now that the same call also sets the account password, the
 same request would have been full takeover. Identity is `req.user.id`, full stop.
+
+**🔒 Every check on the caller's input runs BEFORE the password is set, and that ordering is
+load-bearing.** Setting the password revokes every GoTrue session for that user — including the
+one that authorised this very call, and its refresh token. So an error returned *after* that
+point leaves the caller holding a dead token with no way to retry and no session in the body to
+adopt: the client is told to fix a dropdown, and every attempt to is a 401.
+
+That is not hypothetical. `course_id` / `specialization_id` were validated only by the profile
+`UPDATE` in step 3, so a stale id returned `400 INVALID_REFERENCE` *with the student already
+locked out* — reproduced 17 Sep 2026. It is the state a `supabase db reset` reaches a client in,
+because both clients cache the academic lists and every reset regenerates those uuids.
+
+They are now checked in step 1b, on the safe side of the password change. **If you add any
+validation to this endpoint, put it above step 2 with them.** The comment in
+`auth.controller.js` says the same thing at the line where it matters.
 
 **⚠️ The token you called this with is DEAD when it returns — use the `session` in the body.**
 GoTrue revokes every existing session when a password is set, and this endpoint sets one, so the

@@ -277,6 +277,105 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-17 — Onboarding could lock a student out of their own new account (Vishwajeet)
+
+📮 **HANDOFF — Neeraj, this touched `frontend/` (one comment) and it affects your onboarding
+page's behaviour. Read "What NOT to do yet".**
+
+A failed onboarding destroyed the student's session, so every retry was a 401 they could do
+nothing about. Found while chasing a raw `INVALID_REFERENCE` on the phone; the reference was a
+symptom, the lockout was the bug.
+
+### Migrations applied
+
+**None.** No schema change. Controller, two clients, and this file.
+
+### New endpoints
+
+**None.** No route added, removed or renamed.
+
+### Changed endpoints (BREAKING — in one narrow sense)
+
+**`POST /api/auth/onboarding` now returns a new error before it touches the password.**
+
+| | Before | After |
+|---|---|---|
+| bad `course_id` / `specialization_id` | `400 INVALID_REFERENCE` from a `23503`, **after** the password was set | `400 INVALID_REFERENCE` with a `message`, **before** the password is set |
+| caller's session after that failure | **access token AND refresh token both revoked** | both still valid |
+| what the student could do next | nothing — every retry 401s | re-pick and submit again |
+
+The code is the same; **when** it is raised is what changed, and it now carries a `message`
+("That course or specialization no longer exists. Please pick it again.") where before it was a
+bare `mapDbError` code.
+
+**Why the session died.** `supabase.auth.admin.updateUserById(userId, { password })` revokes
+every GoTrue session for that user — including the one that authorised the request in flight,
+and its refresh token, so there is no self-healing. The two foreign keys were validated only by
+the profile `UPDATE` in step 3, which runs *after* that. So a stale id produced an error message
+telling the student to fix a dropdown, on a screen where every attempt to fix it was a 401.
+
+Reproduced, not theorised:
+
+```
+token after sign-in                 -> 200 still valid
+failed onboarding: 400 INVALID_REFERENCE
+token after the FAILED onboarding   -> 401 DEAD
+refresh token                       -> REVOKED
+```
+
+and after the fix:
+
+```
+failed onboarding: 400 INVALID_REFERENCE
+access token      : 200=before  ->  200=after (survived)
+refresh token     : still works
+```
+
+**How a student reached it at all:** both clients cache the academic lists, and a
+`supabase db reset` regenerates every course and specialization uuid — `seed.sql`'s fixed
+`c0000000-…` ids lose the `on conflict` to rows an earlier migration already inserted, so
+B.Tech's real id changes on every reset. The phone was posting pre-reset ids. Dev-only as a
+*cause*; the lockout it triggered was not.
+
+### New fields on existing responses
+
+`INVALID_REFERENCE` from this endpoint now carries `message`. Purely additive.
+
+### Test data
+
+Nothing seeded. Verified against the local stack, both paths, before and after:
+
+- successful onboarding: 200, response carries a `session`, old token correctly revoked;
+- failed onboarding: 400, **access and refresh tokens both survive**;
+- the other five failure codes unchanged (`WEAK_PASSWORD`, `COMMON_PASSWORD`, password = username,
+  `USERNAME_TAKEN`, `INVALID_FORMAT`) — re-run after the change;
+- probe accounts deleted afterwards.
+
+### What NOT to do yet
+
+- **Don't add validation to `completeOnboarding` below step 2.** Everything that can fail on the
+  caller's input has to be checked above the password change or it re-creates this exact bug.
+  There is a comment at that line and a note in API.md saying so.
+- **Neeraj — your onboarding page was already correct here and I did not change its logic.** It
+  adopts `data.session` on success and redirects to `/auth` on a 401. The one thing I edited is a
+  **comment** above that adopt-branch which said *"The endpoint returns no new session today"*.
+  That is false — it does, and has since Phase 3 — and the comment made the branch look like dead
+  code someone could safely delete. Deleting it would sign a student out the instant signup
+  succeeded. Nothing else in `frontend/` was touched.
+- **Don't rely on the mobile fix having been there before.** `mobile/app/(auth)/onboarding.tsx`
+  was **not** adopting the returned session, so a new student was landing in the app on a revoked
+  token. The marketplace still rendered (that route is `optionalAuth`), which is why it went
+  unnoticed — the dashboard and messages would have 401'd. Fixed.
+
+### Could this fail against existing rows?
+
+**No.** No schema change, no data written by the fix. The new check is two indexed `select id`
+lookups on `courses` / `specializations` per onboarding call, on the rare path. The foreign-key
+constraints still exist and are still what guarantee integrity — the check only decides *when*
+the caller finds out, which a constraint cannot do.
+
+---
+
 ## 2026-09-15 — 📮 Phase 4 Block N-B: cursor pagination on the marketplace feed and the comments list (Neeraj, in Vishwajeet's module)
 
 📮 **HANDOFF — Vishwajeet, the mobile app breaks on both of these until Phase 5.** Two response

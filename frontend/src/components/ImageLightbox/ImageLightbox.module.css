@@ -1,0 +1,202 @@
+/* ImageLightbox — full-screen photo viewer with zoom and pan.
+   Colours come from the tokens in src/styles/global.css. The scrim and the
+   frosted controls are black/white alpha, which is neutral rather than brand. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  background: rgba(11, 11, 11, 0.92);
+  animation: fadeIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  flex-shrink: 0;
+}
+
+.counter {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--white);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.toolBtn,
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--white);
+  cursor: pointer;
+  transition:
+    background 0.16s,
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.16s;
+}
+
+.toolBtn {
+  width: 40px;
+  height: 40px;
+}
+
+.toolBtn:hover:not(:disabled),
+.navBtn:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.toolBtn:active:not(:disabled),
+.navBtn:active {
+  transform: scale(0.94);
+}
+
+.toolBtn:focus-visible,
+.navBtn:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+
+.toolBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.zoomLevel {
+  min-width: 48px;
+  text-align: center;
+  color: var(--white);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The stage takes all the space the bars leave, so gestures work anywhere on
+   screen — pinching just outside a zoomed photo is normal. */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: zoom-in;
+  /* Stops the browser claiming a touch as a page pan or page zoom before the
+     pointer handlers see it — without this, pinch zooms the whole site. */
+  touch-action: none;
+  user-select: none;
+}
+
+.stage.zoomed {
+  cursor: grab;
+}
+
+.stage.dragging {
+  cursor: grabbing;
+}
+
+.image {
+  max-width: 92vw;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  animation: imageIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Following the finger has to be immediate; easing it makes a drag feel like
+   it is on a spring. */
+.dragging .image {
+  transition: none;
+}
+
+.navBtn {
+  position: absolute;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+}
+
+.navPrev {
+  left: 16px;
+}
+
+.navNext {
+  right: 16px;
+}
+
+.hint {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 12px 20px 20px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.8rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes imageIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .topBar {
+    padding: 12px 12px;
+  }
+  .toolBtn {
+    width: 36px;
+    height: 36px;
+  }
+  .navBtn {
+    width: 40px;
+    height: 40px;
+    margin-top: -20px;
+  }
+  .navPrev {
+    left: 8px;
+  }
+  .navNext {
+    right: 8px;
+  }
+  .image {
+    max-width: 100vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .image {
+    animation: none;
+  }
+  .image,
+  .toolBtn,
+  .navBtn {
+    transition: none;
+  }
+}

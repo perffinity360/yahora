@@ -3,6 +3,7 @@ import { decode } from 'base64-arraybuffer';
 import { readAsStringAsync } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -26,7 +27,7 @@ import { UsernameField, type UsernameStatus } from '../../src/components/Usernam
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useCourses, useSpecializations } from '../../src/hooks/useAcademics';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
-import { api } from '../../src/lib/api';
+import { api, type ApiError } from '../../src/lib/api';
 import { supabase } from '../../src/lib/supabase';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { UsernameSuggestions, UserProfile } from '../../src/types';
@@ -55,6 +56,11 @@ const SUBMIT_ERROR_COPY: Record<string, string> = {
   USERNAME_RESERVED: 'That username is taken. Try another.',
   INVALID_FORMAT: 'That username is not valid. Use letters, numbers, dots, dashes or underscores.',
   MISSING_FIELDS: 'Please fill in all required fields.',
+  // 23503, a foreign key the database rejected — in practice a course or
+  // specialization id that no longer exists. See the refetch below.
+  INVALID_REFERENCE:
+    'Your course or specialization is out of date. We have refreshed the lists — please pick them again.',
+  DUPLICATE: 'That username is taken. Try another.',
   CONTENT_TOO_LONG: 'One of your answers is too long. Please shorten it.',
   INTERNAL_ERROR: 'Something went wrong on our side. Please try again.',
 };
@@ -76,6 +82,7 @@ const toOptions = (values: string[]) => values.map((v) => ({ label: v, value: v 
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { session, profile, isDemoUser, saveProfile, skipOnboarding, signOut } = useAuth();
 
   const floatingTop = useFloatingTopInset();
@@ -215,11 +222,14 @@ export default function OnboardingScreen() {
       ].filter(Boolean) as string[])
     : [];
 
+  const usernameBad =
+    usernameStatus === 'invalid' || usernameStatus === 'taken' || usernameStatus === 'reserved';
+
   const fieldIssues = Array.from(
     new Set(
       [
         ...missingFields,
-        usernameServerError ? 'Username' : null,
+        usernameServerError || usernameBad ? 'Username' : null,
         passwordError ? 'Password' : null,
         confirmError || liveMismatch ? 'Confirm password' : null,
       ].filter(Boolean) as string[],
@@ -334,7 +344,11 @@ export default function OnboardingScreen() {
       return;
     }
     if (usernameStatus === 'invalid' || usernameStatus === 'taken' || usernameStatus === 'reserved') {
-      setUsernameServerError('Choose a different username to continue.');
+      // Deliberately sets NO message. The field is already saying the precise
+      // thing that is wrong ("At least 3 characters.", "That username is
+      // taken."), and replacing that with "choose a different username" trades
+      // a specific answer for a vague one. The summary above the button — which
+      // reads usernameStatus directly — is what tells them where to look.
       return;
     }
     // 'checking' and 'unknown' are allowed through on purpose. The server
@@ -359,7 +373,11 @@ export default function OnboardingScreen() {
 
     setSaving(true);
     try {
-      const data = await api.post<{ message: string; userProfile: UserProfile }>(
+      const data = await api.post<{
+        message: string;
+        session?: { access_token: string; refresh_token: string };
+        userProfile: UserProfile;
+      }>(
         '/api/auth/onboarding',
         {
           userId,
@@ -374,6 +392,25 @@ export default function OnboardingScreen() {
           bio: bio.trim() || null,
         },
       );
+      // ── Adopt the new session BEFORE anything else. ──
+      //
+      // Setting a password revokes every existing GoTrue session, including the
+      // one that authorised this very request — so the token this app is
+      // holding is dead the instant this call returns 200, and its refresh
+      // token with it. The endpoint returns a fresh session for exactly this
+      // reason (the web has adopted it since Phase 3; mobile did not, which
+      // left a brand-new student signed in with a revoked token: the
+      // marketplace still rendered because that route is optionalAuth, but the
+      // dashboard and messages would 401).
+      //
+      // onAuthStateChange in AuthContext picks this up and updates `session`.
+      if (data.session?.access_token && data.session?.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+
       // Routing guard sees is_profile_complete and moves into the tabs.
       await saveProfile(data.userProfile);
     } catch (e) {
@@ -382,9 +419,38 @@ export default function OnboardingScreen() {
       // possible end to a signup, and the password fields are the ones a
       // student is least likely to retype correctly.
       const code = e instanceof Error ? e.message : '';
+      const { status } = e as ApiError;
       const copy = SUBMIT_ERROR_COPY[code];
 
-      if (copy && USERNAME_ERRORS.has(code)) {
+      if (status === 401 || code === 'UNAUTHORIZED') {
+        // The session is gone. This is reachable after ANY onboarding failure
+        // that got past the password step: the backend sets the password before
+        // updating the profile, and GoTrue revokes existing sessions when a
+        // password changes — so the token in hand is dead and every retry from
+        // this screen is another 401.
+        //
+        // Sending them back to sign-in is the only exit. The password they just
+        // chose IS set on the account, so signing in with it works; staying here
+        // retrying does not. See docs/CHANGELOG.md.
+        setError('Your session has expired. Please sign in again with your new password.');
+        await signOut().catch(() => {});
+        router.replace('/(auth)/login');
+      } else if (code === 'INVALID_REFERENCE') {
+        // The id we sent is not in the database. The lists these ids come from
+        // are cached for an hour AND persisted to AsyncStorage, so the phone
+        // can hold ids that no longer exist — which is exactly what a
+        // `supabase db reset` produces, because courses and specializations are
+        // re-created with fresh uuids every time.
+        //
+        // Dropping the cache turns a dead end into "pick it again": the pickers
+        // reload from the server and the next attempt sends live ids. The two
+        // selections are cleared because their old values cannot be shown as
+        // chosen when the options behind them are gone.
+        setCourseId('');
+        setSpecializationId('');
+        queryClient.invalidateQueries({ queryKey: ['academic'] });
+        setError(copy ?? 'Please pick your course and specialization again.');
+      } else if (copy && USERNAME_ERRORS.has(code)) {
         // Put it under the field it is about, not in the banner at the top.
         setUsernameServerError(copy);
       } else if (copy && (code === 'WEAK_PASSWORD' || code === 'COMMON_PASSWORD')) {
@@ -513,7 +579,15 @@ export default function OnboardingScreen() {
                   </View>
                   <UsernameField
                     value={username}
-                    onChangeText={setUsername}
+                    onChangeText={(next) => {
+                      setUsername(next);
+                      // The server's verdict was about the PREVIOUS handle. Keep
+                      // it on screen and the field contradicts itself: a green
+                      // tick above a red "choose a different username", which is
+                      // exactly what it did. The live check owns the message
+                      // from the first keystroke onwards.
+                      setUsernameServerError(null);
+                    }}
                     onStatusChange={setUsernameStatus}
                     onSuggestions={setServerSuggestions}
                     serverError={usernameServerError}

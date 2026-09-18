@@ -2,6 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -41,6 +42,12 @@ interface Props {
    * field/modal stacks above a sibling field lower on the page. */
   style?: StyleProp<ViewStyle>;
 }
+
+/**
+ * Option count at which the search box grabs focus (and the keyboard) on open.
+ * Below it, the whole list fits on screen and scanning beats typing.
+ */
+const AUTOFOCUS_SEARCH_THRESHOLD = 8;
 
 /**
  * A labelled field that opens a modal with a (optionally searchable) list of
@@ -102,7 +109,14 @@ export function SearchablePicker({
       </View>
 
       <Pressable
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          // Whatever field they were typing in — usually the password above —
+          // is finished with the moment they reach for a picker. Leaving its
+          // keyboard up covers half the option list with something they cannot
+          // type into.
+          Keyboard.dismiss();
+          setOpen(true);
+        }}
         disabled={isDisabled}
         style={({ pressed }) => [
           styles.field,
@@ -165,7 +179,11 @@ export function SearchablePicker({
                   style={styles.searchInput}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  autoFocus
+                  // Only when the list is long enough to be worth typing at.
+                  // Qualification and Year have five options each: auto-focusing
+                  // there just brings the keyboard straight back and hides half
+                  // of a list you could have read at a glance.
+                  autoFocus={options.length >= AUTOFOCUS_SEARCH_THRESHOLD}
                 />
               </View>
             ) : null}

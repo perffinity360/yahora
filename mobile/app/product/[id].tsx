@@ -26,6 +26,7 @@ import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { formatPrice } from '../../src/components/ProductCard';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
+import { ZoomableImageViewer } from '../../src/components/ZoomableImageViewer';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useAddComment } from '../../src/hooks/useComments';
@@ -180,6 +181,13 @@ function Content({
   onOpenChat: (href: string) => void;
 }) {
   const galleryHeight = Math.min(width, 460);
+
+  // Full-screen zoom. Resolved once so the carousel and the viewer are showing
+  // the same URLs (loopback-safe in local dev — see src/lib/config.ts).
+  const photoUrls = (product.image_urls ?? []).map((u) => resolveMediaUrl(u) ?? u);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
   const cond =
     (product.condition && conditionColors[product.condition as keyof typeof conditionColors]) ||
     FALLBACK_CONDITION;
@@ -257,6 +265,15 @@ function Content({
         contentContainerStyle={{ paddingBottom: 104 + bottomInset }}
       >
         {/* ── Gallery ── */}
+        <ZoomableImageViewer
+          visible={viewerOpen}
+          uris={photoUrls}
+          initialIndex={viewerIndex}
+          shape="fill"
+          onClose={() => setViewerOpen(false)}
+          accessibilityLabel={product.title}
+        />
+
         <View style={[styles.gallery, { height: galleryHeight }]}>
           {product.image_urls?.length ? (
             <FlatList
@@ -268,14 +285,26 @@ function Content({
               onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) =>
                 onIndexChange(Math.round(e.nativeEvent.contentOffset.x / width))
               }
-              renderItem={({ item }) => (
-                <Image
-                  // Loopback-safe in local dev; see src/lib/config.ts.
-                  source={{ uri: resolveMediaUrl(item) ?? item }}
-                  style={{ width, height: galleryHeight }}
-                  contentFit="cover"
-                  transition={220}
-                />
+              renderItem={({ item, index }) => (
+                // Tap to open full-screen, where it can be pinched and zoomed.
+                // The carousel crops to fill its frame; the viewer shows the
+                // whole photo, which is the point of opening it.
+                <Pressable
+                  onPress={() => {
+                    setViewerIndex(index);
+                    setViewerOpen(true);
+                  }}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={`Photo ${index + 1} of ${product.image_urls?.length ?? 1}. Opens full screen`}
+                >
+                  <Image
+                    // Loopback-safe in local dev; see src/lib/config.ts.
+                    source={{ uri: resolveMediaUrl(item) ?? item }}
+                    style={{ width, height: galleryHeight }}
+                    contentFit="cover"
+                    transition={220}
+                  />
+                </Pressable>
               )}
             />
           ) : (

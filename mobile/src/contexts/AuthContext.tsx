@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import { api, type ApiError } from '../lib/api';
 import { API_BASE_URL } from '../lib/config';
+import { getDeviceId } from '../lib/deviceId';
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../types';
 
@@ -116,8 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // captchaToken is the Turnstile token from TurnstileWebView. The backend
   // forwards it to Supabase untouched (backend/API.md, request-otp); an
   // undefined token is dropped by JSON.stringify, exactly as before.
-  const requestOtp = (email: string, captchaToken?: string) =>
-    api.post<RequestOtpResponse>('/api/auth/request-otp', { email, captchaToken });
+  const requestOtp = async (email: string, captchaToken?: string) =>
+    api.post<RequestOtpResponse>(
+      '/api/auth/request-otp',
+      { email, captchaToken },
+      // Opts this install into its own per-device daily quota (20 codes). The
+      // header is optional server-side — without it the device cap is simply
+      // skipped, which is what every phone got until now. Same as the web.
+      { 'X-Device-Id': await getDeviceId() },
+    );
 
   /**
    * Username-or-email + password sign-in (Block V-D).

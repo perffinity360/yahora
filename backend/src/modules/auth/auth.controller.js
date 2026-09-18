@@ -704,6 +704,58 @@ export const completeOnboarding = async (req, res) => {
             return sendError(res, 400, code);
         }
 
+        // ── 1b. The two foreign keys, checked HERE and not by the UPDATE. ──
+        //
+        // course_id and specialization_id are the last things in this payload
+        // that can be rejected, and until now the only thing checking them was
+        // the UPDATE in step 3 — which runs AFTER the password is set.
+        //
+        // That ordering had a consequence nobody intended. Setting a password
+        // revokes every existing GoTrue session, including the one that
+        // authorised this very request. So a stale id produced:
+        //
+        //   400 INVALID_REFERENCE   (a 23503 from the UPDATE)
+        //   + the student's access token AND refresh token both dead
+        //   + no session in the response for the client to adopt
+        //
+        // The student was told to fix a dropdown, and every retry from that
+        // screen was a 401 they could do nothing about. Reproduced on 17 Sep
+        // 2026; it is how a `supabase db reset` reaches a phone, because the
+        // clients cache these lists and courses get fresh uuids on every reset.
+        //
+        // Checking them here costs one indexed lookup and moves the failure to
+        // the safe side of the password change, where the session still works
+        // and "pick it again" is all the student has to do.
+        //
+        // NOT a re-implementation of the FK: the constraint still exists and is
+        // still what guarantees integrity. This only decides WHEN the caller
+        // finds out, which is a question the constraint cannot answer.
+        const references = [
+            ['courses', course_id],
+            ['specializations', specialization_id],
+        ];
+
+        for (const [table, id] of references) {
+            if (!id) continue;   // optional-by-omission stays the UPDATE's business
+
+            const { data: row, error: refError } = await supabase
+                .from(table)
+                .select('id')
+                .eq('id', id)
+                .maybeSingle();
+
+            // A malformed uuid raises 22P02 here rather than reaching the
+            // UPDATE; it is the same bad input either way.
+            if (refError && refError.code !== '22P02') return mapDbError(res, refError);
+
+            if (refError || !row) {
+                return sendError(res, 400, 'INVALID_REFERENCE', {
+                    message:
+                        'That course or specialization no longer exists. Please pick it again.',
+                });
+            }
+        }
+
         // ── 2. Set the password. This must come BEFORE the profile update. ──
         //
         // Order is not cosmetic. If is_profile_complete went true first and this
@@ -711,6 +763,12 @@ export const completeOnboarding = async (req, res) => {
         // profile the app never sends back to onboarding, and no password, with
         // nothing left to prompt them. The reverse failure is harmless — they
         // retry onboarding and the password is simply set again.
+        //
+        // ⚠ EVERYTHING THAT CAN FAIL ON THE CALLER'S INPUT MUST BE CHECKED
+        // ABOVE THIS LINE. Past it, the password has changed and the caller's
+        // session is revoked, so any error returned from here on leaves them
+        // holding a dead token with nothing to retry with. That is what step 1b
+        // exists to prevent — keep new validation up there with it.
         const { error: passwordError } = await supabase.auth.admin.updateUserById(userId, {
             password,
         });

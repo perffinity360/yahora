@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "./ProductDetail.module.css";
+import ImageLightbox from "../../components/ImageLightbox/ImageLightbox";
 import { supabase } from "../../config/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -95,6 +96,8 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  // Full-screen zoomable view of the product photos (ImageLightbox).
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
   /* comment states */
@@ -424,6 +427,19 @@ export default function ProductDetail() {
                 alt={product.title}
                 className={`${styles.mainImage} ${imgLoaded ? styles.imageLoaded : ""}`}
                 onLoad={() => setImgLoaded(true)}
+                // Opens the full-screen viewer, where the photo can be zoomed.
+                // role/tabIndex/onKeyDown make it reachable without a mouse.
+                role="button"
+                tabIndex={0}
+                aria-label={`View ${product.title} full screen`}
+                style={{ cursor: "zoom-in" }}
+                onClick={() => setLightboxOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setLightboxOpen(true);
+                  }
+                }}
               />
 
               {product.image_urls.length > 1 && (
@@ -471,6 +487,15 @@ export default function ProductDetail() {
               </div>
             )}
           </div>
+
+          {lightboxOpen && (
+            <ImageLightbox
+              images={product.image_urls}
+              startIndex={activeImageIndex}
+              alt={product.title}
+              onClose={() => setLightboxOpen(false)}
+            />
+          )}
 
           {/* ── Foreign Campus Banner ── */}
           {isForeignCampus && (

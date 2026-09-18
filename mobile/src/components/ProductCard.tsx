@@ -235,7 +235,7 @@ function ProductCardBase({
                 icon="bookmark"
                 onPress={onSave}
                 active={saved}
-                activeColor={colors.purple}
+                activeColor={colors.white}
                 label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
               />
               <IconBtn icon="share-2" onPress={onShare} label="Share" />
@@ -265,7 +265,7 @@ function ProductCardBase({
                 icon="bookmark"
                 onPress={onSave}
                 active={saved}
-                activeColor={colors.purple}
+                activeColor={colors.white}
                 label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
               />
               <IconBtn icon="share-2" onPress={onShare} label="Share" />
@@ -465,9 +465,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.hairline,
   },
+  /**
+   * Saved. Only the bookmark uses this, and it is the one state on the card
+   * that has to survive being glanced at: a pale pink disc with a purple
+   * outline read as "slightly different", not as "this is in your wishlist".
+   * Filled brand purple with a white edge makes it the darkest thing in the
+   * row, which is what tells you at a glance which cards you kept.
+   */
   iconBtnActive: {
-    backgroundColor: colors.pinkLight,
-    borderColor: colors.inputBorderFocus,
+    backgroundColor: colors.purple,
+    borderColor: colors.white,
   },
   iconBtnPressed: {
     backgroundColor: colors.pinkLight,
