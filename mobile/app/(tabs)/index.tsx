@@ -8,7 +8,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -33,6 +32,7 @@ import { SORT_OPTIONS, type SortKey } from '../../src/lib/marketplace';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { MarketplaceProduct, University } from '../../src/types';
+import { shareProduct } from '../../src/lib/share';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
@@ -88,8 +88,10 @@ export default function MarketplaceScreen() {
     }
   }, [refetch]);
 
+  // Text, link and platform handling all live in src/lib/share.ts — the app and
+  // the website share the same wording, and the link unfurls as a card.
   const handleShare = (item: MarketplaceProduct) => {
-    Share.share({ message: `Check out "${item.title}" for ₹${item.price} on Yahora` }).catch(() => {});
+    shareProduct(item);
   };
 
   const handleSetUniversity = (u: University) => {

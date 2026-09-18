@@ -25,6 +25,7 @@ import reportsRoutes from './modules/reports/reports.routes.js';
 // --- new: VISHWAJEET owns these files ---
 import postsRoutes from './modules/posts/posts.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
+import shareRoutes from './modules/share/share.routes.js';
 
 const app = express();
 
@@ -174,5 +175,12 @@ app.use('/api/reports',       reportsRoutes);
 // --- new: VISHWAJEET owns these files ---
 app.use('/api/posts',         postsRoutes);
 app.use('/api/admin',         adminRoutes);
+
+// Link-preview pages. NOT under /api: these return HTML for WhatsApp, Telegram,
+// X and iMessage to unfurl, and the path is visible to students in the message
+// bubble. A new mount was unavoidable — a /api/... share link in a WhatsApp
+// chat reads like a broken paste. See modules/share/share.controller.js for why
+// the SPA cannot serve these tags itself.
+app.use('/share',             shareRoutes);
 
 export default app;

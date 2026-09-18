@@ -10,7 +10,7 @@ trust an entry.
 | Status | Live. Deployed. | **Nothing here is implemented yet.** |
 | If code and doc disagree | The doc is wrong — fix the doc | The code is wrong — fix the code |
 
-**Part 1** documents the 33 routes that exist now, including their bugs. Where a controller
+**Part 1** documents the 34 routes that exist now, including their bugs. Where a controller
 behaves surprisingly, the surprise is documented rather than corrected. Nothing in Part 1 is
 aspirational.
 
@@ -284,6 +284,9 @@ histories, and comment lists return every matching row.
 - [POST /api/products/comments/:commentId/vote](#post-apiproductscommentscommentidvote)
 - [POST /api/products/:id/sold](#post-apiproductsidsold)
 - [POST /api/products/:id/available](#post-apiproductsidavailable)
+
+**[share](#share)** — HTML, not JSON
+- [GET /share/product/:id](#get-shareproductid)
 
 **[messages](#messages)**
 - [GET /api/messages/inbox/:userId](#get-apimessagesinboxuserid)
@@ -1598,6 +1601,63 @@ unauthenticated call destroyed purchase history that nothing can reconstruct.
 was sold and re-listed more than once, all purchase history for it is destroyed. Like the
 insert in `/sold`, the delete error is logged and ignored, so a 200 does not prove it
 happened.
+
+---
+
+## share
+
+Link-preview pages. **Mounted at `/share`, NOT `/api`** — these return HTML for WhatsApp,
+Telegram, X, Slack and iMessage to unfurl, and the path ends up visible to students in the
+message bubble, where `/api/...` would read like a broken paste.
+
+The only routes in this API that do not return JSON. Owner: Vishwajeet
+(`backend/src/modules/share/`).
+
+### GET /share/product/:id
+**Module:** share
+**Auth:** none — a crawler carries no token, and everything rendered is already public on the
+cross-campus browse feed.
+**Content-Type:** `text/html; charset=utf-8` (**not** JSON — nothing else in this API does this)
+**Path:**
+  - id: uuid, required
+**200:** an HTML document carrying, for this listing:
+  - `og:site_name`, `og:type` (`product`), `og:title`, `og:description`, `og:url`
+  - `og:image` + `og:image:alt` — `image_urls[0]`, omitted entirely when the listing has no photo
+  - `twitter:card` — `summary_large_image` with a photo, `summary` without
+  - a styled fallback card with an "Open in Yahora" link, and
+    `<script>window.location.replace(<web url>)</script>`
+**404:** the same document shape, with "This listing is no longer on Yahora" copy and a
+redirect to the site root. **Not** the JSON error envelope — a crawler cannot read one.
+**500:** never. A database error is logged and falls through to the 404 page: a preview that
+fails is a page that looks broken to everyone in the chat, so the route degrades instead.
+
+**Notes:**
+
+**Why this exists.** The website is a Vite SPA — one static `index.html` with one static set of
+OG tags — so `https://yahora.netlify.app/product/<id>` unfurls as the generic "Yahora | Keep the
+Story Going" card for *every* listing. Crawlers do not run JavaScript, so React never gets to
+replace those tags. This route serves the real ones.
+
+**The redirect is JavaScript-only, deliberately.** A 301/302 would be followed by the crawlers
+straight back to the SPA's generic tags, undoing the point; `<meta http-equiv="refresh">` is
+followed by some of them too. `location.replace()` in a `<script>` is the one form every
+crawler ignores and every browser honours.
+
+`WEB_APP_URL` (env, default `https://yahora.netlify.app`) is where a real browser is sent. It
+is the only consumer of that variable.
+
+Sets `Cache-Control: public, max-age=300, s-maxage=300` on the 200, like
+`GET /api/products/:id/meta`. Deliberately does **not** increment `views` and does **not** join
+comments — a crawler hits this repeatedly and must not inflate a seller's view count.
+
+Every interpolated value is HTML-escaped (`&<>"'`) and `og:image` is accepted only when it
+parses as `http(s)`. Both matter: the title and description are student-authored and land
+inside double-quoted attributes on a route with no auth in front of it. A non-UUID id is
+rejected before it reaches PostgREST, so a scanning bot gets the 404 page rather than a uuid
+cast error.
+
+**Both clients build their share links from this route**, not from the SPA path — see
+`frontend/src/utils/share.js` and `mobile/src/lib/share.ts`.
 
 ---
 

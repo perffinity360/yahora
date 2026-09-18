@@ -99,22 +99,18 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  cursor: zoom-in;
+  /* Default, not zoom-in: the stage is the whole screen, and clicking the empty
+     space beside the photo closes the viewer rather than zooming it. The
+     magnifier belongs on the photo itself, which is the thing that zooms. */
+  cursor: default;
   /* Stops the browser claiming a touch as a page pan or page zoom before the
      pointer handlers see it — without this, pinch zooms the whole site. */
   touch-action: none;
   user-select: none;
 }
 
-.stage.zoomed {
-  cursor: grab;
-}
-
-.stage.dragging {
-  cursor: grabbing;
-}
-
 .image {
+  cursor: zoom-in;
   max-width: 92vw;
   max-height: 100%;
   object-fit: contain;
@@ -124,9 +120,16 @@
   animation: imageIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Zoomed, dragging is the main thing you do with the photo, so the cursor says
+   so — a single click still snaps it back to fit. */
+.zoomed .image {
+  cursor: grab;
+}
+
 /* Following the finger has to be immediate; easing it makes a drag feel like
    it is on a spring. */
 .dragging .image {
+  cursor: grabbing;
   transition: none;
 }
 

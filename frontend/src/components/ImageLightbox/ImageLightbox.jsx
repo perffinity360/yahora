@@ -13,7 +13,7 @@ import styles from "./ImageLightbox.module.css";
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
-const DOUBLE_CLICK_SCALE = 2.5;
+const CLICK_ZOOM_SCALE = 2.5;
 const WHEEL_STEP = 0.0015;
 const BUTTON_STEP = 0.5;
 /** A swipe at fit must travel this far (px) before it changes photo. */
@@ -26,12 +26,31 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
  *
  *   · wheel / trackpad pinch — zoom toward the pointer
  *   · two-finger pinch       — zoom (touch screens)
+ *   · click the photo        — toggle fit ↔ 2.5x, centred on where you clicked
  *   · drag                   — pan when zoomed; at fit, swipe to change photo
- *   · double-click           — toggle fit ↔ 2.5x
  *   · + / − / reset buttons  — for anyone without a wheel or a trackpad
  *   · ← / → keys, ‹ › buttons — change photo
  *   · Esc, ×, click outside  — close (outside only closes at fit, so a missed
  *                              drag while inspecting does not dismiss it)
+ *
+ * ⚠ THERE IS DELIBERATELY NO DOUBLE-CLICK, and clicks are hit-tested by
+ * COORDINATES rather than by `e.target`.
+ *
+ * `onPointerDown` calls `setPointerCapture` on the stage, and browsers do not
+ * agree on what that does to the compatibility mouse events: the click may be
+ * retargeted to the capture element (the stage) instead of the <img> under the
+ * cursor. Either way the old double-click never fired — retargeted, the first
+ * click matched `e.target === e.currentTarget` and closed the viewer before a
+ * second one could land; not retargeted, `dblclick` on the stage was competing
+ * with a capture that had already claimed the sequence.
+ *
+ * So the handler below does not ask WHICH element was clicked. It asks whether
+ * the click landed inside the photo's bounding box, which is true in both
+ * browsers and stays true while zoomed, since the box grows with the scale.
+ * Inside the photo → zoom; outside it, at fit → close.
+ *
+ * Do not add `onDoubleClick` back: with click-zoom live, a double click would
+ * zoom in and then straight back out.
  *
  * Pan is clamped to the photo's overhang at the current zoom, so it can never
  * be dragged off screen and lost. Every photo change and every open starts at
@@ -273,15 +292,28 @@ export default function ImageLightbox({ images, startIndex = 0, alt = "", onClos
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onClick={(e) => {
-          // Empty space beside the photo, at fit, after a click that did not
-          // move: that is a request to close. Anything else is not.
-          if (e.target === e.currentTarget && scale === MIN_SCALE && !lastGestureMoved.current) {
+          // A click that ended a pan or a pinch is not a click — without this
+          // guard, letting go of a drag collapses the zoom being used.
+          if (lastGestureMoved.current) return;
+
+          const rect = imgRef.current?.getBoundingClientRect();
+          const onPhoto =
+            !!rect &&
+            e.clientX >= rect.left &&
+            e.clientX <= rect.right &&
+            e.clientY >= rect.top &&
+            e.clientY <= rect.bottom;
+
+          if (onPhoto) {
+            // Click the photo to zoom in on that spot; click again to fit.
+            if (scale > MIN_SCALE) resetView();
+            else zoomTo(CLICK_ZOOM_SCALE, { x: e.clientX, y: e.clientY });
+          } else if (scale === MIN_SCALE) {
+            // Empty space beside the photo, at fit: a request to close. While
+            // zoomed it is almost always the end of a pan, so it is ignored.
             onClose();
           }
         }}
-        onDoubleClick={(e) =>
-          scale > MIN_SCALE ? resetView() : zoomTo(DOUBLE_CLICK_SCALE, { x: e.clientX, y: e.clientY })
-        }
       >
         <img
           ref={imgRef}
@@ -319,8 +351,8 @@ export default function ImageLightbox({ images, startIndex = 0, alt = "", onClos
 
       <p className={styles.hint}>
         {scale > MIN_SCALE
-          ? "Drag to look around · double-click to reset"
-          : "Scroll, pinch or double-click to zoom"}
+          ? "Drag to look around · click the photo to fit"
+          : "Click the photo, scroll or pinch to zoom"}
       </p>
     </div>
   );

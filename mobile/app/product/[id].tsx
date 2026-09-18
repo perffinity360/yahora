@@ -10,7 +10,6 @@ import {
   Keyboard,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -27,6 +26,7 @@ import { formatPrice } from '../../src/components/ProductCard';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { ZoomableImageViewer } from '../../src/components/ZoomableImageViewer';
+import { PinchLiftOverlay, PinchToZoom, usePinchLift, type PinchLift } from '../../src/components/PinchToZoom';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useAddComment } from '../../src/hooks/useComments';
@@ -35,6 +35,7 @@ import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions'
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, conditionColors, font, radius, spacing } from '../../src/theme';
 import type { ProductDetailData } from '../../src/types';
+import { shareProduct } from '../../src/lib/share';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const FALLBACK_CONDITION = { bg: colors.blue, text: colors.white };
@@ -68,6 +69,20 @@ export default function ProductDetailScreen() {
 
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // Pinch-to-zoom on the gallery photo where it sits, without the page moving.
+  //
+  // The hook lives HERE, not in Content: its overlay positions the photo in
+  // window coordinates, so it has to be mounted in the root full-screen View —
+  // inside the SafeAreaView it would be offset by the status-bar inset and the
+  // copy would land below the original.
+  //
+  // Nothing below reads it during a render. It carries shared values and a ref,
+  // and the overlay owns its own state, so a pinch re-renders neither this
+  // screen nor the carousel. Do not derive a prop from it (a `scrollEnabled`
+  // that did exactly that is what made the gesture so hard to catch) — see the
+  // notes at the top of components/PinchToZoom.tsx.
+  const lift = usePinchLift();
+
   // Root layout is a <Slot/>, so back() re-mounts the tabs at their initial
   // route. Prefer the explicit `from` origin each opener passes; else fall back
   // to history, then home.
@@ -77,9 +92,11 @@ export default function ProductDetailScreen() {
     else router.replace('/(tabs)');
   };
 
+  // See src/lib/share.ts. What was here shared the bare title with no price,
+  // no campus and — the part that mattered — no link, so nobody who received it
+  // could open the listing.
   const handleShare = () => {
-    if (!product) return;
-    Share.share({ message: `${product.title} on Yahora` }).catch(() => {});
+    if (product) shareProduct(product);
   };
 
   const showSkeleton = isLoading && !product;
@@ -99,6 +116,7 @@ export default function ProductDetailScreen() {
           ) : product ? (
             <Content
               product={product}
+              lift={lift}
               width={width}
               bottomInset={insets.bottom}
               activeIndex={activeIndex}
@@ -146,6 +164,10 @@ export default function ProductDetailScreen() {
           ) : null}
         </SafeAreaView>
       </KeyboardAvoider>
+
+      {/* Last child of the root View on purpose — it must cover the floating
+          back/share buttons too, and it measures in window coordinates. */}
+      <PinchLiftOverlay lift={lift} />
     </View>
   );
 }
@@ -153,6 +175,7 @@ export default function ProductDetailScreen() {
 /* ────────────────────────── Content ────────────────────────── */
 function Content({
   product,
+  lift,
   width,
   bottomInset,
   activeIndex,
@@ -167,6 +190,7 @@ function Content({
   onOpenChat,
 }: {
   product: ProductDetailData;
+  lift: PinchLift;
   width: number;
   bottomInset: number;
   activeIndex: number;
@@ -286,25 +310,40 @@ function Content({
                 onIndexChange(Math.round(e.nativeEvent.contentOffset.x / width))
               }
               renderItem={({ item, index }) => (
-                // Tap to open full-screen, where it can be pinched and zoomed.
-                // The carousel crops to fill its frame; the viewer shows the
-                // whole photo, which is the point of opening it.
-                <Pressable
-                  onPress={() => {
-                    setViewerIndex(index);
-                    setViewerOpen(true);
-                  }}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel={`Photo ${index + 1} of ${product.image_urls?.length ?? 1}. Opens full screen`}
+                // TWO ways in, deliberately.
+                //
+                // Tap opens the full-screen viewer, where a zoom persists and
+                // the whole photo is visible (the carousel crops to fill).
+                //
+                // Pinch zooms the photo in place, without leaving the page —
+                // the reflex gesture on a photo, which used to do nothing here.
+                // PinchToZoom lifts it into an overlay so only the photo scales
+                // and no other content on the screen is touched.
+                <PinchToZoom
+                  lift={lift}
+                  id={`${item}-${index}`}
+                  uri={photoUrls[index] ?? item}
+                  width={width}
+                  height={galleryHeight}
+                  contentFit="cover"
                 >
-                  <Image
-                    // Loopback-safe in local dev; see src/lib/config.ts.
-                    source={{ uri: resolveMediaUrl(item) ?? item }}
-                    style={{ width, height: galleryHeight }}
-                    contentFit="cover"
-                    transition={220}
-                  />
-                </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setViewerIndex(index);
+                      setViewerOpen(true);
+                    }}
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel={`Photo ${index + 1} of ${product.image_urls?.length ?? 1}. Opens full screen, or pinch to zoom in place`}
+                  >
+                    <Image
+                      // Loopback-safe in local dev; see src/lib/config.ts.
+                      source={{ uri: resolveMediaUrl(item) ?? item }}
+                      style={{ width, height: galleryHeight }}
+                      contentFit="cover"
+                      transition={220}
+                    />
+                  </Pressable>
+                </PinchToZoom>
               )}
             />
           ) : (
