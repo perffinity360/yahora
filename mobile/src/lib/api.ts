@@ -5,7 +5,19 @@ import { supabase } from './supabase';
  * `fromApi` distinguishes an error the Yahora backend produced from one an
  * intermediary produced. Only the former has a meaningful status code.
  */
-export type ApiError = Error & { status?: number; fromApi?: boolean };
+export type ApiError = Error & {
+  status?: number;
+  fromApi?: boolean;
+  /**
+   * The parsed error body, when there was one.
+   *
+   * Some errors carry more than a code: a 429 from request-otp or
+   * login-password includes `retry_after_seconds`, computed per address — a
+   * student 40 seconds from unlocking is told 40, not the cap. Throwing that
+   * away left screens showing everyone the worst case, or no countdown at all.
+   */
+  body?: Record<string, unknown>;
+};
 
 async function request<T>(path: string, init: RequestInit, json = true): Promise<T> {
   const { data } = await supabase.auth.getSession();
@@ -47,6 +59,7 @@ async function request<T>(path: string, init: RequestInit, json = true): Promise
     ) as ApiError;
     err.status = response.status;
     err.fromApi = Boolean(bodyMessage);
+    if (parsed && typeof parsed === 'object') err.body = parsed as Record<string, unknown>;
     throw err;
   }
 
@@ -63,10 +76,11 @@ function safeJson(text: string): unknown {
 
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
-  post: <T>(path: string, body?: unknown) =>
+  post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
     request<T>(path, {
       method: 'POST',
       body: body === undefined ? undefined : JSON.stringify(body),
+      headers,
     }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, {

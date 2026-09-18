@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "./ProductDetail.module.css";
+import ImageLightbox from "../../components/ImageLightbox/ImageLightbox";
+import ShareSheet from "../../components/ShareSheet/ShareSheet";
 import { supabase } from "../../config/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -95,6 +97,10 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  // Full-screen zoomable view of the product photos (ImageLightbox).
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  // Our own share sheet — see handleShare below for why not navigator.share.
+  const [shareOpen, setShareOpen] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
   /* comment states */
@@ -365,28 +371,16 @@ export default function ProductDetail() {
     );
   };
 
-  const handleShare = async () => {
-    // The exact template you requested
-    const shareText = `Take a look at this ${product.title} on Yahora`;
-    const shareUrl = window.location.href;
+  /* Opens our own sheet (components/ShareSheet) rather than going straight to
+     navigator.share — the same sheet the cards on the marketplace grid use.
 
-    try {
-      if (navigator.share) {
-        // Native share sheet on mobile devices
-        await navigator.share({
-          title: `Yahora - ${product.title}`,
-          text: shareText,
-          url: shareUrl,
-        });
-      } else {
-        // Fallback for desktop browsers
-        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-        alert("Link copied to clipboard!");
-      }
-    } catch (err) {
-      console.log("User canceled share or error occurred", err);
-    }
-  };
+     What was here before called navigator.share, which does not exist on
+     desktop Chrome or Firefox, and fell back to navigator.clipboard, which is
+     undefined over plain http:// (how the dev server is reached from a phone on
+     the LAN). In both cases the throw was caught and logged, so the button
+     looked dead. The sheet always works, and still offers the native one where
+     the browser has it. */
+  const handleShare = () => setShareOpen(true);
 
   const timeAgo = (dateString) => {
     const mins = Math.floor((new Date() - new Date(dateString)) / 60000);
@@ -455,6 +449,19 @@ export default function ProductDetail() {
                 alt={product.title}
                 className={`${styles.mainImage} ${imgLoaded ? styles.imageLoaded : ""}`}
                 onLoad={() => setImgLoaded(true)}
+                // Opens the full-screen viewer, where the photo can be zoomed.
+                // role/tabIndex/onKeyDown make it reachable without a mouse.
+                role="button"
+                tabIndex={0}
+                aria-label={`View ${product.title} full screen`}
+                style={{ cursor: "zoom-in" }}
+                onClick={() => setLightboxOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setLightboxOpen(true);
+                  }
+                }}
               />
 
               {product.image_urls.length > 1 && (
@@ -502,6 +509,19 @@ export default function ProductDetail() {
               </div>
             )}
           </div>
+
+          {lightboxOpen && (
+            <ImageLightbox
+              images={product.image_urls}
+              startIndex={activeImageIndex}
+              alt={product.title}
+              onClose={() => setLightboxOpen(false)}
+            />
+          )}
+
+          {shareOpen && (
+            <ShareSheet product={product} onClose={() => setShareOpen(false)} />
+          )}
 
           {/* ── Foreign Campus Banner ── */}
           {isForeignCampus && (

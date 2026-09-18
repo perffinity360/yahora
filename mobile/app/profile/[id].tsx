@@ -7,7 +7,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -27,6 +26,7 @@ import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { PublicListing, PublicProfile } from '../../src/types';
+import { shareProduct } from '../../src/lib/share';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
@@ -78,10 +78,10 @@ export default function PublicProfileScreen() {
   // falling back to the dashboard.
   const goBack = () => router.replace(fromParam ?? '/(tabs)/profile');
 
+  // See src/lib/share.ts for the message, the link and why Android and iOS
+  // carry the URL differently.
   const handleShare = (item: PublicListing) => {
-    Share.share({ message: `Check out "${item.title}" for ₹${item.price} on Yahora` }).catch(
-      () => {},
-    );
+    shareProduct(item);
   };
 
   const profile = data?.profile;

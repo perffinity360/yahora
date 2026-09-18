@@ -4,10 +4,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -28,10 +28,11 @@ import { useMarketplaceFeed } from '../../src/hooks/useMarketplace';
 import { useMarketplaceFilters } from '../../src/hooks/useMarketplaceFilters';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
 import { useUniversities } from '../../src/hooks/useUniversities';
-import { SORT_OPTIONS } from '../../src/lib/marketplace';
+import { SORT_OPTIONS, type SortKey } from '../../src/lib/marketplace';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { MarketplaceProduct, University } from '../../src/types';
+import { shareProduct } from '../../src/lib/share';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
@@ -87,8 +88,10 @@ export default function MarketplaceScreen() {
     }
   }, [refetch]);
 
+  // Text, link and platform handling all live in src/lib/share.ts — the app and
+  // the website share the same wording, and the link unfurls as a card.
   const handleShare = (item: MarketplaceProduct) => {
-    Share.share({ message: `Check out "${item.title}" for ₹${item.price} on Yahora` }).catch(() => {});
+    shareProduct(item);
   };
 
   const handleSetUniversity = (u: University) => {
@@ -139,6 +142,84 @@ export default function MarketplaceScreen() {
 
   // Drives the grid's scroll position when the sort order changes.
   const gridRef = useRef<FlashListRef<MarketplaceProduct>>(null);
+
+  /**
+   * Set when a sort chip changes the order, cleared once the REORDERED list has
+   * been scrolled to the top.
+   *
+   * Scrolling in the chip's onPress alone was not reliable — it worked most
+   * times and silently did nothing the rest, which is what a race looks like
+   * from the outside. The press issues a scroll, then `setActiveSort` re-renders
+   * the list with completely different `data`, and FlashList settles its own
+   * scroll position for that new content *after* our call. Whichever lands last
+   * wins, and that is timing, not logic.
+   *
+   * `displayProducts` is memoised on `activeSort` (useMarketplaceFilters), so
+   * its identity changes exactly once per re-sort. Scrolling in an effect keyed
+   * on it means we move AFTER the new order is committed, which is the only
+   * point at which the offset is ours to set.
+   */
+  const pendingScrollTop = useRef(false);
+
+  /* ── Sort dropdown ───────────────────────────────────────────────────── */
+  /** Wide enough for "Lowest Price" plus its tick without wrapping. */
+  const SORT_MENU_MIN_WIDTH = 168;
+
+  const sortAnchor = useRef<View>(null);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  /** Where to draw the menu, measured from the trigger so it opens under it. */
+  const [sortMenuAt, setSortMenuAt] = useState({ top: 0, left: 0, width: 0 });
+
+  const activeSortLabel =
+    SORT_OPTIONS.find((o) => o.key === activeSort)?.label ?? SORT_OPTIONS[0].label;
+
+  const openSortMenu = () => {
+    // Measured in window coordinates, so the menu lands under the trigger
+    // wherever the row happens to sit — no hardcoded offsets to drift.
+    //
+    // `w`/`h`, not `width`/`height`: `width` is already the window width from
+    // useWindowDimensions above, and shadowing it here is how the menu ended up
+    // being positioned against the wrong number in the first place.
+    sortAnchor.current?.measureInWindow((x, y, w, h) => {
+      const menuWidth = Math.max(w, SORT_MENU_MIN_WIDTH);
+
+      // RIGHT-aligned to the trigger, then clamped inside the screen.
+      //
+      // Left-aligning it ran the menu off the right edge, because the trigger
+      // sits against the right gutter and the menu is wider than it is. Lining
+      // the two right edges up is also what a dropdown under a right-aligned
+      // control is supposed to do.
+      //
+      // The clamp is not paranoia: a longer sort label, a bigger font scale or
+      // a narrower phone each move the trigger, and any of them could push the
+      // menu back off one edge or the other.
+      const preferredLeft = x + w - menuWidth;
+      const left = Math.min(
+        Math.max(preferredLeft, SCREEN_PAD),
+        Math.max(width - menuWidth - SCREEN_PAD, SCREEN_PAD),
+      );
+
+      setSortMenuAt({ top: y + h + 6, left, width: menuWidth });
+      setSortMenuOpen(true);
+    });
+  };
+
+  const chooseSort = (key: SortKey) => {
+    setSortMenuOpen(false);
+    // Only a genuine change reorders the list; see the effect above.
+    if (key !== activeSort) pendingScrollTop.current = true;
+    setActiveSort(key);
+    gridRef.current?.scrollToOffset({ offset: 0, animated: false });
+  };
+
+  useEffect(() => {
+    if (!pendingScrollTop.current) return;
+    pendingScrollTop.current = false;
+    // Not animated: the list is entirely different content now, so there is
+    // nothing to animate THROUGH — and an in-flight animation is the thing that
+    // was getting clobbered. An instant jump cannot be half-finished.
+    gridRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [displayProducts]);
 
   const emptyTitle = filters.search.trim()
     ? `No results for "${filters.search.trim()}"`
@@ -233,36 +314,23 @@ export default function MarketplaceScreen() {
           })}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.sortScroll}
-          contentContainerStyle={styles.sortRow}
+        {/* One control instead of a strip. Three chips did not fit the row, so
+            the third was always off-screen behind a scroll nobody could see —
+            "Trending" existed but was effectively undiscoverable. A dropdown
+            shows the CURRENT sort as its label, which the strip never did. */}
+        <Pressable
+          ref={sortAnchor}
+          onPress={openSortMenu}
+          accessibilityRole="button"
+          accessibilityLabel={`Sort by ${activeSortLabel}. Change sort order`}
+          style={({ pressed }) => [styles.sortTrigger, pressed && styles.sortTriggerPressed]}
         >
-          {SORT_OPTIONS.map((s) => {
-            const active = activeSort === s.key;
-            return (
-              <Pressable
-                key={s.key}
-                onPress={() => {
-                  setActiveSort(s.key);
-                  // Back to the top. The offset someone is at belongs to the
-                  // ORDER they were reading: keeping it after a re-sort drops
-                  // them into the middle of a list they have not seen the start
-                  // of, which reads as "the button did nothing". Unconditional
-                  // rather than guarded on `s.key !== activeSort` — re-tapping
-                  // the active chip is usually someone trying to get back up.
-                  gridRef.current?.scrollToOffset({ offset: 0, animated: true });
-                }}
-                style={[styles.sortChip, active && styles.sortChipActive]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-              >
-                <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>{s.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+          <Feather name="bar-chart-2" size={13} color={colors.purple} />
+          <Text style={styles.sortTriggerText} numberOfLines={1}>
+            {activeSortLabel}
+          </Text>
+          <Feather name="chevron-down" size={14} color={colors.mutedText} />
+        </Pressable>
       </View>
 
       {/* Foreign-campus (view-only) banner */}
@@ -329,6 +397,19 @@ export default function MarketplaceScreen() {
       ) : (
         <FlashList
           ref={gridRef}
+          // ⚠ OFF, and this is the fix for "switching sort leaves a sliver of
+          // the old first row on screen".
+          //
+          // FlashList v2 turns maintainVisibleContentPosition ON by default: on
+          // a data change it re-anchors the scroll so the item you were looking
+          // at stays put. That is right for a chat, where messages arrive above
+          // what you are reading. It is exactly wrong for a re-sort, where every
+          // item moves on purpose — it would restore the anchor a moment after
+          // our scrollToOffset, landing just short of the top.
+          //
+          // This list only ever gets a wholesale replacement (refetch or
+          // re-sort), so there is no position worth preserving across one.
+          maintainVisibleContentPosition={{ disabled: true }}
           data={displayProducts}
           keyExtractor={(item) => item.id}
           numColumns={2}
@@ -353,6 +434,50 @@ export default function MarketplaceScreen() {
           </LinearGradient>
         </Pressable>
       ) : null}
+
+      {/* Rendered as a Modal so it escapes the list's stacking context — an
+          absolutely positioned menu inside the screen would sit under the FAB
+          and under FlashList's own layers. */}
+      <Modal
+        visible={sortMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortMenuOpen(false)}
+      >
+        <Pressable style={styles.sortBackdrop} onPress={() => setSortMenuOpen(false)}>
+          <View
+            style={[
+              styles.sortMenu,
+              // `width`, not `minWidth`: the clamp above computed a box that is
+              // known to fit, and minWidth would let the content grow back past
+              // the edge it was just pulled inside.
+              { top: sortMenuAt.top, left: sortMenuAt.left, width: sortMenuAt.width },
+            ]}
+          >
+            {SORT_OPTIONS.map((option, index) => {
+              const active = option.key === activeSort;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => chooseSort(option.key)}
+                  accessibilityRole="menuitem"
+                  accessibilityState={{ selected: active }}
+                  style={({ pressed }) => [
+                    styles.sortItem,
+                    index > 0 && styles.sortItemDivided,
+                    pressed && styles.sortItemPressed,
+                  ]}
+                >
+                  <Text style={[styles.sortItemText, active && styles.sortItemTextActive]}>
+                    {option.label}
+                  </Text>
+                  {active ? <Feather name="check" size={15} color={colors.purple} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
 
       <FilterSheet visible={filterOpen} onClose={() => setFilterOpen(false)} filters={filters} />
       <CampusSwitcherModal
@@ -548,32 +673,70 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: colors.white,
   },
-  sortScroll: {
-    flex: 1,
-  },
-  sortRow: {
+  sortTrigger: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingRight: SCREEN_PAD,
-  },
-  sortChip: {
-    paddingHorizontal: 13,
+    gap: 6,
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    // Pushed to the right edge: the view toggle owns the left, the sort owns
+    // the right, and the row reads as two controls instead of a queue.
+    marginLeft: 'auto',
+    marginRight: SCREEN_PAD,
     borderRadius: 999,
     backgroundColor: colors.cardSurface,
     borderWidth: 1,
-    borderColor: colors.hairline,
-  },
-  sortChipActive: {
-    backgroundColor: colors.pinkLight,
     borderColor: colors.inputBorderFocus,
   },
-  sortChipText: {
+  sortTriggerPressed: {
+    backgroundColor: colors.pinkLight,
+  },
+  sortTriggerText: {
+    flexShrink: 1,
     fontFamily: font.family.semibold,
     fontSize: 12.5,
+    color: colors.purpleDark,
+  },
+
+  sortBackdrop: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  sortMenu: {
+    position: 'absolute',
+    borderRadius: radius.md + 4,
+    paddingVertical: 4,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.inputBorderFocus,
+    shadowColor: colors.purple,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  sortItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+  },
+  sortItemDivided: {
+    borderTopWidth: 1,
+    borderTopColor: colors.hairline,
+  },
+  sortItemPressed: {
+    backgroundColor: colors.pinkLight,
+  },
+  sortItemText: {
+    fontFamily: font.family.medium,
+    fontSize: 14,
     color: colors.mutedText,
   },
-  sortChipTextActive: {
+  sortItemTextActive: {
+    fontFamily: font.family.bold,
     color: colors.purpleDark,
   },
 

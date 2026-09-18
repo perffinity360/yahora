@@ -23,6 +23,17 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { DemoModal } from '../../src/components/DemoModal';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import {
+  formatCountdown,
+  formatWait,
+  loadOtpLedger,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  OTP_TIMER_MAX_SECONDS,
+  otpCooldownSeconds,
+  recordOtpSend,
+  recordServerCooldown,
+  type OtpLedger,
+} from '../../src/lib/otpLedger';
 import { PasswordField } from '../../src/components/PasswordField';
 import type { ApiError } from '../../src/lib/api';
 import { TurnstileWebView } from '../../src/components/TurnstileWebView';
@@ -52,12 +63,8 @@ const AUTH_TAB_KEY = 'yahora_auth_tab';
  */
 const INVALID_CREDENTIALS_MESSAGE = 'Incorrect username or password. Please try again.';
 
-/** m:ss for the lockout countdown. */
-const formatWait = (totalSeconds: number) => {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-};
+// formatWait / formatCountdown live in src/lib/otpLedger.ts, shared with the
+// OTP cooldown so the two countdowns on this screen can never format differently.
 
 // Public by design (it only names the widget) and inlined at bundle time, so
 // restart Metro with `npx expo start -c` after changing it. The SECRET key
@@ -101,6 +108,31 @@ export default function LoginScreen() {
   const [universitiesOpen, setUniversitiesOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
 
+  /* ── OTP send limits (mirrors frontend/src/pages/auth/Auth.jsx) ─────────
+     The ledger lives in AsyncStorage and is mirrored here, so the button can
+     answer "may this address have a code right now?" before a request is
+     spent, instead of after a 429. See src/lib/otpLedger.ts. */
+  const [otpLedger, setOtpLedger] = useState<OtpLedger>({});
+  const [otpCooldown, setOtpCooldown] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    loadOtpLedger().then((ledger) => {
+      if (active) setOtpLedger(ledger);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The cooldown belongs to an ADDRESS, not to the screen, so it is recomputed
+  // whenever the ledger or the typed email changes. Without this, typing a
+  // second address left the first one's countdown on the button.
+  useEffect(() => {
+    setOtpCooldown(otpCooldownSeconds(otpLedger, email));
+  }, [otpLedger, email]);
+
+
   /* ── Tabs ──────────────────────────────────────────────────────────────
      Defaults to OTP and is corrected once AsyncStorage answers, rather than
      rendering nothing while we wait: a blank card on app open is worse than a
@@ -140,13 +172,22 @@ export default function LoginScreen() {
   /** Seconds left on an identifier lockout. 0 means not locked. */
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
-  // One tick drives the countdown. It re-renders only while a lockout is
-  // running, so there is no timer alive on an idle screen.
+  // ONE tick drives both countdowns on this screen — the password lockout and
+  // the OTP send cooldown — exactly as the web's Auth.jsx does. Two timers doing
+  // one job is how a small bug quietly becomes two. It only runs while one of
+  // them is counting, so there is no timer alive on an idle screen.
+  //
+  // The OTP cooldown RE-READS its stored deadline each second instead of
+  // subtracting one: a backgrounded app has its timers paused, and re-reading
+  // means it comes back showing the truth rather than however far it drifted.
   useEffect(() => {
-    if (lockoutSeconds <= 0) return;
-    const timer = setTimeout(() => setLockoutSeconds((secs) => Math.max(secs - 1, 0)), 1000);
+    if (lockoutSeconds <= 0 && otpCooldown <= 0) return;
+    const timer = setTimeout(() => {
+      setLockoutSeconds((secs) => Math.max(secs - 1, 0));
+      setOtpCooldown(otpCooldownSeconds(otpLedger, email));
+    }, 1000);
     return () => clearTimeout(timer);
-  }, [lockoutSeconds]);
+  }, [lockoutSeconds, otpCooldown, otpLedger, email]);
 
   const handlePasswordLogin = async () => {
     if (signingIn || lockoutSeconds > 0) return;
@@ -319,6 +360,9 @@ export default function LoginScreen() {
   };
 
   const handleRequestOtp = async () => {
+    // The button is disabled while counting; this is the belt to those braces —
+    // the keyboard's Send key does not respect a disabled button.
+    if (otpCooldown > 0) return;
     setError(null);
     setInfo(null);
     if (!email.trim()) {
@@ -334,6 +378,11 @@ export default function LoginScreen() {
     setSending(true);
     try {
       const res = await requestOtp(email.trim(), captchaToken);
+      // Record the send and let the ledger decide. It mirrors the server:
+      // sends 1–3 leave the button live, and only the fourth starts a gap.
+      // Starting a countdown unconditionally here would put 60 seconds on the
+      // very first code, and eat the two free retries a slow inbox needs.
+      setOtpLedger(await recordOtpSend(otpLedger, email));
       setStep('otp');
       setInfo(
         res.university
@@ -341,7 +390,7 @@ export default function LoginScreen() {
           : `Code sent to ${email.trim()}.`,
       );
     } catch (e) {
-      const { status, fromApi } = e as ApiError;
+      const { status, fromApi, body } = e as ApiError;
       // api.ts puts the backend's `error` field in e.message, which for these
       // responses is a machine code, not a sentence (backend/API.md).
       const code = e instanceof Error ? e.message : '';
@@ -357,7 +406,18 @@ export default function LoginScreen() {
         // Retryable at once: the reset below has already started a new check.
         setError('We could not verify that you are a real visitor. Please try again.');
       } else if (code === 'RATE_LIMITED') {
-        setError('Too many code requests. Please try again shortly.');
+        // One code covers ALL of the server's OTP limits — the per-email
+        // one-minute gap, the 10-a-day email cap, the 20-a-day device cap, and
+        // Supabase's own per-address cooldown. Deliberately: the student gets
+        // one countdown and never has to care which fired.
+        //
+        // The server's number is authoritative — it is the only one that knows
+        // about codes sent from another device, or about the daily cap. The
+        // disabled button (or, past ten minutes, the line under it) carries the
+        // whole message, so no error line as well. Same as the web.
+        const retry = Number(body?.retry_after_seconds) || OTP_RESEND_COOLDOWN_SECONDS;
+        setOtpLedger(await recordServerCooldown(otpLedger, email, retry));
+        setError(null);
       } else if (code === 'SERVICE_BUSY') {
         setError("We're having trouble sending codes right now. Please try again in a few minutes.");
       } else {
@@ -492,7 +552,7 @@ export default function LoginScreen() {
                   {step === 'email' && tab === 'password' ? (
                     <>
                       <Text style={styles.subtitle}>
-                        Enter the username and password you chose at signup
+                        Enter the username and password{'\n'}you chose at signup
                       </Text>
 
                       <Text style={styles.inputLabel}>USERNAME OR EMAIL</Text>
@@ -558,7 +618,7 @@ export default function LoginScreen() {
                           only place that guidance can live, because the failure
                           message is deliberately identical for every cause. */}
                       <Text style={styles.helperNote}>
-                        New to Yahora? Use the College Email &amp; OTP tab to create your
+                        New to Yahora? Use the College Email &amp; OTP{'\n'}tab to create your
                         account.
                       </Text>
                     </>
@@ -595,8 +655,19 @@ export default function LoginScreen() {
                         {/* No token, no send — same rule as the web form. */}
                         <GradientButton
                           onPress={handleRequestOtp}
-                          disabled={sending || !captchaToken}
-                          label={sending ? 'Sending…' : 'Send Code'}
+                          disabled={sending || otpCooldown > 0 || !captchaToken}
+                          label={
+                            sending
+                              ? 'Sending…'
+                              : otpCooldown > OTP_TIMER_MAX_SECONDS
+                                ? // A disabled button still reading "Send Code"
+                                  // looks broken. The line below carries the
+                                  // detail; this just has to stop being a lie.
+                                  'Locked'
+                                : otpCooldown > 0
+                                  ? `Send in ${formatWait(otpCooldown)}`
+                                  : 'Send Code'
+                          }
                           busy={sending}
                         />
                       </View>
@@ -646,8 +717,24 @@ export default function LoginScreen() {
                         </>
                       ) : null}
 
-                      {error ? <InlineMessage tone="error" text={error} /> : null}
-                      {info && !error ? <InlineMessage tone="success" text={info} /> : null}
+                      {/* Long waits get the countdown here rather than on the
+                          button, which has no room for hours. The daily cap is a
+                          rolling 24 hours, so this is the difference between
+                          "come back tomorrow morning" and a dead end that reads
+                          like the account is gone. Under ten minutes the
+                          disabled button is already counting and explains
+                          itself, so nothing extra is said. Same as the web. */}
+                      {otpCooldown > OTP_TIMER_MAX_SECONDS ? (
+                        <InlineMessage
+                          tone="error"
+                          text={`Too many codes requested for this email. You can try again in ${formatCountdown(otpCooldown)}.`}
+                        />
+                      ) : error ? (
+                        <InlineMessage tone="error" text={error} />
+                      ) : null}
+                      {info && !error && otpCooldown <= OTP_TIMER_MAX_SECONDS ? (
+                        <InlineMessage tone="success" text={info} />
+                      ) : null}
 
                       <View style={styles.pillRow}>
                         <PillBtn

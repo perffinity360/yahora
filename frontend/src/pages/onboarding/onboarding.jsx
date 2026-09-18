@@ -566,9 +566,14 @@ const Onboarding = () => {
 
      if (response.ok) {
        // Setting a password revokes every existing GoTrue session, so the token
-       // that authorised this very call is dead as of now. The endpoint returns
-       // no new session today; if it ever starts to, adopt it here so the
-       // student isn't bounced to the login form the instant signup succeeds.
+       // that authorised this very call is dead as of now — its refresh token
+       // too, so there is no self-healing.
+       //
+       // The endpoint DOES return a new session (verified 17 Sep 2026; this
+       // comment previously said it did not, which made the branch below look
+       // like dead code it would be safe to delete). Adopting it is what keeps
+       // a student signed in through signup instead of being bounced to the
+       // login form the instant it succeeds. Do not remove it.
        if (data.session?.access_token) {
          login(
            data.session.access_token,

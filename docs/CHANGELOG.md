@@ -277,6 +277,354 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-18 (later) — Two follow-ups on the share/zoom work (Vishwajeet)
+
+Both reported by the human against the entry below. Amends it; nothing new was added.
+
+### 1. Every emoji in a shared message arrived as � on a laptop
+
+**The emoji stay everywhere they survive, and are dropped on the one path that cannot carry
+them: a desktop browser.** Same message, same wording, decoration only where it makes it
+through.
+
+| Where you share from | What goes out |
+|---|---|
+| the app, and the website on a phone or tablet | `🛍️` `💰` `📍` `👇` — unchanged |
+| the website on a laptop | the same lines, no emoji, `↓` in place of `👇` |
+
+The user's report:
+
+```
+� *Sony WH-1000XM4 Wireless Headphones*
+� ₹14,500 · Like New
+� Hostel Block B, Room 118
+```
+
+**The tell is that `₹` and `·` survived.** Those are BMP characters — at most three bytes of
+UTF-8. Every character that died (`🛍️` `💰` `📍` `👇`) is **astral**: above U+FFFF, four bytes,
+a surrogate pair in JS. Something on the way truncates to the BMP.
+
+That something is **the desktop deep-link handoff**. The web share targets are plain links, so
+on a laptop `wa.me` hands the text to the `whatsapp://` protocol handler and into the WhatsApp
+desktop app, which does not carry non-BMP characters. Our side is clean: `encodeURIComponent`
+round-trips the string exactly, and the source files and the built bundle are valid UTF-8 with
+the emoji intact. The same `wa.me` link **on a phone is fine** — which is why it worked in the
+app and in a mobile browser and broke only on a laptop.
+
+**Implementation** — `frontend/src/utils/share.js`:
+
+- two icon sets, `EMOJI_ICONS` and `PLAIN_ICONS`, over one message;
+- `buildShareText(product, { emoji = isTouchDevice() })`. **The default decides it**, rather than
+  each call site passing a flag, because the failure is silent — a caller that forgot would ship
+  mojibake with no error to notice;
+- `isTouchDevice()` is `matchMedia("(pointer: coarse)")`, not a UA sniff, which would misread
+  desktop-mode-on-a-phone.
+
+`wa.me` is still the WhatsApp link on every device — an earlier pass routed laptops to
+`web.whatsapp.com` to dodge the handoff, and that is reverted: the laptop opens WhatsApp Desktop
+the way it always did.
+
+⚠ **Do not put astral characters in `PLAIN_ICONS`.** Safe there: `₹` `·` `↓` `▸` `★` `✓`. And if a new
+share target ever mangles the emoji on a phone too, that target is deep-linking into a desktop
+app — Telegram is the one to watch (`t.me/share/url` can hand off to Telegram Desktop). It has
+not been reported, so it is untouched.
+
+### 2. In-app pinch-to-zoom "works very hardly, from a very specific point"
+
+Accurate description of a gesture losing a race. The photo sits inside a vertical `ScrollView`
+**and** a horizontal paging `FlatList`, and both native scroll recognisers claim the touch as
+soon as it travels — so the pinch only won when two fingers landed and spread almost perfectly
+still and symmetrically.
+
+**My own code made it worse.** I had `scrollEnabled={!lift.active}` on both scrollers, driven by
+React state set at pinch start. **Toggling `scrollEnabled` during a touch cancels that touch on
+iOS**, so the one thing meant to protect the gesture was cancelling it, and the state change
+also re-rendered the whole screen and every carousel cell mid-pinch.
+
+Three changes, all in `mobile/src/components/PinchToZoom.tsx`:
+
+- **`manualActivation(true)` + `manager.activate()` on the second finger.** The gesture now
+  claims the touch stream the instant a second finger lands, before either scroller can read it
+  as a scroll, and RNGH cancels them for us. Single-finger touches never activate it, so
+  scrolling and tap-to-open are untouched.
+- **No React state during the gesture.** The lifted photo's identity is a **shared value**
+  (`liftedKey`), so the original hides on the UI thread with no re-render; the overlay owns its
+  own state and is driven through a ref, so showing the copy re-renders the overlay **alone** —
+  not the screen, not the carousel.
+- **`scrollEnabled` is not touched at all any more**, on either scroller.
+
+Also: cleanup moved from `onEnd` to **`onFinalize`**, which runs on a cancelled gesture too. With
+`onEnd` alone an interrupted pinch left the original hidden and the copy stuck on screen.
+
+### Migrations applied / New endpoints / Changed endpoints / New fields
+
+**None, none, none, none.** Two client files and one component; no backend, no database.
+
+### Test data
+
+Nothing seeded. `npx tsc --noEmit` (mobile) and `npm run build` (frontend) both clean; the built
+bundle verified to carry the emoji; `buildShareText` run both ways and checked
+character by character (emoji variant keeps all four, laptop variant contains no astral
+character at all); the four RNGH APIs used (`manualActivation`, `onTouchesDown` + `manager.activate`, `onFinalize`) all
+confirmed present in the installed `react-native-gesture-handler` 2.32.
+
+**The pinch itself is not verified on a device — it cannot be from here.** What to check: two
+fingers anywhere on the gallery photo should catch the zoom every time, including while the page
+is mid-scroll; the rest of the page must not move; release should settle the photo back exactly
+into the carousel; and a one-finger swipe across the gallery must still page between photos.
+
+### What NOT to do yet
+
+- **Don't strip the emoji from the phone path too.** They are correct there and always were; only
+  the desktop-app handoff cannot carry them. `buildShareText` already draws that line.
+- **Don't reintroduce a prop derived from the lift state** (`scrollEnabled`, `pointerEvents`,
+  anything) in `mobile/app/product/[id].tsx`. That is what broke it. There is a comment at the
+  hook saying so.
+- Everything under "What NOT to do yet" in the entry below still stands — in particular, the OG
+  card still will not unfurl until `/share` is reachable from the public internet.
+
+---
+
+## 2026-09-18 — Sharing a listing, and zoom on both clients (Vishwajeet)
+
+📮 **HANDOFF — Neeraj, this touched `frontend/` properly this time: four files changed, three
+new ones. Read "What NOT to do yet" before you next open `ProductCard.jsx`.** Requested by the
+human; the same request covered web and app, and the web half is your directory.
+
+### Migrations applied
+
+**None.** No schema change, nothing run against production.
+
+### New endpoints
+
+**`GET /share/product/:id`** → see API.md §share. **Mounted at `/share`, NOT `/api`** — it
+returns HTML, not JSON, and it is the only route in the codebase that does.
+
+It is the Open Graph page for a shared listing. Both clients now build their share links from
+it instead of from the SPA path.
+
+**Why it had to exist.** The site is a Vite SPA: one static `index.html`, one static set of OG
+tags. WhatsApp, Telegram, Slack, iMessage and X do **not run JavaScript** when they unfurl a
+link — they read the first response and nothing else — so every listing anyone has ever shared
+unfurled as the generic "Yahora | Keep the Story Going" card. React replacing the tags happens
+long after the crawler has gone.
+
+⚠ **The redirect inside it is JavaScript-only, and that is load-bearing.** A 301/302 gets
+followed by the crawlers straight back to the SPA's generic tags; `<meta http-equiv="refresh">`
+gets followed by some of them too. `location.replace()` in a `<script>` is the one form every
+crawler ignores and every browser honours. If you ever "tidy" that into a real redirect, every
+preview silently goes generic again and nothing errors.
+
+New env var: `WEB_APP_URL`, default `https://yahora.netlify.app`, documented in
+`backend/.env.example`. It is the only consumer.
+
+### Changed endpoints (BREAKING)
+
+**None.** No existing route, response shape, status code or error string changed.
+
+### New fields on existing responses
+
+**None.**
+
+### What I changed, by directory
+
+**`backend/`** (mine) — new `src/modules/share/`, one mount line in `app.js`, `API.md`,
+`.env.example`.
+
+**`frontend/`** (YOURS — this is the part to read)
+
+| File | What happened |
+|---|---|
+| `src/components/ShareSheet/` | **New.** The share sheet that was inlined in `ProductCard.jsx`, lifted out so the product page can show the same one. |
+| `src/utils/share.js` | **New.** The one place the site decides what a shared listing says. |
+| `src/components/ProductCard/ProductCard.jsx` | ~250 lines **removed** — `ShareSheet`, `BRAND_TARGETS`, `copyText`, three icons, the `createPortal` import. Renders `<ShareSheet product onClose/>` now. **Nothing about how it looks changed.** |
+| `src/components/ProductCard/ProductCard.module.css` | The `.share*` block (~240 lines) removed; it moved with the component. A comment marks where it was. |
+| `src/pages/product/ProductDetail.jsx` | `handleShare` is now two lines and opens the sheet. |
+| `src/components/ImageLightbox/*` | Double-click zoom removed; single click on the photo zooms. |
+
+**`mobile/`** (mine) — new `src/lib/share.ts` and `src/components/PinchToZoom.tsx`, four share
+call sites rewritten, the product gallery wrapped.
+
+### The three bugs behind all of this
+
+**1. The share buttons did almost nothing.** Both web buttons called `navigator.share`, which
+does not exist on desktop Chrome or Firefox, then fell back to `navigator.clipboard`, which is
+`undefined` over plain `http://` — which is how the dev server is reached from a phone on the
+LAN. Both throws landed in an empty `catch`, so the button looked dead with nothing in the
+console. The sheet has no such failure mode, and still offers the native sheet where the
+browser genuinely has it. On mobile, `Share.share()` was posting the title and **no link at
+all**, so a received share could not be opened.
+
+**2. Double-click-to-zoom in the lightbox never worked.** Not a missing handler — `onDoubleClick`
+was there. `setPointerCapture` on the stage retargets the pointer stream, and the second
+`pointerdown` of the pair arrives with the capture still held from the first, so the browser
+never raised `dblclick` on the bound element. Removed rather than fixed: the `zoom-in` cursor
+over the photo was already promising that a **single** click zooms, so that is what it does now
+(click again to fit). The cursor moved off `.stage` onto `.image`, because clicking the empty
+space beside a photo closes the viewer and should not look like it zooms.
+
+**3. Pinching the product photo in the app did nothing.** Tap-then-pinch worked; the reflex —
+pinch the photo where it sits — did not.
+
+### `mobile/src/components/PinchToZoom.tsx` — read this before touching it
+
+The photo is **not** scaled where it sits. It is **lifted**: on pinch start the cell measures
+itself in window coordinates, a copy is drawn at exactly those coordinates in a screen-wide
+overlay above the page, and the original hides underneath — both in one commit, so there is no
+visible swap. Only the copy scales, nothing is laid out again, and nothing else on the screen
+moves. On release it animates back to the rect it came from.
+
+Two things there are load-bearing and look like they could be simplified:
+
+- **No `Modal`.** On Android a transparent Modal is a separate native window and swallows the
+  touches the still-running pinch needs. The overlay is a plain absolutely-positioned sibling
+  at the screen root, `pointerEvents="none"`.
+- **`collapsable={false}`** on the measured View. Without it Android can flatten the view away
+  and `measureInWindow` returns the wrong rect, which lands the copy somewhere else on screen.
+
+Scaling in place would have been clipped to the gallery frame on Android, and would have dragged
+the condition badge, the SOLD badge and the paging dots along with it.
+
+### Test data
+
+Nothing seeded. Verified against the local stack:
+
+- `/share/product/<real id>` → 200, correct `og:title` / `og:description` / `og:image` /
+  `twitter:card: summary_large_image`, `Cache-Control: public, max-age=300`;
+- `/share/product/<id that does not exist>` → 404 with the "no longer on Yahora" card, not a
+  JSON envelope;
+- a title of `Evil" /><script>alert(1)</script> Calc` written into a local row came back fully
+  escaped in both the meta tag and the `<h1>`; row restored afterwards;
+- `npm run build` (frontend) and `npx tsc --noEmit` (mobile) both clean.
+
+**Not verified in a browser or on a phone** — that is yours and the human's. In particular I
+have not watched a real WhatsApp unfurl, because that needs a publicly reachable URL.
+
+### What NOT to do yet
+
+- **The OG card will not unfurl until `/share` is reachable from the public internet.** Today
+  `WEB_APP_URL` defaults to the Netlify site but the share link points at the **backend**
+  origin. If the backend is not public, or it is on a host WhatsApp cannot reach, the message
+  still carries the formatted text and a working link — it just draws no card. Wiring a
+  `/share/*` Netlify redirect to the backend would make the link read as `yahora.netlify.app`,
+  which is nicer, and is a deploy change, not a code change. **I have not done it.**
+- **Links shared from a dev build only open on your Wi-Fi.** The mobile share URL resolves to
+  the Metro host's LAN address in dev. That is correct — a dev build has no public URL — so do
+  not chase it as a bug. `EXPO_PUBLIC_SHARE_BASE_URL` overrides it.
+- **Don't add `onDoubleClick` back to the lightbox.** With click-zoom live it would zoom in and
+  straight back out. There is a comment saying so.
+- **Don't reintroduce the `.share*` classes in `ProductCard.module.css`.** If the sheet needs a
+  style change it belongs in `ShareSheet.module.css`, where both callers get it.
+- **Wording lives in two files that must agree** — `frontend/src/utils/share.js` and
+  `mobile/src/lib/share.ts`. Change one, change the other, or the same listing reads differently
+  depending on which client shared it.
+
+### Could this fail against existing rows?
+
+**No.** Nothing is written. The share route does one indexed `select` on `products` by primary
+key, on a path no student hits in normal use. A listing with no photo omits `og:image` and
+degrades to `twitter:card: summary`; a listing with no condition or campus drops those lines
+from the message rather than sharing stray separators. Both were the first cases I wrote.
+
+## 2026-09-17 — Onboarding could lock a student out of their own new account (Vishwajeet)
+
+📮 **HANDOFF — Neeraj, this touched `frontend/` (one comment) and it affects your onboarding
+page's behaviour. Read "What NOT to do yet".**
+
+A failed onboarding destroyed the student's session, so every retry was a 401 they could do
+nothing about. Found while chasing a raw `INVALID_REFERENCE` on the phone; the reference was a
+symptom, the lockout was the bug.
+
+### Migrations applied
+
+**None.** No schema change. Controller, two clients, and this file.
+
+### New endpoints
+
+**None.** No route added, removed or renamed.
+
+### Changed endpoints (BREAKING — in one narrow sense)
+
+**`POST /api/auth/onboarding` now returns a new error before it touches the password.**
+
+| | Before | After |
+|---|---|---|
+| bad `course_id` / `specialization_id` | `400 INVALID_REFERENCE` from a `23503`, **after** the password was set | `400 INVALID_REFERENCE` with a `message`, **before** the password is set |
+| caller's session after that failure | **access token AND refresh token both revoked** | both still valid |
+| what the student could do next | nothing — every retry 401s | re-pick and submit again |
+
+The code is the same; **when** it is raised is what changed, and it now carries a `message`
+("That course or specialization no longer exists. Please pick it again.") where before it was a
+bare `mapDbError` code.
+
+**Why the session died.** `supabase.auth.admin.updateUserById(userId, { password })` revokes
+every GoTrue session for that user — including the one that authorised the request in flight,
+and its refresh token, so there is no self-healing. The two foreign keys were validated only by
+the profile `UPDATE` in step 3, which runs *after* that. So a stale id produced an error message
+telling the student to fix a dropdown, on a screen where every attempt to fix it was a 401.
+
+Reproduced, not theorised:
+
+```
+token after sign-in                 -> 200 still valid
+failed onboarding: 400 INVALID_REFERENCE
+token after the FAILED onboarding   -> 401 DEAD
+refresh token                       -> REVOKED
+```
+
+and after the fix:
+
+```
+failed onboarding: 400 INVALID_REFERENCE
+access token      : 200=before  ->  200=after (survived)
+refresh token     : still works
+```
+
+**How a student reached it at all:** both clients cache the academic lists, and a
+`supabase db reset` regenerates every course and specialization uuid — `seed.sql`'s fixed
+`c0000000-…` ids lose the `on conflict` to rows an earlier migration already inserted, so
+B.Tech's real id changes on every reset. The phone was posting pre-reset ids. Dev-only as a
+*cause*; the lockout it triggered was not.
+
+### New fields on existing responses
+
+`INVALID_REFERENCE` from this endpoint now carries `message`. Purely additive.
+
+### Test data
+
+Nothing seeded. Verified against the local stack, both paths, before and after:
+
+- successful onboarding: 200, response carries a `session`, old token correctly revoked;
+- failed onboarding: 400, **access and refresh tokens both survive**;
+- the other five failure codes unchanged (`WEAK_PASSWORD`, `COMMON_PASSWORD`, password = username,
+  `USERNAME_TAKEN`, `INVALID_FORMAT`) — re-run after the change;
+- probe accounts deleted afterwards.
+
+### What NOT to do yet
+
+- **Don't add validation to `completeOnboarding` below step 2.** Everything that can fail on the
+  caller's input has to be checked above the password change or it re-creates this exact bug.
+  There is a comment at that line and a note in API.md saying so.
+- **Neeraj — your onboarding page was already correct here and I did not change its logic.** It
+  adopts `data.session` on success and redirects to `/auth` on a 401. The one thing I edited is a
+  **comment** above that adopt-branch which said *"The endpoint returns no new session today"*.
+  That is false — it does, and has since Phase 3 — and the comment made the branch look like dead
+  code someone could safely delete. Deleting it would sign a student out the instant signup
+  succeeded. Nothing else in `frontend/` was touched.
+- **Don't rely on the mobile fix having been there before.** `mobile/app/(auth)/onboarding.tsx`
+  was **not** adopting the returned session, so a new student was landing in the app on a revoked
+  token. The marketplace still rendered (that route is `optionalAuth`), which is why it went
+  unnoticed — the dashboard and messages would have 401'd. Fixed.
+
+### Could this fail against existing rows?
+
+**No.** No schema change, no data written by the fix. The new check is two indexed `select id`
+lookups on `courses` / `specializations` per onboarding call, on the rare path. The foreign-key
+constraints still exist and are still what guarantee integrity — the check only decides *when*
+the caller finds out, which a constraint cannot do.
+
+---
+
 ## 2026-09-15 — 📮 Phase 4 Block N-C: cursor pagination on the inbox and chat history; search envelope renamed (Neeraj, in Vishwajeet's module)
 
 📮 **HANDOFF — Vishwajeet, three envelope keys changed and the mobile app reads all three.**
