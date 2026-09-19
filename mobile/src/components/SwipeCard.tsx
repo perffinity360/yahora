@@ -15,6 +15,8 @@ import { ProductCard } from './ProductCard';
 
 export const SWIPE_THRESHOLD = 100;
 const FLING_MS = 320;
+/** How far a finger may travel and still count as a tap, not a drag. */
+const TAP_SLOP = 12;
 
 export interface SwipeCardHandle {
   /** Programmatically fling the card (used by the Like / Pass buttons). */
@@ -27,19 +29,30 @@ interface Props {
   depth: number;
   onLike: (id: string) => void;
   onPass: (id: string) => void;
+  /** Tap the front card to open the product detail screen. */
+  onOpen?: (id: string) => void;
 }
 
 /**
  * A single Tinder-style card. The front card (`depth === 0`) is pannable via a
  * Reanimated `Gesture.Pan`; drag past ±100px to fling it off and fire
  * like/pass, otherwise it springs back. Cards behind sit scaled + offset.
+ *
+ * The front card is also tappable (`onOpen`) and opens the product detail.
+ * That tap is an RNGH `Gesture.Tap` raced against the pan rather than a
+ * `Pressable` inside ProductCard: a pan handler and the RN touch responder
+ * both claim the same finger, and the loser is decided per-platform. Racing
+ * two gestures in one system makes it deterministic — a still finger lets the
+ * tap win on release, any real travel activates the pan first and cancels the
+ * tap, so a swipe can never also register as an open.
  */
 export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
-  { product, depth, onLike, onPass },
+  { product, depth, onLike, onPass, onOpen },
   ref,
 ) {
   const isTop = depth === 0;
   const translateX = useSharedValue(0);
+  const pressScale = useSharedValue(1);
   const { width: screenW } = useWindowDimensions();
   const flingDistance = screenW * 1.5;
 
@@ -81,6 +94,27 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       }
     });
 
+  const open = useCallback(() => {
+    onOpen?.(product.id);
+  }, [onOpen, product.id]);
+
+  const tap = Gesture.Tap()
+    .enabled(isTop && !!onOpen)
+    .maxDistance(TAP_SLOP)
+    .onBegin(() => {
+      pressScale.value = withTiming(0.985, { duration: 90 });
+    })
+    .onEnd((_e, success) => {
+      if (success) runOnJS(open)();
+    })
+    // Runs whether the tap succeeded, failed, or lost the race to the pan —
+    // so the card can never be left stuck at the pressed scale mid-swipe.
+    .onFinalize(() => {
+      pressScale.value = withTiming(1, { duration: 120 });
+    });
+
+  const gesture = Gesture.Race(pan, tap);
+
   const cardStyle = useAnimatedStyle(() => {
     if (!isTop) {
       const scale = depth === 1 ? 0.96 : 0.92;
@@ -88,7 +122,11 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       return { transform: [{ translateY: offsetY }, { scale }] };
     }
     return {
-      transform: [{ translateX: translateX.value }, { rotate: `${translateX.value / 20}deg` }],
+      transform: [
+        { translateX: translateX.value },
+        { rotate: `${translateX.value / 20}deg` },
+        { scale: pressScale.value },
+      ],
     };
   });
 
@@ -100,7 +138,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
   }));
 
   return (
-    <GestureDetector gesture={pan}>
+    <GestureDetector gesture={gesture}>
       <Animated.View style={[styles.card, { zIndex: 3 - depth }, cardStyle]}>
         {isTop ? (
           <>

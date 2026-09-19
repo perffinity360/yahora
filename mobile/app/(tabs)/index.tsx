@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
@@ -42,14 +42,28 @@ const SKELETON_COUNT = 6;
 
 type ViewMode = 'grid' | 'swipe';
 
+/**
+ * The `from` breadcrumb a swipe card hands to the product detail screen.
+ *
+ * Back out of a detail screen and `goBack()` runs `router.replace(from)`, which
+ * re-mounts this screen from scratch (the root layout is a `<Slot/>`). Plain
+ * `/(tabs)` would therefore drop the user back into the GRID after they tapped
+ * a card in swipe mode. The `view` param survives the round trip and restores
+ * the mode they were actually in; the deck itself is restored inside SwipeDeck.
+ */
+const SWIPE_HREF = '/(tabs)?view=swipe';
+
 export default function MarketplaceScreen() {
   const router = useRouter();
+  const { view } = useLocalSearchParams<{ view?: string }>();
   const { profile, isDemoUser, signOut } = useAuth();
   const myUserId = profile?.id;
   const homeUniversityId = profile?.university_id ?? undefined;
 
   const [viewedUniversityId, setViewedUniversityId] = useState<string | undefined>(homeUniversityId);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  // Read once, on mount: after that the toggle owns the mode, so landing here
+  // with ?view=swipe never fights a later switch back to the grid.
+  const [viewMode, setViewMode] = useState<ViewMode>(view === 'swipe' ? 'swipe' : 'grid');
   const [filterOpen, setFilterOpen] = useState(false);
   const [campusOpen, setCampusOpen] = useState(false);
   const [demoAlertOpen, setDemoAlertOpen] = useState(false);
@@ -371,6 +385,7 @@ export default function MarketplaceScreen() {
         <SwipeDeck
           products={displayProducts}
           onLikeProduct={(id) => toggleLike.mutate({ productId: id })}
+          onOpenProduct={(id) => router.push(hrefWithFrom(`/product/${id}`, SWIPE_HREF))}
           onBackToGrid={() => setViewMode('grid')}
         />
       ) : displayProducts.length === 0 ? (
