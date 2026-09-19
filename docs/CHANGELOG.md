@@ -276,6 +276,30 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-19 — Phase 5 Block N-A part 1: user search is broken on production (Neeraj)
+
+### Result
+User search is DOWN on production, exactly as predicted. Vishwajeet: go ahead with V-A.
+
+| Question | Answer |
+|---|---|
+| Does production search return results? | No |
+| What does the browser show? | `STATUS: 500`, body `{"error":"INTERNAL_ERROR"}` |
+| What is the exact error in the Render log? | `structure of query does not match function result type` — details: `Returned type character varying(255) does not match expected type text in column 3.` (logged 12:27:24 PM IST) |
+| Does the log show `42804` and `column 3`? | Yes, both |
+
+### How it was tested
+No screen on the website or the mobile app calls `GET /api/users/search`, so there is
+no search box to type into. I called the endpoint directly from the browser console on
+https://yahora.netlify.app while logged in, against
+https://yahora-yst4.onrender.com/api/users/search?q=a with my own access token.
+
+### Needs a decision (both of us)
+Because no client uses this endpoint, two parts of the runbook cannot happen as written:
+- N-A part 2: "check the web renders the results"
+- Sign-off: "User search renders results on the live website"
+Should a people-search screen be built in Phase 5, or moved to a later phase?
+Until we decide, part 2 will be verified the same way: by calling the endpoint directly.
 
 ## 2026-09-19 — 👁️ Phase 5 V-0: POCO X2 baseline screenshots are in `docs/screenshots/pre-VR/` (Vishwajeet)
 
