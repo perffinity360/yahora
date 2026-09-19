@@ -301,6 +301,75 @@ Because no client uses this endpoint, two parts of the runbook cannot happen as 
 Should a people-search screen be built in Phase 5, or moved to a later phase?
 Until we decide, part 2 will be verified the same way: by calling the endpoint directly.
 
+## 2026-09-19 — 👁️ Phase 5 V-0: POCO X2 baseline screenshots are in `docs/screenshots/pre-VR/` (Vishwajeet)
+
+Five baseline screens captured on the POCO X2 and committed. This is the V-0 checkpoint item
+from PHASE_5_RUNBOOK §"The baseline screenshots" — the before half of the before/after pair
+that V-B and V-C get compared against.
+
+### Device settings when these were taken
+
+**Both at stock: default font size, default display (screen zoom) size.**
+
+MIUI does not give font size as a number, it gives a ladder of labels. On this phone that
+ladder is **XXS · XS · S · L · XL · XXL**, and **L is the default.**
+
+| | Font size | Display size |
+|---|---|---|
+| Before today — every mobile screenshot and every "looks good" I gave | **S** | default |
+| These baselines, and everything from now on | **L** (default) | default |
+
+**So the phone was one step below default text, and has been for the whole project.** The
+runbook (§V-0) called this — it says the POCO had been on a reduced font size, roughly 0.9
+scale, and that is what S is. Text was *smaller* for me than for a student the entire time,
+which is why screens that looked fine to me looked broken to Neeraj: a label that fits at S
+wraps or clips at L.
+
+Display size was already at default and was not touched. **Only the font slider moved: S → L.**
+
+### Files
+
+`docs/screenshots/pre-VR/`
+
+| # | File | Screen |
+|---|---|---|
+| 1 | `poco-01-auth.jpg` | Auth / login |
+| 2 | `poco-02-marketplace-grid.jpg` | Marketplace, grid mode |
+| 3 | `poco-03-marketplace-swipe.jpg` | Marketplace, swipe mode |
+| 4 | `poco-04-product-detail.jpg` | Product detail |
+| 5 | `poco-05-chat.jpg` | Chat thread |
+
+All five are 1080×2400, the POCO's native resolution — no crop, no scaling.
+
+**Naming rule: `<device>-NN-<screen>.<ext>`, lower case, hyphens only.** The phone saved
+files 2–4 with spaces, capitals and an em dash (`poco-02-Marketplace — grid mode.jpg`); they
+have been renamed. Spaces and non-ASCII in a committed path break shell one-liners and make
+`diff -r pre-VR post-VB` unusable, which is the whole point of the folder.
+
+One deviation from the runbook stands: **these are `.jpg`, not the `.png` §V-0 asks for.**
+That is the phone's own screenshot format and re-encoding JPEG to PNG would add artefacts
+without adding detail, so the extension is left honest. Keep `.jpg` for the other ten
+baselines and for every `post-*` set.
+
+### For Neeraj
+
+- **N-0 is unblocked on my side.** Your five on the OPPO and five on the Samsung go into the
+  same `docs/screenshots/pre-VR/` folder as `oppo-NN-*` and `samsung-NN-*` — fifteen images
+  total once yours land.
+- **Put both your devices on default font size and default display size first**, and write
+  the previous values in this file before you move the sliders — the label, not "default-ish".
+  Mine were S → L. If either of your phones was also off default, say by how much: three
+  devices that were each wrong in a different direction explains a lot of past disagreement
+  about whether a screen "looks fine".
+
+### What NOT to do yet
+
+- Don't compare these against any mobile screenshot taken before today — different text scale,
+  the diff is meaningless.
+- No UI was changed for this entry. Nothing to pull, nothing to rebuild.
+
+---
+
 ## 2026-09-18 (later) — Two follow-ups on the share/zoom work (Vishwajeet)
 
 Both reported by the human against the entry below. Amends it; nothing new was added.

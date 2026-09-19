@@ -8,16 +8,35 @@ import { SwipeCard, type SwipeCardHandle } from './SwipeCard';
 
 const SCREEN_PAD = spacing.lg;
 
+/**
+ * Cards already swiped away, remembered OUTSIDE the component tree.
+ *
+ * Tapping a card opens `/product/:id`, and coming back runs
+ * `router.replace(from)` (see src/lib/nav.ts) — the root layout is a `<Slot/>`,
+ * so the whole tab screen, this deck included, is torn down and re-created.
+ * Without this the deck would rebuild from scratch and hand back every card the
+ * user had already passed on, which makes tap-to-open feel like it lost their
+ * place.
+ *
+ * Keyed by `idsKey` so it only ever restores into the SAME filtered feed: change
+ * a filter, the campus or the sort and the key no longer matches, so the deck
+ * starts fresh exactly as it did before. Module scope means it also clears on
+ * app restart, which is the right lifetime for "seen this session".
+ */
+let swipedMemo: { idsKey: string; ids: string[] } | null = null;
+
 interface Props {
   /** The filtered/sorted feed (from the marketplace filters). */
   products: MarketplaceProduct[];
   /** Fire the network like for a right-swiped card (reuses the like mutation). */
   onLikeProduct: (id: string) => void;
+  /** Tap the front card — opens the product detail screen. */
+  onOpenProduct: (id: string) => void;
   onBackToGrid: () => void;
 }
 
 /** The Tinder-style deck: top 3 cards stacked, only the front one interactive. */
-export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
+export function SwipeDeck({ products, onLikeProduct, onOpenProduct, onBackToGrid }: Props) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(width - SCREEN_PAD * 2, 340);
   // Sized to the actual card (image + info) so there's no dead space beneath it.
@@ -30,14 +49,33 @@ export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
   // like — which flips is_liked but not the set — never re-adds swiped cards.
   const idsKey = useMemo(() => products.map((p) => p.id).slice().sort().join('|'), [products]);
   useEffect(() => {
-    setDeck([...products].reverse()); // newest ends up on top of the stack
+    const stacked = [...products].reverse(); // newest ends up on top of the stack
+    if (swipedMemo?.idsKey === idsKey) {
+      const seen = new Set(swipedMemo.ids);
+      setDeck(stacked.filter((p) => !seen.has(p.id)));
+    } else {
+      swipedMemo = { idsKey, ids: [] };
+      setDeck(stacked);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey]);
 
-  const remove = (id: string) => setDeck((prev) => prev.filter((p) => p.id !== id));
+  const remove = (id: string) => {
+    if (swipedMemo?.idsKey === idsKey) {
+      if (!swipedMemo.ids.includes(id)) swipedMemo.ids.push(id);
+    } else {
+      swipedMemo = { idsKey, ids: [id] };
+    }
+    setDeck((prev) => prev.filter((p) => p.id !== id));
+  };
   const handleLike = (id: string) => {
     remove(id);
     onLikeProduct(id);
+  };
+  /** "See again" — deal the whole feed back out and forget what was swiped. */
+  const resetDeck = () => {
+    swipedMemo = { idsKey, ids: [] };
+    setDeck([...products].reverse());
   };
 
   if (deck.length === 0) {
@@ -58,7 +96,7 @@ export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
           </Pressable>
           {products.length > 0 ? (
             <Pressable
-              onPress={() => setDeck([...products].reverse())}
+              onPress={resetDeck}
               style={({ pressed }) => [styles.solidBtn, pressed && styles.solidBtnPressed]}
             >
               <Feather name="rotate-ccw" size={16} color={colors.white} />
@@ -85,6 +123,7 @@ export function SwipeDeck({ products, onLikeProduct, onBackToGrid }: Props) {
               depth={depth}
               onLike={handleLike}
               onPass={remove}
+              onOpen={onOpenProduct}
             />
           );
         })}
