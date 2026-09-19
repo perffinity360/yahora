@@ -1,1 +1,1 @@
-select * from public.users where username = 'vishwa.singh'
+select * from search_users('a', 'b0000000-0000-4000-8000-000000000006', 10);
