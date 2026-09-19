@@ -2115,21 +2115,24 @@ narrow the query — that is what a search box is for.
 client-side helper reads them all. `next_cursor: null` is the honest answer to "is there more":
 there is not, by design. A `cursor` query parameter is **ignored**, not rejected.
 
-⚠️ **BREAKING:** the key was `{ "users": [...] }` until 2026-09-15. No client read it — see
-"Known defect" below.
+⚠️ **BREAKING:** the key was `{ "users": [...] }` until 2026-09-15. No client read it — and
+no client could have, since every call 500'd until 2026-09-19 (see below).
 
-> 🚨 **KNOWN DEFECT, PRE-EXISTING AND UNFIXED — this endpoint returns 500 for every query
-> that reaches the RPC.** `search_users()` declares its third output column as `full_name text`
-> but `public.users.full_name` is `character varying(255)`, and the function body selects it
-> with no cast. PostgreSQL rejects the mismatch:
-> `42804 — Returned type character varying(255) does not match expected type text in column 3`.
-> Reproduced 2026-09-15 by calling the RPC directly over PostgREST with no backend involved, so
-> it is not a controller bug and the envelope rename above did not cause it. It has presumably
-> been broken since migration 005 (15 Aug) and went unnoticed because **no client calls this
-> endpoint** — the only references anywhere are backend code and docs. Fixing it needs a
-> migration (cast `u.full_name::text` in the function body, or redeclare the column as
-> `varchar`), which is Vishwajeet's to write. Until then, treat the contract above as what this
-> endpoint *will* return, not what it returns today.
+✅ **RESOLVED 2026-09-19 (Phase 5 Block V-A) — the 500 this endpoint returned for its whole
+life.** `search_users()` declared its third output column as `full_name text` while
+`public.users.full_name` is `character varying(255)`, and the body selected it with no cast, so
+PostgreSQL rejected every row:
+`42804 — Returned type character varying(255) does not match expected type text in column 3`.
+It was never a controller bug — `user.controller.js` was correct from the start and had simply
+never executed successfully. Broken since migration 005 (15 Aug), unnoticed because no client
+calls this endpoint. Fixed by `20260919093440_search_users_full_name_cast.sql` (017), which
+casts `u.full_name::text` in the function body; the signature, the column names, the fixed
+ordering and the `{ items, next_cursor: null }` envelope above are all unchanged. Applied to
+production 2026-09-19 ≈16:00 IST.
+
+⚠ One trap if you ever re-test this: the type check fired **per returned row**, so a query
+matching nothing returned `{ "items": [], "next_cursor": null }` even while broken. A green
+result from a term with no matches means nothing.
 
 ### PATCH /api/users/me/username   `OWNER: Neeraj`  `PHASE 1`
 **Module:** user

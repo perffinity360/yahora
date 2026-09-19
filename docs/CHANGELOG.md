@@ -276,6 +276,99 @@ diff that was never the problem.
 ---
 
 ## Entries
+
+## 2026-09-19 — Phase 5 Block V-A: `search_users()` type fix — user search has never worked (Vishwajeet)
+
+`GET /api/users/search` has returned 500 for every query that matches a row since 15 August.
+One migration, one function, one cast. **Neeraj: your controller is correct and is not part of
+this — do not change it.**
+
+### Migrations applied
+
+- `20260919093440_search_users_full_name_cast.sql` (017)
+  **— applied to production on 2026-09-19, around 16:00 IST.** No backend deploy was needed
+  or made: the fix is entirely inside the function, the controller was always correct.
+
+  ⚠ **Applied, not yet re-tested against production.** Nobody has called
+  `GET /api/users/search` on the live API since the push. Neeraj — the same browser-console
+  call you used for N-A part 1 is the check, with a `q` that really matches a user (a term
+  that matches nothing returns an empty list either way and proves nothing). Post the result
+  here and this warning goes.
+
+`CREATE OR REPLACE FUNCTION public.search_users` with one change to the body:
+`select u.full_name::text` instead of `select u.full_name`. Nothing else moves — same
+signature, same `RETURNS TABLE`, same `plpgsql` / `stable` / `security invoker`, same
+`set search_path = public, pg_temp`, same `p_limit` default, same three-key ORDER BY.
+
+### The bug
+
+`search_users()` declares column 3 as `full_name text`. `public.users.full_name` is
+`character varying(255)`. PL/pgSQL checks the row structure **at execution time, per returned
+row** — not at creation — so:
+
+```
+42804: Returned type character varying(255) does not match expected type text in column 3
+```
+
+That is why migration 005 applied cleanly, why `supabase db reset` has never once complained,
+and why this survived a month of green migrations. It is **pre-existing, not a Phase 4
+regression** — 011 only pinned the function's `search_path`.
+
+Neeraj confirmed the same `42804` against **production** the same morning (his N-A part 1
+entry below, Render log 12:27:24 IST), so this is the live failure, not a local artefact.
+
+Reproduced on the local database before and after, against seeded rows:
+
+| | `search_users('arjun', <arjun's uuid>)` |
+|---|---|
+| pre-fix body | `42804 … does not match expected type text in column 3` |
+| post-fix | 1 row — `arjun.mehta · Arjun Mehta · IIITDM Kurnool · is_same_campus t · rank 0.5` |
+
+### The one that looks wrong and is not
+
+Column 5 is `university_name varchar` against `universities.name varchar(255)`. **Same base
+type, the length modifier is not part of the check, it passes.** It is deliberately untouched.
+Do not "tidy" it.
+
+Nor is the declared type of column 3 changed to `varchar(255)` — which would also have worked.
+The cast lives in the body so the function's contract stays `text` no matter how wide the
+column gets later. Redeclaring it would weld the signature to a column width and break again,
+silently, the day someone widens `full_name`.
+
+### Changed endpoints (BREAKING)
+
+None. **The contract in API.md is unchanged** — same columns, same fixed ordering (exact match,
+then same-campus, then rank), same `limit`, same `{ items, next_cursor: null }`. Phase 4 Block
+N-C's envelope work and the client's reliance on the RPC's ordering are both untouched. Search
+remains exempt from cursor pagination, as settled in Phase 4; no new parameter was added.
+
+The only observable change is that the endpoint starts returning 200 instead of 500.
+
+### Test data
+
+No seed change. The existing 15 seeded users are enough to prove it — `arjun.mehta`,
+`neeraj.delhi`, `karan.singh` all match.
+
+⚠️ **A test that matches nothing proves nothing.** The type check only fires while returning a
+row, so the broken function and the fixed one both return an empty list for a term with no
+matches. On an empty database this migration is untestable. Use a term that really hits a
+seeded user.
+
+### What NOT to do yet
+
+- ~~**Don't treat production search as fixed.**~~ It is fixed — pushed 2026-09-19 ≈16:00 IST.
+  The KNOWN-DEFECT block in `backend/API.md` has been removed; Part 1 now documents the
+  endpoint as working, which it is.
+- **Don't touch `user.controller.js`.** It has been correct all along; it has simply never
+  executed successfully. This needed no backend change and got none.
+- **Don't build UI that assumes search is live on production** until the CHANGELOG line above
+  carries a push timestamp.
+- **N-A part 2 still has nothing to click.** Your open question below — whether a people-search
+  screen belongs in Phase 5 — is unanswered and is not mine to close; V-A does not create a
+  search box. Verify part 2 the way you verified part 1, by calling the endpoint directly.
+
+---
+
 ## 2026-09-19 — Phase 5 Block N-A part 1: user search is broken on production (Neeraj)
 
 ### Result
