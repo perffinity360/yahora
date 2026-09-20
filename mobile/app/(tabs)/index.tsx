@@ -10,12 +10,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppText } from '../../src/components/AppText';
+import { AppTextInput } from '../../src/components/AppTextInput';
 import { CampusSwitcherModal } from '../../src/components/CampusSwitcherModal';
 import { DemoCampusAlert } from '../../src/components/DemoCampusAlert';
 import { FilterSheet } from '../../src/components/FilterSheet';
@@ -259,11 +260,11 @@ export default function MarketplaceScreen() {
           accessibilityLabel="Switch campus"
           style={styles.brandRow}
         >
-          <Text style={styles.brand}>Yahora</Text>
-          <Text style={styles.brandDash}>—</Text>
-          <Text style={styles.campus} numberOfLines={1}>
+          <AppText style={styles.brand}>Yahora</AppText>
+          <AppText style={styles.brandDash}>—</AppText>
+          <AppText style={styles.campus} numberOfLines={1}>
             {campusName}
-          </Text>
+          </AppText>
           <Feather name="chevron-down" size={16} color={colors.purple} />
         </Pressable>
 
@@ -276,7 +277,7 @@ export default function MarketplaceScreen() {
           <Feather name="sliders" size={18} color={colors.purple} />
           {activeFilterCount > 0 ? (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{activeFilterCount}</Text>
+              <AppText style={styles.badgeText}>{activeFilterCount}</AppText>
             </View>
           ) : null}
         </Pressable>
@@ -285,7 +286,7 @@ export default function MarketplaceScreen() {
       {/* Search */}
       <View style={styles.searchWrap}>
         <Feather name="search" size={18} color={colors.mutedLabel} />
-        <TextInput
+        <AppTextInput
           value={filters.search}
           onChangeText={filters.setSearch}
           placeholder="Search the marketplace"
@@ -320,9 +321,9 @@ export default function MarketplaceScreen() {
                   size={14}
                   color={active ? colors.white : colors.mutedText}
                 />
-                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                <AppText style={[styles.segmentText, active && styles.segmentTextActive]}>
                   {mode === 'grid' ? 'Grid' : 'Swipe'}
-                </Text>
+                </AppText>
               </Pressable>
             );
           })}
@@ -340,9 +341,9 @@ export default function MarketplaceScreen() {
           style={({ pressed }) => [styles.sortTrigger, pressed && styles.sortTriggerPressed]}
         >
           <Feather name="bar-chart-2" size={13} color={colors.purple} />
-          <Text style={styles.sortTriggerText} numberOfLines={1}>
+          <AppText style={styles.sortTriggerText} numberOfLines={1}>
             {activeSortLabel}
-          </Text>
+          </AppText>
           <Feather name="chevron-down" size={14} color={colors.mutedText} />
         </Pressable>
       </View>
@@ -351,9 +352,9 @@ export default function MarketplaceScreen() {
       {isForeignCampus ? (
         <View style={styles.foreignBanner}>
           <Feather name="globe" size={14} color={colors.purpleDark} />
-          <Text style={styles.foreignText}>
+          <AppText style={styles.foreignText}>
             Browsing {campusName} — view only. Buying and listing stay on your home campus.
-          </Text>
+          </AppText>
         </View>
       ) : null}
 
@@ -445,7 +446,7 @@ export default function MarketplaceScreen() {
         >
           <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGradient}>
             <Feather name="plus" size={17} color={colors.white} />
-            <Text style={styles.fabText}>List an item</Text>
+            <AppText style={styles.fabText}>List an item</AppText>
           </LinearGradient>
         </Pressable>
       ) : null}
@@ -483,9 +484,9 @@ export default function MarketplaceScreen() {
                     pressed && styles.sortItemPressed,
                   ]}
                 >
-                  <Text style={[styles.sortItemText, active && styles.sortItemTextActive]}>
+                  <AppText style={[styles.sortItemText, active && styles.sortItemTextActive]}>
                     {option.label}
-                  </Text>
+                  </AppText>
                   {active ? <Feather name="check" size={15} color={colors.purple} /> : null}
                 </Pressable>
               );
@@ -554,7 +555,7 @@ function FeedState({
         <Pressable onPress={onAction} style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}>
           <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primaryGradient}>
             {actionIcon ? <Feather name={actionIcon} size={16} color={colors.white} /> : null}
-            <Text style={styles.primaryText}>{actionLabel}</Text>
+            <AppText style={styles.primaryText}>{actionLabel}</AppText>
           </LinearGradient>
         </Pressable>
       ) : null}
@@ -588,17 +589,17 @@ const styles = StyleSheet.create({
   },
   brand: {
     fontFamily: font.family.serif,
-    fontSize: 24,
+    fontSize: font.sizes.headline,
     color: colors.purple,
   },
   brandDash: {
     fontFamily: font.family.regular,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.mutedLabel,
   },
   campus: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
     flexShrink: 1,
   },
@@ -631,7 +632,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontFamily: font.family.bold,
-    fontSize: 10,
+    fontSize: font.sizes.micro,
     color: colors.white,
   },
 
@@ -649,7 +650,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     paddingVertical: 0,
   },
@@ -682,7 +683,7 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   segmentTextActive: {
@@ -709,7 +710,7 @@ const styles = StyleSheet.create({
   sortTriggerText: {
     flexShrink: 1,
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
 
@@ -747,7 +748,7 @@ const styles = StyleSheet.create({
   },
   sortItemText: {
     fontFamily: font.family.medium,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
   },
   sortItemTextActive: {
@@ -772,7 +773,7 @@ const styles = StyleSheet.create({
   foreignText: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     lineHeight: 16,
     color: colors.purpleDark,
   },
@@ -830,13 +831,13 @@ const styles = StyleSheet.create({
   },
   stateTitle: {
     fontFamily: font.family.bold,
-    fontSize: 17,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   stateText: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
     marginTop: spacing.xs,
@@ -861,7 +862,7 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
 
@@ -895,7 +896,7 @@ const styles = StyleSheet.create({
   },
   fabText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
 });

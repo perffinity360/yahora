@@ -491,6 +491,13 @@ working days.
   `supabase_realtime` publication and RLS letting the client see its own rows. Mobile uses the
   same anon client and channel name as web, so if web realtime works this should too — but
   nobody has verified it on a phone.
+- **NOT in Phase 5: a user-search screen.** Decided 2026-09-19. Block V-A fixed the
+  `search_users()` RPC — the endpoint works — but **there is no search box anywhere in the web
+  app or the mobile app**, and building one here would mean designing a people-search surface
+  in a phase that is otherwise pagination and navigation. It moves to Phase 8, where the
+  social graph gives it somewhere to go: a result row whose only action is "view profile" is
+  thin, and the same row with follow, block and campus context is the actual feature. The
+  endpoint stays live and verified by direct call until then.
 
 ## Phase 6 — Marketplace completeness
 
@@ -567,6 +574,13 @@ The `posts` module is a stub. The web routes `/feed` and `/hot` were placeholder
 - **Push notifications** — needs the notifications backend first
 - **`utils/notify.js` currently writes to `public.notifications`, which does not exist.** It
   fails silently. Fix it here.
+- **User search, web and mobile** — moved here from Phase 5 on 2026-09-19. The backend has
+  been ready since Phase 5 Block V-A: `GET /api/users/search` returns
+  `{ items, next_cursor: null }` with the ordering fixed inside the RPC (exact match, then
+  same campus, then trigram rank), and it is **deliberately exempt from cursor pagination**.
+  No client has ever called it. Build the box once there is a profile worth landing on.
+- **⚠ Before that box ships: keep `Yahora University (Demo)` accounts out of the results.**
+  See §7.2 — this is the one piece of it that is not just UI work.
 
 ## Phase 9 — Moderation, admin, launch
 
@@ -629,6 +643,7 @@ Nothing here is forgotten. Each has a phase.
 | No pagination anywhere | 4–5 | `.range()` has zero call sites |
 | `products.views` double-counted | 6 | Two uncoordinated increment paths |
 | `utils/notify.js` writes to a non-existent table | 8 | Fails silently |
+| **Demo accounts are searchable by real students** | 8 | `Yahora University (Demo)` (`demo.yahora.com`) users are ordinary `public.users` rows and `search_users()` filters nobody out, so once a search box exists a real student searching a common name can get demo personas and up-to-7-day-old `guest_*` throwaways (`cleanup_demo_users()` only removes them past 7 days) mixed into their results. There is **no `is_demo` flag** — the only handle is `universities.domain = 'demo.yahora.com'`. Decide where the exclusion lives (the RPC, so every caller inherits it, versus the controller) and whether a demo user searching should still see their own campus. **Invisible locally:** the seed creates no demo-campus users, so this cannot be reproduced on a fresh `db reset` — only production has them. |
 | Dead RPCs `increment_product_likes` / `decrement_product_likes` | 9 | Drop in a migration |
 | `backend/API.md:2448` factually wrong | 9 | Says nothing calls `increment_page_view()`; the footer does |
 
@@ -641,7 +656,7 @@ Nothing here is forgotten. Each has a phase.
 | `focusManager` / `AppState` decision | 5 |
 | Confirm realtime delivery works on a phone | 5 |
 | Username display and by-username profiles | 5 |
-| User search | 5 |
+| User search (UI) — **moved to 8 on 2026-09-19**; the RPC was fixed in 5 (Block V-A), no client calls it | 8 |
 | Messages UX fixes ported from web | 6 |
 | Read-tick colour: blue on mobile, amber on web | 6 |
 | Bubble style: solid purple on mobile, gradient on web | 6 |
@@ -656,6 +671,7 @@ Nothing here is forgotten. Each has a phase.
 |---|---|
 | Mobile responsiveness gaps — **Navbar has only 1 media query, UniversityModal has 0** | 5 |
 | Block G5 browser verification — two accounts, two profiles, live chat + campus switcher | 5 |
+| **User search box — there isn't one.** The Phase 5 runbook assumed the website had one; it does not. Moved to 8 with the mobile side | 8 |
 | Backport mobile's Supabase-managed session (web keeps a raw token in `localStorage`) | 9 |
 
 ## 7.5 Deliberately not doing

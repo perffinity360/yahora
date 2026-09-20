@@ -7,10 +7,10 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 
+import { AppText } from './AppText';
 import { colors, font, radius, spacing } from '../theme';
 
 // TODO: replace with the real recorded-demo video URL when available.
@@ -59,10 +59,10 @@ export function DemoModal({ visible, onClose, onSandboxPreview }: Props) {
             hitSlop={8}
             style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
           >
-            <Text style={styles.closeBtnText}>×</Text>
+            <AppText style={styles.closeBtnText}>×</AppText>
           </Pressable>
 
-          <Text style={styles.title}>Choose Demo Experience</Text>
+          <AppText style={styles.title}>Choose Demo Experience</AppText>
 
           <Pressable
             onPress={handleSandbox}
@@ -75,9 +75,9 @@ export function DemoModal({ visible, onClose, onSandboxPreview }: Props) {
           >
             <View style={styles.optionTitleRow}>
               <View style={[styles.iconDot, styles.iconDotPurple]} />
-              <Text style={[styles.optionTitle, styles.optionTitlePurple]}>
+              <AppText style={[styles.optionTitle, styles.optionTitlePurple]}>
                 {sandboxBusy ? 'Creating Sandbox…' : 'Sandbox Preview'}
-              </Text>
+              </AppText>
               {sandboxBusy ? (
                 <ActivityIndicator
                   color={colors.purpleDark}
@@ -85,7 +85,7 @@ export function DemoModal({ visible, onClose, onSandboxPreview }: Props) {
                 />
               ) : null}
             </View>
-            <Text style={styles.optionSubtext}>Limited Access · Live Environment</Text>
+            <AppText style={styles.optionSubtext}>Limited Access · Live Environment</AppText>
           </Pressable>
 
           <Pressable
@@ -98,11 +98,11 @@ export function DemoModal({ visible, onClose, onSandboxPreview }: Props) {
           >
             <View style={styles.optionTitleRow}>
               <View style={[styles.iconDot, styles.iconDotPink]} />
-              <Text style={[styles.optionTitle, styles.optionTitlePink]}>
+              <AppText style={[styles.optionTitle, styles.optionTitlePink]}>
                 Recorded Demo
-              </Text>
+              </AppText>
             </View>
-            <Text style={styles.optionSubtext}>Full Walkthrough · Actual Recording</Text>
+            <AppText style={styles.optionSubtext}>Full Walkthrough · Actual Recording</AppText>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -145,13 +145,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.pinkLight,
   },
   closeBtnText: {
-    fontSize: 22,
+    fontSize: font.sizes.headline,
     lineHeight: Platform.OS === 'ios' ? 24 : 26,
     color: colors.mutedText,
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: font.sizes.lg + 2,
+    fontSize: font.sizes.headline,
     color: colors.black,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   },
   optionTitle: {
     fontFamily: font.family.semibold,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
   },
   optionTitlePurple: {
     color: colors.purpleDark,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   },
   optionSubtext: {
     fontFamily: font.family.medium,
-    fontSize: font.sizes.sm,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
   },
 });

@@ -1,6 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { AppText } from './AppText';
 import { useRealtime } from '../contexts/RealtimeContext';
 import { colors, font, spacing } from '../theme';
 
@@ -18,9 +19,9 @@ export function ConnectionBanner() {
   return (
     <View style={styles.banner}>
       <Feather name="wifi-off" size={12} color={colors.purpleDark} />
-      <Text style={styles.text}>
+      <AppText style={styles.text}>
         {isOffline ? 'You’re offline — messages will send when you reconnect.' : 'Connecting…'}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -39,7 +40,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontFamily: font.family.semibold,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
 });

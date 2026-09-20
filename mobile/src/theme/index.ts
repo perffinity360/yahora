@@ -160,12 +160,49 @@ export const font = {
     extrabold: 'Inter_800ExtraBold',
     serif: 'BreeSerif_400Regular',
   },
+  /**
+   * THE TYPE SCALE. Phase 5 Block V-C, 2026-09-20.
+   *
+   * Seven sizes, and they are the only sizes. Before this block the app used
+   * TWENTY distinct hardcoded fontSize values across 224 call sites (8, 8.5, 9,
+   * 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16, 17, 18, 19,
+   * 22, 23, 24, 28, 30, 34, 40) while this token block sat largely unused.
+   *
+   * ── WHY TWENTY SIZES IS THE PROBLEM, NOT A DETAIL ──
+   * When 13, 14 and 15 all appear on one screen the eye cannot rank them, so
+   * nothing reads as more important than anything else. That flatness is what
+   * the founders were seeing as "cluttered". Hierarchy is made of GAPS: the
+   * jumps below (11 -> 12 -> 13 -> 15 -> 18 -> 22 -> 28) are each big enough to
+   * be legible as a step.
+   *
+   * ── THE FLOOR IS ABSOLUTE ──
+   * Nothing below `micro` (11), anywhere, for any reason. Android's font slider
+   * goes DOWN as well as up: at 0.85 an 11dp label already renders at 9.35dp.
+   * The 22 call sites that used to sit at 8-10dp were the strongest "cheap app"
+   * signal in the product. There is no exception to this rule and no size
+   * smaller than `micro` exists to reach for.
+   *
+   * The scale moved DOWN at the top (40/34/30 -> 28) and UP at the bottom
+   * (8/9/10 -> 11): airier where it was shouting, readable where it was mumbling.
+   *
+   * Pair with MAX_FONT_SCALE (below) — these are the sizes BEFORE the student's
+   * own font setting multiplies them.
+   */
   sizes: {
-    sm: 13,
-    md: 15,
-    lg: 18,
-    xl: 24,
-    xxl: 30,
+    /** 11 — timestamps, image counters, badge text. THE FLOOR. */
+    micro: 11,
+    /** 12 — secondary labels, stat counts, helper text under a field. */
+    caption: 12,
+    /** 13 — default body copy, list rows, card titles. */
+    body: 13,
+    /** 15 — emphasised body, input text, primary button labels. */
+    bodyLg: 15,
+    /** 18 — section headings, card prices, screen subtitles. */
+    title: 18,
+    /** 22 — screen titles, sheet headers. */
+    headline: 22,
+    /** 28 — the one hero line on a screen. Rarely correct; look twice. */
+    display: 28,
   },
 } as const;
 
@@ -173,3 +210,34 @@ export type Colors = typeof colors;
 export type Spacing = typeof spacing;
 export type Radius = typeof radius;
 export type Font = typeof font;
+
+/**
+ * THE FONT-SCALE CAP. Phase 5 Block V-B, decided 2026-09-19.
+ *
+ * Android's Settings > Display > Font size multiplies every <Text> by up to
+ * ~1.30 (iOS Dynamic Type goes further still). Our layouts start failing at
+ * roughly 1.15: the product-card stats row overlaps itself and the auth
+ * headline runs into the settings gear on a Galaxy A03s at DEFAULT font size.
+ * 1.15 is therefore the largest multiplier the current layouts survive, not a
+ * taste decision.
+ *
+ * ── IT IS A CAP, NOT A DISABLE ──
+ * `allowFontScaling={false}` appears nowhere in this app and must not be added.
+ * A student who needs larger text still gets larger text — up to 15% — and the
+ * app stays usable for them. Turning scaling off entirely would make it
+ * unreadable for exactly the people the setting exists for.
+ *
+ * ── WHY NOT THE 1.3 THAT USED TO BE IN ProductCard ──
+ * `DENSE_TEXT_SCALE_CAP = 1.3` (removed in this block) clamped at the value
+ * Android's own slider already tops out at, so it bound nothing on any real
+ * device. It read as a fix in review and behaved as a no-op. If you ever raise
+ * the number here, check it against the slider's real maximum before assuming
+ * it does anything.
+ *
+ * Applied globally through AppText / AppTextInput, not per call site — a cap
+ * that has to be remembered is a cap that gets forgotten. The exceptions are
+ * deliberate and few: the auth headline and the empty-state messages stay on
+ * plain <Text> because they have room to grow, and they honour the student's
+ * setting in full.
+ */
+export const MAX_FONT_SCALE = 1.15;

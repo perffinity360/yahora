@@ -50,36 +50,6 @@ const HeartIcon = ({ filled, size = 18 }) => (
     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
   </svg>
 );
-const EyeIcon = ({ size = 16 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-const CommentIcon = ({ size = 16 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    {/* Round chat bubble (MessageCircle) */}
-    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-  </svg>
-);
 const BookmarkIcon = ({ filled, size = 18 }) => (
   <svg
     width={size}
@@ -153,7 +123,8 @@ const ChatIcon = ({ size = 16 }) => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    {/* Square bubble (MessageSquare) — distinct from the round CommentIcon */}
+    {/* Square bubble (MessageSquare). There used to be a round CommentIcon in
+        this file to tell it apart from; that one went with the comment count. */}
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
@@ -194,8 +165,6 @@ const ProductCard = memo(function ProductCard({
 }) {
   const [imgIndex, setImgIndex] = useState(0);
   const [likeCount, setLikeCount] = useState(product.likes_count ?? 0);
-  const [viewCount, setViewCount] = useState(product.views ?? 0);
-  const [commentCount, setCommentCount] = useState(product.comments_count ?? 0);
   const [timeLabel, setTimeLabel] = useState(() => timeAgo(product.created_at));
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -204,8 +173,7 @@ const ProductCard = memo(function ProductCard({
 
   useEffect(() => {
     setLikeCount(product.likes_count ?? 0);
-    setCommentCount(product.comments_count ?? 0);
-  }, [product.likes_count, product.comments_count]);
+  }, [product.likes_count]);
 
   const images = product.image_urls?.length
     ? product.image_urls
@@ -243,10 +211,10 @@ const ProductCard = memo(function ProductCard({
         },
         (payload) => {
           const row = payload.new;
-          if (row.views !== undefined) setViewCount(row.views);
+          // views and comments_count still arrive on this payload; the card
+          // simply has nowhere to put them now. ProductDetail keeps its own
+          // subscription and still renders both.
           if (row.likes_count !== undefined) setLikeCount(row.likes_count);
-          if (row.comments_count !== undefined)
-            setCommentCount(row.comments_count);
         },
       )
       .subscribe();
@@ -421,30 +389,25 @@ const ProductCard = memo(function ProductCard({
         )}
         <h3 className={styles.title}>{product.title}</h3>
 
+        {/* ── THE CARD SHOWS ONE NUMBER, NOT THREE (Phase 5, Block V-C) ──
+            The view count and the comment count were removed on 2026-09-20 to
+            match the mobile card, which lost them in the same block. They are
+            NOT gone from ProductDetail or the dashboard — that is where a
+            seller is actually asking how a listing is doing. On a grid tile
+            they were decoration, and four numbers in one row is what has been
+            reading as clutter on both clients.
+            The heart and the bookmark stay: they are ACTIONS, not stats.
+            ⚠ The comment button was also the only "jump straight to the
+            comments" shortcut on the web. Clicking the card still opens the
+            detail page; it just lands at the top. */}
         <div className={styles.footerRow}>
           <div className={styles.stats}>
-            <span className={styles.stat}>
-              <EyeIcon />
-              <span>{viewCount}</span>
-            </span>
-
             <button
               className={`${styles.statBtn} ${product.is_liked ? styles.statBtnLiked : ""}`}
               onClick={handleLike}
             >
               <HeartIcon filled={product.is_liked} size={16} />
               <span>{likeCount}</span>
-            </button>
-
-            <button
-              className={styles.statBtn}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onCardClick) onCardClick(`${product.id}#comments`);
-              }}
-            >
-              <CommentIcon size={16} />
-              <span>{commentCount}</span>
             </button>
 
             <button

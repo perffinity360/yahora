@@ -9,12 +9,13 @@ import {
   StyleProp,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
   ViewStyle,
 } from 'react-native';
 
+import { AppText } from './AppText';
+import { AppTextInput } from './AppTextInput';
 import { colors, font, radius, spacing } from '../theme';
 
 // Extra horizontal room a row needs beyond its label text: side padding plus
@@ -104,8 +105,8 @@ export function SearchablePicker({
   return (
     <View style={[styles.group, style]}>
       <View style={styles.labelRow}>
-        <Text style={styles.label}>{label}</Text>
-        {required ? <Text style={styles.required}> *</Text> : null}
+        <AppText style={styles.label}>{label}</AppText>
+        {required ? <AppText style={styles.required}> *</AppText> : null}
       </View>
 
       <Pressable
@@ -127,9 +128,9 @@ export function SearchablePicker({
         {leadingIcon ? (
           <Feather name={leadingIcon} size={18} color={colors.purple} style={styles.leadingIcon} />
         ) : null}
-        <Text style={[styles.fieldText, !selected && styles.fieldPlaceholder]} numberOfLines={1}>
+        <AppText style={[styles.fieldText, !selected && styles.fieldPlaceholder]} numberOfLines={1}>
           {loading ? 'Loading…' : selected ? selected.label : placeholder}
-        </Text>
+        </AppText>
         {selected && !isDisabled ? (
           // Clears the value without opening the modal first, so the user can
           // start a fresh search instead of hunting for the current pick.
@@ -158,7 +159,7 @@ export function SearchablePicker({
 
           <View style={styles.card}>
             <View style={styles.header}>
-              <Text style={styles.cardTitle}>{label}</Text>
+              <AppText style={styles.cardTitle}>{label}</AppText>
               <Pressable
                 onPress={close}
                 hitSlop={8}
@@ -171,7 +172,7 @@ export function SearchablePicker({
             {searchable ? (
               <View style={styles.searchWrap}>
                 <Feather name="search" size={16} color={colors.mutedLabel} style={styles.searchIcon} />
-                <TextInput
+                <AppTextInput
                   value={search}
                   onChangeText={setSearch}
                   placeholder={`Search ${label.toLowerCase()}…`}
@@ -206,7 +207,7 @@ export function SearchablePicker({
                     widest child, so one onLayout on the wrapper gives the widest
                     option's width — enough to size the list so the whole thing
                     scrolls sideways to read long names (no per-row scrollers).
-                    (onLayout on <Text> can fire with a null event, so measure the
+                    (onLayout on <AppText> can fire with a null event, so measure the
                     wrapping View instead.) */}
                 <View
                   pointerEvents="none"
@@ -217,9 +218,9 @@ export function SearchablePicker({
                   }}
                 >
                   {widestProbe.map((o) => (
-                    <Text key={o.value} style={styles.measureText}>
+                    <AppText key={o.value} style={styles.measureText}>
                       {o.label}
-                    </Text>
+                    </AppText>
                   ))}
                 </View>
 
@@ -254,12 +255,12 @@ export function SearchablePicker({
                               pressed && !active && styles.rowPressed,
                             ]}
                           >
-                            <Text
+                            <AppText
                               style={[styles.rowText, active && styles.rowTextActive]}
                               numberOfLines={1}
                             >
                               {item.label}
-                            </Text>
+                            </AppText>
                             {active ? (
                               <Feather
                                 name="check"
@@ -295,14 +296,14 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     color: colors.mutedLabel,
     textTransform: 'uppercase',
   },
   required: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.pinkDark,
   },
 
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
   fieldText: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
   },
   fieldPlaceholder: {
@@ -379,7 +380,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     flex: 1,
     fontFamily: font.family.serif,
-    fontSize: font.sizes.lg + 1,
+    fontSize: font.sizes.title,
     color: colors.black,
   },
   closeBtn: {
@@ -410,7 +411,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: font.family.regular,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
     color: colors.black,
     padding: 0,
   },
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
   measureText: {
     // Measure at the heaviest weight a row can use so real rows never clip.
     fontFamily: font.family.semibold,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
   },
   hScroll: {
     flexGrow: 0,
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
   rowText: {
     flexShrink: 1,
     fontFamily: font.family.medium,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
   },
   rowTextActive: {
@@ -480,7 +481,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: font.family.regular,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
     color: colors.mutedText,
     textAlign: 'center',
   },

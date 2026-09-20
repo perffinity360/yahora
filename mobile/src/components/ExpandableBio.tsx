@@ -3,11 +3,11 @@ import {
   LayoutChangeEvent,
   NativeSyntheticEvent,
   StyleSheet,
-  Text,
   TextLayoutEventData,
   View,
 } from 'react-native';
 
+import { AppText } from './AppText';
 import { colors, font, spacing } from '../theme';
 
 /** How many lines the bio is allowed to occupy before it gets truncated. */
@@ -76,48 +76,48 @@ export function ExpandableBio({ text }: { text: string }) {
     <View style={styles.wrap}>
       {/* Off-screen twin, full width + unclamped, to learn the real line breaks. */}
       {lines == null ? (
-        <Text
+        <AppText
           style={[styles.bio, styles.measureFull]}
           onTextLayout={onMeasureLines}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
           {quoted}
-        </Text>
+        </AppText>
       ) : null}
 
       {/* Off-screen twin, intrinsic width, to size the "… Read more" reservation. */}
       {trailingWidth == null ? (
-        <Text
+        <AppText
           style={[styles.toggle, styles.measureTrailing]}
           onLayout={onMeasureTrailing}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
           {TRAILING}
-        </Text>
+        </AppText>
       ) : null}
 
       {expanded ? (
-        <Text style={styles.bio}>
+        <AppText style={styles.bio}>
           {quoted}{' '}
-          <Text style={styles.toggle} onPress={() => setExpanded(false)} suppressHighlighting>
+          <AppText style={styles.toggle} onPress={() => setExpanded(false)} suppressHighlighting>
             {LESS_LABEL}
-          </Text>
-        </Text>
+          </AppText>
+        </AppText>
       ) : truncated ? (
-        <Text style={styles.bio} numberOfLines={COLLAPSED_LINES}>
+        <AppText style={styles.bio} numberOfLines={COLLAPSED_LINES}>
           {preview}
           {ELLIPSIS}{' '}
-          <Text style={styles.toggle} onPress={() => setExpanded(true)} suppressHighlighting>
+          <AppText style={styles.toggle} onPress={() => setExpanded(true)} suppressHighlighting>
             {MORE_LABEL}
-          </Text>
-        </Text>
+          </AppText>
+        </AppText>
       ) : (
         // Before measuring, clamp to two lines so a long bio never flashes full.
-        <Text style={styles.bio} numberOfLines={ready ? undefined : COLLAPSED_LINES}>
+        <AppText style={styles.bio} numberOfLines={ready ? undefined : COLLAPSED_LINES}>
           {quoted}
-        </Text>
+        </AppText>
       )}
     </View>
   );
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
   bio: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     lineHeight: 19,
     color: colors.mutedText,
     textAlign: 'center',
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   },
   toggle: {
     fontFamily: font.family.semibold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.purple,
   },
   // Spans the full width so its wrapping matches the visible bio exactly.

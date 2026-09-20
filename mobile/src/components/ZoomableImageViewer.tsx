@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { AppText } from './AppText';
 import { colors, font, spacing } from '../theme';
 
 const MAX_SCALE = 4;
@@ -291,9 +292,9 @@ export function ZoomableImageViewer({
           {count > 1 ? (
             <>
               <View style={styles.counter} pointerEvents="none">
-                <Text style={styles.counterText}>
+                <AppText style={styles.counterText}>
                   {index + 1} / {count}
-                </Text>
+                </AppText>
               </View>
 
               {index > 0 ? (
@@ -393,7 +394,7 @@ const styles = StyleSheet.create({
   },
   counterText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
   navBtn: {

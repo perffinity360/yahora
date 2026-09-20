@@ -1091,6 +1091,8 @@ to about 1.30. Our layouts break above roughly 1.15: on a Samsung
 Galaxy A03s at default font size the product card stats row overlaps
 itself and the auth headline is clipped by the settings gear.
 
+Please do check screenshots in docs/screenshots/pre-VR to understand the problems in App UI.
+
 FIRST, READ THIS -- THE EXISTING "FIX" IS NOT ONE
 mobile/src/components/ProductCard.tsx line 40 defines:
 
@@ -1154,7 +1156,9 @@ pass, not a bug fix. Read all of it before changing anything.
 THE GOAL
 The app should feel less cluttered and more premium, and less text
 should be cropped. Those are the same problem. Reference points the
-founders named: super.money, Blinkit, Zepto.
+founders named: super.money, Blinkit, Zepto, etc.
+
+Check the pre-VR and post-VB screenshots.
 
 WHAT IS ACTUALLY WRONG -- MEASURED, NOT GUESSED
 mobile/app and mobile/src contain 20 distinct hardcoded fontSize
@@ -1185,8 +1189,9 @@ migrate every hardcoded fontSize onto them:
   headline 22   <- replaces 22, 23, 24
   display  28   <- replaces 28, 30, 34, 40
 
-Note the direction: everything from 14 upward comes DOWN by one to
-four points, and everything below 11 comes UP. The app gets airier at
+The above fonts are final.
+
+Note the direction: The app gets airier at
 the top and readable at the bottom.
 
 THE FLOOR RULE IS ABSOLUTE: nothing below 11dp anywhere, for any
@@ -1204,9 +1209,8 @@ timestamp, like button, save button.
 Premium apps show FEWER things, not smaller things. Removing content is
 the strongest responsive fix available.
 
-In mobile/src/components/ProductCard.tsx, cut the stats row from four
-items to two:
-  - REMOVE the view count and the comment count from the card.
+In mobile/src/components/ProductCard.tsx, cut the stats:
+  - REMOVE the view count, and the comment count from the card. Make the changes at app and website both.
   - KEEP the condition badge and the timestamp.
   - Keep the like and save buttons; they are actions, not stats.
 
@@ -1217,6 +1221,7 @@ Then make the PRICE the largest element on the card -- `title` (18),
 semibold -- and let the product title sit at `body` (13). One element
 should dominate; right now nothing does.
 
+And in product card detail screen in app, everything is very big, check screenshots, and make them small but still bautiful..
 HARD CONSTRAINTS
 - Do NOT go below 11dp anywhere.
 - Do NOT remove any numberOfLines. Deliberate truncation stays.
@@ -1539,7 +1544,11 @@ Post the result in the CHANGELOG. Vishwajeet is waiting on it.
 
 Once Vishwajeet posts that the migration is on production:
 
-👁️ Repeat the same search on production. It must return results.
+👁️ Repeat the same search on production — **the direct call from part 1, not a search box.
+There is no search box** (see the struck sign-off item under "The search bug"; the UI moved to
+Phase 8). It must return results, so use a `q` that really matches a user: the broken RPC
+returned an empty list without error for a term matching nothing, so an empty result is not a
+pass.
 
 Then check the web side actually reads the response. Phase 4 renamed the response key from
 `{ users: [...] }` to `{ items: [...], next_cursor: null }`. That rename was written but
@@ -1554,8 +1563,10 @@ If anything still reads `.users` for search, fix it to `.items`. If it already r
 `.items`, confirm that in the CHANGELOG — the Phase 4 sign-off line about this is still
 open and this is what closes it.
 
-**👁️ CHECKPOINT N-A.** Search returns results on production, the web renders them, and both
-halves are recorded in the CHANGELOG.
+**👁️ CHECKPOINT N-A.** Search returns results on production **by direct call**, the
+frontend's search read is confirmed to use `.items` (by grep — nothing renders it yet), and
+both halves are recorded in the CHANGELOG. "The web renders them" is **not** part of this
+checkpoint any more; it moved to Phase 8 with the search UI.
 
 ## Block N-B — Web infinite scroll: marketplace and comments (1.5 days, Days 2–3)
 
@@ -1857,12 +1868,25 @@ cannot be confirmed goes into Phase 6 with a name against it rather than being a
 
 ## The search bug
 
-- [ ] 👁️ `GET /api/users/search?q=a` returns results **on production**.
-- [ ] 👁️ User search renders results on the live website.
+- [ ] 👁️ `GET /api/users/search?q=a` returns results **on production**, called directly
+      (browser console with a real token, as in N-A part 1). Use a `q` that really matches a
+      user — a term matching nothing returned an empty list even while the RPC was broken.
 - [ ] The migration is a new file. Migration 005 was not edited.
 - [ ] `SECURITY` and the pinned `search_path` are unchanged.
 - [ ] **The Phase 4 sign-off line that carried over — "User search returns
       `{ items, next_cursor: null }`, and the web reads the new key" — is now closed.**
+
+> ❌ **STRUCK 2026-09-19: "👁️ User search renders results on the live website."**
+> It cannot be confirmed in Phase 5 and is not a failure. **There is no search box in the web
+> app or the mobile app** — this runbook (and N-A part 2) assumed the website had one, and it
+> never has. The UI moves to **Phase 8**, alongside the social graph; see the build plan's
+> Phase 8 and §7.4. Phase 5's scope for search is the RPC fix and a direct-call verification,
+> both above.
+>
+> ⚠ **Phase 8 inherits a prerequisite:** `Yahora University (Demo)` accounts are ordinary
+> user rows and `search_users()` excludes nobody, so the first real search box would show demo
+> personas and `guest_*` throwaways to real students. Recorded in the build plan §7.2. It
+> cannot be reproduced locally — the seed has no demo-campus users.
 
 ## Responsive and typography
 

@@ -1,7 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
 import { forwardRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { AppText } from './AppText';
+import { AppTextInput } from './AppTextInput';
 import { colors, font, radius, spacing } from '../theme';
 
 /** The backend's own floor (MIN_PASSWORD_LENGTH in auth.controller.js). */
@@ -62,7 +64,7 @@ export const PasswordField = forwardRef<TextInput, {
     <View>
       <View style={[styles.inputRow, focused && styles.inputRowFocused]}>
         <Feather name="lock" size={18} color={colors.purple} style={styles.inputIcon} />
-        <TextInput
+        <AppTextInput
           ref={ref}
           value={value}
           onChangeText={onChangeText}
@@ -93,9 +95,9 @@ export const PasswordField = forwardRef<TextInput, {
       </View>
 
       {error ? (
-        <Text style={[styles.status, styles.statusError]}>{error}</Text>
+        <AppText style={[styles.status, styles.statusError]}>{error}</AppText>
       ) : hint ? (
-        <Text style={styles.status}>{hint}</Text>
+        <AppText style={styles.status}>{hint}</AppText>
       ) : null}
     </View>
   );
@@ -123,14 +125,14 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     paddingVertical: 0,
     minHeight: 44,
   },
   status: {
     fontFamily: font.family.medium,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     lineHeight: 17,
     color: colors.mutedText,
     marginTop: spacing.xs + 2,

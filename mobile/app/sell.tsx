@@ -13,12 +13,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppText } from '../src/components/AppText';
+import { AppTextInput } from '../src/components/AppTextInput';
 import { AuroraBackground } from '../src/components/AuroraBackground';
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { ProductCard } from '../src/components/ProductCard';
@@ -262,7 +263,7 @@ export default function SellScreen() {
                   style={styles.retryGradient}
                 >
                   <Feather name="refresh-cw" size={16} color={colors.white} />
-                  <Text style={styles.submitText}>Retry</Text>
+                  <AppText style={styles.submitText}>Retry</AppText>
                 </LinearGradient>
               </Pressable>
             </View>
@@ -274,18 +275,18 @@ export default function SellScreen() {
             >
               <View style={styles.formWrapper}>
                 <View style={styles.header}>
-                  <Text style={styles.title}>{isEditing ? 'Edit Your Listing' : 'List a New Item'}</Text>
-                  <Text style={styles.subtitle}>
+                  <AppText style={styles.title}>{isEditing ? 'Edit Your Listing' : 'List a New Item'}</AppText>
+                  <AppText style={styles.subtitle}>
                     {isEditing
                       ? 'Update your item details below.'
                       : 'Fill in the details — it only takes a minute.'}
-                  </Text>
+                  </AppText>
                 </View>
 
                 {error ? (
                   <View style={styles.banner}>
                     <Feather name="alert-triangle" size={15} color={colors.errorText} />
-                    <Text style={styles.bannerText}>{error}</Text>
+                    <AppText style={styles.bannerText}>{error}</AppText>
                   </View>
                 ) : null}
 
@@ -313,15 +314,15 @@ export default function SellScreen() {
                             />
                             {idx === 0 ? (
                               <View style={styles.coverBadge}>
-                                <Text style={styles.coverBadgeText}>COVER</Text>
+                                <AppText style={styles.coverBadgeText}>COVER</AppText>
                               </View>
                             ) : null}
                           </View>
                         ))}
                       </View>
-                      <Text style={styles.readonlyNote}>
+                      <AppText style={styles.readonlyNote}>
                         Photos can&apos;t be changed here yet.
-                      </Text>
+                      </AppText>
                     </>
                   ) : (
                     <>
@@ -336,7 +337,7 @@ export default function SellScreen() {
                             />
                             {idx === 0 ? (
                               <View style={styles.coverBadge}>
-                                <Text style={styles.coverBadgeText}>COVER</Text>
+                                <AppText style={styles.coverBadgeText}>COVER</AppText>
                               </View>
                             ) : null}
                             <Pressable
@@ -362,13 +363,13 @@ export default function SellScreen() {
                             ]}
                           >
                             <Feather name="plus" size={22} color={colors.purple} />
-                            <Text style={styles.addTileText}>
+                            <AppText style={styles.addTileText}>
                               {images.length === 0 ? 'Add Photos' : 'Add More'}
-                            </Text>
+                            </AppText>
                           </Pressable>
                         ) : null}
                       </View>
-                      {imageNote ? <Text style={styles.imageNote}>{imageNote}</Text> : null}
+                      {imageNote ? <AppText style={styles.imageNote}>{imageNote}</AppText> : null}
                     </>
                   )}
 
@@ -376,7 +377,7 @@ export default function SellScreen() {
                   <SectionLabel num="02" title="Title" required />
                   <View style={[styles.inputRow, focused === 'title' && styles.inputRowFocused]}>
                     <Feather name="tag" size={18} color={colors.purple} style={styles.inputIcon} />
-                    <TextInput
+                    <AppTextInput
                       value={title}
                       onChangeText={setTitle}
                       onFocus={() => setFocused('title')}
@@ -410,12 +411,12 @@ export default function SellScreen() {
                             size={24}
                             color={active ? colors.white : colors.purple}
                           />
-                          <Text
+                          <AppText
                             style={[styles.catLabel, active && styles.catLabelActive]}
                             numberOfLines={2}
                           >
                             {cat.label}
-                          </Text>
+                          </AppText>
                         </Pressable>
                       );
                     })}
@@ -437,7 +438,7 @@ export default function SellScreen() {
                   <SectionLabel num="05" title="Hostel / location" />
                   <View style={[styles.inputRow, focused === 'location' && styles.inputRowFocused]}>
                     <Feather name="map-pin" size={18} color={colors.purple} style={styles.inputIcon} />
-                    <TextInput
+                    <AppTextInput
                       value={location}
                       onChangeText={setLocation}
                       onFocus={() => setFocused('location')}
@@ -452,8 +453,8 @@ export default function SellScreen() {
                   {/* 06 · Price */}
                   <SectionLabel num="06" title="Price" required />
                   <View style={[styles.inputRow, focused === 'price' && styles.inputRowFocused]}>
-                    <Text style={styles.rupee}>₹</Text>
-                    <TextInput
+                    <AppText style={styles.rupee}>₹</AppText>
+                    <AppTextInput
                       value={price}
                       onChangeText={(v) => setPrice(v.replace(/[^0-9.]/g, ''))}
                       onFocus={() => setFocused('price')}
@@ -468,7 +469,7 @@ export default function SellScreen() {
                   {/* 07 · Description */}
                   <SectionLabel num="07" title="Description" />
                   <View style={[styles.textareaWrap, focused === 'description' && styles.inputRowFocused]}>
-                    <TextInput
+                    <AppTextInput
                       value={description}
                       onChangeText={setDescription}
                       onFocus={() => setFocused('description')}
@@ -505,9 +506,9 @@ export default function SellScreen() {
                           size={18}
                           color={colors.white}
                         />
-                        <Text style={styles.submitText}>
+                        <AppText style={styles.submitText}>
                           {isEditing ? 'Save Changes' : 'Post Item to Campus'}
-                        </Text>
+                        </AppText>
                       </>
                     )}
                   </LinearGradient>
@@ -517,9 +518,9 @@ export default function SellScreen() {
                 <View style={styles.previewSection}>
                   <View style={styles.previewHeader}>
                     <View style={styles.previewDot} />
-                    <Text style={styles.previewLabel}>LIVE PREVIEW</Text>
+                    <AppText style={styles.previewLabel}>LIVE PREVIEW</AppText>
                   </View>
-                  <Text style={styles.previewHint}>How your item appears in the marketplace</Text>
+                  <AppText style={styles.previewHint}>How your item appears in the marketplace</AppText>
                   <ProductCard product={previewProduct} style={{ width: previewWidth }} />
                 </View>
               </View>
@@ -560,11 +561,11 @@ function SectionLabel({
   return (
     <View style={[styles.sectionLabel, first && styles.sectionLabelFirst]}>
       <View style={styles.sectionNum}>
-        <Text style={styles.sectionNumText}>{num}</Text>
+        <AppText style={styles.sectionNumText}>{num}</AppText>
       </View>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {required ? <Text style={styles.sectionRequired}> *</Text> : null}
-      {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
+      <AppText style={styles.sectionTitle}>{title}</AppText>
+      {required ? <AppText style={styles.sectionRequired}> *</AppText> : null}
+      {hint ? <AppText style={styles.sectionHint}>{hint}</AppText> : null}
     </View>
   );
 }
@@ -623,13 +624,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: 28,
+    fontSize: font.sizes.display,
     color: colors.purpleDark,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 20,
     color: colors.mutedText,
     textAlign: 'center',
@@ -650,7 +651,7 @@ const styles = StyleSheet.create({
   bannerText: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.errorText,
   },
 
@@ -690,26 +691,26 @@ const styles = StyleSheet.create({
   },
   sectionNumText: {
     fontFamily: font.family.bold,
-    fontSize: 10,
+    fontSize: font.sizes.micro,
     color: colors.purpleDark,
   },
   sectionTitle: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: colors.blackSoft,
   },
   sectionRequired: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.pinkDark,
     marginLeft: -spacing.sm + 2,
   },
   sectionHint: {
     flex: 1,
     fontFamily: font.family.regular,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
     textAlign: 'right',
   },
@@ -742,7 +743,7 @@ const styles = StyleSheet.create({
   },
   coverBadgeText: {
     fontFamily: font.family.extrabold,
-    fontSize: 8,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.5,
     color: colors.white,
   },
@@ -775,18 +776,18 @@ const styles = StyleSheet.create({
   },
   addTileText: {
     fontFamily: font.family.semibold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.purple,
   },
   imageNote: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
     marginTop: spacing.sm,
   },
   readonlyNote: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
     fontStyle: 'italic',
     marginTop: spacing.sm,
@@ -813,14 +814,14 @@ const styles = StyleSheet.create({
   },
   rupee: {
     fontFamily: font.family.semibold,
-    fontSize: 17,
+    fontSize: font.sizes.title,
     color: colors.purple,
     marginRight: 2,
   },
   input: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     paddingVertical: 0,
     minHeight: 44,
@@ -835,7 +836,7 @@ const styles = StyleSheet.create({
   },
   textarea: {
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     lineHeight: 21,
     color: colors.blackSoft,
     minHeight: 96,
@@ -871,7 +872,7 @@ const styles = StyleSheet.create({
   },
   catLabel: {
     fontFamily: font.family.semibold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     lineHeight: 15,
     color: colors.blackSoft,
     textAlign: 'center',
@@ -906,7 +907,7 @@ const styles = StyleSheet.create({
   },
   submitText: {
     fontFamily: font.family.semibold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.white,
   },
 
@@ -931,13 +932,13 @@ const styles = StyleSheet.create({
   },
   stateTitle: {
     fontFamily: font.family.bold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   stateText: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
   },
@@ -974,13 +975,13 @@ const styles = StyleSheet.create({
   },
   previewLabel: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 1.5,
     color: colors.purpleDark,
   },
   previewHint: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
     marginTop: 4,
     marginBottom: spacing.md,

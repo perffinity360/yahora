@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppText } from '../../src/components/AppText';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { ProductCard } from '../../src/components/ProductCard';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
@@ -108,7 +109,7 @@ export default function PublicProfileScreen() {
           {isOwnProfile && !showSkeleton ? (
             <View style={styles.ownBanner}>
               <Feather name="eye" size={14} color={colors.purpleDark} />
-              <Text style={styles.ownBannerText}>This is how others see your profile.</Text>
+              <AppText style={styles.ownBannerText}>This is how others see your profile.</AppText>
             </View>
           ) : null}
 
@@ -124,12 +125,12 @@ export default function PublicProfileScreen() {
               <Header profile={profile} />
 
               <View style={styles.listingsHead}>
-                <Text style={styles.listingsTitle}>
+                <AppText style={styles.listingsTitle}>
                   {isOwnProfile ? 'My active listings' : `${firstName}'s listings`}
-                </Text>
+                </AppText>
                 {listings.length ? (
                   <View style={styles.countChip}>
-                    <Text style={styles.countChipText}>{listings.length}</Text>
+                    <AppText style={styles.countChipText}>{listings.length}</AppText>
                   </View>
                 ) : null}
               </View>
@@ -228,29 +229,29 @@ function Header({ profile }: { profile: PublicProfile }) {
                 transition={220}
               />
             ) : initials ? (
-              <Text style={styles.avatarInitials}>{initials}</Text>
+              <AppText style={styles.avatarInitials}>{initials}</AppText>
             ) : (
               <Feather name="user" size={38} color={colors.purple} />
             )}
           </View>
         </LinearGradient>
 
-        <Text style={styles.name} numberOfLines={1}>
+        <AppText style={styles.name} numberOfLines={1}>
           {profile.full_name || 'Yahora student'}
-        </Text>
+        </AppText>
 
         <View style={styles.uniRow}>
           <View style={styles.uniDot} />
-          <Text style={styles.uniText} numberOfLines={1}>
+          <AppText style={styles.uniText} numberOfLines={1}>
             {profile.university || 'University'}
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.academicCard}>
           {academicFields.map((field) => (
             <View key={field.label} style={styles.acadCell}>
-              <Text style={styles.acadLabel}>{field.label}</Text>
-              <Text style={styles.acadValue}>{field.value || '—'}</Text>
+              <AppText style={styles.acadLabel}>{field.label}</AppText>
+              <AppText style={styles.acadValue}>{field.value || '—'}</AppText>
             </View>
           ))}
         </View>
@@ -260,7 +261,7 @@ function Header({ profile }: { profile: PublicProfile }) {
         {since ? (
           <View style={styles.sinceRow}>
             <Feather name="calendar" size={13} color={colors.mutedText} />
-            <Text style={styles.sinceText}>Member since {since}</Text>
+            <AppText style={styles.sinceText}>Member since {since}</AppText>
           </View>
         ) : null}
       </View>
@@ -288,7 +289,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
           style={styles.retryBtnGradient}
         >
           <Feather name="refresh-cw" size={16} color={colors.white} />
-          <Text style={styles.retryBtnText}>Retry</Text>
+          <AppText style={styles.retryBtnText}>Retry</AppText>
         </LinearGradient>
       </Pressable>
     </View>
@@ -386,7 +387,7 @@ const styles = StyleSheet.create({
   },
   ownBannerText: {
     fontFamily: font.family.semibold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
 
@@ -445,12 +446,12 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     fontFamily: font.family.serif,
-    fontSize: 34,
+    fontSize: font.sizes.display,
     color: colors.purple,
   },
   name: {
     fontFamily: font.family.serif,
-    fontSize: 23,
+    fontSize: font.sizes.headline,
     color: colors.blackSoft,
     marginTop: spacing.sm,
     maxWidth: '86%',
@@ -471,7 +472,7 @@ const styles = StyleSheet.create({
   },
   uniText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.purple,
     flexShrink: 1,
   },
@@ -495,7 +496,7 @@ const styles = StyleSheet.create({
   },
   acadLabel: {
     fontFamily: font.family.bold,
-    fontSize: 9,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: colors.mutedLabel,
@@ -503,7 +504,7 @@ const styles = StyleSheet.create({
   },
   acadValue: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     lineHeight: 17,
     color: colors.blackSoft,
   },
@@ -515,7 +516,7 @@ const styles = StyleSheet.create({
   },
   sinceText: {
     fontFamily: font.family.medium,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
 
@@ -530,7 +531,7 @@ const styles = StyleSheet.create({
   },
   listingsTitle: {
     fontFamily: font.family.serif,
-    fontSize: 19,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
   },
   countChip: {
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
   },
   countChipText: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
   grid: {
@@ -581,13 +582,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: font.family.bold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
     marginTop: spacing.xs,
@@ -612,7 +613,7 @@ const styles = StyleSheet.create({
   },
   retryBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
 

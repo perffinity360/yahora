@@ -1,6 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
+import { AppText } from './AppText';
 import { colors, font, spacing } from '../theme';
 
 interface AvatarSheetProps {
@@ -27,7 +28,7 @@ export function AvatarSheet({
 
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Profile photo</Text>
+          <AppText style={styles.title}>Profile photo</AppText>
 
           <Pressable
             onPress={onChangePhoto}
@@ -38,8 +39,8 @@ export function AvatarSheet({
               <Feather name="image" size={18} color={colors.purple} />
             </View>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Change Photo</Text>
-              <Text style={styles.rowSub}>Pick a new one from your library</Text>
+              <AppText style={styles.rowTitle}>Change Photo</AppText>
+              <AppText style={styles.rowSub}>Pick a new one from your library</AppText>
             </View>
             <Feather name="chevron-right" size={18} color={colors.mutedLabel} />
           </Pressable>
@@ -54,8 +55,8 @@ export function AvatarSheet({
                 <Feather name="trash-2" size={18} color={colors.errorText} />
               </View>
               <View style={styles.rowText}>
-                <Text style={[styles.rowTitle, styles.rowTitleDanger]}>Remove Photo</Text>
-                <Text style={styles.rowSub}>Go back to the default avatar</Text>
+                <AppText style={[styles.rowTitle, styles.rowTitleDanger]}>Remove Photo</AppText>
+                <AppText style={styles.rowSub}>Go back to the default avatar</AppText>
               </View>
             </Pressable>
           ) : null}
@@ -65,7 +66,7 @@ export function AvatarSheet({
             accessibilityRole="button"
             style={({ pressed }) => [styles.cancelBtn, pressed && styles.cancelBtnPressed]}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <AppText style={styles.cancelText}>Cancel</AppText>
           </Pressable>
         </View>
       </View>
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: 19,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
     textAlign: 'center',
     marginBottom: spacing.md,
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     fontFamily: font.family.semibold,
-    fontSize: 14.5,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   rowTitleDanger: {
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
   },
   rowSub: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
     marginTop: 1,
   },
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
 });

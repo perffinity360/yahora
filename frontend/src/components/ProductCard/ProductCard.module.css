@@ -286,16 +286,9 @@
   gap: 10px;
 }
 
-/* Read-only stat (views, comments) */
-.stat {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #888;
-  letter-spacing: 0.01em;
-}
+/* The read-only `.stat` rule (views, comments) was removed on 2026-09-20 with
+   the two counters it styled — Phase 5, Block V-C. Nothing renders a read-only
+   stat on this card any more; everything left in `.stats` is a button. */
 
 /* Interactive stat button (like, save, share) */
 .statBtn {

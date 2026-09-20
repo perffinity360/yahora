@@ -9,11 +9,11 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 
+import { AppText } from './AppText';
+import { AppTextInput } from './AppTextInput';
 import { useUniversities } from '../hooks/useUniversities';
 import { colors, font, radius, spacing } from '../theme';
 import type { University } from '../types';
@@ -109,12 +109,12 @@ function CampusRow({
       />
 
       <View style={styles.rowText}>
-        <Text style={[styles.rowName, active && styles.rowNameActive]} numberOfLines={2}>
+        <AppText style={[styles.rowName, active && styles.rowNameActive]} numberOfLines={2}>
           {university.name}
-        </Text>
-        <Text style={styles.rowDomain} numberOfLines={1}>
+        </AppText>
+        <AppText style={styles.rowDomain} numberOfLines={1}>
           @{university.domain}
-        </Text>
+        </AppText>
 
         {home ? (
           <Animated.View
@@ -136,7 +136,7 @@ function CampusRow({
               style={styles.badge}
             >
               <Feather name="home" size={10} color={colors.white} />
-              <Text style={styles.badgeText}>HOME CAMPUS</Text>
+              <AppText style={styles.badgeText}>HOME CAMPUS</AppText>
             </LinearGradient>
           </Animated.View>
         ) : null}
@@ -209,7 +209,7 @@ export function CampusSwitcherModal({ visible, onClose, currentId, homeId, onSel
 
         <View style={styles.card}>
           <View style={styles.header}>
-            <Text style={styles.title}>Switch Campus</Text>
+            <AppText style={styles.title}>Switch Campus</AppText>
             <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}>
               <Feather name="x" size={20} color={colors.mutedText} />
             </Pressable>
@@ -217,7 +217,7 @@ export function CampusSwitcherModal({ visible, onClose, currentId, homeId, onSel
 
           {homeUniversity ? (
             <>
-              <Text style={[styles.sectionLabel, styles.sectionLabelPinned]}>YOUR CAMPUS</Text>
+              <AppText style={[styles.sectionLabel, styles.sectionLabelPinned]}>YOUR CAMPUS</AppText>
               <CampusRow
                 university={homeUniversity}
                 home
@@ -230,7 +230,7 @@ export function CampusSwitcherModal({ visible, onClose, currentId, homeId, onSel
 
           <View style={styles.searchWrap}>
             <Feather name="search" size={16} color={colors.mutedLabel} />
-            <TextInput
+            <AppTextInput
               value={search}
               onChangeText={setSearch}
               placeholder="Search universities…"
@@ -244,30 +244,30 @@ export function CampusSwitcherModal({ visible, onClose, currentId, homeId, onSel
           {isLoading ? (
             <View style={styles.statusBox}>
               <ActivityIndicator color={colors.purple} />
-              <Text style={styles.statusText}>Loading campuses…</Text>
+              <AppText style={styles.statusText}>Loading campuses…</AppText>
             </View>
           ) : error ? (
             <View style={styles.statusBox}>
-              <Text style={styles.errorText}>Failed to load campuses.</Text>
+              <AppText style={styles.errorText}>Failed to load campuses.</AppText>
               <Pressable onPress={() => refetch()} style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnPressed]}>
-                <Text style={styles.retryBtnText}>{isFetching ? 'Retrying…' : 'Retry'}</Text>
+                <AppText style={styles.retryBtnText}>{isFetching ? 'Retrying…' : 'Retry'}</AppText>
               </Pressable>
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.statusBox}>
-              <Text style={styles.statusText}>
+              <AppText style={styles.statusText}>
                 {search.trim()
                   ? `No campuses match "${search.trim()}".`
                   : homeUniversity
                     ? 'No other campuses yet.'
                     : 'No campuses available yet.'}
-              </Text>
+              </AppText>
             </View>
           ) : (
             <FlatList
               data={filtered}
               ListHeaderComponent={
-                homeUniversity ? <Text style={styles.sectionLabel}>ALL CAMPUSES</Text> : null
+                homeUniversity ? <AppText style={styles.sectionLabel}>ALL CAMPUSES</AppText> : null
               }
               keyExtractor={(u) => u.id}
               style={styles.list}
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: font.sizes.xl,
+    fontSize: font.sizes.headline,
     color: colors.black,
   },
   closeBtn: {
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   // Matches the uppercase field labels on the login screen.
   sectionLabel: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     color: colors.mutedLabel,
     marginBottom: spacing.sm,
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: font.family.regular,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
     color: colors.black,
     padding: 0,
   },
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   rowName: {
     fontFamily: font.family.bold,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
   },
   rowNameActive: {
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   rowDomain: {
     marginTop: 1,
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
   },
 
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontFamily: font.family.bold,
-    fontSize: 9.5,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.6,
     color: colors.white,
   },
@@ -520,13 +520,13 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontFamily: font.family.regular,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
     color: colors.mutedText,
     textAlign: 'center',
   },
   errorText: {
     fontFamily: font.family.medium,
-    fontSize: font.sizes.md,
+    fontSize: font.sizes.bodyLg,
     color: colors.errorText,
     textAlign: 'center',
   },

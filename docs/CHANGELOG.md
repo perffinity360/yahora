@@ -277,6 +277,254 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-20 — Phase 5 Block V-C: one type scale, and the product card shows two numbers instead of four (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change. **One thing in here needs
+you, Neeraj — the website half of the card change, see "For Neeraj" at the bottom.**
+
+### The measurement this started from
+
+`mobile/app` + `mobile/src` carried **20 distinct hardcoded `fontSize` values across 224 call
+sites**: 8, 8.5, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16, 17, 18, 19,
+22, 23, 24, 28, 30, 34, 40. `src/theme/index.ts` had a `sizes` block all along and **20 call
+sites used it**. Twenty sizes is not a type scale, it is the absence of one — when 13, 14 and
+15 all appear on one screen the eye cannot rank them, and that flatness is what has been
+getting reported as "cluttered".
+
+### The scale — seven tokens, in `mobile/src/theme/index.ts`
+
+| Token | dp | Replaced |
+|---|---|---|
+| `micro` | 11 | 8, 8.5, 9, 9.5, 10, 10.5 |
+| `caption` | 12 | 11, 11.5, 12, 12.5 |
+| `body` | 13 | 13, 13.5, 14, 14.5 |
+| `bodyLg` | 15 | 15, 16 |
+| `title` | 18 | 17, 18, 19 |
+| `headline` | 22 | 22, 23, 24 |
+| `display` | 28 | 28, 30, 34, 40 |
+
+**11dp is an absolute floor.** 22 call sites were at 8–10dp; small grey text is the single
+strongest "cheap app" signal there is, and Android's font slider goes *down* as well as up — at
+0.85 an 11dp label already renders at 9.35dp. Nothing smaller than `micro` exists to reach for.
+
+**The old `sm`/`md`/`lg`/`xl`/`xxl` names are gone, not aliased.** There were only 20 references
+and all 20 were migrated, so keeping dead names around would only have invited new ones.
+`xl` (24) and `xxl` (30) landed on `headline` (22) and `display` (28), so anything that used
+them is 2dp smaller.
+
+### Density — the part that matters more than the sizes
+
+`ProductCard` showed ten things per tile. A Blinkit tile shows five. **The view count and the
+comment count are gone from the card** (`mobile/src/components/ProductCard.tsx`). That ends the
+`1350 1 0 09h ago` collision permanently, at every font scale on every device, which no amount
+of `flexShrink` was going to do. Kept: condition badge, timestamp, like and save — the last two
+because they are *actions*, not stats.
+
+**They are removed from the CARD ONLY.** The product detail screen and the seller dashboard
+still show views and comments, and must keep doing so — that is where a seller is actually
+asking how a listing is doing.
+
+The price is now the largest element on the tile (`title`, 18, semibold) against the product
+title at `body` (13). One element per card should dominate; on a marketplace it is the price.
+
+### Product detail screen
+
+Title 24 → 18 and price 30 → 22, with `lineHeight` 30 → 24 to track. On a POCO X2 the hero block
+was pushing the seller row — the thing you came to the screen to act on — off the bottom. The
+price stays the bigger of the two, same as on the card.
+
+### What NOT to do yet
+
+- **Don't fix the layout consequences here.** 24 call sites moved *up* (11 → 12) and 22 moved up
+  from 8–10 → 11, so some rows are tighter than they were. Spacing, flex and layout are Block
+  V-D and must stay separately attributable — no spacing token, flex property or layout
+  direction was touched in this block.
+- **Don't add a third number back to the card.** If a stat feels missing, it belongs on the
+  detail screen.
+- **Don't compare against the pre-VR baselines for text size** — those predate V-B's font-scale
+  cap as well as this. `docs/screenshots/post-VB/` is the fair before.
+
+### ⚠️ For Neeraj — I EDITED `frontend/` (your area), on the human's instruction
+
+**`frontend/src/components/ProductCard/ProductCard.jsx` and its `.module.css` are changed.**
+The human asked for the stat removal on both clients, so the website card lost the same two
+numbers on 2026-09-20. Saying it loudly because the map in `CLAUDE.md` puts `frontend/` entirely
+with you and I would otherwise never touch it. Revert it if you disagree — I will not re-apply
+it without you.
+
+What changed, and nothing else did:
+
+| | |
+|---|---|
+| Removed | the `EyeIcon` + view-count span, and the `CommentIcon` + comment-count button, from `.stats` in the footer row |
+| Removed | the `EyeIcon` and `CommentIcon` definitions, and the `viewCount` / `commentCount` state, which nothing read any more |
+| Kept | the heart, the bookmark and the share button — actions, not stats |
+| Kept | `supabase.rpc("increment_product_views")` (now `:233`, it moved up when the icons went), untouched |
+| CSS | the now-dead `.stat` rule deleted. **No font-size, colour or spacing value in `frontend/` was changed** — the web type scale is untouched and V-C's seven tokens are mobile-only |
+
+`npx vite build` passes (1891 modules, no warnings beyond the pre-existing chunk-size one).
+
+**Two things I could not decide for you:**
+
+- ⚠ **The comment button was the web's only "jump straight to the comments" shortcut** —
+  it called ``onCardClick(`${product.id}#comments`)``. Clicking the card still opens the detail
+  page, it just lands at the top. Mobile never had the shortcut, so the two clients now match,
+  but if the web wants it back it needs to live somewhere other than a counter.
+- ⚠ **`increment_product_views` is still called from the card**, so the web still counts a view
+  for a listing that is merely scrolled past — on a card that no longer shows the number. That
+  is half of `docs/CURRENT_STATE.md` open issue 2 (two independent increment paths) and deleting
+  it in passing would have settled that question the wrong way round. It is now more clearly
+  wrong than it was, which is an argument for finishing issue 2 this phase.
+
+---
+
+## 2026-09-19 (evening) — Phase 5 Block V-B: the real font-scale clamp — `AppText` / `AppTextInput` (Vishwajeet)
+
+Mobile only. No backend, no database, no API change. Logged late — the work was done on the
+19th and this entry was written on the 20th alongside V-C.
+
+### The problem
+
+Android's Settings → Display → Font size multiplies every `<Text>` in the app by up to ~1.30,
+and iOS Dynamic Type goes further. Our layouts start failing at about **1.15**: the product-card
+stats row overlaps itself and the auth headline runs into the settings gear on a Galaxy A03s at
+**default** font size. That is what has been showing up as "text is cropped on my phone" while
+looking fine on the next phone along.
+
+### The fix
+
+`MAX_FONT_SCALE = 1.15` in `mobile/src/theme/index.ts`, applied through two new drop-in
+components rather than at each call site — a cap you have to remember is a cap that gets
+forgotten:
+
+- **`mobile/src/components/AppText.tsx`** — `<Text>` with `maxFontSizeMultiplier` defaulted to
+  the cap. Every prop and the ref are forwarded untouched, so it is a drop-in at the type level.
+- **`mobile/src/components/AppTextInput.tsx`** — the same for `<TextInput>`.
+
+Migrated: **273 `<AppText>` and 21 `<AppTextInput>` call sites across 27 files.**
+
+Two escape hatches, both explicit: `maxFontSizeMultiplier={1.4}` raises the cap for one element,
+`{null}` removes it. Neither is used anywhere today.
+
+### The one that looked like a fix and was not
+
+`ProductCard.tsx` carried `const DENSE_TEXT_SCALE_CAP = 1.3` on four stat labels. **1.30 is
+where Android's own slider tops out**, so it clamped nothing on any real device — it read as a
+fix in review and behaved as a no-op for as long as it existed. Deleted. If you ever raise the
+number in `MAX_FONT_SCALE`, check it against the slider's real maximum before assuming it does
+anything.
+
+### What stayed on plain `<Text>`, deliberately
+
+Roughly 20 call sites: the auth headline (`login.tsx:852`, `:863`) and the empty- and
+error-state messages across the marketplace, chat, dashboard, public profile, sell, comments and
+the swipe deck. They sit alone on the screen with room to grow, so they honour the student's
+setting in full.
+
+**`allowFontScaling={false}` appears nowhere in this app and must not be added.** It is not an
+escape hatch — it is the thing these two components exist to avoid. A student who needs larger
+text still gets it, up to 15%; turning scaling off would make the app unreadable for exactly the
+people the setting is for.
+
+### Screenshots
+
+`docs/screenshots/post-VB/` — the same five POCO X2 screens as the V-0 baselines, at default
+font size and default display size, after the cap.
+
+⚠ One was committed as `poco-05-message.jpg` where the baseline is `poco-05-chat.jpg`; renamed
+to match, so `diff -r pre-VR post-VB` lines the pairs up.
+
+**Neeraj — your baselines have the same problem, and they are already committed:**
+`oppo-04-Product detail.jpeg`, `oppo-05-Chat thread.jpeg`, `samsung-04-product detail.jpeg`,
+`samsung-05-Chat thread.jpeg` and `samsung-01-auth.png.jpeg` carry spaces, capitals and in one
+case a double extension. The V-0 entry set the rule — `<device>-NN-<screen>.<ext>`, lower case,
+hyphens only — because spaces in a committed path break shell one-liners and make the folder
+diff unusable. Yours are the only ones off it; rename them when you are next in there.
+
+### What NOT to do yet
+
+- **Don't read the cap as a licence to keep shrinking type.** V-C is the type scale, and it
+  raised the floor to 11dp. The cap governs how far a size may grow, not how small it may start.
+- **Don't add `maxFontSizeMultiplier` at call sites.** If a screen needs a different cap, that is
+  a layout bug — Block V-D.
+- **Don't compare post-VB against any mobile screenshot older than 19 Sep**: the POCO was on a
+  reduced font size (MIUI "S", roughly 0.9) until that morning. See the V-0 entry.
+
+---
+
+## 2026-09-19 — 📌 DECISION: no search box in Phase 5; user search moves to Phase 8 (Vishwajeet)
+
+Answering Neeraj's open question from N-A part 1. Two things, both now written into the plan
+so they survive this conversation.
+
+### 1. There is no search box, and we are not building one in Phase 5
+
+**Confirmed: nothing in the web app or the mobile app calls `GET /api/users/search`.** The
+Phase 5 runbook assumed the website had a search box — it never has. That assumption is the
+reason N-A part 2 and one sign-off line could not be carried out.
+
+**The endpoint stays live and verified by direct call. The UI moves to Phase 8**, with the
+social graph. The reason is not scheduling convenience: a result row whose only possible
+action is "open profile" is a thin feature, and the same row with follow, block and campus
+context is the real one. Phase 5 is pagination and navigation; designing a people-search
+surface does not belong in it.
+
+Recorded in `docs/YAHORA_BUILD_PLAN.md`:
+
+| Where | What changed |
+|---|---|
+| Phase 5 | explicit "NOT in Phase 5: a user-search screen", with the reason |
+| Phase 8 | user search (web + mobile) added, noting the backend has been ready since V-A |
+| §7.3 Mobile | "User search" moved from phase 5 → 8 |
+| §7.4 Web | new row — the web search box does not exist either; phase 8 |
+
+And in `docs/PHASE_5_RUNBOOK.md`:
+
+- The sign-off line **"👁️ User search renders results on the live website" is STRUCK.** It is
+  not a failure and not deferred work anyone owes — there is nothing to render it.
+- **N-A part 2 is unblocked and unchanged otherwise:** repeat the part-1 direct call against
+  production, then run the `grep -rn "\.users\b" frontend/src/ | grep -i search` check. That
+  grep still closes the Phase 4 `{ items }` sign-off line — a rename is worth confirming even
+  with no UI on top of it.
+- CHECKPOINT N-A no longer includes "the web renders them".
+
+⚠️ Use a `q` that really matches a user. The broken RPC returned an empty list **without
+error** for a term that matched nothing, so an empty result never proved anything either way.
+
+### 2. Demo accounts would be visible to real students in search — unfixed, Phase 8
+
+`Yahora University (Demo)` (`demo.yahora.com`) users are ordinary `public.users` rows, and
+`search_users()` filters nobody out. The moment a real search box ships, a student searching a
+common name can get demo personas — and `guest_*` throwaways, which live up to 7 days before
+`cleanup_demo_users()` removes them — mixed in with real classmates.
+
+**This is not a bug in V-A.** The RPC never excluded them; it simply never returned anything
+at all, so nobody could see it.
+
+Open questions, to settle when the box is built, not now:
+
+- **Where does the exclusion live** — inside `search_users()`, so every caller inherits it and
+  no future endpoint can forget, or in the controller? My instinct is the RPC.
+- **Should a demo user searching still see their own campus?** Otherwise the demo experience
+  has a search box that returns nothing, which is its own kind of broken.
+- **There is no `is_demo` flag.** The only handle today is
+  `universities.domain = 'demo.yahora.com'`. A column may be worth it if anything else ever
+  needs the same distinction.
+
+🚨 **You cannot reproduce this locally.** The seed creates no demo-campus users — I checked
+after `db reset`: zero rows. It exists only on production. Same category as the university-
+domain divergence in §7.1: local green, production wrong.
+
+### What NOT to do yet
+
+- **Don't build a search screen on either client.** Not web, not mobile, not "just a small
+  one" — it is Phase 8 work and it needs the demo-account exclusion in front of it.
+- **Don't add the exclusion to `search_users()` yet either.** That is a migration, it is mine,
+  and it belongs with the UI that makes it observable.
+
+---
+
+
 ## 2026-09-19 — Phase 5 Block V-A: `search_users()` type fix — user search has never worked (Vishwajeet)
 
 `GET /api/users/search` has returned 500 for every query that matches a row since 15 August.

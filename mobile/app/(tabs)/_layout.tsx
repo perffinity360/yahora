@@ -35,7 +35,7 @@ export default function TabsLayout() {
             backgroundColor: colors.pinkDark,
             color: colors.white,
             fontFamily: font.family.bold,
-            fontSize: 10,
+            fontSize: font.sizes.micro,
           },
         }}
       />

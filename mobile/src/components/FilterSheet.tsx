@@ -7,10 +7,10 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from 'react-native';
 
+import { AppText } from './AppText';
 import type { MarketplaceFilters } from '../hooks/useMarketplaceFilters';
 import {
   formatRupees,
@@ -59,7 +59,7 @@ export function FilterSheet({ visible, onClose, filters }: Props) {
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>Filters</Text>
+            <AppText style={styles.title}>Filters</AppText>
             <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}>
               <Feather name="x" size={20} color={colors.mutedText} />
             </Pressable>
@@ -82,10 +82,10 @@ export function FilterSheet({ visible, onClose, filters }: Props) {
             {/* Price */}
             <Section icon="dollar-sign" title="Price range">
               <View style={styles.priceLabels}>
-                <Text style={styles.priceValue}>{formatRupees(min)}</Text>
-                <Text style={styles.priceValue}>{maxLabel}</Text>
+                <AppText style={styles.priceValue}>{formatRupees(min)}</AppText>
+                <AppText style={styles.priceValue}>{maxLabel}</AppText>
               </View>
-              <Text style={styles.sliderCaption}>Minimum</Text>
+              <AppText style={styles.sliderCaption}>Minimum</AppText>
               <Slider
                 minimumValue={PRICE_MIN}
                 maximumValue={PRICE_MAX}
@@ -96,7 +96,7 @@ export function FilterSheet({ visible, onClose, filters }: Props) {
                 maximumTrackTintColor={colors.hairline}
                 thumbTintColor={colors.purple}
               />
-              <Text style={styles.sliderCaption}>Maximum</Text>
+              <AppText style={styles.sliderCaption}>Maximum</AppText>
               <Slider
                 minimumValue={PRICE_MIN}
                 maximumValue={PRICE_MAX}
@@ -162,10 +162,10 @@ export function FilterSheet({ visible, onClose, filters }: Props) {
               ]}
             >
               <Feather name="x" size={15} color={colors.pinkDark} />
-              <Text style={styles.clearText}>Clear all{activeFilterCount ? ` (${activeFilterCount})` : ''}</Text>
+              <AppText style={styles.clearText}>Clear all{activeFilterCount ? ` (${activeFilterCount})` : ''}</AppText>
             </Pressable>
             <Pressable onPress={onClose} style={({ pressed }) => [styles.applyBtn, pressed && styles.applyBtnPressed]}>
-              <Text style={styles.applyText}>Apply</Text>
+              <AppText style={styles.applyText}>Apply</AppText>
             </Pressable>
           </View>
         </View>
@@ -188,7 +188,7 @@ function Section({
     <View style={styles.section}>
       <View style={styles.sectionHead}>
         <Feather name={icon} size={15} color={colors.purple} />
-        <Text style={styles.sectionTitle}>{title}</Text>
+        <AppText style={styles.sectionTitle}>{title}</AppText>
       </View>
       {children}
     </View>
@@ -203,7 +203,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
       accessibilityState={{ selected: active }}
       style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.chipPressed]}
     >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+      <AppText style={[styles.chipText, active && styles.chipTextActive]}>{label}</AppText>
     </Pressable>
   );
 }
@@ -227,8 +227,8 @@ function ToggleRow({
         <Feather name={icon} size={16} color={value ? colors.purple : colors.mutedLabel} />
       </View>
       <View style={styles.toggleText}>
-        <Text style={styles.toggleLabel}>{label}</Text>
-        <Text style={styles.toggleSub}>{sub}</Text>
+        <AppText style={styles.toggleLabel}>{label}</AppText>
+        <AppText style={styles.toggleSub}>{sub}</AppText>
       </View>
       <Switch
         value={value}
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: font.sizes.xl,
+    fontSize: font.sizes.headline,
     color: colors.blackSoft,
   },
   closeBtn: {
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: colors.blackSoft,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   chipTextActive: {
@@ -345,12 +345,12 @@ const styles = StyleSheet.create({
   },
   priceValue: {
     fontFamily: font.family.bold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.purpleDark,
   },
   sliderCaption: {
     fontFamily: font.family.medium,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     color: colors.mutedLabel,
@@ -378,12 +378,12 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   toggleSub: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
     marginTop: 1,
   },
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   },
   clearText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.pinkDark,
   },
   applyBtn: {
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   },
   applyText: {
     fontFamily: font.family.semibold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.white,
   },
 });

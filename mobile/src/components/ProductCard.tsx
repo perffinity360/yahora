@@ -1,9 +1,10 @@
 import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
+import { AppText } from './AppText';
 import { resolveMediaUrl } from '../lib/config';
 import { colors, conditionColors, font, radius, spacing } from '../theme';
 import type { ProductCardItem } from '../types';
@@ -27,18 +28,6 @@ export function formatPrice(value: number): string {
 }
 
 /** Compact relative time ("5m ago"), falling back to a date past a month. */
-/**
- * Ceiling on the OS font-size multiplier for the card's dense rows.
- *
- * A phone set to "large text" scales every Text by up to 1.3x here and well
- * past 2x at the extremes. The stats row is four items across half a screen,
- * so that is the setting that decides whether the timestamp fits. 1.3 keeps
- * the accessibility win and stops the row from outgrowing the card; the title,
- * price and body text are deliberately NOT capped, because they have room to
- * grow and are what someone raising their font size actually wants bigger.
- */
-const DENSE_TEXT_SCALE_CAP = 1.3;
-
 export function timeAgo(iso: string): string {
   if (!iso) return 'Just now';
   const then = new Date(iso).getTime();
@@ -159,12 +148,12 @@ function ProductCardBase({
           )}
           {sold ? (
             <View style={styles.soldOverlay}>
-              <Text style={styles.soldText}>SOLD</Text>
+              <AppText style={styles.soldText}>SOLD</AppText>
             </View>
           ) : null}
           {imageCount > 1 ? (
             <View style={styles.imageCounter}>
-              <Text style={styles.imageCounterText}>1/{imageCount}</Text>
+              <AppText style={styles.imageCounterText}>1/{imageCount}</AppText>
             </View>
           ) : null}
         </View>
@@ -172,32 +161,36 @@ function ProductCardBase({
         <View style={styles.info}>
           <View style={styles.metaRow}>
             <View style={[styles.conditionBadge, { backgroundColor: cond.bg }]}>
-              <Text style={[styles.conditionText, { color: cond.text }]} numberOfLines={1}>
+              <AppText style={[styles.conditionText, { color: cond.text }]} numberOfLines={1}>
                 {condLabel}
-              </Text>
+              </AppText>
             </View>
-            <Text style={styles.price} numberOfLines={1}>
+            <AppText style={styles.price} numberOfLines={1}>
               {formatPrice(product.price)}
-            </Text>
+            </AppText>
           </View>
 
           {product.location ? (
-            <Text style={styles.location} numberOfLines={1}>
+            <AppText style={styles.location} numberOfLines={1}>
               {product.location.toUpperCase()}
-            </Text>
+            </AppText>
           ) : null}
 
-          <Text style={styles.title} numberOfLines={1}>
+          <AppText style={styles.title} numberOfLines={1}>
             {product.title}
-          </Text>
+          </AppText>
 
+          {/* ── THE CARD SHOWS TWO NUMBERS, NOT FOUR (Block V-C) ──
+              The view count and the comment count were removed here on
+              2026-09-20. They are NOT deleted from the product detail screen or
+              the seller dashboard, where a seller is actually asking "how is my
+              listing doing"; on a 2-up grid tile they were decoration that
+              collided with the timestamp ("1350 1 0 09h ago") at every font
+              scale. Removing content is the only responsive fix that holds on
+              every device — no amount of flexShrink makes four numbers fit a
+              half-width card. The heart stays because it is an ACTION, not a
+              stat. Do not add a third number back. */}
           <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Feather name="eye" size={13} color={colors.mutedText} />
-              <Text style={styles.statText} maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}>
-                {product.views ?? 0}
-              </Text>
-            </View>
             <Pressable
               style={styles.stat}
               onPress={onLike}
@@ -207,26 +200,13 @@ function ProductCardBase({
               accessibilityLabel={liked ? 'Unlike' : 'Like'}
             >
               <Feather name="heart" size={13} color={liked ? colors.pinkDark : colors.mutedText} />
-              <Text
-                style={[styles.statText, liked && styles.statTextLiked]}
-                maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}
-              >
+              <AppText style={[styles.statText, liked && styles.statTextLiked]}>
                 {product.likes_count ?? 0}
-              </Text>
+              </AppText>
             </Pressable>
-            <View style={styles.stat}>
-              <Feather name="message-circle" size={13} color={colors.mutedText} />
-              <Text style={styles.statText} maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}>
-                {product.comments_count ?? 0}
-              </Text>
-            </View>
-            <Text
-              style={styles.time}
-              numberOfLines={1}
-              maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}
-            >
+            <AppText style={styles.time} numberOfLines={1}>
               {timeAgo(product.created_at)}
-            </Text>
+            </AppText>
           </View>
 
           {showManageActions ? (
@@ -280,12 +260,12 @@ function ProductCardBase({
                     />
                   ) : (
                     <View style={styles.sellerAvatarFallback}>
-                      <Text style={styles.sellerInitial}>{sellerInitial}</Text>
+                      <AppText style={styles.sellerInitial}>{sellerInitial}</AppText>
                     </View>
                   )}
-                  <Text style={styles.sellerName} numberOfLines={1}>
+                  <AppText style={styles.sellerName} numberOfLines={1}>
                     {firstName}
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
             </View>
@@ -354,7 +334,7 @@ const styles = StyleSheet.create({
   },
   soldText: {
     fontFamily: font.family.serif,
-    fontSize: 22,
+    fontSize: font.sizes.headline,
     letterSpacing: 3,
     color: colors.white,
   },
@@ -378,34 +358,41 @@ const styles = StyleSheet.create({
   },
   conditionText: {
     fontFamily: font.family.extrabold,
-    fontSize: 8.5,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.5,
   },
+  // THE LARGEST THING ON THE CARD, deliberately (Block V-C). A tile where the
+  // title, the price and the location were all within 2dp of each other gave
+  // the eye nothing to land on, which is what read as clutter. On a
+  // marketplace the price is the decision, so it is the one element allowed to
+  // dominate — `title` (18) against the product title's `body` (13).
   price: {
     flexShrink: 0,
-    fontFamily: font.family.serif,
-    fontSize: 16,
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.title,
     color: colors.purple,
   },
   location: {
     fontFamily: font.family.bold,
-    fontSize: 9,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.5,
     color: colors.mutedText,
     marginTop: -2,
   },
   title: {
     fontFamily: font.family.bold,
-    fontSize: 13.5,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    // 8, not 10. Four items plus three gaps have to fit the card's inner width,
-    // and that width varies with the device: the same 2-column grid is ~10dp
-    // narrower per card on an OPPO K14 than on a POCO X2, which was enough to
-    // push the timestamp off the edge.
+    // 8, not 10. This dated from when the row carried four items plus three
+    // gaps on a card whose width varies by device (the same 2-column grid is
+    // ~10dp narrower per card on an OPPO K14 than on a POCO X2, which was
+    // enough to push the timestamp off the edge). The row now carries two
+    // items and has room to spare; the value is left alone because spacing is
+    // Block V-D's to change, not V-C's.
     gap: 8,
     marginTop: 2,
   },
@@ -423,7 +410,7 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontFamily: font.family.semibold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   statTextLiked: {
@@ -432,7 +419,7 @@ const styles = StyleSheet.create({
   time: {
     marginLeft: 'auto',
     fontFamily: font.family.regular,
-    fontSize: 10.5,
+    fontSize: font.sizes.micro,
     color: colors.mutedLabel,
     // Never shrink and never wrap: this is the element that was being cut off.
     // It keeps its measured width and the stats to its left yield instead.
@@ -493,7 +480,7 @@ const styles = StyleSheet.create({
   },
   imageCounterText: {
     fontFamily: font.family.bold,
-    fontSize: 10.5,
+    fontSize: font.sizes.micro,
     color: colors.white,
   },
 
@@ -522,13 +509,13 @@ const styles = StyleSheet.create({
   },
   sellerInitial: {
     fontFamily: font.family.bold,
-    fontSize: 9,
+    fontSize: font.sizes.micro,
     color: colors.white,
   },
   sellerName: {
     flexShrink: 1,
     fontFamily: font.family.semibold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
 });

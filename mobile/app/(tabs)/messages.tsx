@@ -9,11 +9,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppText } from '../../src/components/AppText';
+import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { resolveMediaUrl } from '../../src/lib/config';
@@ -72,10 +73,10 @@ export default function MessagesScreen() {
       <ConnectionBanner />
 
       <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
+        <AppText style={styles.title}>Messages</AppText>
         <View style={styles.searchBar}>
           <Feather name="search" size={15} color={colors.mutedLabel} />
-          <TextInput
+          <AppTextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search conversations…"
@@ -174,11 +175,11 @@ function ConversationRow({
 
       <View style={styles.rowBody}>
         <View style={styles.rowTop}>
-          <Text style={styles.name} numberOfLines={1}>
+          <AppText style={styles.name} numberOfLines={1}>
             {row.contact_name || 'Yahora student'}
             {isSelf ? ' (You)' : ''}
-          </Text>
-          <Text style={styles.time}>{formatInboxTime(row.last_message_time)}</Text>
+          </AppText>
+          <AppText style={styles.time}>{formatInboxTime(row.last_message_time)}</AppText>
         </View>
 
         <View style={styles.productChip}>
@@ -194,21 +195,21 @@ function ConversationRow({
               <Feather name="image" size={9} color={colors.mutedPlaceholder} />
             </View>
           )}
-          <Text style={styles.productTitle} numberOfLines={1}>
+          <AppText style={styles.productTitle} numberOfLines={1}>
             {row.product_title || 'Item'}
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.rowBottom}>
-          <Text
+          <AppText
             style={[styles.preview, unread > 0 && styles.previewUnread]}
             numberOfLines={1}
           >
             {row.last_message || 'Start the conversation ✨'}
-          </Text>
+          </AppText>
           {unread > 0 ? (
             <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{unread > 99 ? '99+' : unread}</Text>
+              <AppText style={styles.unreadText}>{unread > 99 ? '99+' : unread}</AppText>
             </View>
           ) : null}
         </View>
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: 28,
+    fontSize: font.sizes.display,
     color: colors.blackSoft,
   },
   searchBar: {
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
     padding: 0,
   },
@@ -335,12 +336,12 @@ const styles = StyleSheet.create({
   name: {
     flex: 1,
     fontFamily: font.family.bold,
-    fontSize: 14.5,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   time: {
     fontFamily: font.family.medium,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
   },
   productChip: {
@@ -371,7 +372,7 @@ const styles = StyleSheet.create({
   productTitle: {
     flexShrink: 1,
     fontFamily: font.family.semibold,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   rowBottom: {
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
   preview: {
     flex: 1,
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
   },
   previewUnread: {
@@ -401,7 +402,7 @@ const styles = StyleSheet.create({
   },
   unreadText: {
     fontFamily: font.family.extrabold,
-    fontSize: 10.5,
+    fontSize: font.sizes.micro,
     color: colors.white,
   },
 
@@ -428,13 +429,13 @@ const styles = StyleSheet.create({
   },
   stateTitle: {
     fontFamily: font.family.bold,
-    fontSize: 17,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   stateText: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     lineHeight: 19,
     color: colors.mutedText,
     textAlign: 'center',

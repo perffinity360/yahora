@@ -2,6 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
+import { AppText } from './AppText';
 import { colors, font, spacing } from '../theme';
 import type { MarketplaceProduct } from '../types';
 import { SwipeCard, type SwipeCardHandle } from './SwipeCard';
@@ -92,7 +93,7 @@ export function SwipeDeck({ products, onLikeProduct, onOpenProduct, onBackToGrid
             style={({ pressed }) => [styles.ghostBtn, pressed && styles.ghostBtnPressed]}
           >
             <Feather name="grid" size={16} color={colors.purpleDark} />
-            <Text style={styles.ghostBtnText}>Back to grid</Text>
+            <AppText style={styles.ghostBtnText}>Back to grid</AppText>
           </Pressable>
           {products.length > 0 ? (
             <Pressable
@@ -100,7 +101,7 @@ export function SwipeDeck({ products, onLikeProduct, onOpenProduct, onBackToGrid
               style={({ pressed }) => [styles.solidBtn, pressed && styles.solidBtnPressed]}
             >
               <Feather name="rotate-ccw" size={16} color={colors.white} />
-              <Text style={styles.solidBtnText}>See again</Text>
+              <AppText style={styles.solidBtnText}>See again</AppText>
             </Pressable>
           ) : null}
         </View>
@@ -129,9 +130,9 @@ export function SwipeDeck({ products, onLikeProduct, onOpenProduct, onBackToGrid
         })}
       </View>
 
-      <Text style={styles.counter}>
+      <AppText style={styles.counter}>
         {deck.length} item{deck.length !== 1 ? 's' : ''} left
-      </Text>
+      </AppText>
 
       <View style={styles.spacer} />
 
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   },
   counter: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     marginTop: spacing.sm,
   },
@@ -231,13 +232,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: font.family.bold,
-    fontSize: 17,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   emptyText: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
     marginTop: spacing.xs,
@@ -264,7 +265,7 @@ const styles = StyleSheet.create({
   },
   ghostBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.purpleDark,
   },
   solidBtn: {
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
   },
   solidBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
 });

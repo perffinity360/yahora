@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { AppText } from './AppText';
 import { avatarHue, initialsOf } from '../lib/avatar';
 import { resolveMediaUrl } from '../lib/config';
 import { colors, font } from '../theme';
@@ -34,9 +35,14 @@ export function Avatar({
   }
   return (
     <View style={[styles.avatar, dims, { backgroundColor: avatarHue(name) }]}>
-      <Text style={[styles.initials, { fontSize: Math.round(size * 0.38) }]}>
+      {/* 0.38 of the disc, but never under the 11dp floor: the inbox and comment
+          avatars are 26dp, where 0.38 lands at 10 and the initials read as a
+          smudge. See font.sizes in src/theme. */}
+      <AppText
+        style={[styles.initials, { fontSize: Math.max(font.sizes.micro, Math.round(size * 0.38)) }]}
+      >
         {initialsOf(name) || '?'}
-      </Text>
+      </AppText>
     </View>
   );
 }
