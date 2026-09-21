@@ -1,0 +1,50 @@
+/* frontend/src/components/InfiniteScrollSentinel/InfiniteScrollSentinel.module.css */
+
+/* The observed element itself. Empty and zero-content, but it needs a height:
+   a 0px box sitting flush against the last row can end up reported as not
+   intersecting on some browsers, and the list stops paging. */
+.sentinel {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 auto;
+}
+
+.spinnerRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 20px 0 8px;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(128, 128, 128, 0.25);
+  border-top-color: #2bb7ff;
+  animation: sentinelSpin 0.7s linear infinite;
+}
+
+@keyframes sentinelSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Users who ask for less motion get a pulse instead of a rotation. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: sentinelPulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes sentinelPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}

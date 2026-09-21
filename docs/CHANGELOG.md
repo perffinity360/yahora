@@ -276,6 +276,53 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-20 — 📮 Phase 5 Block N-B: web infinite scroll on the marketplace and comments (Neeraj)
+
+### What changed
+- Marketplace grid and product-detail comments now load the next page when an
+  invisible sentinel at the bottom of the list scrolls into view
+  (IntersectionObserver). The cursor from each response is sent back as `cursor=`.
+- Prompt: CC-N1. Files: Marketplace.jsx + Marketplace.module.css,
+  ProductDetail.jsx, new frontend/src/components/InfiniteScrollSentinel/,
+  new frontend/src/hooks/. No backend or mobile changes.
+
+### Checkpoint N-B (tested on localhost:3000, logged in as arjun@iiitk.ac.in)
+| Check | Result |
+|---|---|
+| Marketplace: more listings on scroll | ✅ page 1 = 20, page 2 = 12 (32 total: 24 seed + 8 hand-made) |
+| Marketplace: stops cleanly | ✅ page 2 has `next_cursor: null`, no third request, no spinner |
+| Marketplace: no duplicates / gaps | ✅ compared ids of both pages: no overlap, all 24 seed ids present |
+| Filter (Condition = Good) still applied on page 2 | ✅ page 2 loaded, every card GOOD |
+| Search for a page-2-only listing ("Godrej") | ✅ found; page 2 loaded automatically without scrolling |
+| Comments: three pages, stops, no duplicates | ✅ tested with a temporary limit=2 and 5 test comments: 3 requests (2+2+1), each comment once, in order. Temporary change reverted and verified |
+
+### Notes
+- Filters and search run in the browser, not on the backend: GET /api/products
+  accepts no filter params. So "the cursor request drops the filter" cannot
+  happen; what we tested instead is that page 2 still gets filtered, and that
+  pages keep loading while a filter leaves few cards on screen.
+- Runbook says localhost:5173; the dev server runs on localhost:3000.
+
+### For Vishwajeet (backend, not changed by me)
+- Loading older comments re-calls GET /api/products/:id with a cursor, and that
+  endpoint adds +1 to `views` every time. Scrolling through comments inflates
+  the view count. Not fixed; backend is yours this phase.
+- The frontend still sends `user_id=` on product requests. The backend ignores
+  it since V-A, so it is harmless leftover; can be cleaned up later.
+## 2026-09-19 — Phase 5 Block N-A part 2: user search works on production (Neeraj)
+
+### Result
+- After Vishwajeet's migration: GET /api/users/search?q=a on production
+  returns STATUS 200 with 3 users (ananya_roy, amit.gupta, arjun.singh).
+- The response uses the Phase 4 shape: `{ "items": [...], "next_cursor": null }`.
+  This is the first time the renamed key has actually run. It works.
+- `grep -rn "\.users\b" frontend/src/ | grep -i search` finds nothing.
+  No frontend code reads the old `users` key, so nothing needed fixing.
+  This closes the open Phase 4 sign-off line about the search key.
+
+### Still open
+- "The web renders search results" cannot be checked: no web or mobile screen
+  calls this endpoint yet (see the N-A part 1 entry). Waiting on our decision.
 
 ## 2026-09-19 — Phase 5 Block V-A: `search_users()` type fix — user search has never worked (Vishwajeet)
 

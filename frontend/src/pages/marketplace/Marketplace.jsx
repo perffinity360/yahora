@@ -42,6 +42,8 @@ import {
   House,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
+import useInfiniteScroll from "../../hooks/useInfiniteScroll";
+import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
 
 const CATEGORIES = [
   {
@@ -81,6 +83,21 @@ const POSTING_DATE_OPTIONS = [
   { key: "older", label: "Older" },
 ];
 
+
+/* Appends `next` onto `base`, skipping any id already present.
+
+   The feed cursor is strictly less-than server-side, so a duplicate listing
+   should not arrive on a later page. "Should not" is not "cannot" — a listing
+   created between two requests, or a clock skew on `created_at`, is enough —
+   and a duplicate id here is a React key warning plus a ghost card that the
+   user can never dismiss. Phase 4 Block N-B's handover said it in as many
+   words: a loop that appends without deduping is worse than no pagination. */
+function mergeById(base, next) {
+  if (!next.length) return base;
+  const seen = new Set(base.map((p) => p.id));
+  const fresh = next.filter((p) => !seen.has(p.id));
+  return fresh.length ? [...base, ...fresh] : base;
+}
 
 /* Freezes the page behind an overlay so scrolling inside the overlay can't
    chain through to the feed. Refcounted, because more than one overlay can be
@@ -442,6 +459,52 @@ function FilterSection({ icon, title, children, defaultOpen = false }) {
   );
 }
 
+/* The back-to-top arrow.
+
+   Drawn by hand rather than taken from lucide: the stock ChevronUp is a bare
+   caret with no tail, and a plain arrow icon has a stick-straight stem of even
+   width. This one has a long tail — it runs the full height of the viewBox,
+   tip almost touching the bottom — tapering from its widest where it meets
+   the head down to a rounded point, with the two edges very slightly bowed so
+   the silhouette reads as drawn rather than extruded.
+
+   The glyph is drawn upright and nothing ever rotates it: the only motion on
+   it is a vertical translate — the constant gentle drift upward the
+   stylesheet gives it, and the hover lift — so the arrow always points
+   straight up.
+
+   Head and tail are separate paths, tagged with data-part so the stylesheet
+   can lift the head a touch further than the tail on hover. Everything is
+   currentColor, so the fill inverts with the button. */
+function ArrowUpGlyph({ size = 22 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        data-part="head"
+        d="M5.6 9.6 12 3.3 18.4 9.6"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        data-part="tail"
+        d="M10.65 4.3 C10.8 11 11.18 17.2 11.4 21.3
+           a0.6 0.6 0 0 0 1.2 0
+           C12.82 17.2 13.2 11 13.35 4.3 Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export default function Marketplace() {
   const navigate = useNavigate();
   const { logout, sessionReady } = useAuth();
@@ -455,6 +518,23 @@ export default function Marketplace() {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  /* 📄 Cursor pagination state (Phase 5 Block N-B). `products` above is now
+     every page loaded so far, appended — not the latest response. */
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  /* Guards a page request against being issued twice. A ref rather than state
+     because it has to be readable and writable synchronously, inside the same
+     tick the request starts — a state flag would not have flipped yet when a
+     second caller checks it. */
+  const feedInFlightRef = useRef(false);
+  /* Identifies the current campus run. Bumped on every reset so a late
+     response for the campus the user has just left is dropped instead of being
+     appended to the campus they are now looking at. */
+  const feedRunRef = useRef(0);
+  const feedAbortRef = useRef(null);
   const [viewMode, setViewMode] = useState("grid");
   const [activeSort, setActiveSort] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
@@ -546,15 +626,58 @@ export default function Marketplace() {
     fetchInitialData();
   }, [currentUserId, sessionReady]);
 
-  /* ── 2. Fetch Products when University changes ── */
-  useEffect(() => {
-    if (!university) return;
+  /* ── 2. Fetch the campus feed, one cursor page at a time ──────────────────
+     📄 `{ items, next_cursor }` since Phase 4 Block N-B, which deliberately
+     ignored the cursor and showed page one only. This is that "for now":
+     pages are APPENDED rather than replacing the list, and `next_cursor`
+     coming back null is the ONLY end-of-list signal. A short page is not one —
+     the last page can be exactly `limit` rows with nothing behind it — and
+     neither is an empty array.
 
-    const fetchMarketplaceFeed = async () => {
-      setLoading(true);
+     ⚠️ EVERY FILTER ON THIS PAGE IS CLIENT-SIDE. `GET /api/products` accepts
+     `university_id`, `limit` and `cursor`, and nothing else: no category, no
+     price, no condition, no posting date, no search, no sort. `displayProducts`
+     further down narrows whatever pages have been loaded. So:
+
+       · the campus IS a server-side parameter → changing it resets the pages,
+         the cursor and hasMore, and refetches page one (the effect below);
+       · the filters are NOT → changing one must *not* reset, because a reset
+         would throw away every page already loaded and leave the user with
+         FEWER matches, not more. There is also no filter query parameter to
+         carry into a cursor request, so page two cannot silently drop one.
+
+     The consequence to know about: a narrow filter that matches nothing on the
+     pages loaded so far leaves the sentinel in view, so the observer keeps
+     pulling pages until something matches or the feed ends. That is the right
+     behaviour for a client-side filter, and it is also the argument for asking
+     Vishwajeet for server-side filter parameters on this endpoint. */
+  const fetchFeedPage = useCallback(
+    async (cursor) => {
+      if (!university) return;
+
+      // 🚦 DOUBLE-FETCH GUARD. The observer is torn down for the duration of a
+      // request (see hooks/useInfiniteScroll), but this function is reachable
+      // from the campus effect too, so the ref is the one check that every
+      // caller passes through.
+      if (feedInFlightRef.current) return;
+      feedInFlightRef.current = true;
+
+      const run = feedRunRef.current;
+      const isFirstPage = cursor === null;
+
+      const controller = new AbortController();
+      feedAbortRef.current = controller;
+
+      if (isFirstPage) setLoading(true);
+      else setLoadingMore(true);
+
       try {
         const params = new URLSearchParams({ university_id: university.id });
         if (currentUserId) params.append("user_id", currentUserId);
+        // Sent back exactly as it was received. Never assembled here and never
+        // parsed: the feed cursor happens to be a `created_at` timestamp today
+        // and Block N-B was explicit that this is not a contract.
+        if (cursor !== null) params.append("cursor", cursor);
 
         // 🔒 The viewer comes from the TOKEN since Block V-A — `?user_id=` above
         // is still sent but ignored server-side. Without this header a signed-in
@@ -563,34 +686,102 @@ export default function Marketplace() {
         const token = localStorage.getItem("yahora_session");
         const response = await fetch(
           `${API_BASE_URL}/products?${params.toString()}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            signal: controller.signal,
+          },
         );
         const data = await response.json();
 
+        // The campus changed while this was in the air — drop it on the floor.
+        if (run !== feedRunRef.current) return;
+
         if (response.ok) {
-          // 📄 `{ items, next_cursor }` since Phase 4 Block N-B — the key was
-          // `products`. `items` is the newest page only (20 by default), not
-          // the whole campus feed; infinite scroll arrives in Phase 5, so
-          // `data.next_cursor` is deliberately ignored here for now.
-          //
           // `?? []` rather than `data.items`: a non-ok body or a shape change
           // used to reach `[...undefined]` and throw "data.products is not
           // iterable", which killed the render and left the page blank.
           const items = data.items ?? [];
-          setProducts(items);
-          setSwipeDeck([...items].reverse());
+          const cursorOut = data.next_cursor ?? null;
+
+          setProducts((prev) => (isFirstPage ? items : mergeById(prev, items)));
+          setSwipeDeck((prev) => {
+            // The deck is consumed from the END — `swipeDeck.slice(-3)` with
+            // the last element as the top card — which is why page one is
+            // reversed into oldest-first. Every later page is strictly older
+            // than everything already in the deck, so it goes in FRONT: the new
+            // listings land at the bottom of the stack and the card the user is
+            // currently looking at is never disturbed.
+            const reversed = [...items].reverse();
+            return isFirstPage ? reversed : mergeById(reversed, prev);
+          });
+
+          setNextCursor(cursorOut);
+          // 🛑 The one and only end-of-list test.
+          setHasMore(cursorOut !== null);
         } else {
           console.error("Failed to fetch products:", data.error);
+          // Stop here rather than let the observer re-request, every time the
+          // sentinel scrolls into view, a page the server keeps rejecting.
+          setHasMore(false);
         }
       } catch (error) {
+        if (error.name === "AbortError") return;
+        if (run !== feedRunRef.current) return;
         console.error("Network error fetching products:", error);
+        setHasMore(false);
       } finally {
-        setLoading(false);
+        // Release the guard only if this is still the live request. An aborted
+        // call from the previous campus settles a tick AFTER the reset has
+        // already started page one, and releasing unconditionally there would
+        // unlock the guard while that page one is genuinely in flight.
+        if (feedAbortRef.current === controller) feedInFlightRef.current = false;
+        if (run === feedRunRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
-    };
+    },
+    [university, currentUserId],
+  );
 
-    fetchMarketplaceFeed();
-  }, [university, currentUserId]);
+  /* RESET + page one. The campus and the signed-in viewer are the only two
+     inputs the server knows about, so they are the only two that reset the
+     feed. Everything the sidebar sets is filtered client-side and must leave
+     the loaded pages alone. */
+  useEffect(() => {
+    if (!university) return;
+
+    feedRunRef.current += 1;
+    // Abandon anything still in flight for the previous campus: without this
+    // the in-flight guard would still be held and page one for the new campus
+    // would be skipped entirely.
+    feedAbortRef.current?.abort();
+    feedInFlightRef.current = false;
+
+    setProducts([]);
+    setSwipeDeck([]);
+    setNextCursor(null);
+    setHasMore(false);
+    setLoadingMore(false);
+    setLoading(true);
+
+    fetchFeedPage(null);
+  }, [university, currentUserId, fetchFeedPage]);
+
+  // Leaving the page mid-request should not leave a fetch resolving into a
+  // component that is gone.
+  useEffect(() => () => feedAbortRef.current?.abort(), []);
+
+  const loadMoreProducts = useCallback(() => {
+    if (!hasMore || loading || loadingMore) return;
+    fetchFeedPage(nextCursor);
+  }, [hasMore, loading, loadingMore, nextCursor, fetchFeedPage]);
+
+  const feedSentinelRef = useInfiniteScroll({
+    hasMore,
+    isLoading: loading || loadingMore,
+    onLoadMore: loadMoreProducts,
+  });
 
   const handleSetUniversity = (u) => {
     // Check if they are in demo mode and trying to leave the demo campus
@@ -1096,7 +1287,7 @@ export default function Marketplace() {
         aria-hidden={!showBackToTop}
         tabIndex={showBackToTop ? 0 : -1}
       >
-        <ChevronUp size={20} strokeWidth={2.5} />
+        <ArrowUpGlyph size={22} />
       </button>
 
       {showUniModal && (
@@ -1306,6 +1497,22 @@ export default function Marketplace() {
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* 📄 Infinite scroll trigger. Deliberately OUTSIDE the
+                empty-state branch: the filters on this page are client-side,
+                so a filter matching nothing on the pages loaded so far must
+                keep pulling pages rather than sit on "nothing on this campus".
+
+                Gone entirely once hasMore is false — there is no end-of-list
+                message by design. Grid view only; the swipe deck is not a
+                scroller and grows from whatever the grid has pulled in. */}
+            {!loading && hasMore && (
+              <InfiniteScrollSentinel
+                sentinelRef={feedSentinelRef}
+                loading={loadingMore}
+                label="Loading more listings"
+              />
             )}
           </>
         )}
