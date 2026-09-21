@@ -142,8 +142,6 @@ export default function PublicProfileScreen() {
                       key={item.id}
                       product={item}
                       style={{ width: cardWidth }}
-                      sellerName={profile.full_name}
-                      sellerAvatarUrl={profile.avatar_url}
                       isLiked={item.is_liked}
                       isSaved={item.is_saved}
                       onPress={() =>

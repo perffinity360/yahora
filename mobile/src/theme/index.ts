@@ -182,12 +182,13 @@ export const font = {
    * call sites that used to sit at 8-10dp were the strongest "cheap app" signal
    * in the product, and they are not coming back.
    *
-   * `nano` (9) is the single exception and it has exactly one call site: the
-   * condition pill on ProductCard (2026-09-21, at the founders' request). It
-   * survives 9dp because of what it is — three to eight uppercase characters,
-   * bold, in their own saturated pill, read as a colour-coded chip rather than
-   * as text. Nothing else qualifies. If you are reaching for `nano` for a label,
-   * a count or anything inside a sentence, the answer is `micro`.
+   * `nano` (9) is the one token allowed below that floor, and as of 2026-09-21
+   * it has NO call sites. It briefly carried the condition pill on ProductCard;
+   * that card was reverted, and the pill is back at `micro` with it. The token
+   * stays for the one shape that could ever justify 9dp — a few uppercase
+   * characters, bold, in their own saturated pill, read as a colour-coded chip
+   * rather than as text. Nothing else qualifies. If you are reaching for `nano`
+   * for a label, a count or anything inside a sentence, the answer is `micro`.
    *
    * The scale moved DOWN at the top (40/34/30 -> 24) and UP at the bottom
    * (8/10 -> 11): airier where it was shouting, readable where it was mumbling.
@@ -196,7 +197,7 @@ export const font = {
    * own font setting multiplies them.
    */
   sizes: {
-    /** 9 — the condition pill on ProductCard, and nothing else. See above. */
+    /** 9 — below the floor, currently unused. Read the note above first. */
     nano: 9,
     micro: 11,
     caption: 12,

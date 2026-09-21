@@ -277,6 +277,37 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-21 (latest) — ↩️ REVERTED: the mobile product-card redesign (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change.
+
+**The card redesign described in the 2026-09-21 entry below is no longer in the app.**
+`mobile/src/components/ProductCard.tsx` and its four callers are back to their state before
+that entry: the old layout (badge + price on one row, stats row with the heart and the
+timestamp, seller tag inside the engagement toolbar), no reserved line boxes, uppercase
+location, condition pill at `micro` (11), and the poster's name shown on the marketplace feed
+only. Read that entry as history, not as the current card.
+
+Reverted: `ProductCard.tsx`, `app/(tabs)/profile.tsx`, `app/profile/[id].tsx`, `app/sell.tsx`,
+`components/SwipeCard.tsx`.
+
+**Deliberately kept, because they came from later, separate decisions:**
+- **The price is still Bree Serif 400**, on the card and everywhere else, on both clients. The
+  typography rule in `mobile/DESIGN.md` §3 stands unchanged.
+- **The feed still keeps your place** when you come back from a product (`app/(tabs)/index.tsx`
+  on mobile, `Marketplace.jsx` on the web).
+- The website is untouched by this revert.
+
+**One knock-on:** `font.sizes.nano` (9) now has **zero** call sites — the condition pill was its
+only one. The token stays, and the note in `mobile/src/theme/index.ts` now says plainly that it
+is unused and why it exists. `micro` (11) remains the floor for anything a student reads.
+
+Neeraj: nothing here needs you. The "For Neeraj" note in the entry below about matching the
+mobile card on the web is **withdrawn** — there is no longer a redesign to match. The price-face
+question stands on its own and is answered: Bree Serif 400 on both clients.
+
+---
+
 ## 2026-09-21 (later) — Font consistency pass on BOTH clients: Bree Serif was never loading on the website (Vishwajeet)
 
 No backend, no database, no migration, no API change. Fonts only — no font-size, line-height,

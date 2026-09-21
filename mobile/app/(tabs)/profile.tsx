@@ -241,12 +241,6 @@ export default function ProfileScreen() {
                           product={item}
                           style={{ width: cardWidth }}
                           showManageActions
-                          // Your own listings still carry your name, so the
-                          // dashboard grid and the marketplace grid are the
-                          // same card at the same height. See `sellerName` in
-                          // src/components/ProductCard.tsx.
-                          sellerName={profile?.full_name}
-                          sellerAvatarUrl={profile?.avatar_url}
                           isLiked={item.is_liked}
                           isSaved={item.is_saved}
                           onPress={() =>

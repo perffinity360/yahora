@@ -151,11 +151,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
             </Animated.View>
           </>
         ) : null}
-        <ProductCard
-          product={product}
-          sellerName={product.seller?.full_name}
-          sellerAvatarUrl={product.seller?.avatar_url}
-        />
+        <ProductCard product={product} />
       </Animated.View>
     </GestureDetector>
   );
