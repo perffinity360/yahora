@@ -231,7 +231,9 @@
   display: flex;
   justify-content: space-between;
   font-size: 0.76rem;
-  font-weight: 700;
+  /* Every price on the site is Bree Serif 400 — it ships no other weight. */
+  font-family: "Bree Serif", serif;
+  font-weight: 400;
   color: var(--black-soft, #1a1a1a);
 }
 .rangeInput {
@@ -903,6 +905,8 @@
 }
 .emptyTitle {
   font-family: "Bree Serif", serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
   font-size: 1.3rem;
   color: var(--black-soft, #1a1a1a);
   margin: 0;
@@ -1023,7 +1027,8 @@
   padding: 8px 18px;
   border-radius: 8px;
   font-size: 1.1rem;
-  font-weight: 900;
+  /* 800: the heaviest Inter we load. 900 was browser-faked. */
+  font-weight: 800;
   letter-spacing: 0.06em;
   pointer-events: none;
   transition: opacity 0.12s;
@@ -1174,6 +1179,8 @@
 }
 .uniModalTitle {
   font-family: "Bree Serif", serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
   font-size: 1.1rem;
   color: var(--black-soft, #1a1a1a);
 }
@@ -1548,7 +1555,7 @@
   background: #f8f4ff; display: flex; align-items: center; justify-content: center;
   margin: 0 auto 16px; border: 4px solid #f0eaf8;
 }
-.demoAlertTitle { margin: 0 0 8px; font-size: 1.25rem; color: #1a0a2e; font-family: "Bree Serif", serif; }
+.demoAlertTitle { margin: 0 0 8px; font-size: 1.25rem; color: #1a0a2e; font-family: "Bree Serif", serif; font-weight: 400; }
 .demoAlertText { margin: 0 0 24px; font-size: 0.9rem; color: #64748b; line-height: 1.5; }
 .demoAlertActions { display: flex; gap: 12px; }
 .demoAlertBtnCancel {

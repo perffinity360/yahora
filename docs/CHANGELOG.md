@@ -277,6 +277,96 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-21 (later) — Font consistency pass on BOTH clients: Bree Serif was never loading on the website (Vishwajeet)
+
+No backend, no database, no migration, no API change. Fonts only — no font-size, line-height,
+spacing, colour or layout was touched on either client.
+
+**⚠️ NEERAJ: THIS ONE IS ALMOST ENTIRELY IN YOUR SCOPE.** `frontend/index.html` plus 9
+stylesheets under `frontend/src/`. The founders asked for the same rule enforced on both
+clients in one pass, so I did the website half rather than filing it and waiting. Every change
+is listed below; pull before you keep working in these files.
+
+### The rule, now written in mobile/DESIGN.md §3 and mobile/CLAUDE.md
+
+**Inter for UI and body text; Bree Serif (Regular 400 only) for headings, brand, the SOLD stamp
+and all prices. Same on web and app. Never apply a bold weight to Bree Serif.**
+
+### 1. The website has never actually loaded Bree Serif
+
+`frontend/index.html` had four spaces inside the Google Fonts URL, right after `css2?`. That
+turned the Bree Serif parameter into one named `"    family"`, which Google silently drops.
+Verified against the live API both before and after: the old URL returned 21 Inter faces and
+**zero** Bree Serif; the new one returns Bree Serif plus Inter 400/500/600/700/800.
+
+So every heading, the brand name, the SOLD overlay and every price on the site has been
+rendering in Times New Roman, not Bree Serif. The link is now:
+
+```
+https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:wght@400;500;600;700;800&display=swap
+```
+
+Keep it on one line with no spaces inside the URL.
+
+### 2. Inter 700/800 now download, and the stray weights are gone
+
+The link used to request `400;500;600` while the stylesheets asked for `700` 64 times and `800`
+13 times — all browser-faked. 700 and 800 are now real. Four leftovers normalised to weights we
+actually ship: `.timeAgo` 100→400, `.typewriterCursor` 300→400, `.uploadPlus` 300→400, and the
+swipe LIKE/PASS stamp 900→800.
+
+### 3. No faux-bold Bree Serif anywhere
+
+Four headings inherited Bree Serif from the `h1–h6` rule in `global.css` and then set
+`font-weight: 700` on top of it — `Home .modalTitle`, `Auth .modalTitle`,
+`Messages .chatHeaderName`, `ProductDetail .descHeading`. All are 400 now. Another 14 Bree Serif
+rules had no weight of their own and now say `font-weight: 400` explicitly, so none of them can
+inherit a bold from a container later. `global.css:50` was already correct.
+
+Classes that set their OWN `font-family: Inter` and a 700 were left alone — `ProductCard .title`
+and `onboarding .sectionTitle` are Inter bold on purpose, and that weight is real now.
+
+### 4. Every price is Bree Serif 400
+
+`ProductCard .price` and `ProductDetail .priceValue` were Bree Serif at 800 (faux bold) → 400.
+`ProductDetail .currencySymbol` (the ₹ beside the amount), `ShareSheet .previewPrice` and
+`Marketplace .priceRangeLabels` were Inter → now Bree Serif 400. The swipe deck and the public
+profile render `ProductCard`, so they follow it.
+
+**One new rule, and a bug it exposes:** I added `.cardPrice` to `Dashboard.module.css`. It is the
+only one of `PurchaseCard`'s ten class names that exists in that file — `card`, `cardImgWrap`,
+`cardImg`, `cardBadge`, `cardBody`, `cardHead`, `cardTitle`, `cardFoot` and `cardViews` are
+referenced from `Dashboard.jsx` and defined nowhere, so that card renders unstyled today. That
+is a layout bug, not a font one, so this pass did not touch it. **It is yours and it is worth a
+look.**
+
+### Mobile half (same pass, for the record)
+
+`ProductCard.price` and `FilterSheet.priceValue` moved from Inter Bold to Bree Serif; the detail
+screen and the dashboard purchase rows were already correct. `nano` (9) is now documented as the
+one exception to the 11dp floor, for the condition pill only. Still zero `fontWeight` call sites
+in `mobile/`.
+
+### Deliberately NOT changed, on both clients
+
+- **The sell form's price input** (`Sell.module.css .priceInput` / `.priceSymbol`, and the mobile
+  equivalent). That is a form control being typed into, not a price being displayed, and the live
+  preview beside it already shows the real price in Bree Serif. Same call on both clients so they
+  stay in step — if you disagree, change both.
+- `Home.module.css .listingPrice` — dead CSS, referenced from no JSX.
+- The SOLD stamp on the mobile product DETAIL screen is still Inter ExtraBold
+  (`mobile/app/product/[id].tsx`). The card's stamp is already Bree Serif. One line, not done
+  because that task scoped the code work to prices.
+
+### What NOT to do yet
+
+- **Do not re-add a weight above 400 to anything Bree Serif.** There is no such file to load; the
+  browser fakes it, and faking it is what this pass removed.
+- **Do not "simplify" the font link by splitting it across lines.** The whitespace is exactly
+  what broke it.
+
+---
+
 ## 2026-09-21 — Product card redesign (mobile), the feed remembers your place (BOTH clients), and a font audit that lands on Neeraj (Vishwajeet)
 
 No backend, no database, no migration, no API change.

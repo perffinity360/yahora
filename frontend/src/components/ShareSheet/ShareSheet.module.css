@@ -53,6 +53,8 @@
 }
 .headTitle {
   font-family: "Bree Serif", Georgia, serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
   font-size: 1.1rem;
   color: var(--black-soft, #1a1a1a);
 }
@@ -114,7 +116,9 @@
 }
 .previewPrice {
   font-size: 0.95rem;
-  font-weight: 800;
+  /* Every price on the site is Bree Serif 400 — it ships no other weight. */
+  font-family: "Bree Serif", serif;
+  font-weight: 400;
   color: var(--purple, #800080);
 }
 

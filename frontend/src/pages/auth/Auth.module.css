@@ -312,7 +312,9 @@
   font-size: 1.1rem;
   color: var(--black-soft);
   text-align: center;
-  font-weight: 700;
+  /* Bree Serif (inherited from the h1-h6 rule in global.css) ships one
+     weight — 400. Anything heavier here was browser-faked. */
+  font-weight: 400;
 }
 
 .demoPopupBtn {
