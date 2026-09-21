@@ -343,8 +343,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
+  // A price, so Bree Serif like every other price in the app (400 only — never
+  // paired with a bold family). See §3 in mobile/DESIGN.md.
   priceValue: {
-    fontFamily: font.family.bold,
+    fontFamily: font.family.serif,
     fontSize: font.sizes.bodyLg,
     color: colors.purpleDark,
   },

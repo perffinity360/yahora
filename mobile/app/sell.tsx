@@ -521,7 +521,12 @@ export default function SellScreen() {
                     <AppText style={styles.previewLabel}>LIVE PREVIEW</AppText>
                   </View>
                   <AppText style={styles.previewHint}>How your item appears in the marketplace</AppText>
-                  <ProductCard product={previewProduct} style={{ width: previewWidth }} />
+                  <ProductCard
+                    product={previewProduct}
+                    sellerName={profile?.full_name}
+                    sellerAvatarUrl={profile?.avatar_url}
+                    style={{ width: previewWidth }}
+                  />
                 </View>
               </View>
             </ScrollView>

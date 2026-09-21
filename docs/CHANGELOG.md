@@ -277,6 +277,106 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-21 — Product card redesign (mobile), the feed remembers your place (BOTH clients), and a font audit that lands on Neeraj (Vishwajeet)
+
+No backend, no database, no migration, no API change.
+
+**⚠️ I EDITED ONE FILE IN YOUR SCOPE, NEERAJ:** `frontend/src/pages/marketplace/Marketplace.jsx`
+(~60 lines, all additive, described below). The founders asked for the scroll fix on both
+clients in one go. Nothing else under `frontend/` was touched. If you have that file open in
+another session, pull before you keep going.
+
+### 1. The feed keeps your place when you come back from a product (both clients)
+
+Open a listing from the middle of the marketplace, press back, and you were returned to the top
+of the feed with everything you had already browsed to scroll past again. Fixed on the app and
+the website, with the same three rules on both:
+
+- **Saved only when a card is opened.** Arriving any other way — the navbar / tab bar, a cold
+  start, back out of `/sell` — still lands at the top, because there is no saved position to
+  find. This is what keeps the behaviour scoped to "back from a product".
+- **Read once, then thrown away.** One saved position is good for one return trip.
+- **Matched against the ids it was measured on.** An offset is positional, and the filters,
+  search and sort are component state on both clients, so they reset when the page is rebuilt.
+  If the list that comes back is not the list you left, the restore is skipped rather than
+  guessed. See "known gap" below.
+
+**App** (`mobile/app/(tabs)/index.tsx`): the offset lives in a module-scope `gridScrollMemo`,
+the same trick `SwipeDeck` already uses for swiped cards — the root layout is a `<Slot/>`, so
+the whole screen is destroyed on the way to a product and no ref or state survives it. Restored
+from FlashList's `onLoad`, which is the first moment the list has a height to scroll within.
+
+**Web** (`frontend/src/pages/marketplace/Marketplace.jsx`): same idea in `sessionStorage`, under
+`yahora_marketplace_scroll`, restored in a `useLayoutEffect` so nothing flashes before the jump.
+Two things worth knowing if you touch this, Neeraj:
+- It only restores when `useNavigationType() === "POP"` — a real Back. Clicking "Marketplace" in
+  the navbar after viewing a product is a forward navigation and still means "start at the top".
+- `App.jsx:157` already skips its `scrollTo(0, 0)` on POP. That is necessary but not sufficient:
+  the browser restores a POP scroll only once the document is tall again, and this page mounts
+  empty and then fetches, so the native restore always loses that race.
+
+**Known gap, on both clients:** if a filter, a search term or a non-default sort was active, it
+is lost on the way back (it always has been — plain `useState` in a page that unmounts), so the
+signature check declines to restore and you land at the top as before. Making the filters
+survive the round trip is the real fix and it is not in this change. Worth doing next; it is
+your call on the web side.
+
+### 2. Product card redesign — MOBILE ONLY, and the web card is now out of step
+
+`mobile/src/components/ProductCard.tsx`, to a design the founders supplied. New order: condition
+pill + heart on one row, then a big right-aligned price, location, title, a divider, then the
+timestamp and the poster's name bottom-right. Photo is inset with rounded corners.
+
+- Price, location and title render into **fixed line boxes** (1 / 1 / 2 lines, scaled by the
+  student's font setting). Titles that wrap to two lines no longer push their neighbour's footer
+  out of line — the 2-up grid stays square.
+- Location is **sentence case**, not uppercase.
+- The condition pill is `font.sizes.nano` (9). `nano` is new, and it is the ONE exception to the
+  11dp floor from Block V-C — uppercase, bold, on its own saturated pill. The floor note in
+  `mobile/src/theme/index.ts` now says so explicitly. Do not reach for it elsewhere.
+- **Every surface now names the poster**, including your own listings on the dashboard.
+
+**For Neeraj:** the website card is unchanged and now differs. Nearest mismatch worth a decision
+either way: the web `.price` is `"Bree Serif"` at `font-weight: 800`
+(`frontend/src/components/ProductCard/ProductCard.module.css:247`) while the app's price is Inter
+Bold. Bree Serif only ships a 400, so that rule is faux-bolding a serif. Pick one and we will
+both use it.
+
+### 3. Font audit — two real bugs, both on the website
+
+Checked the app and the website for font consistency. Both intend the same pair (Inter for UI,
+Bree Serif for headings/brand) and the app is clean: zero `fontWeight` call sites (correct —
+React Native will not synthesize a weight for a custom family), 251 uses of `font.family.*`.
+
+**🔴 The website is not loading Bree Serif at all.** `frontend/index.html:10` has four stray
+spaces inside the Google Fonts URL — `css2?····family=Bree+Serif&…` — which turns that parameter
+into one named `"    family"` and Google drops it. Verified against the live API: the URL as
+shipped returns 21 Inter faces and **zero** Bree Serif; with the spaces removed it returns Bree
+Serif too. So all 45 `Bree Serif` declarations on the site — including `h1–h6, .brand-text,
+.brandName` in `global.css:49` — are rendering in the generic `serif` fallback (Times), while the
+app renders real Bree Serif. Deleting four spaces fixes it.
+
+**🔴 The website asks for Inter weights it never downloads.** The same link requests
+`wght@400;500;600`, but the stylesheets use `font-weight: 700` 64 times and `800` 13 times (plus
+a 900, a 300, a 100). Everything above 600 is browser-synthesized faux bold. The app loads real
+400/500/600/700/800. Fix is `wght@400;500;600;700;800`.
+
+**🟡 A doc contradicts both codebases:** `mobile/DESIGN.md:83` and `:157` ban Inter by name as
+the design face, while both clients ship it everywhere. Left alone, someone eventually "fixes"
+one client off Inter and the two stop matching. Either the doc gets an exception or we pick a
+new body face for both — a joint decision, not a silent one.
+
+### What NOT to do yet
+
+- **Don't mirror the mobile card redesign on the web by eye.** If we want parity, we should agree
+  the spec first (price face, whether the web tile also reserves its text boxes) rather than
+  converging twice.
+- **Don't "tidy" the signature check out of either scroll restore.** Without it, a student who was
+  browsing a filtered feed gets dropped at an arbitrary point in a list they did not ask for,
+  which is worse than landing at the top.
+
+---
+
 ## 2026-09-20 — Phase 5 Block V-C: one type scale, and the product card shows two numbers instead of four (Vishwajeet)
 
 Mobile only. No backend, no database, no migration, no API change. **One thing in here needs

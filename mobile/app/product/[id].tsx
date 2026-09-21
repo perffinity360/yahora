@@ -686,8 +686,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+  // Same badge as the card's and the same weight, one step larger on purpose:
+  // the card's pill is `nano` (9) because it sits on a half-width tile, and
+  // this screen is full width with room for the 11dp floor. See `conditionText`
+  // in src/components/ProductCard.tsx and the floor note in src/theme.
   condText: {
-    fontFamily: font.family.extrabold,
+    fontFamily: font.family.bold,
     fontSize: font.sizes.micro,
     letterSpacing: 0.6,
   },

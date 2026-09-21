@@ -163,7 +163,7 @@ export const font = {
   /**
    * THE TYPE SCALE. Phase 5 Block V-C, 2026-09-20.
    *
-   * Seven sizes, and they are the only sizes. Before this block the app used
+   * Eight sizes, and they are the only sizes. Before this block the app used
    * TWENTY distinct hardcoded fontSize values across 224 call sites (8, 8.5, 9,
    * 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16, 17, 18, 19,
    * 22, 23, 24, 28, 30, 34, 40) while this token block sat largely unused.
@@ -172,37 +172,39 @@ export const font = {
    * When 13, 14 and 15 all appear on one screen the eye cannot rank them, so
    * nothing reads as more important than anything else. That flatness is what
    * the founders were seeing as "cluttered". Hierarchy is made of GAPS: the
-   * jumps below (11 -> 12 -> 13 -> 15 -> 18 -> 22 -> 28) are each big enough to
+   * jumps below (11 -> 12 -> 13 -> 14 -> 16 -> 20 -> 24) are each big enough to
    * be legible as a step.
    *
-   * ── THE FLOOR IS ABSOLUTE ──
-   * Nothing below `micro` (11), anywhere, for any reason. Android's font slider
-   * goes DOWN as well as up: at 0.85 an 11dp label already renders at 9.35dp.
-   * The 22 call sites that used to sit at 8-10dp were the strongest "cheap app"
-   * signal in the product. There is no exception to this rule and no size
-   * smaller than `micro` exists to reach for.
+   * ── THE FLOOR, AND ITS ONE EXCEPTION ──
+   * `micro` (11) is the floor for anything a student READS — labels, counts,
+   * timestamps, helper text, every line of copy. Android's font slider goes
+   * DOWN as well as up: at 0.85 an 11dp label already renders at 9.35dp. The 22
+   * call sites that used to sit at 8-10dp were the strongest "cheap app" signal
+   * in the product, and they are not coming back.
    *
-   * The scale moved DOWN at the top (40/34/30 -> 28) and UP at the bottom
-   * (8/9/10 -> 11): airier where it was shouting, readable where it was mumbling.
+   * `nano` (9) is the single exception and it has exactly one call site: the
+   * condition pill on ProductCard (2026-09-21, at the founders' request). It
+   * survives 9dp because of what it is — three to eight uppercase characters,
+   * bold, in their own saturated pill, read as a colour-coded chip rather than
+   * as text. Nothing else qualifies. If you are reaching for `nano` for a label,
+   * a count or anything inside a sentence, the answer is `micro`.
+   *
+   * The scale moved DOWN at the top (40/34/30 -> 24) and UP at the bottom
+   * (8/10 -> 11): airier where it was shouting, readable where it was mumbling.
    *
    * Pair with MAX_FONT_SCALE (below) — these are the sizes BEFORE the student's
    * own font setting multiplies them.
    */
   sizes: {
-    /** 11 — timestamps, image counters, badge text. THE FLOOR. */
+    /** 9 — the condition pill on ProductCard, and nothing else. See above. */
+    nano: 9,
     micro: 11,
-    /** 12 — secondary labels, stat counts, helper text under a field. */
     caption: 12,
-    /** 13 — default body copy, list rows, card titles. */
     body: 13,
-    /** 15 — emphasised body, input text, primary button labels. */
-    bodyLg: 15,
-    /** 18 — section headings, card prices, screen subtitles. */
-    title: 18,
-    /** 22 — screen titles, sheet headers. */
-    headline: 22,
-    /** 28 — the one hero line on a screen. Rarely correct; look twice. */
-    display: 28,
+    bodyLg: 14,
+    title: 16,
+    headline: 20,
+    display: 24,
   },
 } as const;
 

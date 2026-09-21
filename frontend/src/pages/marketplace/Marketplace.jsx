@@ -1,12 +1,13 @@
 import React, {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
   memo,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useNavigationType } from "react-router-dom";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import styles from "./Marketplace.module.css";
 import { supabase } from "../../config/supabaseClient";
@@ -42,6 +43,61 @@ import {
   House,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
+
+/* ────────── KEEPING YOUR PLACE IN THE FEED ──────────
+ *
+ * Opening a product unmounts this page; pressing Back mounts a brand new one
+ * that starts at the top, so a student who tapped the twentieth card had to
+ * scroll past everything they had already looked at to get back to it.
+ *
+ * The browser's own scroll restoration cannot help here. On a POP it waits for
+ * the document to reach its old height before restoring, and this page mounts
+ * EMPTY and then fetches — by the time the grid exists the browser has long
+ * since given up. (App.jsx already skips its scroll-to-top on POP for the same
+ * reason; that is necessary but on its own it is not enough.)
+ *
+ * So the position is saved by hand, and the rules are deliberately narrow:
+ *
+ *   WRITTEN  only by `openProduct()`, as a card is opened. Arriving any other
+ *            way — the navbar, a fresh load, Back out of /sell — leaves no memo
+ *            and lands at the top, which is what those entries should do.
+ *   READ     once per mount, and only on a POP (a real Back). Clicking
+ *            "Marketplace" in the navbar after viewing a product is a forward
+ *            navigation and still means "start at the top".
+ *   MATCHED  against the ids the offset was measured on. A scroll offset is
+ *            positional, and the filters/search/sort in this page are component
+ *            state that resets on the way back, so a student who was browsing a
+ *            filtered feed returns to the full one. Restoring into a different
+ *            list would drop them somewhere arbitrary, which is worse than the
+ *            top — the signature makes that case a no-op instead of a guess.
+ *
+ * sessionStorage rather than a module variable so it also survives a reload of
+ * the product page, and dies with the tab.
+ */
+const FEED_POSITION_KEY = "yahora_marketplace_scroll";
+
+function rememberFeedPosition(signature) {
+  try {
+    sessionStorage.setItem(
+      FEED_POSITION_KEY,
+      JSON.stringify({ signature, y: window.scrollY }),
+    );
+  } catch {
+    // Private mode / storage disabled. Losing the scroll position is not worth
+    // throwing over.
+  }
+}
+
+/** Reads AND clears — one saved position is good for exactly one return trip. */
+function takeFeedPosition() {
+  try {
+    const raw = sessionStorage.getItem(FEED_POSITION_KEY);
+    sessionStorage.removeItem(FEED_POSITION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 const CATEGORIES = [
   {
@@ -444,6 +500,8 @@ function FilterSection({ icon, title, children, defaultOpen = false }) {
 
 export default function Marketplace() {
   const navigate = useNavigate();
+  // POP = the student pressed Back. See the feed-position notes above.
+  const navigationType = useNavigationType();
   const { logout, sessionReady } = useAuth();
   const [currentUserId] = useState(localStorage.getItem("yahora_user_id"));
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
@@ -880,6 +938,49 @@ export default function Marketplace() {
     isWithinPostingDate,
   ]);
 
+  /* ── Keeping your place in the feed (see the notes at the top of the file) ── */
+
+  const feedSignature = useMemo(
+    () => displayProducts.map((p) => p.id).join("|"),
+    [displayProducts],
+  );
+
+  const openProduct = useCallback(
+    (id) => {
+      rememberFeedPosition(feedSignature);
+      navigate(`/product/${id}`);
+    },
+    [feedSignature, navigate],
+  );
+
+  /** One attempt per mount, whether or not there was anything to restore. */
+  const feedRestoredRef = useRef(false);
+
+  // useLayoutEffect, not useEffect: this runs after the grid is in the DOM but
+  // BEFORE the browser paints it, so the student never sees the top of the feed
+  // flash past on the way to where they were.
+  useLayoutEffect(() => {
+    if (feedRestoredRef.current) return;
+    // Nothing to scroll within until the grid has actually rendered.
+    if (loading || viewMode !== "grid" || !displayProducts.length) return;
+    feedRestoredRef.current = true;
+
+    // Consumed even when it is not used, so a stale position can never fire on
+    // some later, unrelated visit.
+    const saved = takeFeedPosition();
+    if (!saved || !saved.y) return;
+    if (navigationType !== "POP") return;
+    if (saved.signature !== feedSignature) return;
+
+    window.scrollTo(0, saved.y);
+  }, [
+    loading,
+    viewMode,
+    displayProducts.length,
+    feedSignature,
+    navigationType,
+  ]);
+
   if (!university) {
     return (
       <div
@@ -1295,7 +1396,7 @@ export default function Marketplace() {
                     <ProductCard
                       product={product}
                       currentUserId={currentUserId}
-                      onCardClick={(id) => navigate(`/product/${id}`)}
+                      onCardClick={openProduct}
                       onToggleLike={() =>
                         handleToggleGridLike(product.id, product.is_liked)
                       }

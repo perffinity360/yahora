@@ -54,6 +54,46 @@ type ViewMode = 'grid' | 'swipe';
  */
 const SWIPE_HREF = '/(tabs)?view=swipe';
 
+/**
+ * WHERE THE GRID WAS SCROLLED TO, remembered OUTSIDE the component tree.
+ *
+ * Same problem and same shape as `swipedMemo` in SwipeDeck. Tapping a card
+ * opens `/product/:id`, and coming back runs `router.replace(from)` (see
+ * src/lib/nav.ts) — the root layout is a `<Slot/>`, so this whole screen is
+ * torn down and rebuilt. A `useRef` or a piece of state cannot survive that, so
+ * a student who tapped the twentieth item was returned to the first one and had
+ * to scroll past everything they had already looked at.
+ *
+ * ── WRITTEN IN EXACTLY ONE PLACE ──
+ * `rememberGridPosition()`, called as a card is opened. That is what makes this
+ * "restore only when coming back from a product". Arriving any other way — cold
+ * start, the tab bar, back from /sell — finds no memo and lands at the top,
+ * which is what those entries should do.
+ *
+ * ── AND READ EXACTLY ONCE ──
+ * The restore consumes it (`gridScrollMemo = null`), so one saved position is
+ * good for one return trip and can never fire again later.
+ *
+ * Module scope also means it dies with the app, which is the right lifetime for
+ * "where I was a moment ago".
+ */
+let gridScrollMemo: { signature: string; offset: number } | null = null;
+
+/**
+ * The identity of the list an offset was measured against.
+ *
+ * An offset is POSITIONAL: 1,400dp down is only "where I was" if the same items
+ * are in the same order. The filters, the search box and the sort live in
+ * component state (useMarketplaceFilters), so they reset when this screen is
+ * rebuilt — a student who was browsing a filtered feed comes back to the full
+ * one, and restoring into that would drop them somewhere arbitrary, which is
+ * worse than the top. Comparing the ordered ids makes the restore a no-op in
+ * exactly those cases instead of a wrong answer.
+ */
+function feedSignature(items: MarketplaceProduct[]): string {
+  return items.map((p) => p.id).join('|');
+}
+
 export default function MarketplaceScreen() {
   const router = useRouter();
   const { view } = useLocalSearchParams<{ view?: string }>();
@@ -136,6 +176,58 @@ export default function MarketplaceScreen() {
     />
   );
 
+  /* ── Keeping your place in the feed (see `gridScrollMemo` above) ──────── */
+
+  // Drives the grid's scroll position: to the top when the sort order changes,
+  // and back to where the student was when they return from a product.
+  const gridRef = useRef<FlashListRef<MarketplaceProduct>>(null);
+
+  /** The live scroll offset. A ref, not state: this changes on every frame of
+   *  every scroll and nothing on screen depends on it. */
+  const gridOffset = useRef(0);
+  /** The current list, readable from a STABLE callback — putting
+   *  `displayProducts` in `openProduct`'s deps would rebuild `renderItem`, and
+   *  with it every row, on every filter keystroke. */
+  const feedRef = useRef<MarketplaceProduct[]>(displayProducts);
+  feedRef.current = displayProducts;
+  /** One restore per mount, whether or not there was anything to restore. */
+  const restoredRef = useRef(false);
+
+  const rememberGridPosition = useCallback(() => {
+    gridScrollMemo = {
+      signature: feedSignature(feedRef.current),
+      offset: gridOffset.current,
+    };
+  }, []);
+
+  /**
+   * Fired by FlashList's `onLoad`, which is the first moment the list has
+   * actually drawn rows — and therefore the first moment it has a scrollable
+   * height to move within. Calling `scrollToOffset` any earlier (in an effect
+   * on mount) silently does nothing, because there is nowhere to scroll yet.
+   */
+  const restoreGridPosition = useCallback(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+
+    const memo = gridScrollMemo;
+    gridScrollMemo = null;
+    if (!memo || memo.offset <= 0) return;
+    if (memo.signature !== feedSignature(feedRef.current)) return;
+
+    // Not animated: this is a restore, not a movement. The student should find
+    // the feed where they left it, not watch it scroll there.
+    gridRef.current?.scrollToOffset({ offset: memo.offset, animated: false });
+  }, []);
+
+  const openProduct = useCallback(
+    (id: string) => {
+      rememberGridPosition();
+      router.push(hrefWithFrom(`/product/${id}`, '/(tabs)'));
+    },
+    [rememberGridPosition, router],
+  );
+
   const renderCard = useCallback(
     ({ item }: { item: MarketplaceProduct }) => (
       <View style={styles.cell}>
@@ -145,18 +237,15 @@ export default function MarketplaceScreen() {
           isSaved={item.is_saved}
           sellerName={item.seller?.full_name}
           sellerAvatarUrl={item.seller?.avatar_url}
-          onPress={() => router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)'))}
+          onPress={() => openProduct(item.id)}
           onLike={() => toggleLike.mutate({ productId: item.id })}
           onSave={() => toggleSave.mutate({ productId: item.id })}
           onShare={() => handleShare(item)}
         />
       </View>
     ),
-    [router, toggleLike, toggleSave],
+    [openProduct, toggleLike, toggleSave],
   );
-
-  // Drives the grid's scroll position when the sort order changes.
-  const gridRef = useRef<FlashListRef<MarketplaceProduct>>(null);
 
   /**
    * Set when a sort chip changes the order, cleared once the REORDERED list has
@@ -433,6 +522,14 @@ export default function MarketplaceScreen() {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
+          // Recording where the student is, so opening a card can remember it.
+          // The handler only writes a ref, so a 16ms cadence costs nothing and
+          // means the offset is current at the instant a card is tapped.
+          onScroll={(e) => {
+            gridOffset.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
+          onLoad={restoreGridPosition}
         />
       )}
 
