@@ -15,10 +15,17 @@ export function Avatar({
   name,
   uri,
   size,
+  ringed = false,
 }: {
   name?: string | null;
   uri?: string | null;
   size: number;
+  /**
+   * The purple ring the product card puts on a seller's photo (see
+   * `sellerAvatar` in ProductCard.tsx). Photo only: the initials disc is
+   * already a solid colour and gets no ring, on the card or here.
+   */
+  ringed?: boolean;
 }) {
   const dims = { width: size, height: size, borderRadius: size / 2 };
 
@@ -30,7 +37,12 @@ export function Avatar({
 
   if (src) {
     return (
-      <Image source={{ uri: src }} style={[styles.avatar, dims]} contentFit="cover" transition={180} />
+      <Image
+        source={{ uri: src }}
+        style={[styles.avatar, dims, ringed && [styles.ring, { borderWidth: size >= 40 ? 2 : 1.5 }]]}
+        contentFit="cover"
+        transition={180}
+      />
     );
   }
   return (
@@ -53,6 +65,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.pinkLight,
     overflow: 'hidden',
+  },
+  ring: {
+    borderColor: colors.purpleDark,
   },
   initials: {
     fontFamily: font.family.bold,

@@ -27,18 +27,33 @@ import { SwipeDeck } from '../../src/components/SwipeDeck';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useMarketplaceFeed } from '../../src/hooks/useMarketplace';
 import { useMarketplaceFilters } from '../../src/hooks/useMarketplaceFilters';
-import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
+import { useToggleLike } from '../../src/hooks/useProductActions';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import { SORT_OPTIONS, type SortKey } from '../../src/lib/marketplace';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { MarketplaceProduct, University } from '../../src/types';
-import { shareProduct } from '../../src/lib/share';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
-const GAP = spacing.md;
-const HALF_GAP = GAP / 2;
+/**
+ * ── THE CARD GRID'S OWN SPACING ──
+ *
+ * Tighter than the rest of the screen, and deliberately so: at SCREEN_PAD (24)
+ * either side plus a 16 gutter, a 2-up grid on a 360dp phone left each card
+ * about 152dp to hold a price, a location, a two-line title and a seller. The
+ * space around the cards was costing the cards. 12 / 10 buys each one ~11dp.
+ *
+ * The three numbers are separate because the columns and the rows want
+ * different gaps — a 10dp gutter reads as "two columns of one grid" while 12dp
+ * between rows keeps the rows from stacking into a wall.
+ *
+ * These are the same three values in profile/[id].tsx and (tabs)/profile.tsx.
+ * If you change one, change all three files — the grids are meant to match.
+ */
+const GRID_PAD = 12;
+const GRID_COL_GAP = 10;
+const GRID_ROW_GAP = 12;
 const SKELETON_COUNT = 6;
 
 type ViewMode = 'grid' | 'swipe';
@@ -128,10 +143,9 @@ export default function MarketplaceScreen() {
 
   const feedKey = ['marketplace', viewedUniversityId] as const;
   const toggleLike = useToggleLike(feedKey);
-  const toggleSave = useToggleSave(feedKey);
 
   const { width } = useWindowDimensions();
-  const cardWidth = (width - SCREEN_PAD * 2 - GAP) / 2;
+  const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
   const swipeCardW = Math.min(width - SCREEN_PAD * 2, 340);
 
   const onRefresh = useCallback(async () => {
@@ -142,12 +156,6 @@ export default function MarketplaceScreen() {
       setRefreshing(false);
     }
   }, [refetch]);
-
-  // Text, link and platform handling all live in src/lib/share.ts — the app and
-  // the website share the same wording, and the link unfurls as a card.
-  const handleShare = (item: MarketplaceProduct) => {
-    shareProduct(item);
-  };
 
   const handleSetUniversity = (u: University) => {
     // Demo users are locked to the sandbox campus.
@@ -233,18 +241,16 @@ export default function MarketplaceScreen() {
       <View style={styles.cell}>
         <ProductCard
           product={item}
+          style={styles.cardFill}
           isLiked={item.is_liked}
-          isSaved={item.is_saved}
           sellerName={item.seller?.full_name}
           sellerAvatarUrl={item.seller?.avatar_url}
           onPress={() => openProduct(item.id)}
           onLike={() => toggleLike.mutate({ productId: item.id })}
-          onSave={() => toggleSave.mutate({ productId: item.id })}
-          onShare={() => handleShare(item)}
         />
       </View>
     ),
-    [openProduct, toggleLike, toggleSave],
+    [openProduct, toggleLike],
   );
 
   /**
@@ -441,9 +447,17 @@ export default function MarketplaceScreen() {
       {isForeignCampus ? (
         <View style={styles.foreignBanner}>
           <Feather name="globe" size={14} color={colors.purpleDark} />
-          <AppText style={styles.foreignText}>
-            Browsing {campusName} — view only. Buying and listing stay on your home campus.
-          </AppText>
+          {/* One line, always. The campus name is the only part allowed to
+              give up space (long names end in "…"); "view only" is the point
+              of the banner, so it never truncates. */}
+          <View style={styles.foreignLine}>
+            <AppText style={[styles.foreignText, styles.foreignName]} numberOfLines={1}>
+              Browsing {campusName}
+            </AppText>
+            <AppText style={styles.foreignText} numberOfLines={1}>
+              {' — view only.'}
+            </AppText>
+          </View>
         </View>
       ) : null}
 
@@ -867,30 +881,48 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.inputBorderFocus,
   },
-  foreignText: {
+  foreignLine: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // `micro` (11), one step down from `caption` — the 11dp floor, so it cannot
+  // go further. Fitting on one line is the `foreignLine` row's job.
+  foreignText: {
     fontFamily: font.family.medium,
-    fontSize: font.sizes.caption,
-    lineHeight: 16,
+    fontSize: font.sizes.micro,
+    lineHeight: 15,
     color: colors.purpleDark,
+  },
+  foreignName: {
+    flexShrink: 1,
   },
 
   /* Grid */
   listContent: {
-    paddingHorizontal: SCREEN_PAD - HALF_GAP,
+    // Each cell carries half a column gutter on each side, so the list pads
+    // only the remainder out to the screen edge.
+    paddingHorizontal: GRID_PAD - GRID_COL_GAP / 2,
     paddingTop: spacing.md,
     paddingBottom: spacing.xl * 3,
   },
   cell: {
     flex: 1,
-    padding: HALF_GAP,
+    paddingHorizontal: GRID_COL_GAP / 2,
+    paddingVertical: GRID_ROW_GAP / 2,
+  },
+  /** Lets the card fill the cell, which FlashList stretches to the tallest in
+   *  the row. Only safe to pass from here: `cell` is a column, so `flex: 1` is
+   *  a HEIGHT. The profile grids lay their cards out in a row and must not. */
+  cardFill: {
+    flex: 1,
   },
 
   /* Skeleton */
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: SCREEN_PAD - HALF_GAP,
+    paddingHorizontal: GRID_PAD - GRID_COL_GAP / 2,
     paddingTop: spacing.md,
   },
   skeletonLine: {

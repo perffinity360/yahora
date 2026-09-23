@@ -151,7 +151,12 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
             </Animated.View>
           </>
         ) : null}
-        <ProductCard product={product} />
+        {/* The deck row carries its joined seller, same as the feed. */}
+        <ProductCard
+          product={product}
+          sellerName={product.seller?.full_name}
+          sellerAvatarUrl={product.seller?.avatar_url}
+        />
       </Animated.View>
     </GestureDetector>
   );

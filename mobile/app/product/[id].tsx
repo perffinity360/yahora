@@ -1,4 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -393,7 +394,11 @@ function Content({
                 <AppText style={styles.statText}>{product.views ?? 0} views</AppText>
               </View>
               <View style={styles.stat}>
-                <Feather name="heart" size={15} color={liked ? colors.pinkDark : colors.mutedText} />
+                <MaterialCommunityIcons
+                  name={liked ? 'heart' : 'heart-outline'}
+                  size={15}
+                  color={liked ? colors.pinkDark : colors.mutedText}
+                />
                 <AppText style={[styles.statText, liked && styles.statTextActive]}>
                   {product.likes_count ?? 0} likes
                 </AppText>
@@ -418,7 +423,7 @@ function Content({
               accessibilityLabel={`View ${product.seller.full_name ?? 'seller'}'s profile`}
               style={({ pressed }) => [styles.sellerRow, pressed && styles.sellerRowPressed]}
             >
-              <Avatar name={product.seller.full_name} uri={product.seller.avatar_url} size={48} />
+              <Avatar name={product.seller.full_name} uri={product.seller.avatar_url} size={48} ringed />
               <View style={styles.sellerInfo}>
                 <AppText style={styles.sellerName} numberOfLines={1}>
                   {product.seller.full_name || 'Yahora student'}
@@ -528,7 +533,15 @@ function Content({
             accessibilityLabel={liked ? 'Unlike' : 'Like'}
             style={({ pressed }) => [styles.circleBtn, liked && styles.circleBtnLike, pressed && styles.circlePressed]}
           >
-            <Feather name="heart" size={22} color={liked ? colors.pinkDark : colors.mutedText} />
+            {/* Filled when liked, same as the product card's heart — see the
+                note beside it in src/components/ProductCard.tsx. Feather has
+                no solid heart (or bookmark), so the two hearts and the
+                bookmark below are the only MCI glyphs on this screen. */}
+            <MaterialCommunityIcons
+              name={liked ? 'heart' : 'heart-outline'}
+              size={22}
+              color={liked ? colors.pinkDark : colors.mutedText}
+            />
           </Pressable>
           <Pressable
             onPress={onSave}
@@ -536,7 +549,14 @@ function Content({
             accessibilityLabel={saved ? 'Remove from wishlist' : 'Save to wishlist'}
             style={({ pressed }) => [styles.circleBtn, saved && styles.circleBtnSave, pressed && styles.circlePressed]}
           >
-            <Feather name="bookmark" size={21} color={saved ? colors.purple : colors.mutedText} />
+            {/* Filled when saved, for the same reason the heart is: a colour
+                change alone is too weak a signal. MCI, one family for both
+                faces, so the silhouette does not jump on tap. */}
+            <MaterialCommunityIcons
+              name={saved ? 'bookmark' : 'bookmark-outline'}
+              size={22}
+              color={saved ? colors.purple : colors.mutedText}
+            />
           </Pressable>
 
           {isOwnListing ? (

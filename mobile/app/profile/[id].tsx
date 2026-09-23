@@ -21,17 +21,21 @@ import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
-import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
+import { useToggleLike } from '../../src/hooks/useProductActions';
 import { usePublicProfile } from '../../src/hooks/usePublicProfile';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
-import type { PublicListing, PublicProfile } from '../../src/types';
-import { shareProduct } from '../../src/lib/share';
+import type { PublicProfile } from '../../src/types';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
-const GRID_GAP = spacing.md;
+/** The card grid runs tighter than the rest of the screen so the cards get the
+ *  width back. Same three values in (tabs)/index.tsx and (tabs)/profile.tsx —
+ *  change one, change all three. */
+const GRID_PAD = 12;
+const GRID_COL_GAP = 10;
+const GRID_ROW_GAP = 12;
 
 function initialsOf(name?: string | null): string {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
@@ -57,11 +61,10 @@ export default function PublicProfileScreen() {
 
   const { data, isLoading, isError, refetch } = usePublicProfile(profileUserId);
   const toggleLike = useToggleLike(['publicProfile', profileUserId]);
-  const toggleSave = useToggleSave(['publicProfile', profileUserId]);
 
   const { width } = useWindowDimensions();
   const floatingTop = useFloatingTopInset();
-  const cardWidth = (width - SCREEN_PAD * 2 - GRID_GAP) / 2;
+  const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -78,12 +81,6 @@ export default function PublicProfileScreen() {
   // `from` param each opener passes (the dashboard, or a product's seller card),
   // falling back to the dashboard.
   const goBack = () => router.replace(fromParam ?? '/(tabs)/profile');
-
-  // See src/lib/share.ts for the message, the link and why Android and iOS
-  // carry the URL differently.
-  const handleShare = (item: PublicListing) => {
-    shareProduct(item);
-  };
 
   const profile = data?.profile;
   const listings = data?.listings ?? [];
@@ -143,7 +140,11 @@ export default function PublicProfileScreen() {
                       product={item}
                       style={{ width: cardWidth }}
                       isLiked={item.is_liked}
-                      isSaved={item.is_saved}
+                      // The public-profile endpoint does not join a seller onto
+                      // its listing rows — every listing on this screen belongs
+                      // to the profile being viewed, so that is the seller.
+                      sellerName={profile.full_name}
+                      sellerAvatarUrl={profile.avatar_url}
                       onPress={() =>
                         router.push(
                           hrefWithFrom(
@@ -153,8 +154,6 @@ export default function PublicProfileScreen() {
                         )
                       }
                       onLike={() => toggleLike.mutate({ productId: item.id })}
-                      onSave={() => toggleSave.mutate({ productId: item.id })}
-                      onShare={() => handleShare(item)}
                     />
                   ))}
                 </View>
@@ -553,8 +552,9 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: GRID_GAP,
-    paddingHorizontal: SCREEN_PAD,
+    columnGap: GRID_COL_GAP,
+    rowGap: GRID_ROW_GAP,
+    paddingHorizontal: GRID_PAD,
   },
 
   /* Empty / error */

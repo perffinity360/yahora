@@ -277,7 +277,196 @@ diff that was never the problem.
 
 ## Entries
 
-## 2026-09-21 (latest) — ↩️ REVERTED: the mobile product-card redesign (Vishwajeet)
+## 2026-09-23 — Founder feedback round on the card and product screen, and the like button that stopped working (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change. **Nothing under `frontend/`
+was touched.**
+
+### The like button (the one real bug)
+
+`POST /like` and `POST /save` are blind toggles — the server flips whatever it has. The same
+listing sits in several TanStack caches at once (marketplace, product detail, public profile,
+dashboard) and a toggle only patched the cache of the screen it was tapped on; the detail
+screen never refetches at all. Like a listing on its detail screen, go back, and the
+marketplace card is still showing the old state inside its 5-minute `staleTime`. Tap it and
+the server flips the opposite way from what the heart promised, then the card snaps back.
+That is "works once, then needs a reload".
+
+Fix, in `mobile/src/hooks/useProductActions.ts`: the toggle's response (`is_liked` /
+`is_saved`, the state AFTER the toggle) is now written into **every** cached copy of the
+listing on success (`syncListingEverywhere`). The dashboard's own toggles call it too. A
+double tap lets only the last in-flight toggle settle the state, so the heart does not flash.
+**Not verified on a device.**
+
+### Card (`ProductCard.tsx`)
+
+- Timestamp and seller name `caption` (12) → `micro` (11). Like count `caption` → `body` (13),
+  heart 14 → 16.
+- Price pulled 2dp closer to the like row.
+- **The title no longer reserves two lines.** Every grid already stretches the cards in a row to
+  the tallest one (FlashList v2 normalises row heights; the profile grids are wrapping flex
+  rows), and the footer is `marginTop: 'auto'`, so the footers still line up. A row where both
+  titles fit on one line is now a line shorter instead of carrying a blank line under each.
+  The location keeps its one reserved line.
+
+### Product detail screen
+
+- The bookmark is `MaterialCommunityIcons` `bookmark` / `bookmark-outline`, **filled** purple
+  when saved, same treatment as the heart.
+- The seller's photo gets the card's purple ring (`Avatar` gained a `ringed` prop; 2dp at 48dp).
+  Photo only — the initials disc has no ring, same rule as the card.
+
+### Marketplace campus banner
+
+Now one line: `Browsing <campus> — view only.` at `micro` (11). The campus name truncates with
+"…" if it has to; "— view only." never does. The ask was "three points smaller", which would
+be 9dp — below the 11dp floor, so it stops at `micro`.
+
+### For Neeraj
+
+Nothing here needs you. The web card is still out of step with the app's; same call as before —
+agree a spec before matching it.
+
+---
+
+## 2026-09-21 — Phase 5 Block V-C correction: the product card, rebuilt to the founders' design (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change. **Nothing under `frontend/`
+was touched.**
+
+**This supersedes the revert entry below.** The card redesign is back, to a new design the
+founders supplied, and it is not the one that was reverted this morning — the differences are
+listed under "What is different from the reverted version".
+
+### The card, top to bottom
+
+| | Before (the reverted-to card) | Now |
+|---|---|---|
+| Photo | square, top corners rounded | unchanged |
+| Row 1 | condition badge + price on one row | condition badge **left**, like button (heart + count) **right** |
+| Row 2 | — | **price alone, right-aligned** — Bree Serif at `headline` (20), the largest thing on the tile |
+| Row 3 | LOCATION, UPPERCASE, letter-spaced | location **exactly as the seller typed it**, `micro`, one reserved line |
+| Row 4 | title, 1 line | title, **2 reserved lines**, `body` Inter Bold |
+| — | — | **thin divider** |
+| Row 5 | heart + count, then timestamp | **timestamp left · avatar + seller's FULL name right** |
+| Engagement row | bookmark + share + seller first-name tag | **gone** |
+| Owner toolbar | bookmark, share, sold/available, edit, delete | **sold/available, edit, delete** — bookmark and share dropped |
+
+- **The condition badge is the only thing in the app at `font.sizes.nano` (9).** Uppercase
+  Inter ExtraBold on a saturated pill; the per-condition colours still come from
+  `conditionColors`, nothing is hardcoded. `nano` had zero call sites after this morning's
+  revert and now has exactly one. The note beside it in `src/theme/index.ts` says so by name.
+- **Location is sentence case, not uppercase.** Only transformation: a leading *lowercase*
+  letter is capitalised. `main gate parking` → `Main gate parking`; `CSE Department` is left
+  alone; a digit or a caseless script is left alone.
+- **Every card names the seller now, your own listings included.** The marketplace and the
+  swipe deck read it off the joined feed row; the public profile passes the profile being
+  viewed; the dashboard and the sell preview pass the signed-in student. `ProductCardItem`
+  gained an optional `seller` so the card can fall back to the row when a screen passes
+  nothing. **No call site is left without a seller name.**
+
+### Two founder follow-ups, same day
+
+- **A liked heart is now FILLED, not just pink.** The card's heart is the only
+  `MaterialCommunityIcons` glyph in the file (`heart` / `heart-outline`); Feather ships outline
+  faces only, so "liked" could never be more than a colour change, and colour alone is the
+  weakest signal on a tile you are scanning past. Both states come from the one family so the
+  silhouette does not jump on tap.
+  **The product detail screen's two hearts got the same treatment** — the "N likes" stat and
+  the action-bar like button (`app/product/[id].tsx:397`, `:540`). Both were Feather, both
+  signalled liked with colour alone, so a student could fill the heart on a card, open the
+  listing and see an outline heart for the same product. The three hearts now agree.
+- **The seller's photo gets the website's purple ring** — `borderWidth: 1.5`,
+  `colors.purpleDark`, matching `.sellerAvatar` in
+  `frontend/src/components/ProductCard/ProductCard.module.css:356`. The initials fallback does
+  NOT get one: it is already a solid purple disc, and the web fallback has no border either.
+  The web's exact value is `--purple-emphasis` (`#2a082a`), which has no mobile token;
+  `purpleDark` (`#4f014f`) is the closest one that exists, so no new colour was added. Say so
+  if you want them byte-identical and I will add the token to both sides.
+
+### Equal heights — why the two columns stay in step
+
+A one-line title used to pull its neighbour's footer up, and a listing with no location sat a
+whole line shorter than the card beside it. Both rows now get **reserved** space rather than
+sizing to their content:
+
+- location: `minHeight = 14 × min(fontScale, MAX_FONT_SCALE)` — one line, always rendered even
+  when empty;
+- title: `minHeight = 17 × 2 × min(fontScale, MAX_FONT_SCALE)` — two lines, always;
+- the footer row is floored at the 20dp avatar, so a seller with a null name does not shorten
+  the card;
+- belt and braces: the info area is `flex: 1` and the divider + footer carry
+  `marginTop: 'auto'`, so a card that does end up taller still puts its footer on the same
+  line as the rest of the row.
+
+`fontScale` comes from `useWindowDimensions()` and the cap is **imported** from the theme
+(`MAX_FONT_SCALE`), not re-typed — React Native multiplies `lineHeight` by the student's font
+setting, so a box measured at 1.0 clips its second line at 1.15.
+
+### Tighter grid spacing — the cards got wider
+
+Screen padding **24 → 12**, column gutter **16 → 10**, row gap **16 → 12**, card inner padding
+**12 → 10** horizontal. On a 360dp phone each card goes from 148dp to 163dp — **+15dp, a 10% wider card**, which is where the second line of a title and a full seller name come from. Applied to all
+three grids that render `ProductCard`, each with the same three named constants and the same
+formula `cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2`:
+
+| Screen | How the gaps are made |
+|---|---|
+| `app/(tabs)/index.tsx` | FlashList: `listContent` pads `GRID_PAD - GRID_COL_GAP/2` (7), each cell pads 5 horizontal / 6 vertical |
+| `app/profile/[id].tsx` | wrap row: `paddingHorizontal: 12`, `columnGap: 10`, `rowGap: 12` |
+| `app/(tabs)/profile.tsx` | same, plus `marginHorizontal: GRID_PAD - SCREEN_PAD` to pull the grid back out of the tab's own 24dp padding |
+
+`SCREEN_PAD` (24) is unchanged on all three screens — only the grids moved. The purchases grid
+and both listing skeletons follow automatically, since they share `styles.grid` and `cardWidth`.
+
+### Removed
+
+Props `onSave`, `onShare`, `onChat`, `isSaved`; the `showEngagementOnly` branch; `IconBtn`'s
+`active` / `activeColor` params and the `iconBtnActive` style; the `statsRow` / `stat` /
+`statText` / `sellerTag` / `actionRow` styles; and, at the call sites, the now-dead
+`useToggleSave` / `shareProduct` imports and their `toggleSave` / `handleShare` locals in
+`(tabs)/index.tsx`, `profile/[id].tsx` and `(tabs)/profile.tsx`.
+
+**Save and share left the card; they did NOT leave the app.** Both are on the product detail
+screen (`app/product/[id].tsx` — bookmark at `:534`, share in the header at `:157`), which is
+verified, not assumed. The cost is real and worth naming: saving a listing from the feed is now
+two taps instead of one.
+
+### What is different from the reverted version
+
+Same shape, four changes: the price is Bree Serif at `headline` (the reverted card had it in
+Inter Bold — the founders' reference used Inter, the price-face decision from the font pass
+overrides it); the seller's **full** name, not the first name; the bookmark and share buttons
+are gone from the owner toolbar as well as the card; and the grid spacing is tighter, which the
+reverted version never touched.
+
+### Checks
+
+`npx tsc --noEmit` passes. Zero `fontWeight` call sites, still. No new colours, no new
+dependency, nothing below 9dp outside the badge. **Not verified on a device** — needs a human
+with a phone; see the list at the end of my handoff.
+
+### What NOT to do yet
+
+- **Do not reach for `nano` again.** One call site, named in the theme. Anything a student
+  reads is `micro` (11) or larger.
+- **Do not put the save button back on the card** without deciding where it goes — the
+  founders' design has one action on the tile and it is the heart.
+- 🟡 **Stale comment I deliberately did not touch:** `app/product/[id].tsx:689` says the detail
+  screen's condition badge is "Same badge as the card's, so the same weight and size". That is
+  no longer true — the card's is ExtraBold at `nano` (9), the detail screen's is Bold at `micro`
+  (11). The task scoped me out of the detail screen, so it is a comment fix for whoever does
+  Block V-D. The sizes differing is correct: the detail screen has room, the tile does not.
+
+### For Neeraj
+
+**Nothing here needs you, and the website card is once again out of step with the app's.** Do
+not mirror this by eye — same call as last time: if we want parity we agree the spec first. The
+one thing already settled and shared is the price face, Bree Serif 400 on both clients.
+
+---
+
+## 2026-09-21 — ↩️ REVERTED: the mobile product-card redesign (Vishwajeet)
 
 Mobile only. No backend, no database, no migration, no API change.
 

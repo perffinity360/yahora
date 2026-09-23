@@ -521,7 +521,15 @@ export default function SellScreen() {
                     <AppText style={styles.previewLabel}>LIVE PREVIEW</AppText>
                   </View>
                   <AppText style={styles.previewHint}>How your item appears in the marketplace</AppText>
-                  <ProductCard product={previewProduct} style={{ width: previewWidth }} />
+                  {/* The preview is the card the campus will see, so it names
+                      the seller too — which on this screen is you. There is no
+                      `onLike`, so the card renders its heart unpressable. */}
+                  <ProductCard
+                    product={previewProduct}
+                    style={{ width: previewWidth }}
+                    sellerName={profile?.full_name}
+                    sellerAvatarUrl={profile?.avatar_url}
+                  />
                 </View>
               </View>
             </ScrollView>

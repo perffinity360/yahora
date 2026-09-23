@@ -32,11 +32,15 @@ import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { DashboardProfile, ProductListing, Purchase } from '../../src/types';
-import { shareProduct } from '../../src/lib/share';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
-const GRID_GAP = spacing.md;
+/** The card grid runs tighter than the rest of the screen so the cards get the
+ *  width back. Same three values in (tabs)/index.tsx and profile/[id].tsx —
+ *  change one, change all three. */
+const GRID_PAD = 12;
+const GRID_COL_GAP = 10;
+const GRID_ROW_GAP = 12;
 
 type TabKey = 'listings' | 'purchases' | 'watchlist';
 const TABS: { key: TabKey; label: string }[] = [
@@ -70,7 +74,7 @@ export default function ProfileScreen() {
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
-  const cardWidth = (width - SCREEN_PAD * 2 - GRID_GAP) / 2;
+  const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -126,12 +130,6 @@ export default function ProfileScreen() {
       setAvatarError(e instanceof Error ? e.message : 'Could not remove your photo.');
     }
   }, [removeAvatar]);
-
-  // See src/lib/share.ts for the message, the link and why Android and iOS
-  // carry the URL differently.
-  const handleShare = (item: ProductListing) => {
-    shareProduct(item);
-  };
 
   const confirmSold = (item: ProductListing) =>
     Alert.alert('Mark as sold?', `"${item.title}" will move to your sold items.`, [
@@ -242,17 +240,18 @@ export default function ProfileScreen() {
                           style={{ width: cardWidth }}
                           showManageActions
                           isLiked={item.is_liked}
-                          isSaved={item.is_saved}
+                          // The dashboard endpoint returns the signed-in
+                          // student's own listings with no seller joined onto
+                          // them. The card names the seller on EVERY surface,
+                          // your own listings included, so pass yourself.
+                          sellerName={profile?.full_name}
+                          sellerAvatarUrl={profile?.avatar_url}
                           onPress={() =>
                             router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
                           }
                           onLike={() =>
                             actions.toggleLike.mutate({ id: item.id, isLiked: !!item.is_liked })
                           }
-                          onSave={() =>
-                            actions.toggleSave.mutate({ id: item.id, isSaved: !!item.is_saved })
-                          }
-                          onShare={() => handleShare(item)}
                           onEdit={() => router.push(`/sell?edit=${item.id}`)}
                           onMarkSold={() => confirmSold(item)}
                           onMarkAvailable={() => confirmAvailable(item)}
@@ -972,7 +971,12 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: GRID_GAP,
+    columnGap: GRID_COL_GAP,
+    rowGap: GRID_ROW_GAP,
+    // `content` pads the whole tab to SCREEN_PAD for the headings and the
+    // empty states; the grid alone pulls back out to GRID_PAD so its cards run
+    // closer to the screen edge than the text around them.
+    marginHorizontal: GRID_PAD - SCREEN_PAD,
   },
 
   /* Purchase card */

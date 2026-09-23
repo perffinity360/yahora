@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import type { DashboardData, ProductListing } from '../types';
+import { syncListingEverywhere } from './useProductActions';
 
 /**
  * Owner-side listing mutations for the dashboard (like / save / mark sold /
@@ -50,6 +51,10 @@ export function useDashboardActions(userId: string | null | undefined) {
       }));
       return ctx;
     },
+    // The same listing may be cached by the marketplace or a detail screen;
+    // see syncListingEverywhere for why they must all hear the answer.
+    onSuccess: (result, vars) =>
+      syncListingEverywhere(queryClient, vars.id, 'like', result as { is_liked?: boolean }),
     onError: rollback,
     onSettled: reconcile,
   });
@@ -62,6 +67,8 @@ export function useDashboardActions(userId: string | null | undefined) {
       patchListing(vars.id, (p) => ({ ...p, is_saved: !vars.isSaved }));
       return ctx;
     },
+    onSuccess: (result, vars) =>
+      syncListingEverywhere(queryClient, vars.id, 'save', result as { is_saved?: boolean }),
     onError: rollback,
     onSettled: reconcile,
   });
