@@ -88,6 +88,25 @@ function rememberFeedPosition(signature) {
   }
 }
 
+/* ────────── ...AND COMING BACK WITHOUT A FLASH OF THE TOP ──────────
+ *
+ * Saving the offset was not enough on its own. On Back this page mounted with
+ * no campus and no listings, showed the loader, fetched /universities, then
+ * the feed, and only THEN could it scroll — so every return trip showed the
+ * top of the marketplace for two round trips before jumping.
+ *
+ * So `openProduct()` also keeps the feed it was looking at. On a POP the page
+ * starts from that snapshot: the grid is in the DOM on the very first render,
+ * the useLayoutEffect below scrolls before the browser paints, and the student
+ * never sees the top. Both fetches still run, quietly, and refresh the
+ * listings in place — no loader, so the grid (and the scroll) never collapse.
+ *
+ * Module scope, not sessionStorage: it is the whole feed, and it only has to
+ * survive an in-app round trip. A full reload of the product page falls back to
+ * the old behaviour — fetch, then restore — which is correct, just not instant.
+ */
+let feedSnapshot = null;
+
 /** Reads AND clears — one saved position is good for exactly one return trip. */
 function takeFeedPosition() {
   try {
@@ -502,23 +521,43 @@ export default function Marketplace() {
   const navigate = useNavigate();
   // POP = the student pressed Back. See the feed-position notes above.
   const navigationType = useNavigationType();
+  // Only a real Back may start from the snapshot. Read once; cleared on mount
+  // below so it can never be picked up by some later, unrelated visit.
+  const [returnSnapshot] = useState(() =>
+    navigationType === "POP" ? feedSnapshot : null,
+  );
   const { logout, sessionReady } = useAuth();
   const [currentUserId] = useState(localStorage.getItem("yahora_user_id"));
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
-  const [universities, setUniversities] = useState([]);
-  const [university, setUniversity] = useState(null);
+  const [universities, setUniversities] = useState(
+    () => returnSnapshot?.universities ?? [],
+  );
+  const [university, setUniversity] = useState(
+    () => returnSnapshot?.university ?? null,
+  );
 
   // <-- NEW: State to track the user's home university
-  const [homeUniversityId, setHomeUniversityId] = useState(null);
+  const [homeUniversityId, setHomeUniversityId] = useState(
+    () => returnSnapshot?.homeUniversityId ?? null,
+  );
 
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState(() => returnSnapshot?.products ?? []);
+  const [loading, setLoading] = useState(() => !returnSnapshot);
   const [viewMode, setViewMode] = useState("grid");
   const [activeSort, setActiveSort] = useState("newest");
   const [searchQuery, setSearchQuery] = useState("");
   const [showUniModal, setShowUniModal] = useState(false);
   const [showMobileFilter, setShowMobileFilter] = useState(false);
-  const [swipeDeck, setSwipeDeck] = useState([]);
+  const [swipeDeck, setSwipeDeck] = useState(() =>
+    returnSnapshot ? [...returnSnapshot.products].reverse() : [],
+  );
+  /** The first feed fetch after a snapshot start refreshes in place: showing
+   *  the loader would swap the grid out and drop the restored scroll. */
+  const quietRefreshRef = useRef(!!returnSnapshot);
+
+  useEffect(() => {
+    feedSnapshot = null;
+  }, []);
   const [showDemoAlert, setShowDemoAlert] = useState(false);
 
   const [selCategories, setSelCategories] = useState([]);
@@ -595,7 +634,12 @@ export default function Marketplace() {
           if (!targetUniId) targetUniId = homeUniId;
           const defaultUni =
             uniData.find((u) => u.id === targetUniId) || uniData[0];
-          setUniversity(defaultUni);
+          // Keep the SAME object when the campus has not changed. A fresh one
+          // re-runs the feed effect below — after a snapshot start that would
+          // fetch the feed twice and could flash the loader.
+          setUniversity((prev) =>
+            prev && defaultUni && prev.id === defaultUni.id ? prev : defaultUni,
+          );
         }
       } catch (error) {
         console.error("Failed to load initial data:", error);
@@ -609,7 +653,9 @@ export default function Marketplace() {
     if (!university) return;
 
     const fetchMarketplaceFeed = async () => {
-      setLoading(true);
+      const quiet = quietRefreshRef.current;
+      quietRefreshRef.current = false;
+      if (!quiet) setLoading(true);
       try {
         const params = new URLSearchParams({ university_id: university.id });
         if (currentUserId) params.append("user_id", currentUserId);
@@ -948,9 +994,10 @@ export default function Marketplace() {
   const openProduct = useCallback(
     (id) => {
       rememberFeedPosition(feedSignature);
+      feedSnapshot = { universities, university, homeUniversityId, products };
       navigate(`/product/${id}`);
     },
-    [feedSignature, navigate],
+    [feedSignature, navigate, universities, university, homeUniversityId, products],
   );
 
   /** One attempt per mount, whether or not there was anything to restore. */
