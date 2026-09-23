@@ -1,7 +1,15 @@
 // frontend/src/pages/messages/Messages.jsx
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, {
+  useCallback,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import styles from "./Messages.module.css";
+import useInfiniteScroll from "../../hooks/useInfiniteScroll";
+import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
 import { supabase } from "../../config/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -49,6 +57,38 @@ const UNREAD_ANCHOR_LEAD_RATIO = 0.35;
 /* How close to the bottom still counts as "reading the live end of the thread".
    Above this, an arriving message must not pull the viewport down. */
 const BOTTOM_STICK_THRESHOLD = 80;
+
+/* 📄 Block N-C. Where one message is sitting inside the scroll container right
+   now, as `{ id, top }` with top measured from the container's own top edge.
+
+   Rects, not offsetTop: offsetTop is relative to whichever ancestor happens to
+   be the offsetParent, and the bubbles sit several wrappers deep. Rects are
+   relative to the viewport, and subtracting the container's own rect turns two
+   viewport-relative numbers into one container-relative one — which is what
+   scrollTop is in, so the difference between two of these can be added to it
+   directly.
+
+   Returns null when there is no such message on screen; every caller treats
+   that as "nothing to anchor to" and leaves the scroll position alone. */
+const measureAnchor = (container, id) => {
+  if (!container || id === undefined || id === null) return null;
+  // The id comes from the database as a uuid; it is only ever a selector here,
+  // never markup, and CSS.escape covers the case where that ever stops holding.
+  const el = container.querySelector(
+    `[data-msg-id="${CSS.escape(String(id))}"]`,
+  );
+  if (!el) return null;
+  return {
+    id,
+    top: el.getBoundingClientRect().top - container.getBoundingClientRect().top,
+  };
+};
+
+/* Stands in for a measurement when a page is landing but there is nothing on
+   screen to anchor to — an empty thread. It keeps the layout effect on the
+   prepend branch, where it stops; without it the effect would fall through and
+   read the page as an arriving message, and glide the thread to the bottom. */
+const NO_ANCHOR = { id: null, top: 0 };
 
 const readSavedChat = () => {
   try {
@@ -233,6 +273,28 @@ export default function Messages() {
      reader. */
   const [unreadMarker, setUnreadMarker] = useState(null);
 
+  /* ── 📄 Pagination, Phase 5 Block N-C ──────────────────────────────────────
+     The thread pages BACKWARDS: `messages` holds the newest page on open and
+     each further page is OLDER and goes on the FRONT of the array. The inbox
+     beside it is an ordinary downward list and pages the normal way.
+
+     `hasOlder` / `hasMoreInbox` come from `next_cursor !== null` and from
+     nothing else — not from an empty page, not from a short one. */
+  const [olderCursor, setOlderCursor] = useState(null);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+
+  const [inboxCursor, setInboxCursor] = useState(null);
+  const [hasMoreInbox, setHasMoreInbox] = useState(false);
+  const [loadingMoreInbox, setLoadingMoreInbox] = useState(false);
+
+  /* Both scroll containers, held in state as well as in a ref. The observers
+     must be built against the element that actually scrolls — the viewport is
+     the wrong box for both of these — and a ref assignment does not re-render,
+     so the hook would never see the node arrive. */
+  const [messagesEl, setMessagesEl] = useState(null);
+  const [inboxListEl, setInboxListEl] = useState(null);
+
   const messagesContainerRef = useRef(null);
   const chatInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
@@ -266,6 +328,41 @@ export default function Messages() {
      inside it. */
   const didInitForUserRef = useRef(null);
 
+  /* ── 📄 Block N-C bookkeeping ─────────────────────────────────────────────
+     `historyRunRef` is bumped on every thread open, so a page still in the air
+     for the PREVIOUS conversation can be recognised and dropped instead of
+     prepending one student's history above another's. `historyAbortRef`
+     cancels it outright where it can. */
+  const historyInFlightRef = useRef(false);
+  const historyRunRef = useRef(0);
+  const historyAbortRef = useRef(null);
+  const inboxInFlightRef = useRef(false);
+
+  /* Where the oldest message on screen was sitting in the instant BEFORE an
+     older page was handed to React — `{ id, top }`, top measured from the top
+     edge of the scroll container. The layout effect finds that same message
+     once the page is laid out and pushes scrollTop by however far it moved.
+     null means "no page is landing", which is what keeps the compensation from
+     firing on an ordinary new message.
+
+     It is deliberately an ELEMENT's position and not the container's
+     scrollHeight. A height delta is only the right correction if scrollTop is
+     untouched between the two measurements, and in this thread it is not:
+     Chrome's scroll anchoring moves it (see `overflow-anchor: none` in the
+     CSS), and a realtime message can be appended to the BOTTOM in the same
+     commit, which grows scrollHeight without moving anything the reader is
+     looking at. Re-measuring the anchor after the fact is immune to both — it
+     asks the only question that matters, "how far did the message under their
+     eyes move", and the answer already accounts for whatever else happened. */
+  const prependAnchorRef = useRef(null);
+
+  /* `messages` as of this render, so the prepend can be de-duplicated against
+     the list without putting `messages` in loadOlderMessages' dependencies —
+     which would rebuild the callback, and with it the observer, on every
+     single message that arrives. */
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   /* Whether this student is actually LOOKING at the page: the tab is visible
      and the window has focus. A message that lands while this is false has not
      been seen by anyone, so it must not be marked read — see the note on the
@@ -289,6 +386,14 @@ export default function Messages() {
     user: searchParams.get("user"),
     product: searchParams.get("product"),
   });
+
+  /* Callback refs that keep the existing ref AND the state copy in step. The
+     ref is what the scroll code reads synchronously; the state is what the
+     observers are built against. */
+  const attachMessagesContainer = useCallback((node) => {
+    messagesContainerRef.current = node;
+    setMessagesEl(node);
+  }, []);
 
   const scrollToBottom = (behavior = "smooth") => {
     const container = messagesContainerRef.current;
@@ -377,11 +482,64 @@ export default function Messages() {
 
     if (pendingInitialScrollRef.current) {
       pendingInitialScrollRef.current = false;
+      // An open places the viewport outright, so any measurement left over
+      // from a page that was in the air belongs to the thread being left.
+      prependAnchorRef.current = null;
       // The divider is the whole point of the anchored open; without one there
       // is nothing unread, so the live end of the thread is where to land.
       if (!anchorToUnreadDivider()) {
         scrollToBottom("auto");
         isAtBottomRef.current = true;
+      }
+      return;
+    }
+
+    /* ── 📄 SCROLL COMPENSATION — Phase 5 Block N-C ────────────────────────
+       This is the whole block, and it is why this effect is useLayoutEffect
+       and not useEffect.
+
+       A page of older messages went on the FRONT of the list, so every
+       message already on screen has just been pushed DOWN by the height of
+       what was inserted above it. `scrollTop` is measured from the top of the
+       content, so a value that pointed at the message under the reader's eyes
+       now points a whole page further back in the conversation. Nobody can be
+       relied on to fix that: the browser fixes it sometimes (see the CSS note
+       on `overflow-anchor`) and Safari never does.
+
+       So: find the message that was at the top of the list before the page
+       arrived, see how far down the insertion pushed it, and push `scrollTop`
+       by the same amount. It ends up back under their eyes.
+
+       This is a RE-MEASUREMENT, not a height delta, and that is the whole
+       point — by the time this runs, scrollTop may already have been moved by
+       someone else (Chrome's scroll anchoring did exactly that, which is the
+       bug this shape fixes; see the CSS note). Asking the DOM where the anchor
+       actually is now folds in anything that happened in between, so the
+       correction is right whatever else touched the container.
+
+       React runs a layout effect after the DOM is updated but BEFORE the
+       browser paints, so this correction is inside the same frame as the
+       insertion and there is nothing to see. In a passive useEffect the
+       browser would paint the jumped position first and the correction would
+       land a frame later, as a visible flick. */
+    if (prependAnchorRef.current !== null) {
+      const before = prependAnchorRef.current;
+      prependAnchorRef.current = null;
+
+      // Only when the list actually grew. A page that turned out to be
+      // entirely duplicates commits nothing, and compensating for a layout
+      // that never changed would scroll the thread for no reason.
+      if (count > previousCount) {
+        const after = measureAnchor(container, before.id);
+        // The anchor is gone only if the thread was swapped out from under
+        // this commit, in which case whoever swapped it has placed the
+        // viewport already and there is nothing here to correct.
+        if (after !== null) {
+          container.scrollTop += after.top - before.top;
+          // The prepend changed how far the reader is from the live end;
+          // sample it rather than leaving a stale answer for the next arrival.
+          handleMessagesScroll();
+        }
       }
       return;
     }
@@ -564,6 +722,13 @@ export default function Messages() {
         const data = await res.json();
         let fetchedInbox = data.items || [];
 
+        // 📄 Page one of the inbox. Everything past the first 20 conversations
+        // used to be simply unreachable — the response has carried a
+        // `next_cursor` since Block N-C and nothing read it.
+        const firstInboxCursor = data.next_cursor ?? null;
+        setInboxCursor(firstInboxCursor);
+        setHasMoreInbox(firstInboxCursor !== null);
+
         let paramUserId = deepLinkRef.current.user;
         let paramProductId = deepLinkRef.current.product;
         const isDeepLink = Boolean(paramUserId && paramProductId);
@@ -628,6 +793,177 @@ export default function Messages() {
     loadInboxAndCheckParams();
   }, [currentUserId, navigate]);
 
+  /* ── 📄 Older messages — Phase 5 Block N-C ────────────────────────────────
+     Scrolling UP loads the page BEFORE the oldest one on screen.
+
+     The backend hands each page back oldest-first already (Phase 4 Block N-C
+     queries descending and reverses before sending), so the page is prepended
+     AS A BLOCK, exactly as received. Nothing here sorts, and nothing here
+     reorders. If the order ever looks wrong on screen, the page arrived wrong
+     and that is a backend bug to report, not something to paper over here. */
+  const loadOlderMessages = useCallback(async () => {
+    const chat = activeChatRef.current;
+    const container = messagesContainerRef.current;
+    if (!chat || !container) return;
+    if (!hasOlder || olderCursor === null) return;
+
+    // 🚦 DOUBLE-FETCH GUARD. The hook also tears the observer down for the
+    // duration of a request, but the observer is not the only caller, and
+    // IntersectionObserver fires repeatedly while the sentinel is on screen.
+    if (historyInFlightRef.current) return;
+    historyInFlightRef.current = true;
+
+    const run = historyRunRef.current;
+    const controller = new AbortController();
+    historyAbortRef.current = controller;
+    setLoadingOlder(true);
+
+    try {
+      const params = new URLSearchParams({
+        userId: currentUserId,
+        contactId: chat.contact_id,
+        productId: chat.product_id,
+        // Verbatim, never rebuilt: the cursor is an opaque base64url
+        // `created_at|id` pair and its encoding is explicitly not a contract.
+        cursor: olderCursor,
+      });
+
+      const token = authHeaderToken();
+      const res = await fetch(
+        `${API_BASE_URL}/messages/history?${params.toString()}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: controller.signal,
+        },
+      );
+
+      // Same reasoning as the first page: a 401 has a perfectly good JSON body,
+      // so the status has to be checked or the failure is silent.
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          `history ${res.status} ${body?.error || ""}`.trim(),
+        );
+      }
+
+      const data = await res.json();
+
+      // A different conversation was opened while this was in the air. Its
+      // messages must not be prepended above someone else's thread.
+      if (run !== historyRunRef.current) return;
+
+      const page = data.items || [];
+      const known = new Set(messagesRef.current.map((m) => m.id));
+      const older = page.filter((m) => !known.has(m.id));
+
+      if (older.length) {
+        // History renders SETTLED. `openingIdsRef` is what suppresses the
+        // fly-in animation, and without this every message of a page that is
+        // being scrolled back into would animate in as if it were new.
+        older.forEach((m) => openingIdsRef.current.add(m.id));
+
+        // ⬇️ THE MEASUREMENT the layout effect compensates against. Taken
+        // here, immediately before React is handed the new list, so it is the
+        // thread exactly as the reader is currently looking at it. The anchor
+        // is the oldest message on screen: it is the row the incoming page
+        // lands directly above, and with the sentinel 300px from the top when
+        // the fetch fires it is always near the viewport, so its position is a
+        // meaningful thing to hold still.
+        prependAnchorRef.current =
+          measureAnchor(container, messagesRef.current[0]?.id) ?? NO_ANCHOR;
+
+        // Functional update, and the page goes on the FRONT as one block: a
+        // realtime message may have been appended to the end since this
+        // request went out, and it must stay at the end.
+        setMessages((prev) => [...older, ...prev]);
+      }
+
+      const nextCursor = data.next_cursor ?? null;
+      setOlderCursor(nextCursor);
+      setHasOlder(nextCursor !== null);
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      console.error("Failed to load older messages:", error);
+    } finally {
+      // Not when the thread has moved on: handleSelectChat has already reset
+      // these for the new conversation and this is the old one finishing.
+      if (run === historyRunRef.current) {
+        historyInFlightRef.current = false;
+        setLoadingOlder(false);
+      }
+    }
+  }, [currentUserId, hasOlder, olderCursor]);
+
+  /* The trigger sits at the TOP of the thread — see the sentinel in the render
+     below. `messagesEl` is the root because the thread scrolls inside its own
+     element; until that element exists there is nothing to measure against, so
+     `hasMore` stays false and no observer is built. */
+  const olderMessagesSentinelRef = useInfiniteScroll({
+    hasMore: hasOlder && messagesEl !== null,
+    isLoading: loadingOlder,
+    onLoadMore: loadOlderMessages,
+    root: messagesEl,
+    rootMargin: "300px",
+  });
+
+  /* ── 📄 More conversations — the ordinary downward list ────────────────────
+     The inbox sidebar is a plain newest-first list that grows at the BOTTOM,
+     so it takes the standard bottom-sentinel pattern, the same one the
+     marketplace grid uses. Nothing is reversed and nothing is compensated. */
+  const loadMoreInbox = useCallback(async () => {
+    if (!currentUserId) return;
+    if (!hasMoreInbox || inboxCursor === null) return;
+    if (inboxInFlightRef.current) return;
+    inboxInFlightRef.current = true;
+    setLoadingMoreInbox(true);
+
+    try {
+      const params = new URLSearchParams({ cursor: inboxCursor });
+      const token = authHeaderToken();
+      const res = await fetch(
+        `${API_BASE_URL}/messages/inbox/${currentUserId}?${params.toString()}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(`inbox ${res.status} ${body?.error || ""}`.trim());
+      }
+
+      const data = await res.json();
+      const page = data.items || [];
+
+      setInbox((prev) => {
+        // A conversation already on screen can appear on a later page too: the
+        // realtime handler moves a thread to the top of the list the moment a
+        // message lands in it, which shifts everything below it by one.
+        const seen = new Set(
+          prev.map((c) => `${c.contact_id}-${c.product_id}`),
+        );
+        const next = page.filter(
+          (c) => !seen.has(`${c.contact_id}-${c.product_id}`),
+        );
+        return next.length ? [...prev, ...next] : prev;
+      });
+
+      const nextCursor = data.next_cursor ?? null;
+      setInboxCursor(nextCursor);
+      setHasMoreInbox(nextCursor !== null);
+    } catch (error) {
+      console.error("Failed to load more conversations:", error);
+    } finally {
+      inboxInFlightRef.current = false;
+      setLoadingMoreInbox(false);
+    }
+  }, [currentUserId, hasMoreInbox, inboxCursor]);
+
+  const inboxSentinelRef = useInfiniteScroll({
+    hasMore: hasMoreInbox && inboxListEl !== null,
+    isLoading: loadingMoreInbox,
+    onLoadMore: loadMoreInbox,
+    root: inboxListEl,
+  });
+
   /* ── 2. Select Chat ── */
   const handleSelectChat = async (chat, isInitialLoad = false) => {
     setActiveChat(chat);
@@ -641,6 +977,19 @@ export default function Messages() {
     setUnreadMarker(null);
     // Belongs to the thread being left, not to this one.
     awayUnreadRef.current = null;
+
+    /* 📄 RESET THE PAGER. A new thread is a different history: the cursor, the
+       end-of-list flag and any page still in the air all belong to the
+       conversation being left. Bumping the run id is what makes a late
+       response identifiable as stale — the abort handles the common case, but
+       a request whose response is already on the wire cannot be called back. */
+    historyRunRef.current += 1;
+    historyAbortRef.current?.abort();
+    historyInFlightRef.current = false;
+    prependAnchorRef.current = null;
+    setOlderCursor(null);
+    setHasOlder(false);
+    setLoadingOlder(false);
 
     // Remember it for the next mount — see ACTIVE_CHAT_KEY.
     localStorage.setItem(
@@ -691,6 +1040,13 @@ export default function Messages() {
       const history = data.items || [];
       openingIdsRef.current = new Set(history.map((m) => m.id));
       setMessages(history);
+
+      // 📄 Page one of the history. `next_cursor` points at the messages
+      // BEFORE this page — scrolling up is what asks for them — and a null
+      // here is the only thing that means "this is the whole conversation".
+      const firstCursor = data.next_cursor ?? null;
+      setOlderCursor(firstCursor);
+      setHasOlder(firstCursor !== null);
 
       // Work this out BEFORE the read-receipt PUT below clears `is_read` on the
       // server and the realtime UPDATE handler mirrors that into state.
@@ -749,6 +1105,10 @@ export default function Messages() {
       setUnreadMarker(null);
       awayUnreadRef.current = null;
       openingIdsRef.current = new Set();
+      // No first page means no cursor to continue from; leaving `hasOlder` set
+      // would point the observer at a thread that was never loaded.
+      setOlderCursor(null);
+      setHasOlder(false);
       console.error("Failed to load chat history:", error);
     }
   };
@@ -1002,7 +1362,7 @@ export default function Messages() {
           </div>
 
           {/* Inbox List */}
-          <div className={styles.inboxList}>
+          <div className={styles.inboxList} ref={setInboxListEl}>
             {filteredInbox.length === 0 ? (
               <div className={styles.emptyInbox}>
                 {searchQuery ? (
@@ -1098,6 +1458,18 @@ export default function Messages() {
                 );
               })
             )}
+
+            {/* 📄 Block N-C. Bottom of the list, the ordinary way round: this
+                list grows downward, so the sentinel goes last. Rendered only
+                while `next_cursor` is non-null, which is also why there is no
+                "that's everyone" line — it simply stops. */}
+            {hasMoreInbox && (
+              <InfiniteScrollSentinel
+                sentinelRef={inboxSentinelRef}
+                loading={loadingMoreInbox}
+                label="Loading more conversations"
+              />
+            )}
           </div>
         </div>
 
@@ -1175,25 +1547,52 @@ export default function Messages() {
               {/* Messages Container */}
               <div
                 className={styles.messagesContainer}
-                ref={messagesContainerRef}
+                ref={attachMessagesContainer}
                 onScroll={handleMessagesScroll}
               >
-                {/* Welcome message at top */}
-                <div className={styles.chatWelcomeBanner}>
-                  <div className={styles.chatWelcomeIcon}>
-                    <Users size={18} />
+                {/* 📄 Block N-C. THE SENTINEL GOES AT THE TOP, because this is
+                    the only list in the app that pages backwards: the oldest
+                    message is at the top, the thread opens at the bottom, and
+                    "load more" means scrolling UP into history. A bottom
+                    sentinel here would sit against the newest message and fire
+                    the moment the thread opened.
+
+                    `reserveSpace` keeps the spinner's row in the layout even
+                    when it is empty. Everything below this point is the
+                    conversation, so a row that appears when the fetch starts
+                    would shove the whole thread down before a single message
+                    had arrived. */}
+                {hasOlder && (
+                  <InfiniteScrollSentinel
+                    sentinelRef={olderMessagesSentinelRef}
+                    loading={loadingOlder}
+                    label="Loading older messages"
+                    reserveSpace
+                  />
+                )}
+
+                {/* Welcome message at top. Held back while there is still
+                    history to load: "this is the beginning of your
+                    conversation" sitting above a thread with 200 older
+                    messages under it is simply untrue. Once `next_cursor` is
+                    null this IS the beginning, and it reappears. */}
+                {!hasOlder && (
+                  <div className={styles.chatWelcomeBanner}>
+                    <div className={styles.chatWelcomeIcon}>
+                      <Users size={18} />
+                    </div>
+                    <p>
+                      This is the beginning of your conversation with{" "}
+                      <strong>
+                        {activeChat?.contact_id === currentUserId
+                          ? "yourself"
+                          : activeChat?.contact_name?.split(" ")[0]}
+                      </strong>{" "}
+                      about <strong>{activeChat?.product_title}</strong>. Be
+                      respectful and transact safely on campus! 🎓
+                    </p>
                   </div>
-                  <p>
-                    This is the beginning of your conversation with{" "}
-                    <strong>
-                      {activeChat?.contact_id === currentUserId
-                        ? "yourself"
-                        : activeChat?.contact_name?.split(" ")[0]}
-                    </strong>{" "}
-                    about <strong>{activeChat?.product_title}</strong>. Be
-                    respectful and transact safely on campus! 🎓
-                  </p>
-                </div>
+                )}
 
                 {messages.length === 0 ? (
                   <div className={styles.emptyChat}>
@@ -1286,6 +1685,10 @@ export default function Messages() {
                               </div>
                             )}
                             <div
+                              /* 📄 Block N-C. What the scroll compensation
+                                 anchors on when a page of older messages is
+                                 prepended — see `measureAnchor`. */
+                              data-msg-id={msg.id}
                               className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs} ${
                                 isRunEnd ? styles.runEnd : ""
                               } ${

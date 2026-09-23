@@ -1,5 +1,5 @@
 // frontend/src/pages/product/ProductDetail.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "./ProductDetail.module.css";
 import ImageLightbox from "../../components/ImageLightbox/ImageLightbox";
@@ -26,7 +26,24 @@ import {
   User,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
+import useInfiniteScroll from "../../hooks/useInfiniteScroll";
+import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
 
+
+/* Appends a page of comments onto the ones already on screen, skipping any id
+   already present.
+
+   Order is load order, which is what the threading below wants: the server
+   sends each page newest-first and every reply arrives on the same page as its
+   top-level parent, so appending keeps top-level comments in newest-first order
+   and keeps every reply behind its parent. A comment the student has just
+   posted sits at the front of `prev` and stays there. */
+function mergeCommentsById(prev, next) {
+  if (!next.length) return prev;
+  const seen = new Set(prev.map((c) => c.id));
+  const fresh = next.filter((c) => !seen.has(c.id));
+  return fresh.length ? [...prev, ...fresh] : prev;
+}
 
 const CONDITION_CONFIG = {
   Mint: { label: "MINT", bg: "#2BB7FF", color: "#fff" },
@@ -110,6 +127,19 @@ export default function ProductDetail() {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentInputFocused, setCommentInputFocused] = useState(false);
 
+  /* 📄 Comment pagination (Phase 5 Block N-B). `product.comments.items` is now
+     every page of comments loaded so far, appended — not one response. */
+  const [commentsCursor, setCommentsCursor] = useState(null);
+  const [commentsHasMore, setCommentsHasMore] = useState(false);
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
+  /* Synchronous double-fetch guard — a state flag has not flipped yet when a
+     second caller checks it in the same tick. */
+  const commentsInFlightRef = useRef(false);
+  /* Bumped when the listing being viewed changes, so a page of comments for
+     the previous product cannot land in this one. */
+  const commentsRunRef = useRef(0);
+  const commentsAbortRef = useRef(null);
+
   /* ui feedback */
   const [likeAnim, setLikeAnim] = useState(false);
   const [savedAnim, setSavedAnim] = useState(false);
@@ -124,6 +154,15 @@ export default function ProductDetail() {
     // `anon`; signed-out visitors skip the wait entirely.
     if (currentUserId && !sessionReady) return;
 
+    // RESET per listing: a new :id is a different comment list, so the pages,
+    // the cursor and hasMore all start again from nothing.
+    commentsRunRef.current += 1;
+    commentsAbortRef.current?.abort();
+    commentsInFlightRef.current = false;
+    setCommentsCursor(null);
+    setCommentsHasMore(false);
+    setLoadingMoreComments(false);
+
     const fetchData = async () => {
       try {
         const url = `${API_BASE_URL}/products/${id}${currentUserId ? `?user_id=${currentUserId}` : ""}`;
@@ -136,7 +175,15 @@ export default function ProductDetail() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         const data = await response.json();
-        if (response.ok) setProduct(data.product);
+        if (response.ok) {
+          setProduct(data.product);
+          // 📄 Page one of the comments rides along inside the product
+          // response. `next_cursor === null` is the ONLY end-of-list signal —
+          // not an empty `items`, and not a page shorter than the limit.
+          const cursor = data.product?.comments?.next_cursor ?? null;
+          setCommentsCursor(cursor);
+          setCommentsHasMore(cursor !== null);
+        }
 
         if (currentUserId && !actualHomeUniId) {
           const { data: userData } = await supabase
@@ -359,6 +406,107 @@ export default function ProductDetail() {
     }
   };
 
+  /* ── Older comments ────────────────────────────────────────────────────────
+     📄 Phase 5 Block N-B. Block N-B (Phase 4) turned `product.comments` from a
+     bare array into `{ items, next_cursor }` and left the cursor unread; this
+     reads it.
+
+     There is no comments-only endpoint — the comment pages are served by
+     `GET /api/products/:id`, which is why this refetches the listing to get
+     them. Only `comments` is merged out of the response: `product` itself is
+     left exactly as it is, because it carries optimistic like / save state that
+     a wholesale replace would silently roll back.
+
+     `limit` is not sent. The server's default of 20 is what we want and it caps
+     at 50 regardless. The cursor goes back verbatim — the comment cursor is a
+     compound `created_at|id` encoded base64url and Block N-B was explicit that
+     the encoding is not a contract: never build one, never decode one. */
+  const loadMoreComments = useCallback(async () => {
+    if (!commentsHasMore || commentsCursor === null) return;
+
+    // 🚦 DOUBLE-FETCH GUARD. The observer is also torn down for the duration of
+    // a request (see hooks/useInfiniteScroll); this ref is the check that every
+    // caller passes through, in the same tick the request starts.
+    if (commentsInFlightRef.current) return;
+    commentsInFlightRef.current = true;
+
+    const run = commentsRunRef.current;
+    const controller = new AbortController();
+    commentsAbortRef.current = controller;
+    setLoadingMoreComments(true);
+
+    try {
+      const params = new URLSearchParams();
+      if (currentUserId) params.append("user_id", currentUserId);
+      params.append("cursor", commentsCursor);
+
+      // 🔒 The viewer comes from the TOKEN since Block V-A — `?user_id=` above
+      // is still sent but ignored server-side. Without this header the older
+      // comments come back with no `user_vote`, so the student's own votes on
+      // page two render as unvoted.
+      const token = localStorage.getItem("yahora_session");
+      const response = await fetch(
+        `${API_BASE_URL}/products/${id}?${params.toString()}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: controller.signal,
+        },
+      );
+      const data = await response.json();
+
+      // Navigated to a different listing while this was in the air.
+      if (run !== commentsRunRef.current) return;
+
+      if (response.ok) {
+        const items = data.product?.comments?.items ?? [];
+        const cursor = data.product?.comments?.next_cursor ?? null;
+
+        setProduct((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            comments: {
+              ...prev.comments,
+              // Merge, never replace: a comment posted while this request was
+              // in flight is at the front of `items` and has to survive, and
+              // so does every page already loaded.
+              items: mergeCommentsById(prev.comments?.items ?? [], items),
+            },
+          };
+        });
+
+        setCommentsCursor(cursor);
+        setCommentsHasMore(cursor !== null);
+      } else {
+        // Stop rather than let the observer re-request, every time the sentinel
+        // scrolls into view, a page the server keeps rejecting.
+        setCommentsHasMore(false);
+      }
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      if (run !== commentsRunRef.current) return;
+      setCommentsHasMore(false);
+    } finally {
+      // Release the guard only if this is still the live request — an aborted
+      // call for the previous listing settles after the new one has started,
+      // and releasing unconditionally would unlock the guard underneath it.
+      if (commentsAbortRef.current === controller) {
+        commentsInFlightRef.current = false;
+      }
+      if (run === commentsRunRef.current) setLoadingMoreComments(false);
+    }
+  }, [commentsHasMore, commentsCursor, currentUserId, id]);
+
+  const commentsSentinelRef = useInfiniteScroll({
+    hasMore: commentsHasMore,
+    isLoading: loadingMoreComments,
+    onLoadMore: loadMoreComments,
+  });
+
+  // Leaving the page mid-request should not leave a fetch resolving into a
+  // component that is gone.
+  useEffect(() => () => commentsAbortRef.current?.abort(), []);
+
   const handleImageNav = (dir) => {
     setActiveImageIndex((prev) =>
       dir === "next"
@@ -397,8 +545,11 @@ export default function ProductDetail() {
   // sends a flat list, newest first, and every reply on the page arrives with
   // its parent, so no reply can be orphaned by pagination.
   //
-  // Only the newest 20 top-level comments come back. "Load older comments" is
-  // Phase 5 work; `product.comments.next_cursor` is what it will page on.
+  // 📄 Phase 5 Block N-B: `items` now holds every page loaded so far, appended
+  // in load order, and `next_cursor` drives the sentinel at the bottom of the
+  // list. The threading is untouched and needs to be — each page carries its
+  // own replies, so a flat filter still reassembles every thread correctly
+  // however many pages are on screen.
   const commentItems = product?.comments?.items ?? [];
   const topLevelComments = commentItems.filter((c) => !c.parent_comment_id);
   const getReplies = (parentId) =>
@@ -829,6 +980,17 @@ export default function ProductDetail() {
                     </div>
                   );
                 })
+              )}
+
+              {/* 📄 Infinite scroll for older comments. Outside the
+                  empty/populated branch so it works either way, and gone
+                  entirely once next_cursor is null — no end-of-list message. */}
+              {commentsHasMore && (
+                <InfiniteScrollSentinel
+                  sentinelRef={commentsSentinelRef}
+                  loading={loadingMoreComments}
+                  label="Loading older comments"
+                />
               )}
             </div>
           </div>

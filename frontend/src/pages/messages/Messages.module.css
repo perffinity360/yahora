@@ -557,6 +557,15 @@
   padding: 16px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* 📄 Block N-C. OFF ON PURPOSE. Chrome's scroll anchoring already shifts
+     scrollTop by itself when content is inserted ABOVE the viewport, and this
+     is the one list in the app where that happens — paging up into history.
+     With it left on, the browser compensated for the prepend AND the layout
+     effect in Messages.jsx compensated for it again, so the thread jumped down
+     by exactly one page. It cannot simply be left to the browser instead:
+     anchoring is suppressed at scrollTop 0 and Safari does not implement it at
+     all. The JS is the single source of truth for this container's scroll. */
+  overflow-anchor: none;
   /* No `scroll-behavior: smooth` here on purpose: Messages.jsx picks the
      behaviour per scroll — instant when a thread opens on its unread line,
      smooth when a new message arrives. */
