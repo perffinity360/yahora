@@ -9,6 +9,9 @@
 
 ## 1. What Yahora is (design context)
 
+> **Not adopted — see the typography rule in §3.** The display face and highlighter-yellow
+> accent described below are from a rebrand that was never shipped.
+
 A **verified, student-only campus marketplace with a social feed** for Indian universities (IIITDM Kurnool, NIET Greater Noida first). Users are 17–24, on mid-range Android phones and iPhones, price-sensitive, trust-driven ("everyone here is a verified student from my campus").
 
 **Design direction (the thesis):**
@@ -21,6 +24,9 @@ A **verified, student-only campus marketplace with a social feed** for Indian un
 ---
 
 ## 2. Design tokens (`src/theme/tokens.ts` — canonical)
+
+> **Not adopted — see the typography rule in §3.** The `paper` background and highlighter-yellow
+> `mark` palette below were never shipped; `src/theme/index.ts` is the canonical theme.
 
 Never hardcode a color, radius, spacing, or duration in a component. Import from the theme.
 
@@ -74,13 +80,18 @@ Theming: resolve `light`/`dark` from `useColorScheme()` through one `useTheme()`
 
 ## 3. Typography
 
+**THE TYPOGRAPHY RULE (what the app actually ships).** Inter for UI and body text; Bree Serif (Regular 400 only) for headings, brand, the SOLD stamp and all prices. Same on web and app. Never apply a bold weight to Bree Serif.
+
+> **Not adopted — see the typography rule above.** The table and bullets below are from a
+> rebrand that was never shipped; they are kept for reference only.
+
 | Role | Face | Weights | Load via |
 |---|---|---|---|
 | Display | **Khand** (Indian Type Foundry) | 500 / 600 / 700 | `@expo-google-fonts/khand` |
 | Body / UI | **Instrument Sans** | 400 / 500 / 600 | `@expo-google-fonts/instrument-sans` |
 
 - Load with `useFonts` at the root; hold the splash screen until loaded. Exactly two families.
-- **Banned:** Inter, Roboto, Arial, San Francisco/system default as the visible design face (system font may remain only in OS-level UI we don't control).
+- **The shipped rule, restated:** Inter for UI and body text; Bree Serif (Regular 400 only) for headings, brand, the SOLD stamp and all prices — the same pair the website uses. Never apply a bold weight to Bree Serif.
 - Scale (pt): display 32 · title 24 · heading 20 · body 16 · small 14 · caption 12 · price-lg 22. Line-height ≈1.15 display/title, 1.45 body.
 - ALL-CAPS labels (chips, eyebrows): Instrument Sans 600, 11–12pt, letterSpacing 0.6.
 - **Prices are a feature:** Khand 600, `₹`, formatted with `Intl.NumberFormat('en-IN')` → ₹1,250 · ₹1,20,000.
@@ -89,6 +100,9 @@ Theming: resolve `light`/`dark` from `useColorScheme()` through one `useTheme()`
 ---
 
 ## 4. Color rules
+
+> **Not adopted — see the typography rule above.** The `mark` highlighter rules below are from the
+> unshipped rebrand.
 
 - Light is default; full dark mode required on every screen from day one.
 - `mark` is a **highlighter, not paint**: primary CTA, active tab/filter, selection, the price tag, one moment per screen. **≤10% of any screen.** Text on `mark` is always `ink`.
@@ -123,6 +137,9 @@ Theming: resolve `light`/`dark` from `useColorScheme()` through one `useTheme()`
 
 ## 7. Signature elements & component recipes
 
+> **Not adopted — see the typography rule above.** The Khand price tag and `mark` fills below are
+> from the unshipped rebrand; the shipped price style is Bree Serif 400.
+
 **The price tag (signature #1):** tag-shaped chip — `mark` background, `ink` Khand 600 text, radius `r2`, small punched "tag hole" (5px `paper` circle, absolutely positioned left). Used everywhere a price appears.
 
 **The verified stamp (signature #2):** compact badge — 1.5px `verified` border, `verified` check + "VERIFIED" caps 10–11pt, transparent fill. On profiles and listing cards; never restyled per screen.
@@ -154,7 +171,7 @@ Theming: resolve `light`/`dark` from `useColorScheme()` through one `useTheme()`
 
 ## 9. Anti-patterns (never)
 
-Web hover states or cursor logic · scroll-jacking · duration-based fake gestures · layout animations inside list rows · animation driven from JS thread · autoplaying heavy Lottie/Skia on feeds · spinner-only loading · blocking touch while something animates · purple-gradient-on-white · Inter/Roboto as the design face · the three AI-default looks (§1) · more than one `mark` moment competing per screen · emoji as icons · lorem ipsum.
+Web hover states or cursor logic · scroll-jacking · duration-based fake gestures · layout animations inside list rows · animation driven from JS thread · autoplaying heavy Lottie/Skia on feeds · spinner-only loading · blocking touch while something animates · purple-gradient-on-white · a bold weight on Bree Serif (it ships Regular 400 only — see §3) · the three AI-default looks (§1) · more than one `mark` moment competing per screen · emoji as icons · lorem ipsum.
 
 ## 10. Pre-flight ritual (every UI task)
 

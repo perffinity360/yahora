@@ -500,7 +500,8 @@
 /* --- TYPEWRITER EFFECT --- */
 .typewriterCursor {
   display: inline-block;
-  font-weight: 300;
+  /* 400: Inter's lightest loaded weight. */
+  font-weight: 400;
   color: var(--pink-dark); /* Using your brand pink for the cursor */
   animation: blink 0.85s infinite;
   margin-left: 2px;
@@ -579,7 +580,9 @@
   font-size: 1.1rem;
   color: var(--black-soft);
   text-align: center;
-  font-weight: 700;
+  /* Bree Serif (inherited from the h1-h6 rule in global.css) ships one
+     weight — 400. Anything heavier here was browser-faked. */
+  font-weight: 400;
 }
 .demoPopupBtn {
   background: #e5dbf5;

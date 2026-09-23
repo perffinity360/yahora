@@ -1,12 +1,13 @@
 import React, {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
   memo,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useNavigationType } from "react-router-dom";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import styles from "./Marketplace.module.css";
 import { supabase } from "../../config/supabaseClient";
@@ -44,6 +45,86 @@ import {
 import { API_BASE_URL } from '../../config/urls';
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
+
+/* ────────── KEEPING YOUR PLACE IN THE FEED ──────────
+ *
+ * Opening a product unmounts this page; pressing Back mounts a brand new one
+ * that starts at the top, so a student who tapped the twentieth card had to
+ * scroll past everything they had already looked at to get back to it.
+ *
+ * The browser's own scroll restoration cannot help here. On a POP it waits for
+ * the document to reach its old height before restoring, and this page mounts
+ * EMPTY and then fetches — by the time the grid exists the browser has long
+ * since given up. (App.jsx already skips its scroll-to-top on POP for the same
+ * reason; that is necessary but on its own it is not enough.)
+ *
+ * So the position is saved by hand, and the rules are deliberately narrow:
+ *
+ *   WRITTEN  only by `openProduct()`, as a card is opened. Arriving any other
+ *            way — the navbar, a fresh load, Back out of /sell — leaves no memo
+ *            and lands at the top, which is what those entries should do.
+ *   READ     once per mount, and only on a POP (a real Back). Clicking
+ *            "Marketplace" in the navbar after viewing a product is a forward
+ *            navigation and still means "start at the top".
+ *   MATCHED  against the ids the offset was measured on. A scroll offset is
+ *            positional, and the filters/search/sort in this page are component
+ *            state that resets on the way back, so a student who was browsing a
+ *            filtered feed returns to the full one. Restoring into a different
+ *            list would drop them somewhere arbitrary, which is worse than the
+ *            top — the signature makes that case a no-op instead of a guess.
+ *
+ * sessionStorage rather than a module variable so it also survives a reload of
+ * the product page, and dies with the tab.
+ */
+const FEED_POSITION_KEY = "yahora_marketplace_scroll";
+
+function rememberFeedPosition(signature) {
+  try {
+    sessionStorage.setItem(
+      FEED_POSITION_KEY,
+      JSON.stringify({ signature, y: window.scrollY }),
+    );
+  } catch {
+    // Private mode / storage disabled. Losing the scroll position is not worth
+    // throwing over.
+  }
+}
+
+/* ────────── ...AND COMING BACK WITHOUT A FLASH OF THE TOP ──────────
+ *
+ * Saving the offset was not enough on its own. On Back this page mounted with
+ * no campus and no listings, showed the loader, fetched /universities, then
+ * the feed, and only THEN could it scroll — so every return trip showed the
+ * top of the marketplace for two round trips before jumping.
+ *
+ * So `openProduct()` also keeps the feed it was looking at — every page loaded
+ * so far, plus `nextCursor` / `hasMore` (the feed is cursor-paginated and
+ * appended since Phase 5 Block N-B). On a POP the page starts from that
+ * snapshot: the grid is in the DOM on the very first render, the
+ * useLayoutEffect below scrolls before the browser paints, and the student
+ * never sees the top. Infinite scroll carries on from the saved cursor.
+ *
+ * The campus list is refetched quietly; the FEED IS NOT. A page-one refetch
+ * would replace every page below the first and collapse the grid under the
+ * restored scroll. The cost: listings are as fresh as when the product was
+ * opened — switching campus or reloading fetches anew.
+ *
+ * Module scope, not sessionStorage: it is the whole feed, and it only has to
+ * survive an in-app round trip. A full reload of the product page falls back to
+ * the old behaviour — fetch, then restore — which is correct, just not instant.
+ */
+let feedSnapshot = null;
+
+/** Reads AND clears — one saved position is good for exactly one return trip. */
+function takeFeedPosition() {
+  try {
+    const raw = sessionStorage.getItem(FEED_POSITION_KEY);
+    sessionStorage.removeItem(FEED_POSITION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 const CATEGORIES = [
   {
@@ -507,23 +588,38 @@ function ArrowUpGlyph({ size = 22 }) {
 
 export default function Marketplace() {
   const navigate = useNavigate();
+  // POP = the student pressed Back. See the feed-position notes above.
+  const navigationType = useNavigationType();
+  // Only a real Back may start from the snapshot. Read once; cleared on mount
+  // below so it can never be picked up by some later, unrelated visit.
+  const [returnSnapshot] = useState(() =>
+    navigationType === "POP" ? feedSnapshot : null,
+  );
   const { logout, sessionReady } = useAuth();
   const [currentUserId] = useState(localStorage.getItem("yahora_user_id"));
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
-  const [universities, setUniversities] = useState([]);
-  const [university, setUniversity] = useState(null);
+  const [universities, setUniversities] = useState(
+    () => returnSnapshot?.universities ?? [],
+  );
+  const [university, setUniversity] = useState(
+    () => returnSnapshot?.university ?? null,
+  );
 
   // <-- NEW: State to track the user's home university
-  const [homeUniversityId, setHomeUniversityId] = useState(null);
+  const [homeUniversityId, setHomeUniversityId] = useState(
+    () => returnSnapshot?.homeUniversityId ?? null,
+  );
 
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState(() => returnSnapshot?.products ?? []);
+  const [loading, setLoading] = useState(() => !returnSnapshot);
 
   /* 📄 Cursor pagination state (Phase 5 Block N-B). `products` above is now
      every page loaded so far, appended — not the latest response. */
   const [loadingMore, setLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
+  // Seeded from the snapshot too, so infinite scroll carries on from the last
+  // page that was loaded rather than stopping or starting over.
+  const [nextCursor, setNextCursor] = useState(() => returnSnapshot?.nextCursor ?? null);
+  const [hasMore, setHasMore] = useState(() => returnSnapshot?.hasMore ?? false);
 
   /* Guards a page request against being issued twice. A ref rather than state
      because it has to be readable and writable synchronously, inside the same
@@ -540,7 +636,18 @@ export default function Marketplace() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showUniModal, setShowUniModal] = useState(false);
   const [showMobileFilter, setShowMobileFilter] = useState(false);
-  const [swipeDeck, setSwipeDeck] = useState([]);
+  const [swipeDeck, setSwipeDeck] = useState(() =>
+    returnSnapshot ? [...returnSnapshot.products].reverse() : [],
+  );
+  /** The campus a snapshot start already holds every loaded page for. The
+   *  reset effect below leaves the feed alone for this campus — see the note on
+   *  `feedSnapshot`. Keyed by id rather than a one-shot flag so React's
+   *  StrictMode double-run of effects in development cannot reset it anyway. */
+  const snapshotCampusRef = useRef(returnSnapshot?.university?.id ?? null);
+
+  useEffect(() => {
+    feedSnapshot = null;
+  }, []);
   const [showDemoAlert, setShowDemoAlert] = useState(false);
 
   const [selCategories, setSelCategories] = useState([]);
@@ -617,7 +724,12 @@ export default function Marketplace() {
           if (!targetUniId) targetUniId = homeUniId;
           const defaultUni =
             uniData.find((u) => u.id === targetUniId) || uniData[0];
-          setUniversity(defaultUni);
+          // Keep the SAME object when the campus has not changed. A fresh one
+          // re-runs the feed effect below — after a snapshot start that would
+          // fetch the feed twice and could flash the loader.
+          setUniversity((prev) =>
+            prev && defaultUni && prev.id === defaultUni.id ? prev : defaultUni,
+          );
         }
       } catch (error) {
         console.error("Failed to load initial data:", error);
@@ -750,6 +862,13 @@ export default function Marketplace() {
      the loaded pages alone. */
   useEffect(() => {
     if (!university) return;
+
+    // Back from a product: the pages, the cursor and hasMore came in with the
+    // snapshot. Refetching page one here would replace every loaded page with
+    // the first 20 listings — the grid would collapse and the restored scroll
+    // with it. Any OTHER campus (a switch after returning) resets as normal.
+    if (snapshotCampusRef.current === university.id) return;
+    snapshotCampusRef.current = null;
 
     feedRunRef.current += 1;
     // Abandon anything still in flight for the previous campus: without this
@@ -1069,6 +1188,66 @@ export default function Marketplace() {
     activeSort,
     currentUserId,
     isWithinPostingDate,
+  ]);
+
+  /* ── Keeping your place in the feed (see the notes at the top of the file) ── */
+
+  const feedSignature = useMemo(
+    () => displayProducts.map((p) => p.id).join("|"),
+    [displayProducts],
+  );
+
+  const openProduct = useCallback(
+    (id) => {
+      rememberFeedPosition(feedSignature);
+      feedSnapshot = {
+        universities,
+        university,
+        homeUniversityId,
+        products,
+        nextCursor,
+        hasMore,
+      };
+      navigate(`/product/${id}`);
+    },
+    [
+      feedSignature,
+      navigate,
+      universities,
+      university,
+      homeUniversityId,
+      products,
+      nextCursor,
+      hasMore,
+    ],
+  );
+
+  /** One attempt per mount, whether or not there was anything to restore. */
+  const feedRestoredRef = useRef(false);
+
+  // useLayoutEffect, not useEffect: this runs after the grid is in the DOM but
+  // BEFORE the browser paints it, so the student never sees the top of the feed
+  // flash past on the way to where they were.
+  useLayoutEffect(() => {
+    if (feedRestoredRef.current) return;
+    // Nothing to scroll within until the grid has actually rendered.
+    if (loading || viewMode !== "grid" || !displayProducts.length) return;
+    feedRestoredRef.current = true;
+
+    // Consumed even when it is not used, so a stale position can never fire on
+    // some later, unrelated visit.
+    const saved = takeFeedPosition();
+    if (!saved || !saved.y) return;
+    if (navigationType !== "POP") return;
+    if (saved.signature !== feedSignature) return;
+
+    window.scrollTo(0, saved.y);
+  }, [
+    loading,
+    viewMode,
+    displayProducts.length,
+    feedSignature,
+    navigationType,
   ]);
 
   if (!university) {
@@ -1486,7 +1665,7 @@ export default function Marketplace() {
                     <ProductCard
                       product={product}
                       currentUserId={currentUserId}
-                      onCardClick={(id) => navigate(`/product/${id}`)}
+                      onCardClick={openProduct}
                       onToggleLike={() =>
                         handleToggleGridLike(product.id, product.is_liked)
                       }

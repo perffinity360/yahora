@@ -176,8 +176,9 @@ Aesthetic direction for this project: warm, tactile student marketplace where ev
 listing feels like a keepsake — nostalgic sentiment meets modern campus energy, one
 confident accent on a soft neutral canvas.
 
-- Typography: pair one characterful display font with a clean body font.
-  Never Inter, Roboto, Arial, Space Grotesk, or system-ui.
+- Typography: Inter for UI and body text; Bree Serif (Regular 400 only) for
+  headings, brand, the SOLD stamp and all prices. Same on web and app.
+  Never apply a bold weight to Bree Serif.
 - Color: one dominant tone + one sharp accent, defined as CSS variables /
   theme tokens. No purple-gradient-on-white, no timid evenly-spread palettes.
 - Motion: every screen gets entrance choreography (staggered reveals);

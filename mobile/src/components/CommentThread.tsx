@@ -9,11 +9,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
+import { AppText } from './AppText';
+import { AppTextInput } from './AppTextInput';
 import { useAddComment, useVoteComment } from '../hooks/useComments';
 import { colors, font, radius, spacing } from '../theme';
 import type { ProductComment } from '../types';
@@ -110,10 +111,10 @@ export function CommentSection({
     <View style={style}>
       <View style={styles.header}>
         <Feather name="message-circle" size={17} color={colors.purple} />
-        <Text style={styles.headerTitle}>Questions &amp; Answers</Text>
+        <AppText style={styles.headerTitle}>Questions &amp; Answers</AppText>
         {comments.length > 0 ? (
           <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{comments.length}</Text>
+            <AppText style={styles.countBadgeText}>{comments.length}</AppText>
           </View>
         ) : null}
       </View>
@@ -126,17 +127,17 @@ export function CommentSection({
           style={({ pressed }) => [styles.prompt, pressed && styles.promptPressed]}
         >
           <Avatar name={viewerName} uri={viewerAvatarUrl} size={30} />
-          <Text style={styles.promptText} numberOfLines={1}>
+          <AppText style={styles.promptText} numberOfLines={1}>
             Ask the seller a question…
-          </Text>
+          </AppText>
           <Feather name="edit-3" size={15} color={colors.purple} />
         </Pressable>
       ) : (
         <View style={styles.locked}>
           <Feather name="lock" size={15} color={colors.mutedLabel} />
-          <Text style={styles.lockedText}>
+          <AppText style={styles.lockedText}>
             Questions are locked for visitors from other campuses.
-          </Text>
+          </AppText>
         </View>
       )}
 
@@ -172,16 +173,16 @@ export function CommentSection({
                           }
                           style={({ pressed }) => [styles.replyBtn, pressed && styles.replyBtnPressed]}
                         >
-                          <Text
+                          <AppText
                             style={[styles.replyBtnText, isReplying && styles.replyBtnTextActive]}
                           >
                             {isReplying ? 'Cancel' : 'Reply'}
-                          </Text>
+                          </AppText>
                         </Pressable>
                         {replies.length > 0 ? (
-                          <Text style={styles.replyCount}>
+                          <AppText style={styles.replyCount}>
                             {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
-                          </Text>
+                          </AppText>
                         ) : null}
                       </>
                     ) : null
@@ -253,14 +254,14 @@ function CommentCard({
       <View style={styles.commentBody}>
         <View style={[styles.bubble, compact && styles.bubbleCompact]}>
           <View style={styles.metaRow}>
-            <Text style={styles.commenterName} numberOfLines={1}>
+            <AppText style={styles.commenterName} numberOfLines={1}>
               {comment.user.full_name || 'Yahora student'}
-            </Text>
-            <Text style={styles.commentTime}>{timeAgo(comment.created_at)}</Text>
+            </AppText>
+            <AppText style={styles.commentTime}>{timeAgo(comment.created_at)}</AppText>
           </View>
-          <Text style={[styles.commentText, compact && styles.commentTextCompact]}>
+          <AppText style={[styles.commentText, compact && styles.commentTextCompact]}>
             {comment.content}
-          </Text>
+          </AppText>
         </View>
 
         {canInteract ? (
@@ -318,7 +319,7 @@ function VotePill({
       ]}
     >
       <Feather name={icon} size={13} color={active ? tint : colors.mutedLabel} />
-      <Text style={[styles.pillCount, active && { color: tint }]}>{count}</Text>
+      <AppText style={[styles.pillCount, active && { color: tint }]}>{count}</AppText>
     </Pressable>
   );
 }
@@ -383,10 +384,10 @@ function ReplyComposer({
     <View ref={viewRef} style={styles.replyComposerWrap}>
       <View style={styles.rail} />
       <View style={styles.replyComposer}>
-        <Text style={styles.replyingLabel} numberOfLines={1}>
-          Replying to <Text style={styles.replyingName}>{parentName || 'this question'}</Text>
-        </Text>
-        <TextInput
+        <AppText style={styles.replyingLabel} numberOfLines={1}>
+          Replying to <AppText style={styles.replyingName}>{parentName || 'this question'}</AppText>
+        </AppText>
+        <AppTextInput
           value={value}
           onChangeText={onChangeText}
           autoFocus
@@ -405,7 +406,7 @@ function ReplyComposer({
             accessibilityLabel="Cancel reply"
             style={({ pressed }) => [styles.ghostBtn, pressed && styles.ghostBtnPressed]}
           >
-            <Text style={styles.ghostBtnText}>Cancel</Text>
+            <AppText style={styles.ghostBtnText}>Cancel</AppText>
           </Pressable>
           <Pressable
             onPress={onSubmit}
@@ -424,7 +425,7 @@ function ReplyComposer({
             ) : (
               <>
                 <Feather name="send" size={13} color={colors.white} />
-                <Text style={styles.sendReplyText}>Reply</Text>
+                <AppText style={styles.sendReplyText}>Reply</AppText>
               </>
             )}
           </Pressable>
@@ -443,7 +444,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: font.family.bold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
   },
   countBadge: {
@@ -456,7 +457,7 @@ const styles = StyleSheet.create({
   },
   countBadgeText: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
 
@@ -480,7 +481,7 @@ const styles = StyleSheet.create({
   promptText: {
     flex: 1,
     fontFamily: font.family.regular,
-    fontSize: 13.5,
+    fontSize: font.sizes.body,
     color: colors.mutedLabel,
   },
 
@@ -500,7 +501,7 @@ const styles = StyleSheet.create({
   lockedText: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     lineHeight: 18,
     color: colors.mutedText,
   },
@@ -524,7 +525,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: font.family.medium,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
   },
@@ -566,22 +567,22 @@ const styles = StyleSheet.create({
   commenterName: {
     flexShrink: 1,
     fontFamily: font.family.bold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   commentTime: {
     fontFamily: font.family.regular,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
   },
   commentText: {
     fontFamily: font.family.regular,
-    fontSize: 13.5,
+    fontSize: font.sizes.body,
     lineHeight: 20,
     color: colors.blackSoft,
   },
   commentTextCompact: {
-    fontSize: 13,
+    fontSize: font.sizes.body,
     lineHeight: 19,
   },
 
@@ -608,7 +609,7 @@ const styles = StyleSheet.create({
   },
   pillCount: {
     fontFamily: font.family.semibold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
   },
   actionDivider: {
@@ -627,7 +628,7 @@ const styles = StyleSheet.create({
   },
   replyBtnText: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.purple,
   },
   replyBtnTextActive: {
@@ -635,7 +636,7 @@ const styles = StyleSheet.create({
   },
   replyCount: {
     fontFamily: font.family.medium,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
   },
 
@@ -667,7 +668,7 @@ const styles = StyleSheet.create({
   },
   replyingLabel: {
     fontFamily: font.family.regular,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
     marginBottom: 6,
   },
@@ -685,7 +686,7 @@ const styles = StyleSheet.create({
     borderColor: colors.inputBorderFocus,
     backgroundColor: colors.white,
     fontFamily: font.family.regular,
-    fontSize: 13.5,
+    fontSize: font.sizes.body,
     lineHeight: 19,
     color: colors.blackSoft,
     textAlignVertical: 'top',
@@ -707,7 +708,7 @@ const styles = StyleSheet.create({
   },
   ghostBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   sendReplyBtn: {
@@ -729,7 +730,7 @@ const styles = StyleSheet.create({
   },
   sendReplyText: {
     fontFamily: font.family.bold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.white,
   },
 });

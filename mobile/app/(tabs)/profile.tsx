@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppText } from '../../src/components/AppText';
 import { AvatarSheet } from '../../src/components/AvatarSheet';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { formatPrice, ProductCard } from '../../src/components/ProductCard';
@@ -31,11 +32,15 @@ import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { DashboardProfile, ProductListing, Purchase } from '../../src/types';
-import { shareProduct } from '../../src/lib/share';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
-const GRID_GAP = spacing.md;
+/** The card grid runs tighter than the rest of the screen so the cards get the
+ *  width back. Same three values in (tabs)/index.tsx and profile/[id].tsx —
+ *  change one, change all three. */
+const GRID_PAD = 12;
+const GRID_COL_GAP = 10;
+const GRID_ROW_GAP = 12;
 
 type TabKey = 'listings' | 'purchases' | 'watchlist';
 const TABS: { key: TabKey; label: string }[] = [
@@ -69,7 +74,7 @@ export default function ProfileScreen() {
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
-  const cardWidth = (width - SCREEN_PAD * 2 - GRID_GAP) / 2;
+  const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -125,12 +130,6 @@ export default function ProfileScreen() {
       setAvatarError(e instanceof Error ? e.message : 'Could not remove your photo.');
     }
   }, [removeAvatar]);
-
-  // See src/lib/share.ts for the message, the link and why Android and iOS
-  // carry the URL differently.
-  const handleShare = (item: ProductListing) => {
-    shareProduct(item);
-  };
 
   const confirmSold = (item: ProductListing) =>
     Alert.alert('Mark as sold?', `"${item.title}" will move to your sold items.`, [
@@ -199,7 +198,7 @@ export default function ProfileScreen() {
                 onEditPhoto={() => setAvatarSheetOpen(true)}
                 avatarBusy={avatarBusy}
               />
-              {avatarError ? <Text style={styles.avatarErrorText}>{avatarError}</Text> : null}
+              {avatarError ? <AppText style={styles.avatarErrorText}>{avatarError}</AppText> : null}
 
               <ListNewItemCard onPress={() => router.push('/sell')} />
 
@@ -222,9 +221,9 @@ export default function ProfileScreen() {
                           style={StyleSheet.absoluteFill}
                         />
                       ) : null}
-                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                      <AppText style={[styles.segmentText, active && styles.segmentTextActive]}>
                         {t.label}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   );
                 })}
@@ -241,17 +240,18 @@ export default function ProfileScreen() {
                           style={{ width: cardWidth }}
                           showManageActions
                           isLiked={item.is_liked}
-                          isSaved={item.is_saved}
+                          // The dashboard endpoint returns the signed-in
+                          // student's own listings with no seller joined onto
+                          // them. The card names the seller on EVERY surface,
+                          // your own listings included, so pass yourself.
+                          sellerName={profile?.full_name}
+                          sellerAvatarUrl={profile?.avatar_url}
                           onPress={() =>
                             router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
                           }
                           onLike={() =>
                             actions.toggleLike.mutate({ id: item.id, isLiked: !!item.is_liked })
                           }
-                          onSave={() =>
-                            actions.toggleSave.mutate({ id: item.id, isSaved: !!item.is_saved })
-                          }
-                          onShare={() => handleShare(item)}
                           onEdit={() => router.push(`/sell?edit=${item.id}`)}
                           onMarkSold={() => confirmSold(item)}
                           onMarkAvailable={() => confirmAvailable(item)}
@@ -304,11 +304,11 @@ export default function ProfileScreen() {
                 ) : (
                   <>
                     <Feather name="log-out" size={16} color={colors.pinkDark} />
-                    <Text style={styles.signOutText}>Sign out</Text>
+                    <AppText style={styles.signOutText}>Sign out</AppText>
                   </>
                 )}
               </Pressable>
-              {signOutError ? <Text style={styles.signOutError}>{signOutError}</Text> : null}
+              {signOutError ? <AppText style={styles.signOutError}>{signOutError}</AppText> : null}
             </>
           )}
         </ScrollView>
@@ -373,7 +373,7 @@ function ProfileHeader({
     <View style={styles.headerShadow}>
       <View style={styles.headerCard}>
         <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.banner}>
-          <Text style={styles.bannerEyebrow}>STUDENT DASHBOARD</Text>
+          <AppText style={styles.bannerEyebrow}>STUDENT DASHBOARD</AppText>
         </LinearGradient>
 
         <LinearGradient
@@ -392,7 +392,7 @@ function ProfileHeader({
             {avatar ? (
               <Image source={{ uri: avatar }} style={styles.avatarImg} contentFit="cover" transition={220} />
             ) : initials ? (
-              <Text style={styles.avatarInitials}>{initials}</Text>
+              <AppText style={styles.avatarInitials}>{initials}</AppText>
             ) : (
               <Feather name="user" size={38} color={colors.purple} />
             )}
@@ -414,28 +414,28 @@ function ProfileHeader({
           </Pressable>
         </LinearGradient>
 
-        <Text style={styles.name} numberOfLines={1}>
+        <AppText style={styles.name} numberOfLines={1}>
           {profile?.full_name || 'Your name'}
-        </Text>
+        </AppText>
 
         {isDemoUser ? (
           <View style={styles.demoChip}>
-            <Text style={styles.demoChipText}>DEMO ACCOUNT</Text>
+            <AppText style={styles.demoChipText}>DEMO ACCOUNT</AppText>
           </View>
         ) : null}
 
         <View style={styles.uniRow}>
           <View style={styles.uniDot} />
-          <Text style={styles.uniText} numberOfLines={1}>
+          <AppText style={styles.uniText} numberOfLines={1}>
             {profile?.university || 'Your University'}
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.academicCard}>
           {academicFields.map((field) => (
             <View key={field.label} style={styles.acadCell}>
-              <Text style={styles.acadLabel}>{field.label}</Text>
-              <Text style={styles.acadValue}>{field.value || '—'}</Text>
+              <AppText style={styles.acadLabel}>{field.label}</AppText>
+              <AppText style={styles.acadValue}>{field.value || '—'}</AppText>
             </View>
           ))}
         </View>
@@ -457,7 +457,7 @@ function ProfileHeader({
             style={styles.publicBtnGradient}
           >
             <Feather name="external-link" size={16} color={colors.white} />
-            <Text style={styles.publicBtnText}>View Your Public Profile</Text>
+            <AppText style={styles.publicBtnText}>View Your Public Profile</AppText>
           </LinearGradient>
         </Pressable>
 
@@ -466,7 +466,7 @@ function ProfileHeader({
           style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
         >
           <Feather name="edit-2" size={15} color={colors.purpleDark} />
-          <Text style={styles.editBtnText}>Edit Profile</Text>
+          <AppText style={styles.editBtnText}>Edit Profile</AppText>
         </Pressable>
       </View>
     </View>
@@ -491,8 +491,8 @@ function ListNewItemCard({ onPress }: { onPress: () => void }) {
           <Feather name="plus" size={22} color={colors.white} />
         </LinearGradient>
         <View style={styles.listNewText}>
-          <Text style={styles.listNewTitle}>List a New Item</Text>
-          <Text style={styles.listNewSub}>Earn some campus cash</Text>
+          <AppText style={styles.listNewTitle}>List a New Item</AppText>
+          <AppText style={styles.listNewSub}>Earn some campus cash</AppText>
         </View>
         <Feather name="chevron-right" size={20} color={colors.mutedLabel} />
       </View>
@@ -521,22 +521,22 @@ function PurchaseCard({ purchase, width }: { purchase: Purchase; width: number }
             </View>
           )}
           <View style={styles.boughtBadge}>
-            <Text style={styles.boughtBadgeText}>BOUGHT</Text>
+            <AppText style={styles.boughtBadgeText}>BOUGHT</AppText>
           </View>
         </View>
         <View style={styles.purchaseInfo}>
-          <Text style={styles.purchaseTitle} numberOfLines={1}>
+          <AppText style={styles.purchaseTitle} numberOfLines={1}>
             {p?.title ?? 'Item'}
-          </Text>
-          <Text style={styles.purchasePrice} numberOfLines={1}>
+          </AppText>
+          <AppText style={styles.purchasePrice} numberOfLines={1}>
             {formatPrice(p?.price ?? 0)}
-          </Text>
+          </AppText>
           {dateLabel ? (
             <View style={styles.purchaseDateRow}>
               <Feather name="clock" size={12} color={colors.mutedText} />
-              <Text style={styles.purchaseDate} numberOfLines={1}>
+              <AppText style={styles.purchaseDate} numberOfLines={1}>
                 {dateLabel}
-              </Text>
+              </AppText>
             </View>
           ) : null}
         </View>
@@ -593,7 +593,7 @@ function ErrorState({
           style={styles.publicBtnGradient}
         >
           <Feather name="refresh-cw" size={16} color={colors.white} />
-          <Text style={styles.publicBtnText}>Retry</Text>
+          <AppText style={styles.publicBtnText}>Retry</AppText>
         </LinearGradient>
       </Pressable>
       <Pressable
@@ -606,7 +606,7 @@ function ErrorState({
         ) : (
           <>
             <Feather name="log-out" size={16} color={colors.pinkDark} />
-            <Text style={styles.signOutText}>Sign out</Text>
+            <AppText style={styles.signOutText}>Sign out</AppText>
           </>
         )}
       </Pressable>
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
   },
   bannerEyebrow: {
     fontFamily: font.family.bold,
-    fontSize: 10,
+    fontSize: font.sizes.micro,
     letterSpacing: 2,
     color: colors.white,
     opacity: 0.85,
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   },
   avatarErrorText: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.errorText,
     textAlign: 'center',
     marginTop: spacing.sm,
@@ -762,12 +762,12 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     fontFamily: font.family.serif,
-    fontSize: 34,
+    fontSize: font.sizes.display,
     color: colors.purple,
   },
   name: {
     fontFamily: font.family.serif,
-    fontSize: 23,
+    fontSize: font.sizes.headline,
     color: colors.blackSoft,
     marginTop: spacing.sm,
     maxWidth: '86%',
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
   },
   demoChipText: {
     fontFamily: font.family.bold,
-    fontSize: 9,
+    fontSize: font.sizes.micro,
     letterSpacing: 1,
     color: colors.purpleDark,
   },
@@ -803,7 +803,7 @@ const styles = StyleSheet.create({
   },
   uniText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.purple,
     flexShrink: 1,
   },
@@ -827,7 +827,7 @@ const styles = StyleSheet.create({
   },
   acadLabel: {
     fontFamily: font.family.bold,
-    fontSize: 9,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: colors.mutedLabel,
@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
   },
   acadValue: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     lineHeight: 17,
     color: colors.blackSoft,
   },
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
   },
   publicBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
   editBtn: {
@@ -879,7 +879,7 @@ const styles = StyleSheet.create({
   },
   editBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.purpleDark,
   },
 
@@ -926,12 +926,12 @@ const styles = StyleSheet.create({
   },
   listNewTitle: {
     fontFamily: font.family.bold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
   },
   listNewSub: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
     marginTop: 2,
   },
@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
   },
   segmentText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
   },
   segmentTextActive: {
@@ -971,7 +971,12 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: GRID_GAP,
+    columnGap: GRID_COL_GAP,
+    rowGap: GRID_ROW_GAP,
+    // `content` pads the whole tab to SCREEN_PAD for the headings and the
+    // empty states; the grid alone pulls back out to GRID_PAD so its cards run
+    // closer to the screen edge than the text around them.
+    marginHorizontal: GRID_PAD - SCREEN_PAD,
   },
 
   /* Purchase card */
@@ -1020,7 +1025,7 @@ const styles = StyleSheet.create({
   },
   boughtBadgeText: {
     fontFamily: font.family.extrabold,
-    fontSize: 8.5,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.5,
     color: colors.white,
   },
@@ -1032,12 +1037,12 @@ const styles = StyleSheet.create({
   },
   purchaseTitle: {
     fontFamily: font.family.bold,
-    fontSize: 13.5,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   purchasePrice: {
     fontFamily: font.family.serif,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.blueDark,
   },
   purchaseDateRow: {
@@ -1048,7 +1053,7 @@ const styles = StyleSheet.create({
   },
   purchaseDate: {
     fontFamily: font.family.regular,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
 
@@ -1077,13 +1082,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: font.family.bold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
     marginTop: spacing.xs,
@@ -1116,12 +1121,12 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.pinkDark,
   },
   signOutError: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.errorText,
     textAlign: 'center',
     marginTop: spacing.sm,

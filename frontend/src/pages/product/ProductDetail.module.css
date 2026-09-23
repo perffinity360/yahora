@@ -260,6 +260,8 @@
 
 .title {
   font-family: "Bree Serif", Georgia, serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
   font-size: 1.5rem;
   color: #1a1225;
   margin: 0 0 12px 0;
@@ -290,7 +292,9 @@
 
 .descHeading {
   font-size: 0.88rem;
-  font-weight: 700;
+  /* Bree Serif (inherited from the h1-h6 rule in global.css) ships one
+     weight — 400. Anything heavier here was browser-faked. */
+  font-weight: 400;
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -751,13 +755,16 @@
 }
 .currencySymbol {
   font-size: 1.1rem;
-  font-weight: 700;
+  /* Every price on the site is Bree Serif 400 — it ships no other weight. */
+  font-family: "Bree Serif", serif;
+  font-weight: 400;
   color: #888;
   line-height: 1;
 }
 .priceValue {
   font-size: 1.9rem;
-  font-weight: 800;
+  /* Every price on the site is Bree Serif 400 — it ships no other weight. */
+  font-weight: 400;
   color: #1a1225;
   letter-spacing: -0.03em;
   line-height: 1;

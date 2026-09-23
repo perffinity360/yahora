@@ -14,23 +14,29 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackButton } from '../../src/components/CircleButton';
+import { AppText } from '../../src/components/AppText';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { ProductCard } from '../../src/components/ProductCard';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
-import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
+import { useToggleLike } from '../../src/hooks/useProductActions';
 import { usePublicProfile } from '../../src/hooks/usePublicProfile';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
-import type { PublicListing, PublicProfile } from '../../src/types';
-import { shareProduct } from '../../src/lib/share';
+import type { PublicProfile } from '../../src/types';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
 const SCREEN_PAD = spacing.lg;
-const GRID_GAP = spacing.md;
+/** The card grid runs tighter than the rest of the screen so the cards get the
+ *  width back. Same three values in (tabs)/index.tsx and (tabs)/profile.tsx —
+ *  change one, change all three. */
+const GRID_PAD = 12;
+const GRID_COL_GAP = 10;
+const GRID_ROW_GAP = 12;
 
 function initialsOf(name?: string | null): string {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
@@ -56,11 +62,10 @@ export default function PublicProfileScreen() {
 
   const { data, isLoading, isError, refetch } = usePublicProfile(profileUserId);
   const toggleLike = useToggleLike(['publicProfile', profileUserId]);
-  const toggleSave = useToggleSave(['publicProfile', profileUserId]);
 
   const { width } = useWindowDimensions();
   const floatingTop = useFloatingTopInset();
-  const cardWidth = (width - SCREEN_PAD * 2 - GRID_GAP) / 2;
+  const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -77,12 +82,6 @@ export default function PublicProfileScreen() {
   // `from` param each opener passes (the dashboard, or a product's seller card),
   // falling back to the dashboard.
   const goBack = () => router.replace(fromParam ?? '/(tabs)/profile');
-
-  // See src/lib/share.ts for the message, the link and why Android and iOS
-  // carry the URL differently.
-  const handleShare = (item: PublicListing) => {
-    shareProduct(item);
-  };
 
   const profile = data?.profile;
   const listings = data?.listings ?? [];
@@ -108,7 +107,7 @@ export default function PublicProfileScreen() {
           {isOwnProfile && !showSkeleton ? (
             <View style={styles.ownBanner}>
               <Feather name="eye" size={14} color={colors.purpleDark} />
-              <Text style={styles.ownBannerText}>This is how others see your profile.</Text>
+              <AppText style={styles.ownBannerText}>This is how others see your profile.</AppText>
             </View>
           ) : null}
 
@@ -124,12 +123,12 @@ export default function PublicProfileScreen() {
               <Header profile={profile} />
 
               <View style={styles.listingsHead}>
-                <Text style={styles.listingsTitle}>
+                <AppText style={styles.listingsTitle}>
                   {isOwnProfile ? 'My active listings' : `${firstName}'s listings`}
-                </Text>
+                </AppText>
                 {listings.length ? (
                   <View style={styles.countChip}>
-                    <Text style={styles.countChipText}>{listings.length}</Text>
+                    <AppText style={styles.countChipText}>{listings.length}</AppText>
                   </View>
                 ) : null}
               </View>
@@ -142,7 +141,11 @@ export default function PublicProfileScreen() {
                       product={item}
                       style={{ width: cardWidth }}
                       isLiked={item.is_liked}
-                      isSaved={item.is_saved}
+                      // The public-profile endpoint does not join a seller onto
+                      // its listing rows — every listing on this screen belongs
+                      // to the profile being viewed, so that is the seller.
+                      sellerName={profile.full_name}
+                      sellerAvatarUrl={profile.avatar_url}
                       onPress={() =>
                         router.push(
                           hrefWithFrom(
@@ -152,8 +155,6 @@ export default function PublicProfileScreen() {
                         )
                       }
                       onLike={() => toggleLike.mutate({ productId: item.id })}
-                      onSave={() => toggleSave.mutate({ productId: item.id })}
-                      onShare={() => handleShare(item)}
                     />
                   ))}
                 </View>
@@ -174,15 +175,7 @@ export default function PublicProfileScreen() {
           ) : null}
         </ScrollView>
 
-        <Pressable
-          onPress={goBack}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
-        >
-          <Feather name="arrow-left" size={22} color={colors.purpleDark} />
-        </Pressable>
+        <BackButton onPress={goBack} style={[styles.backBtn, { top: floatingTop }]} />
       </SafeAreaView>
     </View>
   );
@@ -228,29 +221,29 @@ function Header({ profile }: { profile: PublicProfile }) {
                 transition={220}
               />
             ) : initials ? (
-              <Text style={styles.avatarInitials}>{initials}</Text>
+              <AppText style={styles.avatarInitials}>{initials}</AppText>
             ) : (
               <Feather name="user" size={38} color={colors.purple} />
             )}
           </View>
         </LinearGradient>
 
-        <Text style={styles.name} numberOfLines={1}>
+        <AppText style={styles.name} numberOfLines={1}>
           {profile.full_name || 'Yahora student'}
-        </Text>
+        </AppText>
 
         <View style={styles.uniRow}>
           <View style={styles.uniDot} />
-          <Text style={styles.uniText} numberOfLines={1}>
+          <AppText style={styles.uniText} numberOfLines={1}>
             {profile.university || 'University'}
-          </Text>
+          </AppText>
         </View>
 
         <View style={styles.academicCard}>
           {academicFields.map((field) => (
             <View key={field.label} style={styles.acadCell}>
-              <Text style={styles.acadLabel}>{field.label}</Text>
-              <Text style={styles.acadValue}>{field.value || '—'}</Text>
+              <AppText style={styles.acadLabel}>{field.label}</AppText>
+              <AppText style={styles.acadValue}>{field.value || '—'}</AppText>
             </View>
           ))}
         </View>
@@ -260,7 +253,7 @@ function Header({ profile }: { profile: PublicProfile }) {
         {since ? (
           <View style={styles.sinceRow}>
             <Feather name="calendar" size={13} color={colors.mutedText} />
-            <Text style={styles.sinceText}>Member since {since}</Text>
+            <AppText style={styles.sinceText}>Member since {since}</AppText>
           </View>
         ) : null}
       </View>
@@ -288,7 +281,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
           style={styles.retryBtnGradient}
         >
           <Feather name="refresh-cw" size={16} color={colors.white} />
-          <Text style={styles.retryBtnText}>Retry</Text>
+          <AppText style={styles.retryBtnText}>Retry</AppText>
         </LinearGradient>
       </Pressable>
     </View>
@@ -347,26 +340,10 @@ const styles = StyleSheet.create({
   backBtn: {
     // `top` is applied inline from useFloatingTopInset(): an absolutely
     // positioned child ignores the padding SafeAreaView adds, so a static
-    // `top` here slides under the status bar in full-screen mode.
+    // `top` here slides under the status bar in full-screen mode. Position
+    // only — the look lives in src/components/CircleButton.tsx.
     position: 'absolute',
     left: spacing.lg,
-    zIndex: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.cardSurface,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    shadowColor: colors.purple,
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  backBtnPressed: {
-    backgroundColor: colors.pinkLight,
   },
 
   /* Own-profile banner */
@@ -386,7 +363,7 @@ const styles = StyleSheet.create({
   },
   ownBannerText: {
     fontFamily: font.family.semibold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
 
@@ -445,12 +422,12 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     fontFamily: font.family.serif,
-    fontSize: 34,
+    fontSize: font.sizes.display,
     color: colors.purple,
   },
   name: {
     fontFamily: font.family.serif,
-    fontSize: 23,
+    fontSize: font.sizes.headline,
     color: colors.blackSoft,
     marginTop: spacing.sm,
     maxWidth: '86%',
@@ -471,7 +448,7 @@ const styles = StyleSheet.create({
   },
   uniText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.purple,
     flexShrink: 1,
   },
@@ -495,7 +472,7 @@ const styles = StyleSheet.create({
   },
   acadLabel: {
     fontFamily: font.family.bold,
-    fontSize: 9,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     color: colors.mutedLabel,
@@ -503,7 +480,7 @@ const styles = StyleSheet.create({
   },
   acadValue: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     lineHeight: 17,
     color: colors.blackSoft,
   },
@@ -515,7 +492,7 @@ const styles = StyleSheet.create({
   },
   sinceText: {
     fontFamily: font.family.medium,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
 
@@ -530,7 +507,7 @@ const styles = StyleSheet.create({
   },
   listingsTitle: {
     fontFamily: font.family.serif,
-    fontSize: 19,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
   },
   countChip: {
@@ -546,14 +523,15 @@ const styles = StyleSheet.create({
   },
   countChipText: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: GRID_GAP,
-    paddingHorizontal: SCREEN_PAD,
+    columnGap: GRID_COL_GAP,
+    rowGap: GRID_ROW_GAP,
+    paddingHorizontal: GRID_PAD,
   },
 
   /* Empty / error */
@@ -581,13 +559,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: font.family.bold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
     marginTop: spacing.xs,
@@ -612,7 +590,7 @@ const styles = StyleSheet.create({
   },
   retryBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
 

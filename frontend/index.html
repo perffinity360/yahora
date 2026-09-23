@@ -7,7 +7,13 @@
     <link rel="icon" type="image/svg+xml" href="/yahora_favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?    family=Bree+Serif&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- One stylesheet, both faces. The four spaces that used to sit after
+         "css2?" turned the Bree Serif parameter into one named "    family",
+         which Google silently drops — every heading, the brand name and every
+         price on the site was falling back to Times. Inter now also downloads
+         700 and 800, which the stylesheets ask for ~77 times and the browser
+         was faking. Keep this on ONE line with no spaces inside the URL. -->
+    <link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <title>Yahora | Keep the Story Going</title>
 
     <!-- Default link-preview tags. Product pages have these REPLACED at the

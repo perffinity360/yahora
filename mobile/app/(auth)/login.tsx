@@ -14,12 +14,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppText } from '../../src/components/AppText';
+import { AppTextInput } from '../../src/components/AppTextInput';
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { DemoModal } from '../../src/components/DemoModal';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
@@ -500,15 +501,15 @@ export default function LoginScreen() {
               <Animated.View style={rise(introCopy, 18)}>
                 <GradientHeading text="Keep the story going." />
 
-                <Text style={styles.tagline}>
+                <AppText style={styles.tagline}>
                   Find, share, and pass on the things that made campus home, with the
                   students right beside you.
-                </Text>
+                </AppText>
               </Animated.View>
 
               <Animated.View style={[styles.cardWrap, rise(introCard, 26, true)]}>
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Join Yahora</Text>
+                  <AppText style={styles.cardTitle}>Join Yahora</AppText>
 
                   {/* Segmented control. The labels are fixed copy from runbook
                       §0.6 — "College Email & OTP", not just "Email": students
@@ -537,12 +538,12 @@ export default function LoginScreen() {
                               pressed && !active && styles.tabBtnPressed,
                             ]}
                           >
-                            <Text
+                            <AppText
                               numberOfLines={1}
                               style={[styles.tabText, active && styles.tabTextActive]}
                             >
                               {label}
-                            </Text>
+                            </AppText>
                           </Pressable>
                         );
                       })}
@@ -551,15 +552,15 @@ export default function LoginScreen() {
 
                   {step === 'email' && tab === 'password' ? (
                     <>
-                      <Text style={styles.subtitle}>
+                      <AppText style={styles.subtitle}>
                         Enter the username and password{'\n'}you chose at signup
-                      </Text>
+                      </AppText>
 
-                      <Text style={styles.inputLabel}>USERNAME OR EMAIL</Text>
+                      <AppText style={styles.inputLabel}>USERNAME OR EMAIL</AppText>
                       <View
                         style={[styles.pillGroup, identifierFocused && styles.pillGroupFocused]}
                       >
-                        <TextInput
+                        <AppTextInput
                           value={identifier}
                           onChangeText={setIdentifier}
                           onFocus={() => setIdentifierFocused(true)}
@@ -617,23 +618,23 @@ export default function LoginScreen() {
                           to sign up BEFORE wasting an attempt — and this is the
                           only place that guidance can live, because the failure
                           message is deliberately identical for every cause. */}
-                      <Text style={styles.helperNote}>
+                      <AppText style={styles.helperNote}>
                         New to Yahora? Use the College Email &amp; OTP{'\n'}tab to create your
                         account.
-                      </Text>
+                      </AppText>
                     </>
                   ) : step === 'email' ? (
                     <>
-                      <Text style={styles.subtitle}>
+                      <AppText style={styles.subtitle}>
                         Enter your university email to get started
-                      </Text>
+                      </AppText>
 
-                      <Text style={styles.inputLabel}>UNIVERSITY EMAIL ADDRESS</Text>
+                      <AppText style={styles.inputLabel}>UNIVERSITY EMAIL ADDRESS</AppText>
                       <View
                         ref={emailRow}
                         style={[styles.pillGroup, emailFocused && styles.pillGroupFocused]}
                       >
-                        <TextInput
+                        <AppTextInput
                           value={email}
                           onChangeText={setEmail}
                           onFocus={() => {
@@ -750,17 +751,17 @@ export default function LoginScreen() {
                     </>
                   ) : (
                     <>
-                      <Text style={styles.subtitle}>
+                      <AppText style={styles.subtitle}>
                         Enter the 6-digit code sent to{' '}
-                        <Text style={styles.subtitleEmphasis}>{email.trim()}</Text>
-                      </Text>
+                        <AppText style={styles.subtitleEmphasis}>{email.trim()}</AppText>
+                      </AppText>
 
-                      <Text style={styles.inputLabel}>6-DIGIT VERIFICATION CODE</Text>
+                      <AppText style={styles.inputLabel}>6-DIGIT VERIFICATION CODE</AppText>
                       <View
                         ref={otpRow}
                         style={[styles.pillGroup, otpFocused && styles.pillGroupFocused]}
                       >
-                        <TextInput
+                        <AppTextInput
                           value={otp}
                           onChangeText={(v) => setOtp(v.replace(/[^0-9]/g, '').slice(0, 6))}
                           onFocus={() => {
@@ -792,7 +793,7 @@ export default function LoginScreen() {
                         onPress={goBackToEmail}
                         style={({ pressed }) => [styles.backLink, pressed && styles.backLinkPressed]}
                       >
-                        <Text style={styles.backLinkText}>← Wrong email? Go back</Text>
+                        <AppText style={styles.backLinkText}>← Wrong email? Go back</AppText>
                       </Pressable>
                     </>
                   )}
@@ -805,7 +806,7 @@ export default function LoginScreen() {
                 </View>
               </Animated.View>
 
-              <Text style={styles.footerNote}>Because every item has a memory.</Text>
+              <AppText style={styles.footerNote}>Because every item has a memory.</AppText>
             </View>
           </ScrollView>
         </KeyboardAvoider>
@@ -894,7 +895,7 @@ function GradientButton({
         {busy ? (
           <ActivityIndicator color={colors.white} />
         ) : (
-          <Text style={styles.insideBtnText}>{label}</Text>
+          <AppText style={styles.insideBtnText}>{label}</AppText>
         )}
       </LinearGradient>
     </Pressable>
@@ -915,8 +916,8 @@ function PillBtn({
       onPress={onPress}
       style={({ pressed }) => [styles.pillBtn, pressed && styles.pillBtnPressed]}
     >
-      {leading ? <Text style={styles.pillBtnLeading}>{leading}</Text> : null}
-      <Text style={styles.pillBtnText}>{label}</Text>
+      {leading ? <AppText style={styles.pillBtnLeading}>{leading}</AppText> : null}
+      <AppText style={styles.pillBtnText}>{label}</AppText>
     </Pressable>
   );
 }
@@ -924,14 +925,14 @@ function PillBtn({
 function InlineMessage({ tone, text }: { tone: 'error' | 'success'; text: string }) {
   return (
     <View style={[styles.message, tone === 'error' ? styles.messageError : styles.messageSuccess]}>
-      <Text
+      <AppText
         style={[
           styles.messageText,
           tone === 'error' ? styles.messageTextError : styles.messageTextSuccess,
         ]}
       >
         {text}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -984,7 +985,7 @@ const styles = StyleSheet.create({
   },
   headingText: {
     fontFamily: font.family.serif,
-    fontSize: 30,
+    fontSize: font.sizes.display,
     lineHeight: 36,
     letterSpacing: -0.5,
     color: colors.black,
@@ -994,7 +995,7 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 21,
     color: colors.mutedText,
     marginBottom: spacing.lg,
@@ -1048,7 +1049,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontFamily: font.family.serif,
     textAlign: 'center',
-    fontSize: 23,
+    fontSize: font.sizes.headline,
     color: colors.blackSoft,
     marginBottom: spacing.xs,
   },
@@ -1082,7 +1083,7 @@ const styles = StyleSheet.create({
     fontFamily: font.family.semibold,
     // 11.5 so both labels hold on one line at 375pt. "College Email & OTP" is
     // fixed copy, so the type gives way rather than the words.
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   tabTextActive: {
@@ -1099,7 +1100,7 @@ const styles = StyleSheet.create({
   },
   helperNote: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     lineHeight: 18,
     textAlign: 'center',
     color: colors.mutedText,
@@ -1110,7 +1111,7 @@ const styles = StyleSheet.create({
     fontFamily: font.family.regular,
     textAlign: 'center',
     color: colors.mutedText,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     marginBottom: spacing.lg,
   },
   subtitleEmphasis: {
@@ -1120,7 +1121,7 @@ const styles = StyleSheet.create({
 
   inputLabel: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     color: colors.mutedLabel,
     marginBottom: spacing.sm,
@@ -1149,7 +1150,7 @@ const styles = StyleSheet.create({
   pillInput: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
     paddingVertical: 0,
     minHeight: 38,
@@ -1181,7 +1182,7 @@ const styles = StyleSheet.create({
   insideBtnText: {
     fontFamily: font.family.semibold,
     color: colors.white,
-    fontSize: 14,
+    fontSize: font.sizes.body,
   },
 
   message: {
@@ -1199,7 +1200,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontFamily: font.family.medium,
     textAlign: 'center',
-    fontSize: 13,
+    fontSize: font.sizes.body,
   },
   messageTextError: {
     color: colors.errorText,
@@ -1236,12 +1237,12 @@ const styles = StyleSheet.create({
   pillBtnLeading: {
     fontFamily: font.family.bold,
     color: colors.white,
-    fontSize: 13,
+    fontSize: font.sizes.body,
   },
   pillBtnText: {
     fontFamily: font.family.semibold,
     color: colors.white,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     letterSpacing: 0.2,
   },
 
@@ -1264,7 +1265,7 @@ const styles = StyleSheet.create({
   backLinkText: {
     fontFamily: font.family.semibold,
     color: colors.white,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
   },
 
   footerNote: {
@@ -1272,7 +1273,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.purpleDark,
     opacity: 0.65,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     marginTop: spacing.lg,
   },
 });

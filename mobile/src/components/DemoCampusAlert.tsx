@@ -1,7 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
+import { AppText } from './AppText';
 import { colors, font, spacing } from '../theme';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
@@ -22,15 +23,15 @@ export function DemoCampusAlert({ visible, onClose, onSignUp }: Props) {
           <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.iconWrap}>
             <Feather name="globe" size={26} color={colors.white} />
           </LinearGradient>
-          <Text style={styles.title}>Unlock All Campuses</Text>
-          <Text style={styles.text}>Create a free account to browse every campus on Yahora.</Text>
+          <AppText style={styles.title}>Unlock All Campuses</AppText>
+          <AppText style={styles.text}>Create a free account to browse every campus on Yahora.</AppText>
           <View style={styles.actions}>
             <Pressable onPress={onClose} style={({ pressed }) => [styles.cancelBtn, pressed && styles.cancelBtnPressed]}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <AppText style={styles.cancelText}>Cancel</AppText>
             </Pressable>
             <Pressable onPress={onSignUp} style={({ pressed }) => [styles.signUpBtn, pressed && styles.signUpBtnPressed]}>
               <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.signUpGradient}>
-                <Text style={styles.signUpText}>Sign up</Text>
+                <AppText style={styles.signUpText}>Sign up</AppText>
               </LinearGradient>
             </Pressable>
           </View>
@@ -71,13 +72,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: 22,
+    fontSize: font.sizes.headline,
     color: colors.purpleDark,
     textAlign: 'center',
   },
   text: {
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 20,
     color: colors.mutedText,
     textAlign: 'center',
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontFamily: font.family.semibold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.purpleDark,
   },
   signUpBtn: {
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   },
   signUpText: {
     fontFamily: font.family.semibold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.white,
   },
 });

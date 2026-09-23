@@ -1,7 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { AppText } from './AppText';
+import { AppTextInput } from './AppTextInput';
 import { api } from '../lib/api';
 import { colors, font, radius, spacing } from '../theme';
 import type { UsernameAvailability } from '../types';
@@ -202,7 +204,7 @@ export function UsernameField({
     <View>
       <View style={[styles.inputRow, focused && styles.inputRowFocused]}>
         <Feather name="at-sign" size={18} color={colors.purple} style={styles.inputIcon} />
-        <TextInput
+        <AppTextInput
           value={value}
           // Folded, not rejected. Someone typing a capital is not making a
           // mistake worth an error message — the handle is simply lowercase, so
@@ -231,7 +233,7 @@ export function UsernameField({
       </View>
 
       {message ? (
-        <Text
+        <AppText
           style={[
             styles.status,
             tone === 'ok' && styles.statusOk,
@@ -239,7 +241,7 @@ export function UsernameField({
           ]}
         >
           {message}
-        </Text>
+        </AppText>
       ) : null}
     </View>
   );
@@ -267,14 +269,14 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     paddingVertical: 0,
     minHeight: 44,
   },
   status: {
     fontFamily: font.family.medium,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     lineHeight: 17,
     color: colors.mutedText,
     marginTop: spacing.xs + 2,

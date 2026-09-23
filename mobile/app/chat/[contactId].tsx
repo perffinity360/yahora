@@ -13,11 +13,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton } from '../../src/components/CircleButton';
+import { AppText } from '../../src/components/AppText';
+import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
@@ -289,15 +291,7 @@ export default function ChatScreen() {
 
           {/* ── Header ── */}
           <View style={styles.header}>
-            <Pressable
-              onPress={goBack}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-            >
-              <Feather name="arrow-left" size={21} color={colors.purpleDark} />
-            </Pressable>
+            <BackButton onPress={goBack} variant="plain" hitSlop={10} accessibilityLabel="Back" />
 
             <View>
               <Avatar name={contactName} uri={contactAvatar} size={42} />
@@ -306,10 +300,10 @@ export default function ChatScreen() {
 
             <View style={styles.headerInfo}>
               <View style={styles.headerNameRow}>
-                <Text style={styles.headerName} numberOfLines={1}>
+                <AppText style={styles.headerName} numberOfLines={1}>
                   {contactName}
-                </Text>
-                {isOnline ? <Text style={styles.onlineLabel}>Online</Text> : null}
+                </AppText>
+                {isOnline ? <AppText style={styles.onlineLabel}>Online</AppText> : null}
               </View>
 
               <Pressable
@@ -338,9 +332,9 @@ export default function ChatScreen() {
                     <Feather name="image" size={9} color={colors.mutedPlaceholder} />
                   </View>
                 )}
-                <Text style={styles.productTitle} numberOfLines={1}>
+                <AppText style={styles.productTitle} numberOfLines={1}>
                   {productTitle}
-                </Text>
+                </AppText>
                 <Feather name="chevron-right" size={13} color={colors.purple} />
               </Pressable>
             </View>
@@ -374,7 +368,7 @@ export default function ChatScreen() {
                         accessibilityRole="button"
                         style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
                       >
-                        <Text style={styles.suggestionText}>{suggestion}</Text>
+                        <AppText style={styles.suggestionText}>{suggestion}</AppText>
                       </Pressable>
                     ),
                   )}
@@ -395,9 +389,9 @@ export default function ChatScreen() {
                 contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : null
               }
               ListFooterComponent={
-                <Text style={styles.threadStart}>
+                <AppText style={styles.threadStart}>
                   This is the beginning of your conversation about {productTitle}.
-                </Text>
+                </AppText>
               }
               renderItem={({ item }) =>
                 item.kind === 'day' ? (
@@ -431,9 +425,9 @@ export default function ChatScreen() {
                     accessibilityState={{ selected: emojiTab === i }}
                     style={[styles.emojiTab, emojiTab === i && styles.emojiTabActive]}
                   >
-                    <Text style={[styles.emojiTabText, emojiTab === i && styles.emojiTabTextActive]}>
+                    <AppText style={[styles.emojiTabText, emojiTab === i && styles.emojiTabTextActive]}>
                       {tab.label}
-                    </Text>
+                    </AppText>
                   </Pressable>
                 ))}
               </View>
@@ -446,7 +440,7 @@ export default function ChatScreen() {
                     accessibilityLabel={`Insert ${emoji}`}
                     style={({ pressed }) => [styles.emojiBtn, pressed && styles.emojiBtnPressed]}
                   >
-                    <Text style={styles.emoji}>{emoji}</Text>
+                    <AppText style={styles.emoji}>{emoji}</AppText>
                   </Pressable>
                 ))}
               </View>
@@ -469,7 +463,7 @@ export default function ChatScreen() {
               <Feather name="smile" size={20} color={showEmoji ? colors.purple : colors.mutedText} />
             </Pressable>
 
-            <TextInput
+            <AppTextInput
               value={draft}
               onChangeText={handleChangeText}
               onFocus={() => setShowEmoji(false)}
@@ -549,9 +543,9 @@ function MessageBubble({
         >
           <MessageText content={message.content} mine={mine} />
           <View style={styles.bubbleMeta}>
-            <Text style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
+            <AppText style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
               {formatClockTime(message.created_at)}
-            </Text>
+            </AppText>
             {mine ? <Ticks message={message} /> : null}
           </View>
         </View>
@@ -566,7 +560,7 @@ function MessageBubble({
           style={({ pressed }) => [styles.retryRow, pressed && styles.retryRowPressed]}
         >
           <Feather name="rotate-cw" size={11} color={colors.errorText} />
-          <Text style={styles.retryText}>Failed — tap to retry</Text>
+          <AppText style={styles.retryText}>Failed — tap to retry</AppText>
         </Pressable>
       ) : null}
     </View>
@@ -577,21 +571,21 @@ function MessageBubble({
 function MessageText({ content, mine }: { content: string; mine: boolean }) {
   const parts = content.split(/(https?:\/\/\S+|www\.\S+)/gi);
   return (
-    <Text style={[styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextTheirs]}>
+    <AppText style={[styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextTheirs]}>
       {parts.map((part, i) => {
         if (!/^(https?:\/\/|www\.)/i.test(part)) return part;
         const url = part.startsWith('www.') ? `https://${part}` : part;
         return (
-          <Text
+          <AppText
             key={`${part}-${i}`}
             style={[styles.link, mine ? styles.linkMine : styles.linkTheirs]}
             onPress={() => Linking.openURL(url).catch(() => {})}
           >
             {part}
-          </Text>
+          </AppText>
         );
       })}
-    </Text>
+    </AppText>
   );
 }
 
@@ -616,7 +610,7 @@ function DaySeparator({ label }: { label: string }) {
   return (
     <View style={styles.daySeparator}>
       <View style={styles.dayLine} />
-      <Text style={styles.dayLabel}>{label}</Text>
+      <AppText style={styles.dayLabel}>{label}</AppText>
       <View style={styles.dayLine} />
     </View>
   );
@@ -631,9 +625,9 @@ function UnreadDivider({ count }: { count: number }) {
   return (
     <View style={styles.unreadSeparator}>
       <View style={styles.unreadLine} />
-      <Text style={styles.unreadLabel}>
+      <AppText style={styles.unreadLabel}>
         {count} unread message{count > 1 ? 's' : ''}
-      </Text>
+      </AppText>
       <View style={styles.unreadLine} />
     </View>
   );
@@ -723,7 +717,7 @@ function ChatState({
             end={{ x: 1, y: 1 }}
             style={styles.stateGradient}
           >
-            <Text style={styles.stateBtnText}>{actionLabel}</Text>
+            <AppText style={styles.stateBtnText}>{actionLabel}</AppText>
           </LinearGradient>
         </Pressable>
       ) : null}
@@ -746,14 +740,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.hairline,
   },
-  backBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtnPressed: { backgroundColor: colors.pinkLight },
   headerDot: {
     position: 'absolute',
     right: 0,
@@ -774,12 +760,12 @@ const styles = StyleSheet.create({
   headerName: {
     flexShrink: 1,
     fontFamily: font.family.bold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
   },
   onlineLabel: {
     fontFamily: font.family.semibold,
-    fontSize: 10.5,
+    fontSize: font.sizes.micro,
     color: colors.successText,
   },
   productStrip: {
@@ -808,7 +794,7 @@ const styles = StyleSheet.create({
   productTitle: {
     flexShrink: 1,
     fontFamily: font.family.semibold,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
 
@@ -819,7 +805,7 @@ const styles = StyleSheet.create({
   },
   threadStart: {
     fontFamily: font.family.regular,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     lineHeight: 17,
     color: colors.mutedLabel,
     textAlign: 'center',
@@ -852,7 +838,7 @@ const styles = StyleSheet.create({
   bubbleFailed: { opacity: 0.72 },
   bubbleText: {
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 20,
   },
   bubbleTextMine: { color: colors.white },
@@ -869,7 +855,7 @@ const styles = StyleSheet.create({
   },
   bubbleTime: {
     fontFamily: font.family.regular,
-    fontSize: 10,
+    fontSize: font.sizes.micro,
   },
   bubbleTimeMine: { color: colors.pinkBg },
   bubbleTimeTheirs: { color: colors.mutedLabel },
@@ -887,7 +873,7 @@ const styles = StyleSheet.create({
   retryRowPressed: { opacity: 0.7 },
   retryText: {
     fontFamily: font.family.semibold,
-    fontSize: 10.5,
+    fontSize: font.sizes.micro,
     color: colors.errorText,
   },
   daySeparator: {
@@ -908,14 +894,14 @@ const styles = StyleSheet.create({
   unreadLine: { flex: 1, height: 1, backgroundColor: colors.inputBorderFocus },
   unreadLabel: {
     fontFamily: font.family.bold,
-    fontSize: 10.5,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     color: colors.pinkDark,
   },
   dayLabel: {
     fontFamily: font.family.bold,
-    fontSize: 10,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     color: colors.mutedLabel,
@@ -943,17 +929,17 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
   },
   emptyWrap: { alignItems: 'center' },
-  emptyEmoji: { fontSize: 40 },
+  emptyEmoji: { fontSize: font.sizes.display },
   emptyTitle: {
     fontFamily: font.family.bold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     textAlign: 'center',
     marginTop: spacing.md,
   },
   emptyText: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     lineHeight: 19,
     color: colors.mutedText,
     textAlign: 'center',
@@ -976,7 +962,7 @@ const styles = StyleSheet.create({
   suggestionPressed: { backgroundColor: colors.demoCardPinkBg },
   suggestionText: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.purpleDark,
   },
 
@@ -1002,7 +988,7 @@ const styles = StyleSheet.create({
   emojiTabActive: { backgroundColor: colors.demoCardPurpleBg },
   emojiTabText: {
     fontFamily: font.family.semibold,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   emojiTabTextActive: { color: colors.purpleDark },
@@ -1018,7 +1004,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   emojiBtnPressed: { backgroundColor: colors.pinkLight },
-  emoji: { fontSize: 22 },
+  emoji: { fontSize: font.sizes.headline },
 
   /* Composer */
   composer: {
@@ -1053,7 +1039,7 @@ const styles = StyleSheet.create({
     borderColor: colors.inputBorderFocus,
     backgroundColor: colors.white,
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 19,
     color: colors.blackSoft,
     textAlignVertical: 'top',
@@ -1095,13 +1081,13 @@ const styles = StyleSheet.create({
   },
   stateTitle: {
     fontFamily: font.family.bold,
-    fontSize: 17,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   stateText: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     lineHeight: 19,
     color: colors.mutedText,
     textAlign: 'center',
@@ -1122,7 +1108,7 @@ const styles = StyleSheet.create({
   },
   stateBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
 });

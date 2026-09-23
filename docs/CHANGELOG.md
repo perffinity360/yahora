@@ -276,6 +276,28 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-23 (merge) — ⚠️ NEERAJ: your marketplace infinite scroll now skips its reset when someone comes back from a product (Vishwajeet)
+
+Merging `main` into `infiniper` conflicted in `frontend/src/pages/marketplace/Marketplace.jsx`:
+your Block N-B pagination against my "Back without a flash of the top" snapshot (entry
+"2026-09-23 (later)" below). **Both are kept.** One behaviour of yours changed, so read this:
+
+- `feedSnapshot` (written in `openProduct()`) now also carries `nextCursor` and `hasMore`, and
+  on a POP the page seeds `products`, `loading`, `nextCursor` and `hasMore` from it.
+- **Your RESET + page-one effect returns early for the snapshot's campus**
+  (`snapshotCampusRef`). Otherwise it would replace every loaded page with page one, and the
+  grid would collapse under the restored scroll. Switching to any other campus resets exactly
+  as before. Keyed by campus id rather than a one-shot flag, because StrictMode runs effects
+  twice in dev.
+- The cost: after Back, listings are as fresh as when the product was opened. Infinite scroll
+  carries on from the saved cursor.
+- My quiet-refresh flag inside the old `fetchMarketplaceFeed` is gone; `fetchFeedPage` owns
+  `loading` untouched.
+
+`npx vite build` passes. **Not verified in a browser** — worth one round trip from page 2+.
+
+---
+
 ## 2026-09-23 — 📮 Phase 5 Block N-C: web infinite scroll on chat (reverse) (Neeraj)
 
 ### What changed
@@ -412,6 +434,727 @@ does not yank the reader down.
 ### Still open
 - "The web renders search results" cannot be checked: no web or mobile screen
   calls this endpoint yet (see the N-A part 1 entry). Waiting on our decision.
+
+## 2026-09-23 (evening) — One back button for the whole app; marketplace spacing and borders (Vishwajeet)
+
+Mobile only. No backend, no database, no API change. **Nothing under `frontend/` was touched.**
+
+- **New `mobile/src/components/CircleButton.tsx`** (`CircleButton` + `BackButton`). Every back
+  button now uses it: product detail, public profile, sell, edit profile, onboarding (floating
+  42dp white disc, thin purple border, soft purple shadow, spring press), and the chat header
+  (`variant="plain"`). The product screen's share button uses `CircleButton` too. Each screen
+  keeps its own `onPress`, disabled and loading behaviour; its style is now position only.
+- **The white octagon** inside the product screen's back button was Android drawing the
+  `elevation` shadow behind a translucent surface (`glassBorder`, white at 75%). The new surface
+  is opaque. Do not make it translucent again while it carries an elevation.
+- **Campus banner spacing:** 12dp above and below, the same as the gap between two rows of cards
+  (`GRID_ROW_GAP`). It was 16 above and 22 below.
+- **Search bar and Grid/Swipe toggle** get the sort pill's thin purple border
+  (`colors.inputBorderFocus`).
+
+`npx tsc --noEmit` passes. **Not verified on a device.**
+
+---
+
+## 2026-09-23 (later) — Back from a product lands in place with no flash of the top (BOTH clients), plus a second card round (Vishwajeet)
+
+No backend, no database, no migration, no API change.
+
+**⚠️ NEERAJ: I EDITED ONE FILE IN YOUR SCOPE** — `frontend/src/pages/marketplace/Marketplace.jsx`.
+The founders asked for the fix on both clients. Nothing else under `frontend/` changed. Pull
+before you keep working in that file.
+
+### Back from a product: no glimpse of the top
+
+**Web.** On Back the page mounted with no campus and no listings, showed the loader, fetched
+`/universities`, then the feed, and only then scrolled — two round trips of the top of the page.
+`openProduct()` now also keeps a module-scope `feedSnapshot` (campus list, campus, home campus,
+listings). On a POP the page's state starts from it, so the grid is in the DOM on the first
+render and the existing `useLayoutEffect` scrolls before paint. Both fetches still run and
+refresh the listings in place, without the loader (`quietRefreshRef`), and the campus fetch keeps
+the same `university` object when the id has not changed so the feed effect does not re-run.
+A full reload of the product page still falls back to fetch-then-restore. `npx vite build` passes.
+
+**Mobile.** FlashList can only scroll once it has drawn, so the first rows showed for a frame or
+two before the jump. When there is a saved position the grid now starts at opacity 0, is scrolled
+unseen, and fades in (140ms, native driver) already in place; an 800ms fallback reveals it if
+`onLoad` never fires. Also: the campus being browsed now survives the round trip
+(`viewedUniversityMemo`, keyed to the user) — it used to reset to the home campus, which also
+defeated the scroll restore for anyone browsing another campus.
+
+### Mobile, the rest
+
+- **Campus banner** is the grid's `ListHeaderComponent` when listings are showing, so it scrolls
+  away with the first row and comes back at the top. Pinned as before in swipe, loading, empty and
+  error states. "Buying and listing stay on your home campus." is back, as a second line at
+  `micro` (11).
+- Card price pulled 4dp (was 2dp) towards the like row.
+- **Initials.** The card's seller initials are now `nano` (9) — **the second `nano` call site**,
+  same justification as the condition badge (capitals on a solid chip); the note in
+  `src/theme/index.ts` says so. The shared `Avatar` (detail screen, inbox, chat, comments) sizes
+  initials at 0.34 of the disc instead of 0.38, still floored at 11.
+
+**Not verified on a device or in a browser.**
+
+---
+
+## 2026-09-23 — Founder feedback round on the card and product screen, and the like button that stopped working (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change. **Nothing under `frontend/`
+was touched.**
+
+### The like button (the one real bug)
+
+`POST /like` and `POST /save` are blind toggles — the server flips whatever it has. The same
+listing sits in several TanStack caches at once (marketplace, product detail, public profile,
+dashboard) and a toggle only patched the cache of the screen it was tapped on; the detail
+screen never refetches at all. Like a listing on its detail screen, go back, and the
+marketplace card is still showing the old state inside its 5-minute `staleTime`. Tap it and
+the server flips the opposite way from what the heart promised, then the card snaps back.
+That is "works once, then needs a reload".
+
+Fix, in `mobile/src/hooks/useProductActions.ts`: the toggle's response (`is_liked` /
+`is_saved`, the state AFTER the toggle) is now written into **every** cached copy of the
+listing on success (`syncListingEverywhere`). The dashboard's own toggles call it too. A
+double tap lets only the last in-flight toggle settle the state, so the heart does not flash.
+**Not verified on a device.**
+
+### Card (`ProductCard.tsx`)
+
+- Timestamp and seller name `caption` (12) → `micro` (11). Like count `caption` → `body` (13),
+  heart 14 → 16.
+- Price pulled 2dp closer to the like row.
+- **The title no longer reserves two lines.** Every grid already stretches the cards in a row to
+  the tallest one (FlashList v2 normalises row heights; the profile grids are wrapping flex
+  rows), and the footer is `marginTop: 'auto'`, so the footers still line up. A row where both
+  titles fit on one line is now a line shorter instead of carrying a blank line under each.
+  The location keeps its one reserved line.
+
+### Product detail screen
+
+- The bookmark is `MaterialCommunityIcons` `bookmark` / `bookmark-outline`, **filled** purple
+  when saved, same treatment as the heart.
+- The seller's photo gets the card's purple ring (`Avatar` gained a `ringed` prop; 2dp at 48dp).
+  Photo only — the initials disc has no ring, same rule as the card.
+
+### Marketplace campus banner
+
+Now one line: `Browsing <campus> — view only.` at `micro` (11). The campus name truncates with
+"…" if it has to; "— view only." never does. The ask was "three points smaller", which would
+be 9dp — below the 11dp floor, so it stops at `micro`.
+
+### For Neeraj
+
+Nothing here needs you. The web card is still out of step with the app's; same call as before —
+agree a spec before matching it.
+
+---
+
+## 2026-09-21 — Phase 5 Block V-C correction: the product card, rebuilt to the founders' design (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change. **Nothing under `frontend/`
+was touched.**
+
+**This supersedes the revert entry below.** The card redesign is back, to a new design the
+founders supplied, and it is not the one that was reverted this morning — the differences are
+listed under "What is different from the reverted version".
+
+### The card, top to bottom
+
+| | Before (the reverted-to card) | Now |
+|---|---|---|
+| Photo | square, top corners rounded | unchanged |
+| Row 1 | condition badge + price on one row | condition badge **left**, like button (heart + count) **right** |
+| Row 2 | — | **price alone, right-aligned** — Bree Serif at `headline` (20), the largest thing on the tile |
+| Row 3 | LOCATION, UPPERCASE, letter-spaced | location **exactly as the seller typed it**, `micro`, one reserved line |
+| Row 4 | title, 1 line | title, **2 reserved lines**, `body` Inter Bold |
+| — | — | **thin divider** |
+| Row 5 | heart + count, then timestamp | **timestamp left · avatar + seller's FULL name right** |
+| Engagement row | bookmark + share + seller first-name tag | **gone** |
+| Owner toolbar | bookmark, share, sold/available, edit, delete | **sold/available, edit, delete** — bookmark and share dropped |
+
+- **The condition badge is the only thing in the app at `font.sizes.nano` (9).** Uppercase
+  Inter ExtraBold on a saturated pill; the per-condition colours still come from
+  `conditionColors`, nothing is hardcoded. `nano` had zero call sites after this morning's
+  revert and now has exactly one. The note beside it in `src/theme/index.ts` says so by name.
+- **Location is sentence case, not uppercase.** Only transformation: a leading *lowercase*
+  letter is capitalised. `main gate parking` → `Main gate parking`; `CSE Department` is left
+  alone; a digit or a caseless script is left alone.
+- **Every card names the seller now, your own listings included.** The marketplace and the
+  swipe deck read it off the joined feed row; the public profile passes the profile being
+  viewed; the dashboard and the sell preview pass the signed-in student. `ProductCardItem`
+  gained an optional `seller` so the card can fall back to the row when a screen passes
+  nothing. **No call site is left without a seller name.**
+
+### Two founder follow-ups, same day
+
+- **A liked heart is now FILLED, not just pink.** The card's heart is the only
+  `MaterialCommunityIcons` glyph in the file (`heart` / `heart-outline`); Feather ships outline
+  faces only, so "liked" could never be more than a colour change, and colour alone is the
+  weakest signal on a tile you are scanning past. Both states come from the one family so the
+  silhouette does not jump on tap.
+  **The product detail screen's two hearts got the same treatment** — the "N likes" stat and
+  the action-bar like button (`app/product/[id].tsx:397`, `:540`). Both were Feather, both
+  signalled liked with colour alone, so a student could fill the heart on a card, open the
+  listing and see an outline heart for the same product. The three hearts now agree.
+- **The seller's photo gets the website's purple ring** — `borderWidth: 1.5`,
+  `colors.purpleDark`, matching `.sellerAvatar` in
+  `frontend/src/components/ProductCard/ProductCard.module.css:356`. The initials fallback does
+  NOT get one: it is already a solid purple disc, and the web fallback has no border either.
+  The web's exact value is `--purple-emphasis` (`#2a082a`), which has no mobile token;
+  `purpleDark` (`#4f014f`) is the closest one that exists, so no new colour was added. Say so
+  if you want them byte-identical and I will add the token to both sides.
+
+### Equal heights — why the two columns stay in step
+
+A one-line title used to pull its neighbour's footer up, and a listing with no location sat a
+whole line shorter than the card beside it. Both rows now get **reserved** space rather than
+sizing to their content:
+
+- location: `minHeight = 14 × min(fontScale, MAX_FONT_SCALE)` — one line, always rendered even
+  when empty;
+- title: `minHeight = 17 × 2 × min(fontScale, MAX_FONT_SCALE)` — two lines, always;
+- the footer row is floored at the 20dp avatar, so a seller with a null name does not shorten
+  the card;
+- belt and braces: the info area is `flex: 1` and the divider + footer carry
+  `marginTop: 'auto'`, so a card that does end up taller still puts its footer on the same
+  line as the rest of the row.
+
+`fontScale` comes from `useWindowDimensions()` and the cap is **imported** from the theme
+(`MAX_FONT_SCALE`), not re-typed — React Native multiplies `lineHeight` by the student's font
+setting, so a box measured at 1.0 clips its second line at 1.15.
+
+### Tighter grid spacing — the cards got wider
+
+Screen padding **24 → 12**, column gutter **16 → 10**, row gap **16 → 12**, card inner padding
+**12 → 10** horizontal. On a 360dp phone each card goes from 148dp to 163dp — **+15dp, a 10% wider card**, which is where the second line of a title and a full seller name come from. Applied to all
+three grids that render `ProductCard`, each with the same three named constants and the same
+formula `cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2`:
+
+| Screen | How the gaps are made |
+|---|---|
+| `app/(tabs)/index.tsx` | FlashList: `listContent` pads `GRID_PAD - GRID_COL_GAP/2` (7), each cell pads 5 horizontal / 6 vertical |
+| `app/profile/[id].tsx` | wrap row: `paddingHorizontal: 12`, `columnGap: 10`, `rowGap: 12` |
+| `app/(tabs)/profile.tsx` | same, plus `marginHorizontal: GRID_PAD - SCREEN_PAD` to pull the grid back out of the tab's own 24dp padding |
+
+`SCREEN_PAD` (24) is unchanged on all three screens — only the grids moved. The purchases grid
+and both listing skeletons follow automatically, since they share `styles.grid` and `cardWidth`.
+
+### Removed
+
+Props `onSave`, `onShare`, `onChat`, `isSaved`; the `showEngagementOnly` branch; `IconBtn`'s
+`active` / `activeColor` params and the `iconBtnActive` style; the `statsRow` / `stat` /
+`statText` / `sellerTag` / `actionRow` styles; and, at the call sites, the now-dead
+`useToggleSave` / `shareProduct` imports and their `toggleSave` / `handleShare` locals in
+`(tabs)/index.tsx`, `profile/[id].tsx` and `(tabs)/profile.tsx`.
+
+**Save and share left the card; they did NOT leave the app.** Both are on the product detail
+screen (`app/product/[id].tsx` — bookmark at `:534`, share in the header at `:157`), which is
+verified, not assumed. The cost is real and worth naming: saving a listing from the feed is now
+two taps instead of one.
+
+### What is different from the reverted version
+
+Same shape, four changes: the price is Bree Serif at `headline` (the reverted card had it in
+Inter Bold — the founders' reference used Inter, the price-face decision from the font pass
+overrides it); the seller's **full** name, not the first name; the bookmark and share buttons
+are gone from the owner toolbar as well as the card; and the grid spacing is tighter, which the
+reverted version never touched.
+
+### Checks
+
+`npx tsc --noEmit` passes. Zero `fontWeight` call sites, still. No new colours, no new
+dependency, nothing below 9dp outside the badge. **Not verified on a device** — needs a human
+with a phone; see the list at the end of my handoff.
+
+### What NOT to do yet
+
+- **Do not reach for `nano` again.** One call site, named in the theme. Anything a student
+  reads is `micro` (11) or larger.
+- **Do not put the save button back on the card** without deciding where it goes — the
+  founders' design has one action on the tile and it is the heart.
+- 🟡 **Stale comment I deliberately did not touch:** `app/product/[id].tsx:689` says the detail
+  screen's condition badge is "Same badge as the card's, so the same weight and size". That is
+  no longer true — the card's is ExtraBold at `nano` (9), the detail screen's is Bold at `micro`
+  (11). The task scoped me out of the detail screen, so it is a comment fix for whoever does
+  Block V-D. The sizes differing is correct: the detail screen has room, the tile does not.
+
+### For Neeraj
+
+**Nothing here needs you, and the website card is once again out of step with the app's.** Do
+not mirror this by eye — same call as last time: if we want parity we agree the spec first. The
+one thing already settled and shared is the price face, Bree Serif 400 on both clients.
+
+---
+
+## 2026-09-21 — ↩️ REVERTED: the mobile product-card redesign (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change.
+
+**The card redesign described in the 2026-09-21 entry below is no longer in the app.**
+`mobile/src/components/ProductCard.tsx` and its four callers are back to their state before
+that entry: the old layout (badge + price on one row, stats row with the heart and the
+timestamp, seller tag inside the engagement toolbar), no reserved line boxes, uppercase
+location, condition pill at `micro` (11), and the poster's name shown on the marketplace feed
+only. Read that entry as history, not as the current card.
+
+Reverted: `ProductCard.tsx`, `app/(tabs)/profile.tsx`, `app/profile/[id].tsx`, `app/sell.tsx`,
+`components/SwipeCard.tsx`.
+
+**Deliberately kept, because they came from later, separate decisions:**
+- **The price is still Bree Serif 400**, on the card and everywhere else, on both clients. The
+  typography rule in `mobile/DESIGN.md` §3 stands unchanged.
+- **The feed still keeps your place** when you come back from a product (`app/(tabs)/index.tsx`
+  on mobile, `Marketplace.jsx` on the web).
+- The website is untouched by this revert.
+
+**One knock-on:** `font.sizes.nano` (9) now has **zero** call sites — the condition pill was its
+only one. The token stays, and the note in `mobile/src/theme/index.ts` now says plainly that it
+is unused and why it exists. `micro` (11) remains the floor for anything a student reads.
+
+Neeraj: nothing here needs you. The "For Neeraj" note in the entry below about matching the
+mobile card on the web is **withdrawn** — there is no longer a redesign to match. The price-face
+question stands on its own and is answered: Bree Serif 400 on both clients.
+
+---
+
+## 2026-09-21 (later) — Font consistency pass on BOTH clients: Bree Serif was never loading on the website (Vishwajeet)
+
+No backend, no database, no migration, no API change. Fonts only — no font-size, line-height,
+spacing, colour or layout was touched on either client.
+
+**⚠️ NEERAJ: THIS ONE IS ALMOST ENTIRELY IN YOUR SCOPE.** `frontend/index.html` plus 9
+stylesheets under `frontend/src/`. The founders asked for the same rule enforced on both
+clients in one pass, so I did the website half rather than filing it and waiting. Every change
+is listed below; pull before you keep working in these files.
+
+### The rule, now written in mobile/DESIGN.md §3 and mobile/CLAUDE.md
+
+**Inter for UI and body text; Bree Serif (Regular 400 only) for headings, brand, the SOLD stamp
+and all prices. Same on web and app. Never apply a bold weight to Bree Serif.**
+
+### 1. The website has never actually loaded Bree Serif
+
+`frontend/index.html` had four spaces inside the Google Fonts URL, right after `css2?`. That
+turned the Bree Serif parameter into one named `"    family"`, which Google silently drops.
+Verified against the live API both before and after: the old URL returned 21 Inter faces and
+**zero** Bree Serif; the new one returns Bree Serif plus Inter 400/500/600/700/800.
+
+So every heading, the brand name, the SOLD overlay and every price on the site has been
+rendering in Times New Roman, not Bree Serif. The link is now:
+
+```
+https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:wght@400;500;600;700;800&display=swap
+```
+
+Keep it on one line with no spaces inside the URL.
+
+### 2. Inter 700/800 now download, and the stray weights are gone
+
+The link used to request `400;500;600` while the stylesheets asked for `700` 64 times and `800`
+13 times — all browser-faked. 700 and 800 are now real. Four leftovers normalised to weights we
+actually ship: `.timeAgo` 100→400, `.typewriterCursor` 300→400, `.uploadPlus` 300→400, and the
+swipe LIKE/PASS stamp 900→800.
+
+### 3. No faux-bold Bree Serif anywhere
+
+Four headings inherited Bree Serif from the `h1–h6` rule in `global.css` and then set
+`font-weight: 700` on top of it — `Home .modalTitle`, `Auth .modalTitle`,
+`Messages .chatHeaderName`, `ProductDetail .descHeading`. All are 400 now. Another 14 Bree Serif
+rules had no weight of their own and now say `font-weight: 400` explicitly, so none of them can
+inherit a bold from a container later. `global.css:50` was already correct.
+
+Classes that set their OWN `font-family: Inter` and a 700 were left alone — `ProductCard .title`
+and `onboarding .sectionTitle` are Inter bold on purpose, and that weight is real now.
+
+### 4. Every price is Bree Serif 400
+
+`ProductCard .price` and `ProductDetail .priceValue` were Bree Serif at 800 (faux bold) → 400.
+`ProductDetail .currencySymbol` (the ₹ beside the amount), `ShareSheet .previewPrice` and
+`Marketplace .priceRangeLabels` were Inter → now Bree Serif 400. The swipe deck and the public
+profile render `ProductCard`, so they follow it.
+
+**One new rule, and a bug it exposes:** I added `.cardPrice` to `Dashboard.module.css`. It is the
+only one of `PurchaseCard`'s ten class names that exists in that file — `card`, `cardImgWrap`,
+`cardImg`, `cardBadge`, `cardBody`, `cardHead`, `cardTitle`, `cardFoot` and `cardViews` are
+referenced from `Dashboard.jsx` and defined nowhere, so that card renders unstyled today. That
+is a layout bug, not a font one, so this pass did not touch it. **It is yours and it is worth a
+look.**
+
+### Mobile half (same pass, for the record)
+
+`ProductCard.price` and `FilterSheet.priceValue` moved from Inter Bold to Bree Serif; the detail
+screen and the dashboard purchase rows were already correct. `nano` (9) is now documented as the
+one exception to the 11dp floor, for the condition pill only. Still zero `fontWeight` call sites
+in `mobile/`.
+
+### Deliberately NOT changed, on both clients
+
+- **The sell form's price input** (`Sell.module.css .priceInput` / `.priceSymbol`, and the mobile
+  equivalent). That is a form control being typed into, not a price being displayed, and the live
+  preview beside it already shows the real price in Bree Serif. Same call on both clients so they
+  stay in step — if you disagree, change both.
+- `Home.module.css .listingPrice` — dead CSS, referenced from no JSX.
+- The SOLD stamp on the mobile product DETAIL screen is still Inter ExtraBold
+  (`mobile/app/product/[id].tsx`). The card's stamp is already Bree Serif. One line, not done
+  because that task scoped the code work to prices.
+
+### What NOT to do yet
+
+- **Do not re-add a weight above 400 to anything Bree Serif.** There is no such file to load; the
+  browser fakes it, and faking it is what this pass removed.
+- **Do not "simplify" the font link by splitting it across lines.** The whitespace is exactly
+  what broke it.
+
+---
+
+## 2026-09-21 — Product card redesign (mobile), the feed remembers your place (BOTH clients), and a font audit that lands on Neeraj (Vishwajeet)
+
+No backend, no database, no migration, no API change.
+
+**⚠️ I EDITED ONE FILE IN YOUR SCOPE, NEERAJ:** `frontend/src/pages/marketplace/Marketplace.jsx`
+(~60 lines, all additive, described below). The founders asked for the scroll fix on both
+clients in one go. Nothing else under `frontend/` was touched. If you have that file open in
+another session, pull before you keep going.
+
+### 1. The feed keeps your place when you come back from a product (both clients)
+
+Open a listing from the middle of the marketplace, press back, and you were returned to the top
+of the feed with everything you had already browsed to scroll past again. Fixed on the app and
+the website, with the same three rules on both:
+
+- **Saved only when a card is opened.** Arriving any other way — the navbar / tab bar, a cold
+  start, back out of `/sell` — still lands at the top, because there is no saved position to
+  find. This is what keeps the behaviour scoped to "back from a product".
+- **Read once, then thrown away.** One saved position is good for one return trip.
+- **Matched against the ids it was measured on.** An offset is positional, and the filters,
+  search and sort are component state on both clients, so they reset when the page is rebuilt.
+  If the list that comes back is not the list you left, the restore is skipped rather than
+  guessed. See "known gap" below.
+
+**App** (`mobile/app/(tabs)/index.tsx`): the offset lives in a module-scope `gridScrollMemo`,
+the same trick `SwipeDeck` already uses for swiped cards — the root layout is a `<Slot/>`, so
+the whole screen is destroyed on the way to a product and no ref or state survives it. Restored
+from FlashList's `onLoad`, which is the first moment the list has a height to scroll within.
+
+**Web** (`frontend/src/pages/marketplace/Marketplace.jsx`): same idea in `sessionStorage`, under
+`yahora_marketplace_scroll`, restored in a `useLayoutEffect` so nothing flashes before the jump.
+Two things worth knowing if you touch this, Neeraj:
+- It only restores when `useNavigationType() === "POP"` — a real Back. Clicking "Marketplace" in
+  the navbar after viewing a product is a forward navigation and still means "start at the top".
+- `App.jsx:157` already skips its `scrollTo(0, 0)` on POP. That is necessary but not sufficient:
+  the browser restores a POP scroll only once the document is tall again, and this page mounts
+  empty and then fetches, so the native restore always loses that race.
+
+**Known gap, on both clients:** if a filter, a search term or a non-default sort was active, it
+is lost on the way back (it always has been — plain `useState` in a page that unmounts), so the
+signature check declines to restore and you land at the top as before. Making the filters
+survive the round trip is the real fix and it is not in this change. Worth doing next; it is
+your call on the web side.
+
+### 2. Product card redesign — MOBILE ONLY, and the web card is now out of step
+
+`mobile/src/components/ProductCard.tsx`, to a design the founders supplied. New order: condition
+pill + heart on one row, then a big right-aligned price, location, title, a divider, then the
+timestamp and the poster's name bottom-right. Photo is inset with rounded corners.
+
+- Price, location and title render into **fixed line boxes** (1 / 1 / 2 lines, scaled by the
+  student's font setting). Titles that wrap to two lines no longer push their neighbour's footer
+  out of line — the 2-up grid stays square.
+- Location is **sentence case**, not uppercase.
+- The condition pill is `font.sizes.nano` (9). `nano` is new, and it is the ONE exception to the
+  11dp floor from Block V-C — uppercase, bold, on its own saturated pill. The floor note in
+  `mobile/src/theme/index.ts` now says so explicitly. Do not reach for it elsewhere.
+- **Every surface now names the poster**, including your own listings on the dashboard.
+
+**For Neeraj:** the website card is unchanged and now differs. Nearest mismatch worth a decision
+either way: the web `.price` is `"Bree Serif"` at `font-weight: 800`
+(`frontend/src/components/ProductCard/ProductCard.module.css:247`) while the app's price is Inter
+Bold. Bree Serif only ships a 400, so that rule is faux-bolding a serif. Pick one and we will
+both use it.
+
+### 3. Font audit — two real bugs, both on the website
+
+Checked the app and the website for font consistency. Both intend the same pair (Inter for UI,
+Bree Serif for headings/brand) and the app is clean: zero `fontWeight` call sites (correct —
+React Native will not synthesize a weight for a custom family), 251 uses of `font.family.*`.
+
+**🔴 The website is not loading Bree Serif at all.** `frontend/index.html:10` has four stray
+spaces inside the Google Fonts URL — `css2?····family=Bree+Serif&…` — which turns that parameter
+into one named `"    family"` and Google drops it. Verified against the live API: the URL as
+shipped returns 21 Inter faces and **zero** Bree Serif; with the spaces removed it returns Bree
+Serif too. So all 45 `Bree Serif` declarations on the site — including `h1–h6, .brand-text,
+.brandName` in `global.css:49` — are rendering in the generic `serif` fallback (Times), while the
+app renders real Bree Serif. Deleting four spaces fixes it.
+
+**🔴 The website asks for Inter weights it never downloads.** The same link requests
+`wght@400;500;600`, but the stylesheets use `font-weight: 700` 64 times and `800` 13 times (plus
+a 900, a 300, a 100). Everything above 600 is browser-synthesized faux bold. The app loads real
+400/500/600/700/800. Fix is `wght@400;500;600;700;800`.
+
+**🟡 A doc contradicts both codebases:** `mobile/DESIGN.md:83` and `:157` ban Inter by name as
+the design face, while both clients ship it everywhere. Left alone, someone eventually "fixes"
+one client off Inter and the two stop matching. Either the doc gets an exception or we pick a
+new body face for both — a joint decision, not a silent one.
+
+### What NOT to do yet
+
+- **Don't mirror the mobile card redesign on the web by eye.** If we want parity, we should agree
+  the spec first (price face, whether the web tile also reserves its text boxes) rather than
+  converging twice.
+- **Don't "tidy" the signature check out of either scroll restore.** Without it, a student who was
+  browsing a filtered feed gets dropped at an arbitrary point in a list they did not ask for,
+  which is worse than landing at the top.
+
+---
+
+## 2026-09-20 — Phase 5 Block V-C: one type scale, and the product card shows two numbers instead of four (Vishwajeet)
+
+Mobile only. No backend, no database, no migration, no API change. **One thing in here needs
+you, Neeraj — the website half of the card change, see "For Neeraj" at the bottom.**
+
+### The measurement this started from
+
+`mobile/app` + `mobile/src` carried **20 distinct hardcoded `fontSize` values across 224 call
+sites**: 8, 8.5, 9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16, 17, 18, 19,
+22, 23, 24, 28, 30, 34, 40. `src/theme/index.ts` had a `sizes` block all along and **20 call
+sites used it**. Twenty sizes is not a type scale, it is the absence of one — when 13, 14 and
+15 all appear on one screen the eye cannot rank them, and that flatness is what has been
+getting reported as "cluttered".
+
+### The scale — seven tokens, in `mobile/src/theme/index.ts`
+
+| Token | dp | Replaced |
+|---|---|---|
+| `micro` | 11 | 8, 8.5, 9, 9.5, 10, 10.5 |
+| `caption` | 12 | 11, 11.5, 12, 12.5 |
+| `body` | 13 | 13, 13.5, 14, 14.5 |
+| `bodyLg` | 15 | 15, 16 |
+| `title` | 18 | 17, 18, 19 |
+| `headline` | 22 | 22, 23, 24 |
+| `display` | 28 | 28, 30, 34, 40 |
+
+**11dp is an absolute floor.** 22 call sites were at 8–10dp; small grey text is the single
+strongest "cheap app" signal there is, and Android's font slider goes *down* as well as up — at
+0.85 an 11dp label already renders at 9.35dp. Nothing smaller than `micro` exists to reach for.
+
+**The old `sm`/`md`/`lg`/`xl`/`xxl` names are gone, not aliased.** There were only 20 references
+and all 20 were migrated, so keeping dead names around would only have invited new ones.
+`xl` (24) and `xxl` (30) landed on `headline` (22) and `display` (28), so anything that used
+them is 2dp smaller.
+
+### Density — the part that matters more than the sizes
+
+`ProductCard` showed ten things per tile. A Blinkit tile shows five. **The view count and the
+comment count are gone from the card** (`mobile/src/components/ProductCard.tsx`). That ends the
+`1350 1 0 09h ago` collision permanently, at every font scale on every device, which no amount
+of `flexShrink` was going to do. Kept: condition badge, timestamp, like and save — the last two
+because they are *actions*, not stats.
+
+**They are removed from the CARD ONLY.** The product detail screen and the seller dashboard
+still show views and comments, and must keep doing so — that is where a seller is actually
+asking how a listing is doing.
+
+The price is now the largest element on the tile (`title`, 18, semibold) against the product
+title at `body` (13). One element per card should dominate; on a marketplace it is the price.
+
+### Product detail screen
+
+Title 24 → 18 and price 30 → 22, with `lineHeight` 30 → 24 to track. On a POCO X2 the hero block
+was pushing the seller row — the thing you came to the screen to act on — off the bottom. The
+price stays the bigger of the two, same as on the card.
+
+### What NOT to do yet
+
+- **Don't fix the layout consequences here.** 24 call sites moved *up* (11 → 12) and 22 moved up
+  from 8–10 → 11, so some rows are tighter than they were. Spacing, flex and layout are Block
+  V-D and must stay separately attributable — no spacing token, flex property or layout
+  direction was touched in this block.
+- **Don't add a third number back to the card.** If a stat feels missing, it belongs on the
+  detail screen.
+- **Don't compare against the pre-VR baselines for text size** — those predate V-B's font-scale
+  cap as well as this. `docs/screenshots/post-VB/` is the fair before.
+
+### ⚠️ For Neeraj — I EDITED `frontend/` (your area), on the human's instruction
+
+**`frontend/src/components/ProductCard/ProductCard.jsx` and its `.module.css` are changed.**
+The human asked for the stat removal on both clients, so the website card lost the same two
+numbers on 2026-09-20. Saying it loudly because the map in `CLAUDE.md` puts `frontend/` entirely
+with you and I would otherwise never touch it. Revert it if you disagree — I will not re-apply
+it without you.
+
+What changed, and nothing else did:
+
+| | |
+|---|---|
+| Removed | the `EyeIcon` + view-count span, and the `CommentIcon` + comment-count button, from `.stats` in the footer row |
+| Removed | the `EyeIcon` and `CommentIcon` definitions, and the `viewCount` / `commentCount` state, which nothing read any more |
+| Kept | the heart, the bookmark and the share button — actions, not stats |
+| Kept | `supabase.rpc("increment_product_views")` (now `:233`, it moved up when the icons went), untouched |
+| CSS | the now-dead `.stat` rule deleted. **No font-size, colour or spacing value in `frontend/` was changed** — the web type scale is untouched and V-C's seven tokens are mobile-only |
+
+`npx vite build` passes (1891 modules, no warnings beyond the pre-existing chunk-size one).
+
+**Two things I could not decide for you:**
+
+- ⚠ **The comment button was the web's only "jump straight to the comments" shortcut** —
+  it called ``onCardClick(`${product.id}#comments`)``. Clicking the card still opens the detail
+  page, it just lands at the top. Mobile never had the shortcut, so the two clients now match,
+  but if the web wants it back it needs to live somewhere other than a counter.
+- ⚠ **`increment_product_views` is still called from the card**, so the web still counts a view
+  for a listing that is merely scrolled past — on a card that no longer shows the number. That
+  is half of `docs/CURRENT_STATE.md` open issue 2 (two independent increment paths) and deleting
+  it in passing would have settled that question the wrong way round. It is now more clearly
+  wrong than it was, which is an argument for finishing issue 2 this phase.
+
+---
+
+## 2026-09-19 (evening) — Phase 5 Block V-B: the real font-scale clamp — `AppText` / `AppTextInput` (Vishwajeet)
+
+Mobile only. No backend, no database, no API change. Logged late — the work was done on the
+19th and this entry was written on the 20th alongside V-C.
+
+### The problem
+
+Android's Settings → Display → Font size multiplies every `<Text>` in the app by up to ~1.30,
+and iOS Dynamic Type goes further. Our layouts start failing at about **1.15**: the product-card
+stats row overlaps itself and the auth headline runs into the settings gear on a Galaxy A03s at
+**default** font size. That is what has been showing up as "text is cropped on my phone" while
+looking fine on the next phone along.
+
+### The fix
+
+`MAX_FONT_SCALE = 1.15` in `mobile/src/theme/index.ts`, applied through two new drop-in
+components rather than at each call site — a cap you have to remember is a cap that gets
+forgotten:
+
+- **`mobile/src/components/AppText.tsx`** — `<Text>` with `maxFontSizeMultiplier` defaulted to
+  the cap. Every prop and the ref are forwarded untouched, so it is a drop-in at the type level.
+- **`mobile/src/components/AppTextInput.tsx`** — the same for `<TextInput>`.
+
+Migrated: **273 `<AppText>` and 21 `<AppTextInput>` call sites across 27 files.**
+
+Two escape hatches, both explicit: `maxFontSizeMultiplier={1.4}` raises the cap for one element,
+`{null}` removes it. Neither is used anywhere today.
+
+### The one that looked like a fix and was not
+
+`ProductCard.tsx` carried `const DENSE_TEXT_SCALE_CAP = 1.3` on four stat labels. **1.30 is
+where Android's own slider tops out**, so it clamped nothing on any real device — it read as a
+fix in review and behaved as a no-op for as long as it existed. Deleted. If you ever raise the
+number in `MAX_FONT_SCALE`, check it against the slider's real maximum before assuming it does
+anything.
+
+### What stayed on plain `<Text>`, deliberately
+
+Roughly 20 call sites: the auth headline (`login.tsx:852`, `:863`) and the empty- and
+error-state messages across the marketplace, chat, dashboard, public profile, sell, comments and
+the swipe deck. They sit alone on the screen with room to grow, so they honour the student's
+setting in full.
+
+**`allowFontScaling={false}` appears nowhere in this app and must not be added.** It is not an
+escape hatch — it is the thing these two components exist to avoid. A student who needs larger
+text still gets it, up to 15%; turning scaling off would make the app unreadable for exactly the
+people the setting is for.
+
+### Screenshots
+
+`docs/screenshots/post-VB/` — the same five POCO X2 screens as the V-0 baselines, at default
+font size and default display size, after the cap.
+
+⚠ One was committed as `poco-05-message.jpg` where the baseline is `poco-05-chat.jpg`; renamed
+to match, so `diff -r pre-VR post-VB` lines the pairs up.
+
+**Neeraj — your baselines have the same problem, and they are already committed:**
+`oppo-04-Product detail.jpeg`, `oppo-05-Chat thread.jpeg`, `samsung-04-product detail.jpeg`,
+`samsung-05-Chat thread.jpeg` and `samsung-01-auth.png.jpeg` carry spaces, capitals and in one
+case a double extension. The V-0 entry set the rule — `<device>-NN-<screen>.<ext>`, lower case,
+hyphens only — because spaces in a committed path break shell one-liners and make the folder
+diff unusable. Yours are the only ones off it; rename them when you are next in there.
+
+### What NOT to do yet
+
+- **Don't read the cap as a licence to keep shrinking type.** V-C is the type scale, and it
+  raised the floor to 11dp. The cap governs how far a size may grow, not how small it may start.
+- **Don't add `maxFontSizeMultiplier` at call sites.** If a screen needs a different cap, that is
+  a layout bug — Block V-D.
+- **Don't compare post-VB against any mobile screenshot older than 19 Sep**: the POCO was on a
+  reduced font size (MIUI "S", roughly 0.9) until that morning. See the V-0 entry.
+
+---
+
+## 2026-09-19 — 📌 DECISION: no search box in Phase 5; user search moves to Phase 8 (Vishwajeet)
+
+Answering Neeraj's open question from N-A part 1. Two things, both now written into the plan
+so they survive this conversation.
+
+### 1. There is no search box, and we are not building one in Phase 5
+
+**Confirmed: nothing in the web app or the mobile app calls `GET /api/users/search`.** The
+Phase 5 runbook assumed the website had a search box — it never has. That assumption is the
+reason N-A part 2 and one sign-off line could not be carried out.
+
+**The endpoint stays live and verified by direct call. The UI moves to Phase 8**, with the
+social graph. The reason is not scheduling convenience: a result row whose only possible
+action is "open profile" is a thin feature, and the same row with follow, block and campus
+context is the real one. Phase 5 is pagination and navigation; designing a people-search
+surface does not belong in it.
+
+Recorded in `docs/YAHORA_BUILD_PLAN.md`:
+
+| Where | What changed |
+|---|---|
+| Phase 5 | explicit "NOT in Phase 5: a user-search screen", with the reason |
+| Phase 8 | user search (web + mobile) added, noting the backend has been ready since V-A |
+| §7.3 Mobile | "User search" moved from phase 5 → 8 |
+| §7.4 Web | new row — the web search box does not exist either; phase 8 |
+
+And in `docs/PHASE_5_RUNBOOK.md`:
+
+- The sign-off line **"👁️ User search renders results on the live website" is STRUCK.** It is
+  not a failure and not deferred work anyone owes — there is nothing to render it.
+- **N-A part 2 is unblocked and unchanged otherwise:** repeat the part-1 direct call against
+  production, then run the `grep -rn "\.users\b" frontend/src/ | grep -i search` check. That
+  grep still closes the Phase 4 `{ items }` sign-off line — a rename is worth confirming even
+  with no UI on top of it.
+- CHECKPOINT N-A no longer includes "the web renders them".
+
+⚠️ Use a `q` that really matches a user. The broken RPC returned an empty list **without
+error** for a term that matched nothing, so an empty result never proved anything either way.
+
+### 2. Demo accounts would be visible to real students in search — unfixed, Phase 8
+
+`Yahora University (Demo)` (`demo.yahora.com`) users are ordinary `public.users` rows, and
+`search_users()` filters nobody out. The moment a real search box ships, a student searching a
+common name can get demo personas — and `guest_*` throwaways, which live up to 7 days before
+`cleanup_demo_users()` removes them — mixed in with real classmates.
+
+**This is not a bug in V-A.** The RPC never excluded them; it simply never returned anything
+at all, so nobody could see it.
+
+Open questions, to settle when the box is built, not now:
+
+- **Where does the exclusion live** — inside `search_users()`, so every caller inherits it and
+  no future endpoint can forget, or in the controller? My instinct is the RPC.
+- **Should a demo user searching still see their own campus?** Otherwise the demo experience
+  has a search box that returns nothing, which is its own kind of broken.
+- **There is no `is_demo` flag.** The only handle today is
+  `universities.domain = 'demo.yahora.com'`. A column may be worth it if anything else ever
+  needs the same distinction.
+
+🚨 **You cannot reproduce this locally.** The seed creates no demo-campus users — I checked
+after `db reset`: zero rows. It exists only on production. Same category as the university-
+domain divergence in §7.1: local green, production wrong.
+
+### What NOT to do yet
+
+- **Don't build a search screen on either client.** Not web, not mobile, not "just a small
+  one" — it is Phase 8 work and it needs the demo-account exclusion in front of it.
+- **Don't add the exclusion to `search_users()` yet either.** That is a migration, it is mine,
+  and it belongs with the UI that makes it observable.
+
+---
+
 
 ## 2026-09-19 — Phase 5 Block V-A: `search_users()` type fix — user search has never worked (Vishwajeet)
 

@@ -170,6 +170,15 @@ export interface ProductCardItem {
   location?: string | null;
   is_liked?: boolean;
   is_saved?: boolean;
+  /**
+   * The joined seller, when the row carries one — marketplace feed rows
+   * (`MarketplaceProduct`) do; the dashboard and public-profile rows do not,
+   * because the screen already knows whose listings it is showing.
+   *
+   * `ProductCard` shows the seller on EVERY card, so it reads this as the
+   * fallback for a screen that did not pass `sellerName` / `sellerAvatarUrl`.
+   */
+  seller?: { full_name: string | null; avatar_url: string | null } | null;
 }
 
 /* ────────────────────────── Messaging ────────────────────────── */

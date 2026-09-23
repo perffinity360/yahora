@@ -184,6 +184,8 @@
   align-items: center;
   justify-content: center;
   font-family: "Bree Serif", serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
   font-size: 1.8rem;
   letter-spacing: 0.12em;
   color: #fff;
@@ -245,7 +247,8 @@
 /* Price — right side, big, purple */
 .price {
   font-size: 1.20rem;
-  font-weight: 800;
+  /* Every price on the site is Bree Serif 400 — it ships no other weight. */
+  font-weight: 400;
   color: var(--purple, #800080);
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -286,16 +289,9 @@
   gap: 10px;
 }
 
-/* Read-only stat (views, comments) */
-.stat {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #888;
-  letter-spacing: 0.01em;
-}
+/* The read-only `.stat` rule (views, comments) was removed on 2026-09-20 with
+   the two counters it styled — Phase 5, Block V-C. Nothing renders a read-only
+   stat on this card any more; everything left in `.stats` is a button. */
 
 /* Interactive stat button (like, save, share) */
 .statBtn {
@@ -400,7 +396,9 @@
   font-size: 0.80rem;
   color: #aaa;
   margin: 0;
-  font-weight: 100;
+  /* 400, not 100: Inter ships 400-800 here and 100 was rendering as 400
+     anyway — now it says so. */
+  font-weight: 400;
 }
 
 /* ── Dashboard Specific / Owner Actions ── */

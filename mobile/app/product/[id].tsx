@@ -1,4 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,13 +13,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  View,
   useWindowDimensions,
+  View,
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton, CircleButton } from '../../src/components/CircleButton';
+import { AppText } from '../../src/components/AppText';
+import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
 import { CommentSection, MAX_COMMENT_LENGTH } from '../../src/components/CommentThread';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
@@ -142,25 +145,15 @@ export default function ProductDetailScreen() {
           ) : null}
 
           {/* Floating top controls — always reachable over the hero. */}
-          <Pressable
-            onPress={goBack}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            style={({ pressed }) => [styles.topBtn, styles.topBtnLeft, { top: floatingTop }, pressed && styles.topBtnPressed]}
-          >
-            <Feather name="arrow-left" size={22} color={colors.purpleDark} />
-          </Pressable>
+          <BackButton onPress={goBack} style={[styles.topBtn, styles.topBtnLeft, { top: floatingTop }]} />
           {product ? (
-            <Pressable
+            <CircleButton
+              icon="share-2"
+              iconSize={18}
               onPress={handleShare}
-              hitSlop={8}
-              accessibilityRole="button"
               accessibilityLabel="Share this item"
-              style={({ pressed }) => [styles.topBtn, styles.topBtnRight, { top: floatingTop }, pressed && styles.topBtnPressed]}
-            >
-              <Feather name="share-2" size={19} color={colors.purpleDark} />
-            </Pressable>
+              style={[styles.topBtn, styles.topBtnRight, { top: floatingTop }]}
+            />
           ) : null}
         </SafeAreaView>
       </KeyboardAvoider>
@@ -354,13 +347,13 @@ function Content({
 
           {/* Condition badge */}
           <View style={[styles.condBadge, { backgroundColor: cond.bg }]}>
-            <Text style={[styles.condText, { color: cond.text }]}>{condLabel}</Text>
+            <AppText style={[styles.condText, { color: cond.text }]}>{condLabel}</AppText>
           </View>
 
           {/* Sold badge */}
           {sold ? (
             <View style={styles.soldBadge}>
-              <Text style={styles.soldText}>SOLD</Text>
+              <AppText style={styles.soldText}>SOLD</AppText>
             </View>
           ) : null}
 
@@ -377,8 +370,8 @@ function Content({
         {/* ── Info ── */}
         <View style={styles.body}>
           <View style={styles.card}>
-            <Text style={styles.title}>{product.title}</Text>
-            <Text style={styles.price}>{formatPrice(product.price)}</Text>
+            <AppText style={styles.title}>{product.title}</AppText>
+            <AppText style={styles.price}>{formatPrice(product.price)}</AppText>
 
             <View style={styles.metaRow}>
               {product.category ? <MetaChip icon="tag" label={product.category} /> : null}
@@ -389,45 +382,49 @@ function Content({
             <View style={styles.statsRow}>
               <View style={styles.stat}>
                 <Feather name="eye" size={15} color={colors.mutedText} />
-                <Text style={styles.statText}>{product.views ?? 0} views</Text>
+                <AppText style={styles.statText}>{product.views ?? 0} views</AppText>
               </View>
               <View style={styles.stat}>
-                <Feather name="heart" size={15} color={liked ? colors.pinkDark : colors.mutedText} />
-                <Text style={[styles.statText, liked && styles.statTextActive]}>
+                <MaterialCommunityIcons
+                  name={liked ? 'heart' : 'heart-outline'}
+                  size={15}
+                  color={liked ? colors.pinkDark : colors.mutedText}
+                />
+                <AppText style={[styles.statText, liked && styles.statTextActive]}>
                   {product.likes_count ?? 0} likes
-                </Text>
+                </AppText>
               </View>
             </View>
           </View>
 
           {/* ── Description ── */}
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>DESCRIPTION</Text>
-            <Text style={styles.description}>
+            <AppText style={styles.sectionLabel}>DESCRIPTION</AppText>
+            <AppText style={styles.description}>
               {product.description?.trim() || 'No description provided.'}
-            </Text>
+            </AppText>
           </View>
 
           {/* ── Seller ── */}
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>SELLER</Text>
+            <AppText style={styles.sectionLabel}>SELLER</AppText>
             <Pressable
               onPress={onOpenSeller}
               accessibilityRole="button"
               accessibilityLabel={`View ${product.seller.full_name ?? 'seller'}'s profile`}
               style={({ pressed }) => [styles.sellerRow, pressed && styles.sellerRowPressed]}
             >
-              <Avatar name={product.seller.full_name} uri={product.seller.avatar_url} size={48} />
+              <Avatar name={product.seller.full_name} uri={product.seller.avatar_url} size={48} ringed />
               <View style={styles.sellerInfo}>
-                <Text style={styles.sellerName} numberOfLines={1}>
+                <AppText style={styles.sellerName} numberOfLines={1}>
                   {product.seller.full_name || 'Yahora student'}
-                </Text>
+                </AppText>
                 {eduLine ? (
-                  <Text style={styles.sellerEdu} numberOfLines={1}>
+                  <AppText style={styles.sellerEdu} numberOfLines={1}>
                     {eduLine}
-                  </Text>
+                  </AppText>
                 ) : null}
-                <Text style={styles.sellerLink}>View profile →</Text>
+                <AppText style={styles.sellerLink}>View profile →</AppText>
               </View>
               <Feather name="chevron-right" size={20} color={colors.mutedLabel} />
             </Pressable>
@@ -462,7 +459,7 @@ function Content({
         // so it already covers the home indicator — no bottom inset needed.
         <View style={[styles.actionWrap, { paddingBottom: spacing.md }]}>
           <View style={styles.composerHead}>
-            <Text style={styles.composerTitle}>Ask the seller</Text>
+            <AppText style={styles.composerTitle}>Ask the seller</AppText>
             <Pressable
               onPress={closeComposer}
               hitSlop={10}
@@ -470,12 +467,12 @@ function Content({
               accessibilityLabel="Cancel question"
               style={({ pressed }) => [styles.composerCancel, pressed && styles.composerCancelPressed]}
             >
-              <Text style={styles.composerCancelText}>Cancel</Text>
+              <AppText style={styles.composerCancelText}>Cancel</AppText>
             </Pressable>
           </View>
           <View style={styles.composerRow}>
             <Avatar name={viewerName} uri={viewerAvatarUrl} size={34} />
-            <TextInput
+            <AppTextInput
               value={draft}
               onChangeText={setDraft}
               autoFocus
@@ -516,9 +513,9 @@ function Content({
       ) : (
       <View style={[styles.actionWrap, { paddingBottom: bottomInset + spacing.sm }]}>
         {isForeignCampus && !isOwnListing ? (
-          <Text style={styles.foreignNote}>
+          <AppText style={styles.foreignNote}>
             Viewing another campus — messaging is limited to your home campus.
-          </Text>
+          </AppText>
         ) : null}
         <View style={styles.actionBar}>
           <Pressable
@@ -527,7 +524,15 @@ function Content({
             accessibilityLabel={liked ? 'Unlike' : 'Like'}
             style={({ pressed }) => [styles.circleBtn, liked && styles.circleBtnLike, pressed && styles.circlePressed]}
           >
-            <Feather name="heart" size={22} color={liked ? colors.pinkDark : colors.mutedText} />
+            {/* Filled when liked, same as the product card's heart — see the
+                note beside it in src/components/ProductCard.tsx. Feather has
+                no solid heart (or bookmark), so the two hearts and the
+                bookmark below are the only MCI glyphs on this screen. */}
+            <MaterialCommunityIcons
+              name={liked ? 'heart' : 'heart-outline'}
+              size={22}
+              color={liked ? colors.pinkDark : colors.mutedText}
+            />
           </Pressable>
           <Pressable
             onPress={onSave}
@@ -535,18 +540,25 @@ function Content({
             accessibilityLabel={saved ? 'Remove from wishlist' : 'Save to wishlist'}
             style={({ pressed }) => [styles.circleBtn, saved && styles.circleBtnSave, pressed && styles.circlePressed]}
           >
-            <Feather name="bookmark" size={21} color={saved ? colors.purple : colors.mutedText} />
+            {/* Filled when saved, for the same reason the heart is: a colour
+                change alone is too weak a signal. MCI, one family for both
+                faces, so the silhouette does not jump on tap. */}
+            <MaterialCommunityIcons
+              name={saved ? 'bookmark' : 'bookmark-outline'}
+              size={22}
+              color={saved ? colors.purple : colors.mutedText}
+            />
           </Pressable>
 
           {isOwnListing ? (
             <View style={[styles.msgBtn, styles.ownPill]}>
               <Feather name="user-check" size={16} color={colors.purpleDark} />
-              <Text style={styles.ownPillText}>Your listing</Text>
+              <AppText style={styles.ownPillText}>Your listing</AppText>
             </View>
           ) : isForeignCampus ? (
             <View style={[styles.msgBtn, styles.msgDisabled]}>
               <Feather name="lock" size={16} color={colors.mutedLabel} />
-              <Text style={styles.msgDisabledText}>Home campus only</Text>
+              <AppText style={styles.msgDisabledText}>Home campus only</AppText>
             </View>
           ) : (
             <Pressable
@@ -557,7 +569,7 @@ function Content({
             >
               <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.msgGradient}>
                 <Feather name="message-square" size={17} color={colors.white} />
-                <Text style={styles.msgText}>Message Seller</Text>
+                <AppText style={styles.msgText}>Message Seller</AppText>
               </LinearGradient>
             </Pressable>
           )}
@@ -573,9 +585,9 @@ function MetaChip({ icon, label }: { icon: keyof typeof Feather.glyphMap; label:
   return (
     <View style={styles.metaChip}>
       <Feather name={icon} size={12} color={colors.mutedText} />
-      <Text style={styles.metaChipText} numberOfLines={1}>
+      <AppText style={styles.metaChipText} numberOfLines={1}>
         {label}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -622,11 +634,11 @@ function ErrorState({ onRetry, onBack }: { onRetry: () => void; onBack: () => vo
       <Pressable onPress={onRetry} style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnDim]}>
         <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.retryGradient}>
           <Feather name="refresh-cw" size={16} color={colors.white} />
-          <Text style={styles.retryText}>Retry</Text>
+          <AppText style={styles.retryText}>Retry</AppText>
         </LinearGradient>
       </Pressable>
       <Pressable onPress={onBack} hitSlop={8} style={styles.backLink}>
-        <Text style={styles.backLinkText}>Go back</Text>
+        <AppText style={styles.backLinkText}>Go back</AppText>
       </Pressable>
     </View>
   );
@@ -641,26 +653,12 @@ const styles = StyleSheet.create({
   topBtn: {
     // `top` is applied inline from the safe-area inset: an absolutely
     // positioned child ignores the padding SafeAreaView adds, so a static
-    // `top` here slides under the status bar in full-screen mode.
+    // `top` here slides under the status bar in full-screen mode. Position
+    // only — the look lives in src/components/CircleButton.tsx.
     position: 'absolute',
-    zIndex: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.glassBorder,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    shadowColor: colors.black,
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
   },
   topBtnLeft: { left: spacing.lg },
   topBtnRight: { right: spacing.lg },
-  topBtnPressed: { backgroundColor: colors.pinkLight },
 
   /* Gallery */
   gallery: {
@@ -685,9 +683,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+  // Same badge as the card's, so the same weight and size. See
+  // `conditionText` in src/components/ProductCard.tsx.
   condText: {
-    fontFamily: font.family.extrabold,
-    fontSize: 10,
+    fontFamily: font.family.bold,
+    fontSize: font.sizes.micro,
     letterSpacing: 0.6,
   },
   soldBadge: {
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
   },
   soldText: {
     fontFamily: font.family.extrabold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     letterSpacing: 2,
     color: colors.white,
   },
@@ -747,15 +747,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
+  // ── THE HERO BLOCK, STEPPED DOWN ONE RUNG (Block V-C) ──
+  // Title was 24 and price 30, which put a two-line serif headline and a
+  // 30dp number above the fold and pushed the seller row — the thing you came
+  // here to act on — off the bottom of a POCO X2 (see
+  // docs/screenshots/post-VB/poco-04-product-detail.jpg). `title` and
+  // `headline` say the same thing in half the vertical space.
+  //
+  // The price stays the bigger of the two, as it is on the card: on a
+  // marketplace the price is the decision. Hierarchy is the RATIO (22 against
+  // 18), not the absolute size.
   title: {
     fontFamily: font.family.serif,
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: font.sizes.title,
+    // Tracks the font, ~1.35x. It was 30 for a 24dp title; left at 30 it would
+    // have opened a gap the smaller type does not need.
+    lineHeight: 24,
     color: colors.blackSoft,
   },
   price: {
     fontFamily: font.family.serif,
-    fontSize: 30,
+    fontSize: font.sizes.headline,
     color: colors.purple,
     marginTop: 6,
   },
@@ -780,7 +792,7 @@ const styles = StyleSheet.create({
   metaChipText: {
     flexShrink: 1,
     fontFamily: font.family.semibold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   statsRow: {
@@ -798,7 +810,7 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
   },
   statTextActive: {
@@ -807,14 +819,14 @@ const styles = StyleSheet.create({
 
   sectionLabel: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     color: colors.mutedLabel,
     marginBottom: spacing.sm,
   },
   description: {
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 22,
     color: colors.blackSoft,
   },
@@ -834,18 +846,18 @@ const styles = StyleSheet.create({
   },
   sellerName: {
     fontFamily: font.family.bold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
   },
   sellerEdu: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
     marginTop: 2,
   },
   sellerLink: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.blueDark,
     marginTop: 4,
   },
@@ -859,7 +871,7 @@ const styles = StyleSheet.create({
   },
   composerTitle: {
     fontFamily: font.family.bold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
   composerCancel: {
@@ -872,7 +884,7 @@ const styles = StyleSheet.create({
   },
   composerCancelText: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
   composerRow: {
@@ -891,7 +903,7 @@ const styles = StyleSheet.create({
     borderColor: colors.inputBorderFocus,
     backgroundColor: colors.white,
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 19,
     color: colors.blackSoft,
     textAlignVertical: 'top',
@@ -933,7 +945,7 @@ const styles = StyleSheet.create({
   },
   foreignNote: {
     fontFamily: font.family.medium,
-    fontSize: 11.5,
+    fontSize: font.sizes.caption,
     lineHeight: 15,
     color: colors.purpleDark,
     textAlign: 'center',
@@ -983,7 +995,7 @@ const styles = StyleSheet.create({
   },
   msgText: {
     fontFamily: font.family.semibold,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.white,
   },
   msgDisabled: {
@@ -997,7 +1009,7 @@ const styles = StyleSheet.create({
   },
   msgDisabledText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.mutedLabel,
   },
   ownPill: {
@@ -1011,7 +1023,7 @@ const styles = StyleSheet.create({
   },
   ownPillText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.purpleDark,
   },
 
@@ -1035,13 +1047,13 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontFamily: font.family.bold,
-    fontSize: 17,
+    fontSize: font.sizes.title,
     color: colors.blackSoft,
     textAlign: 'center',
   },
   errorText: {
     fontFamily: font.family.regular,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',
     marginTop: spacing.xs,
@@ -1065,7 +1077,7 @@ const styles = StyleSheet.create({
   },
   retryText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
   backLink: {
@@ -1074,7 +1086,7 @@ const styles = StyleSheet.create({
   },
   backLinkText: {
     fontFamily: font.family.semibold,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     color: colors.purpleDark,
   },
 });

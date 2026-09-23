@@ -9,12 +9,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackButton } from '../src/components/CircleButton';
+import { AppText } from '../src/components/AppText';
+import { AppTextInput } from '../src/components/AppTextInput';
 import { AuroraBackground } from '../src/components/AuroraBackground';
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { SearchablePicker } from '../src/components/SearchablePicker';
@@ -164,36 +165,36 @@ export default function EditProfileScreen() {
           >
             <View style={styles.formWrapper}>
               <View style={styles.header}>
-                <Text style={styles.title}>Edit Your Profile</Text>
-                <Text style={styles.subtitle}>
+                <AppText style={styles.title}>Edit Your Profile</AppText>
+                <AppText style={styles.subtitle}>
                   Keep your campus identity fresh —{'\n'}changes show up everywhere instantly.
-                </Text>
+                </AppText>
               </View>
 
               {error ? (
                 <View style={styles.banner}>
-                  <Text style={styles.bannerText}>{error}</Text>
+                  <AppText style={styles.bannerText}>{error}</AppText>
                 </View>
               ) : null}
               {listsError ? (
                 <View style={styles.banner}>
-                  <Text style={styles.bannerText}>
+                  <AppText style={styles.bannerText}>
                     Couldn&apos;t load academic options. Check your connection and try again.
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
 
               <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Identity</Text>
+                <AppText style={styles.sectionTitle}>Identity</AppText>
 
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.label}>FULL NAME</Text>
-                    <Text style={styles.required}> *</Text>
+                    <AppText style={styles.label}>FULL NAME</AppText>
+                    <AppText style={styles.required}> *</AppText>
                   </View>
                   <View style={[styles.inputRow, nameFocused && styles.inputRowFocused]}>
                     <Feather name="user" size={18} color={colors.purple} style={styles.inputIcon} />
-                    <TextInput
+                    <AppTextInput
                       value={fullName}
                       onChangeText={setFullName}
                       onFocus={() => setNameFocused(true)}
@@ -207,9 +208,9 @@ export default function EditProfileScreen() {
                   </View>
                 </View>
 
-                <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
+                <AppText style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
                   Academic Details
-                </Text>
+                </AppText>
 
                 <SearchablePicker
                   label="Qualification"
@@ -249,16 +250,16 @@ export default function EditProfileScreen() {
                   loading={specsQuery.isLoading}
                 />
 
-                <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Personal Touch</Text>
+                <AppText style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Personal Touch</AppText>
 
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.label}>SHORT BIO</Text>
-                    <Text style={styles.optional}> (Optional)</Text>
-                    <Text style={styles.charCount}>{bio.length}/250</Text>
+                    <AppText style={styles.label}>SHORT BIO</AppText>
+                    <AppText style={styles.optional}> (Optional)</AppText>
+                    <AppText style={styles.charCount}>{bio.length}/250</AppText>
                   </View>
                   <View style={[styles.textareaWrap, bioFocused && styles.inputRowFocused]}>
-                    <TextInput
+                    <AppTextInput
                       value={bio}
                       onChangeText={(v) => setBio(v.slice(0, 250))}
                       onFocus={() => setBioFocused(true)}
@@ -291,7 +292,7 @@ export default function EditProfileScreen() {
                   {saving ? (
                     <ActivityIndicator color={colors.white} />
                   ) : (
-                    <Text style={styles.submitText}>Save Changes</Text>
+                    <AppText style={styles.submitText}>Save Changes</AppText>
                   )}
                 </LinearGradient>
               </Pressable>
@@ -300,16 +301,12 @@ export default function EditProfileScreen() {
         </KeyboardAvoider>
 
         {/* Rendered last + raised so it stays above the form's elevated card. */}
-        <Pressable
+        <BackButton
           onPress={goBack}
           disabled={saving}
-          hitSlop={8}
-          accessibilityRole="button"
           accessibilityLabel="Back to dashboard"
-          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
-        >
-          <Feather name="arrow-left" size={22} color={colors.purpleDark} />
-        </Pressable>
+          style={[styles.backBtn, { top: floatingTop }]}
+        />
       </SafeAreaView>
     </View>
   );
@@ -326,27 +323,10 @@ const styles = StyleSheet.create({
   backBtn: {
     // `top` is applied inline from useFloatingTopInset(): an absolutely
     // positioned child ignores the padding SafeAreaView adds, so a static
-    // `top` here slides under the status bar in full-screen mode.
+    // `top` here slides under the status bar in full-screen mode. Position
+    // only — the look lives in src/components/CircleButton.tsx.
     position: 'absolute',
     left: spacing.lg,
-    zIndex: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.cardSurface,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    shadowColor: colors.purple,
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  backBtnPressed: {
-    backgroundColor: colors.pinkLight,
-    borderColor: colors.inputBorderFocus,
   },
   scroll: {
     flexGrow: 1,
@@ -368,13 +348,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: 28,
+    fontSize: font.sizes.display,
     color: colors.purpleDark,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 20,
     color: colors.mutedText,
     textAlign: 'center',
@@ -391,7 +371,7 @@ const styles = StyleSheet.create({
   },
   bannerText: {
     fontFamily: font.family.medium,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.errorText,
     textAlign: 'center',
   },
@@ -411,7 +391,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: colors.purple,
@@ -432,24 +412,24 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     color: colors.mutedLabel,
     textTransform: 'uppercase',
   },
   required: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.pinkDark,
   },
   optional: {
     fontFamily: font.family.regular,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
   },
   charCount: {
     fontFamily: font.family.medium,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
     marginLeft: 'auto',
   },
@@ -475,7 +455,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     paddingVertical: 0,
     minHeight: 44,
@@ -491,7 +471,7 @@ const styles = StyleSheet.create({
   },
   textarea: {
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     lineHeight: 21,
     color: colors.blackSoft,
     minHeight: 88,
@@ -521,7 +501,7 @@ const styles = StyleSheet.create({
   },
   submitText: {
     fontFamily: font.family.semibold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.white,
   },
 });

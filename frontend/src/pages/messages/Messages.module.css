@@ -480,7 +480,9 @@
 .chatHeaderName {
   margin: 0;
   font-size: 0.95rem;
-  font-weight: 700;
+  /* Bree Serif (inherited from the h1-h6 rule in global.css) ships one
+     weight — 400. Anything heavier here was browser-faked. */
+  font-weight: 400;
   color: #1a0a2e;
   white-space: nowrap;
   overflow: hidden;
@@ -1057,6 +1059,8 @@
 }
 .noChatTitle {
   font-family: "Bree Serif", Georgia, serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
   font-size: 1.35rem;
   color: #1a0a2e;
   margin: 0 0 8px 0;

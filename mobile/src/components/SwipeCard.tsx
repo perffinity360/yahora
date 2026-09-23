@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle } from 'react';
-import { StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -9,6 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { AppText } from './AppText';
 import { colors, font, radius, spacing } from '../theme';
 import type { MarketplaceProduct } from '../types';
 import { ProductCard } from './ProductCard';
@@ -143,14 +144,19 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
         {isTop ? (
           <>
             <Animated.View style={[styles.stamp, styles.likeStamp, likeStyle]} pointerEvents="none">
-              <Text style={styles.likeText}>LIKE</Text>
+              <AppText style={styles.likeText}>LIKE</AppText>
             </Animated.View>
             <Animated.View style={[styles.stamp, styles.passStamp, passStyle]} pointerEvents="none">
-              <Text style={styles.passText}>PASS</Text>
+              <AppText style={styles.passText}>PASS</AppText>
             </Animated.View>
           </>
         ) : null}
-        <ProductCard product={product} />
+        {/* The deck row carries its joined seller, same as the feed. */}
+        <ProductCard
+          product={product}
+          sellerName={product.seller?.full_name}
+          sellerAvatarUrl={product.seller?.avatar_url}
+        />
       </Animated.View>
     </GestureDetector>
   );
@@ -190,13 +196,13 @@ const styles = StyleSheet.create({
   },
   likeText: {
     fontFamily: font.family.extrabold,
-    fontSize: 18,
+    fontSize: font.sizes.title,
     letterSpacing: 1.5,
     color: colors.white,
   },
   passText: {
     fontFamily: font.family.extrabold,
-    fontSize: 18,
+    fontSize: font.sizes.title,
     letterSpacing: 1.5,
     color: colors.white,
   },

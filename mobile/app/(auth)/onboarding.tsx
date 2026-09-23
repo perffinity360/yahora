@@ -13,12 +13,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackButton } from '../../src/components/CircleButton';
+import { AppText } from '../../src/components/AppText';
+import { AppTextInput } from '../../src/components/AppTextInput';
 import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { MIN_PASSWORD_LENGTH, PasswordField } from '../../src/components/PasswordField';
@@ -477,10 +478,10 @@ export default function OnboardingScreen() {
           >
             <View style={styles.formWrapper}>
               <View style={styles.header}>
-                <Text style={styles.title}>Complete Your Profile</Text>
-                <Text style={styles.subtitle}>
+                <AppText style={styles.title}>Complete Your Profile</AppText>
+                <AppText style={styles.subtitle}>
                   Let your campus know who you are{'\n'}before you dive in.
-                </Text>
+                </AppText>
               </View>
 
               {isDemoUser ? (
@@ -492,27 +493,27 @@ export default function OnboardingScreen() {
                   {skipping ? (
                     <ActivityIndicator color={colors.purple} />
                   ) : (
-                    <Text style={styles.skipBtnText}>Skip for now</Text>
+                    <AppText style={styles.skipBtnText}>Skip for now</AppText>
                   )}
                 </Pressable>
               ) : null}
 
               {error ? (
                 <View style={styles.banner}>
-                  <Text style={styles.bannerText}>{error}</Text>
+                  <AppText style={styles.bannerText}>{error}</AppText>
                 </View>
               ) : null}
               {listsError ? (
                 <View style={styles.banner}>
-                  <Text style={styles.bannerText}>
+                  <AppText style={styles.bannerText}>
                     Couldn&apos;t load academic options. Check your connection and try again.
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
 
               <View style={styles.card}>
                 {/* Section 1: Identity */}
-                <Text style={styles.sectionTitle}>Identity</Text>
+                <AppText style={styles.sectionTitle}>Identity</AppText>
 
                 <View style={styles.avatarRow}>
                   <Pressable
@@ -542,22 +543,22 @@ export default function OnboardingScreen() {
                       ]}
                     >
                       <Feather name="image" size={16} color={colors.purple} />
-                      <Text style={styles.uploadBtnText}>
+                      <AppText style={styles.uploadBtnText}>
                         {uploading ? 'Uploading…' : 'Upload Photo (Optional)'}
-                      </Text>
+                      </AppText>
                     </Pressable>
-                    <Text style={styles.helperText}>A real photo builds trust.</Text>
+                    <AppText style={styles.helperText}>A real photo builds trust.</AppText>
                   </View>
                 </View>
 
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.label}>FULL NAME</Text>
-                    <Text style={styles.required}> *</Text>
+                    <AppText style={styles.label}>FULL NAME</AppText>
+                    <AppText style={styles.required}> *</AppText>
                   </View>
                   <View style={[styles.inputRow, nameFocused && styles.inputRowFocused]}>
                     <Feather name="user" size={18} color={colors.purple} style={styles.inputIcon} />
-                    <TextInput
+                    <AppTextInput
                       value={fullName}
                       onChangeText={setFullName}
                       onFocus={() => setNameFocused(true)}
@@ -574,8 +575,8 @@ export default function OnboardingScreen() {
                 {/* Username — required by POST /api/auth/onboarding. */}
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.label}>USERNAME</Text>
-                    <Text style={styles.required}> *</Text>
+                    <AppText style={styles.label}>USERNAME</AppText>
+                    <AppText style={styles.required}> *</AppText>
                   </View>
                   <UsernameField
                     value={username}
@@ -608,9 +609,9 @@ export default function OnboardingScreen() {
                             pressed && styles.suggestionChipPressed,
                           ]}
                         >
-                          <Text style={styles.suggestionText} numberOfLines={1}>
+                          <AppText style={styles.suggestionText} numberOfLines={1}>
                             @{handle}
-                          </Text>
+                          </AppText>
                         </Pressable>
                       ))}
                     </View>
@@ -621,8 +622,8 @@ export default function OnboardingScreen() {
                     student sign in later without waiting for an emailed code. */}
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.label}>PASSWORD</Text>
-                    <Text style={styles.required}> *</Text>
+                    <AppText style={styles.label}>PASSWORD</AppText>
+                    <AppText style={styles.required}> *</AppText>
                   </View>
                   <PasswordField
                     value={password}
@@ -640,8 +641,8 @@ export default function OnboardingScreen() {
 
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.label}>CONFIRM PASSWORD</Text>
-                    <Text style={styles.required}> *</Text>
+                    <AppText style={styles.label}>CONFIRM PASSWORD</AppText>
+                    <AppText style={styles.required}> *</AppText>
                   </View>
                   <PasswordField
                     value={confirmPassword}
@@ -658,9 +659,9 @@ export default function OnboardingScreen() {
                 </View>
 
                 {/* Section 2: Academic Details */}
-                <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
+                <AppText style={[styles.sectionTitle, styles.sectionTitleSpaced]}>
                   Academic Details
-                </Text>
+                </AppText>
 
                 <SearchablePicker
                   label="Qualification"
@@ -706,16 +707,16 @@ export default function OnboardingScreen() {
                 />
 
                 {/* Section 3: Personal Touch */}
-                <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Personal Touch</Text>
+                <AppText style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Personal Touch</AppText>
 
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
-                    <Text style={styles.label}>SHORT BIO</Text>
-                    <Text style={styles.optional}> (Optional)</Text>
-                    <Text style={styles.charCount}>{bio.length}/250</Text>
+                    <AppText style={styles.label}>SHORT BIO</AppText>
+                    <AppText style={styles.optional}> (Optional)</AppText>
+                    <AppText style={styles.charCount}>{bio.length}/250</AppText>
                   </View>
                   <View style={[styles.textareaWrap, bioFocused && styles.inputRowFocused]}>
-                    <TextInput
+                    <AppTextInput
                       value={bio}
                       onChangeText={(v) => setBio(v.slice(0, 250))}
                       onFocus={() => setBioFocused(true)}
@@ -739,11 +740,11 @@ export default function OnboardingScreen() {
               {fieldIssues.length > 0 ? (
                 <View style={styles.summary}>
                   <Feather name="alert-circle" size={15} color={colors.errorText} />
-                  <Text style={styles.summaryText}>
+                  <AppText style={styles.summaryText}>
                     {fieldIssues.length === 1
                       ? `Check the ${fieldIssues[0].toLowerCase()} field above.`
                       : `Check these fields above: ${fieldIssues.join(', ').toLowerCase()}.`}
-                  </Text>
+                  </AppText>
                 </View>
               ) : null}
 
@@ -764,7 +765,7 @@ export default function OnboardingScreen() {
                   {saving ? (
                     <ActivityIndicator color={colors.white} />
                   ) : (
-                    <Text style={styles.submitText}>Save &amp; Enter Yahora</Text>
+                    <AppText style={styles.submitText}>Save &amp; Enter Yahora</AppText>
                   )}
                 </LinearGradient>
               </Pressable>
@@ -773,20 +774,13 @@ export default function OnboardingScreen() {
         </KeyboardAvoider>
 
         {/* Rendered last + raised so it stays above the form's elevated card. */}
-        <Pressable
+        <BackButton
           onPress={handleBack}
           disabled={busy || goingBack}
-          hitSlop={8}
-          accessibilityRole="button"
+          loading={goingBack}
           accessibilityLabel="Back to login"
-          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
-        >
-          {goingBack ? (
-            <ActivityIndicator size="small" color={colors.purpleDark} />
-          ) : (
-            <Feather name="arrow-left" size={22} color={colors.purpleDark} />
-          )}
-        </Pressable>
+          style={[styles.backBtn, { top: floatingTop }]}
+        />
       </SafeAreaView>
     </View>
   );
@@ -803,27 +797,10 @@ const styles = StyleSheet.create({
   backBtn: {
     // `top` is applied inline from useFloatingTopInset(): an absolutely
     // positioned child ignores the padding SafeAreaView adds, so a static
-    // `top` here slides under the status bar in full-screen mode.
+    // `top` here slides under the status bar in full-screen mode. Position
+    // only — the look lives in src/components/CircleButton.tsx.
     position: 'absolute',
     left: spacing.lg,
-    zIndex: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.cardSurface,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    shadowColor: colors.purple,
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  backBtnPressed: {
-    backgroundColor: colors.pinkLight,
-    borderColor: colors.inputBorderFocus,
   },
   scroll: {
     flexGrow: 1,
@@ -845,13 +822,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: 28,
+    fontSize: font.sizes.display,
     color: colors.purpleDark,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: font.family.regular,
-    fontSize: 14,
+    fontSize: font.sizes.body,
     lineHeight: 20,
     color: colors.mutedText,
     textAlign: 'center',
@@ -872,7 +849,7 @@ const styles = StyleSheet.create({
   },
   skipBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.white,
   },
 
@@ -891,7 +868,7 @@ const styles = StyleSheet.create({
   summaryText: {
     flexShrink: 1,
     fontFamily: font.family.medium,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     lineHeight: 18,
     color: colors.errorText,
   },
@@ -905,7 +882,7 @@ const styles = StyleSheet.create({
   },
   bannerText: {
     fontFamily: font.family.medium,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.errorText,
     textAlign: 'center',
   },
@@ -925,7 +902,7 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontFamily: font.family.bold,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: colors.purple,
@@ -987,12 +964,12 @@ const styles = StyleSheet.create({
   },
   uploadBtnText: {
     fontFamily: font.family.semibold,
-    fontSize: 13,
+    fontSize: font.sizes.body,
     color: colors.purpleDark,
   },
   helperText: {
     fontFamily: font.family.regular,
-    fontSize: 12,
+    fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
 
@@ -1020,7 +997,7 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     fontFamily: font.family.semibold,
-    fontSize: 12.5,
+    fontSize: font.sizes.caption,
     color: colors.purple,
   },
   labelRow: {
@@ -1031,24 +1008,24 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     letterSpacing: 1,
     color: colors.mutedLabel,
     textTransform: 'uppercase',
   },
   required: {
     fontFamily: font.family.bold,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.pinkDark,
   },
   optional: {
     fontFamily: font.family.regular,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
   },
   charCount: {
     fontFamily: font.family.medium,
-    fontSize: 11,
+    fontSize: font.sizes.caption,
     color: colors.mutedLabel,
     marginLeft: 'auto',
   },
@@ -1074,7 +1051,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     paddingVertical: 0,
     minHeight: 44,
@@ -1090,7 +1067,7 @@ const styles = StyleSheet.create({
   },
   textarea: {
     fontFamily: font.family.medium,
-    fontSize: 15,
+    fontSize: font.sizes.bodyLg,
     lineHeight: 21,
     color: colors.blackSoft,
     minHeight: 88,
@@ -1120,7 +1097,7 @@ const styles = StyleSheet.create({
   },
   submitText: {
     fontFamily: font.family.semibold,
-    fontSize: 16,
+    fontSize: font.sizes.bodyLg,
     color: colors.white,
   },
 });

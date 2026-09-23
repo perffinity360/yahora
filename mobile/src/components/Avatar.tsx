@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { AppText } from './AppText';
 import { avatarHue, initialsOf } from '../lib/avatar';
 import { resolveMediaUrl } from '../lib/config';
 import { colors, font } from '../theme';
@@ -14,10 +15,17 @@ export function Avatar({
   name,
   uri,
   size,
+  ringed = false,
 }: {
   name?: string | null;
   uri?: string | null;
   size: number;
+  /**
+   * The purple ring the product card puts on a seller's photo (see
+   * `sellerAvatar` in ProductCard.tsx). Photo only: the initials disc is
+   * already a solid colour and gets no ring, on the card or here.
+   */
+  ringed?: boolean;
 }) {
   const dims = { width: size, height: size, borderRadius: size / 2 };
 
@@ -29,14 +37,25 @@ export function Avatar({
 
   if (src) {
     return (
-      <Image source={{ uri: src }} style={[styles.avatar, dims]} contentFit="cover" transition={180} />
+      <Image
+        source={{ uri: src }}
+        style={[styles.avatar, dims, ringed && [styles.ring, { borderWidth: size >= 40 ? 2 : 1.5 }]]}
+        contentFit="cover"
+        transition={180}
+      />
     );
   }
   return (
     <View style={[styles.avatar, dims, { backgroundColor: avatarHue(name) }]}>
-      <Text style={[styles.initials, { fontSize: Math.round(size * 0.38) }]}>
+      {/* 0.34 of the disc (was 0.38 — two initials crowded the edge), but never
+          under the 11dp floor: the chat and comment avatars are 26–30dp, where
+          the ratio lands at 9–10 and the initials read as a smudge. See
+          font.sizes in src/theme. */}
+      <AppText
+        style={[styles.initials, { fontSize: Math.max(font.sizes.micro, Math.round(size * 0.34)) }]}
+      >
         {initialsOf(name) || '?'}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -47,6 +66,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.pinkLight,
     overflow: 'hidden',
+  },
+  ring: {
+    borderColor: colors.purpleDark,
   },
   initials: {
     fontFamily: font.family.bold,

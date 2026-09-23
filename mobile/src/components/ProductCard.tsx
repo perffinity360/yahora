@@ -1,14 +1,50 @@
 import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
+import { AppText } from './AppText';
 import { resolveMediaUrl } from '../lib/config';
-import { colors, conditionColors, font, radius, spacing } from '../theme';
+import { colors, conditionColors, font, MAX_FONT_SCALE, radius } from '../theme';
 import type { ProductCardItem } from '../types';
 
 const FALLBACK_CONDITION = { bg: colors.blue, text: colors.white };
+
+/**
+ * ── KEEPING THE TWO COLUMNS IN STEP ──
+ *
+ * Every tile in a grid row has to be the same height, with the dividers and
+ * the footers lined up across the two columns.
+ *
+ * The TITLE is not given reserved room. It takes one line or two, as it needs,
+ * and the row does the equalising: all three grids stretch every card in a row
+ * to the tallest one (FlashList v2 normalises row heights; the profile grids
+ * are wrapping flex rows, which stretch by default), and the footer's
+ * `marginTop: 'auto'` pins it to the bottom of the stretched card. So a row
+ * where one title wraps lines up exactly as before, and a row where BOTH
+ * titles fit on one line no longer carries an empty line under each of them.
+ *
+ * The LOCATION still gets one reserved line, always rendered even when empty,
+ * so a listing with no location does not sit a line shorter than its
+ * neighbour inside a row. Its height is `lineHeight x fontScale`: React Native
+ * multiplies lineHeight by the student's font setting, so a box measured at
+ * scale 1.0 is short at 1.15. Paired with the same cap AppText applies
+ * (MAX_FONT_SCALE) — scaling past the cap cannot happen, so reserving for it
+ * would only waste space on every card.
+ */
+const LOCATION_LINE_HEIGHT = 14;
+const TITLE_LINE_HEIGHT = 17;
+const TITLE_LINES = 2;
+/**
+ * The seller avatar, and therefore the height of the footer row. It is a fixed
+ * dp circle, so it does not grow with the font scale — and the footer row is
+ * floored at it so a listing whose seller has no name (the group is not
+ * rendered at all) still lines its divider and timestamp up with the card
+ * beside it.
+ */
+const SELLER_AVATAR = 20;
 
 /** ₹ with Indian digit grouping (12,34,567) — Hermes lacks reliable Intl, so
  *  we group manually instead of relying on `toLocaleString('en-IN')`. */
@@ -27,18 +63,6 @@ export function formatPrice(value: number): string {
 }
 
 /** Compact relative time ("5m ago"), falling back to a date past a month. */
-/**
- * Ceiling on the OS font-size multiplier for the card's dense rows.
- *
- * A phone set to "large text" scales every Text by up to 1.3x here and well
- * past 2x at the extremes. The stats row is four items across half a screen,
- * so that is the setting that decides whether the timestamp fits. 1.3 keeps
- * the accessibility win and stops the row from outgrowing the card; the title,
- * price and body text are deliberately NOT capped, because they have room to
- * grow and are what someone raising their font size actually wants bigger.
- */
-const DENSE_TEXT_SCALE_CAP = 1.3;
-
 export function timeAgo(iso: string): string {
   if (!iso) return 'Just now';
   const then = new Date(iso).getTime();
@@ -52,43 +76,62 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
+/**
+ * The location EXACTLY as the seller typed it, with one concession: a leading
+ * lowercase letter is capitalised. Uppercasing the whole string (what this card
+ * used to do) turned "CSE Department" into shouting and lost the distinction
+ * between a building code and a sentence.
+ *
+ * Comparing against `toUpperCase()` rather than matching /^[a-z]/ so that an
+ * accented first letter is handled too, and so a digit or a script without
+ * cases ("4th block", Devanagari) is left exactly as it was.
+ */
+function sentenceCase(value: string): string {
+  const first = value.charAt(0);
+  const upper = first.toUpperCase();
+  return upper === first ? value : upper + value.slice(1);
+}
+
+/** "Priya Sharma" -> "PS"; "Priya" -> "P"; nothing usable -> "". */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
 export interface ProductCardProps {
   product: ProductCardItem;
   onPress?: () => void;
   /** Optional layout override so a parent grid can size the card. */
   style?: StyleProp<ViewStyle>;
-  // ── Engagement + owner actions (dashboard/public profile/marketplace). ──
   onLike?: () => void;
-  onSave?: () => void;
-  onShare?: () => void;
-  onChat?: () => void;
+  isLiked?: boolean;
+  // ── Owner actions (dashboard only). ──
   onEdit?: () => void;
   onMarkSold?: () => void;
   onMarkAvailable?: () => void;
   onDelete?: () => void;
-  isLiked?: boolean;
-  isSaved?: boolean;
-  /** Seller shown on the marketplace feed only (compact first-name tag). */
+  /**
+   * The seller, shown on EVERY card including the owner's own listings. When a
+   * screen does not pass one, the card falls back to `product.seller`, which
+   * marketplace feed rows carry.
+   */
   sellerName?: string | null;
   sellerAvatarUrl?: string | null;
-  /** When true, render the owner toolbar (chat / sold / edit / delete). */
+  /** When true, render the owner toolbar (sold / available / edit / delete). */
   showManageActions?: boolean;
 }
 
-/** Compact round icon button used across the card's action toolbar. */
+/** Compact round icon button, used only by the owner toolbar. */
 function IconBtn({
   icon,
   onPress,
   color = colors.mutedText,
-  active = false,
-  activeColor,
   label,
 }: {
   icon: keyof typeof Feather.glyphMap;
   onPress?: () => void;
   color?: string;
-  active?: boolean;
-  activeColor?: string;
   label?: string;
 }) {
   return (
@@ -98,13 +141,9 @@ function IconBtn({
       hitSlop={6}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.iconBtn,
-        active && styles.iconBtnActive,
-        pressed && !!onPress && styles.iconBtnPressed,
-      ]}
+      style={({ pressed }) => [styles.iconBtn, pressed && !!onPress && styles.iconBtnPressed]}
     >
-      <Feather name={icon} size={15} color={active ? activeColor ?? colors.purple : color} />
+      <Feather name={icon} size={15} color={color} />
     </Pressable>
   );
 }
@@ -114,14 +153,11 @@ function ProductCardBase({
   onPress,
   style,
   onLike,
-  onSave,
-  onShare,
+  isLiked,
   onEdit,
   onMarkSold,
   onMarkAvailable,
   onDelete,
-  isLiked,
-  isSaved,
   sellerName,
   sellerAvatarUrl,
   showManageActions,
@@ -136,11 +172,19 @@ function ProductCardBase({
   const condLabel = (product.condition ?? 'Good').toUpperCase();
   const sold = product.status === 'sold';
   const liked = isLiked ?? product.is_liked ?? false;
-  const saved = isSaved ?? product.is_saved ?? false;
-  const showEngagementOnly = !showManageActions && !!(onSave || onShare);
   const imageCount = product.image_urls?.length ?? 0;
-  const firstName = sellerName ? sellerName.trim().split(/\s+/)[0] : '';
-  const sellerInitial = firstName ? firstName.charAt(0).toUpperCase() : '?';
+
+  const location = product.location?.trim();
+  const locationLabel = location ? sentenceCase(location) : '';
+
+  const seller = (sellerName ?? product.seller?.full_name ?? '').trim();
+  const sellerAvatar = resolveMediaUrl(sellerAvatarUrl ?? product.seller?.avatar_url);
+  const sellerInitials = initialsOf(seller);
+
+  // The location's reserved line. `fontScale` is the student's system font
+  // setting; the cap is AppText's, so the text can never outgrow the box.
+  const { fontScale } = useWindowDimensions();
+  const locationBox = LOCATION_LINE_HEIGHT * Math.min(fontScale, MAX_FONT_SCALE);
 
   return (
     <Pressable
@@ -159,86 +203,119 @@ function ProductCardBase({
           )}
           {sold ? (
             <View style={styles.soldOverlay}>
-              <Text style={styles.soldText}>SOLD</Text>
+              <AppText style={styles.soldText}>SOLD</AppText>
             </View>
           ) : null}
           {imageCount > 1 ? (
             <View style={styles.imageCounter}>
-              <Text style={styles.imageCounterText}>1/{imageCount}</Text>
+              <AppText style={styles.imageCounterText}>1/{imageCount}</AppText>
             </View>
           ) : null}
         </View>
 
         <View style={styles.info}>
-          <View style={styles.metaRow}>
+          {/* Row 1 — condition badge left, like button right. */}
+          <View style={styles.topRow}>
             <View style={[styles.conditionBadge, { backgroundColor: cond.bg }]}>
-              <Text style={[styles.conditionText, { color: cond.text }]} numberOfLines={1}>
+              <AppText style={[styles.conditionText, { color: cond.text }]} numberOfLines={1}>
                 {condLabel}
-              </Text>
-            </View>
-            <Text style={styles.price} numberOfLines={1}>
-              {formatPrice(product.price)}
-            </Text>
-          </View>
-
-          {product.location ? (
-            <Text style={styles.location} numberOfLines={1}>
-              {product.location.toUpperCase()}
-            </Text>
-          ) : null}
-
-          <Text style={styles.title} numberOfLines={1}>
-            {product.title}
-          </Text>
-
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Feather name="eye" size={13} color={colors.mutedText} />
-              <Text style={styles.statText} maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}>
-                {product.views ?? 0}
-              </Text>
+              </AppText>
             </View>
             <Pressable
-              style={styles.stat}
               onPress={onLike}
               disabled={!onLike}
-              hitSlop={6}
+              hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel={liked ? 'Unlike' : 'Like'}
+              style={styles.like}
             >
-              <Feather name="heart" size={13} color={liked ? colors.pinkDark : colors.mutedText} />
-              <Text
-                style={[styles.statText, liked && styles.statTextLiked]}
-                maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}
-              >
+              {/* MaterialCommunityIcons, not Feather, and only here: Feather
+                  ships outline glyphs only, so a liked heart could never be
+                  more than a colour change — and colour alone is the weakest
+                  signal on a tile you are scanning, doubly so for the ~8% of
+                  men with a red-green deficiency. MCI carries both faces of
+                  the same heart, so liking it FILLS it. Both states come from
+                  one family so the silhouette does not jump on tap. */}
+              <MaterialCommunityIcons
+                name={liked ? 'heart' : 'heart-outline'}
+                size={16}
+                color={liked ? colors.pinkDark : colors.mutedText}
+              />
+              <AppText style={[styles.likeCount, liked && styles.likeCountLiked]} numberOfLines={1}>
                 {product.likes_count ?? 0}
-              </Text>
+              </AppText>
             </Pressable>
-            <View style={styles.stat}>
-              <Feather name="message-circle" size={13} color={colors.mutedText} />
-              <Text style={styles.statText} maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}>
-                {product.comments_count ?? 0}
-              </Text>
-            </View>
-            <Text
-              style={styles.time}
-              numberOfLines={1}
-              maxFontSizeMultiplier={DENSE_TEXT_SCALE_CAP}
-            >
-              {timeAgo(product.created_at)}
-            </Text>
           </View>
 
+          {/* Row 2 — the price owns its own row and is the largest element on
+              the tile. Bree Serif, like every price in the app and on the
+              website; it ships one weight, so never pair it with a bold family
+              or a fontWeight. See §3 in DESIGN.md. */}
+          <AppText style={styles.price} numberOfLines={1}>
+            {formatPrice(product.price)}
+          </AppText>
+
+          {/* Row 3 — location. Always rendered, even when empty: the blank line
+              is what keeps a listing with no location the same height as one
+              with it, so the dividers line up across the two columns. */}
+          <AppText
+            style={[styles.location, { minHeight: locationBox }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {locationLabel}
+          </AppText>
+
+          {/* Row 4 — title, one line or two as it needs. The grid row, not
+              this box, keeps the footers level — see the note at the top. */}
+          <AppText
+            style={styles.title}
+            numberOfLines={TITLE_LINES}
+            ellipsizeMode="tail"
+          >
+            {product.title}
+          </AppText>
+
+          {/* Row 5 — timestamp left, seller right. `marginTop: 'auto'` is belt
+              and braces on top of the reserved boxes above: if anything in a
+              row does end up taller, the footers still sit on one line. */}
+          <View style={styles.footer}>
+            <View style={styles.divider} />
+            <View style={styles.footerRow}>
+              <AppText style={styles.time} numberOfLines={1}>
+                {timeAgo(product.created_at)}
+              </AppText>
+              {seller ? (
+                <View style={styles.seller}>
+                  {sellerAvatar ? (
+                    <Image
+                      source={{ uri: sellerAvatar }}
+                      style={styles.sellerAvatar}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={styles.sellerAvatarFallback}>
+                      <AppText style={styles.sellerInitials}>{sellerInitials}</AppText>
+                    </View>
+                  )}
+                  <AppText style={styles.sellerName} numberOfLines={1} ellipsizeMode="tail">
+                    {seller}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* ── THE OWNER TOOLBAR IS NOT PART OF THE FOUNDERS' CARD, AND STAYS ──
+              Mark sold / mark available / edit / delete exist nowhere else in
+              the app — the product detail screen has no way to do any of them,
+              so removing this row would leave an owner unable to manage a
+              listing at all. Dashboard only (`showManageActions`), below the
+              footer, and without the bookmark and share buttons it used to
+              carry: those two ARE on the detail screen. */}
           {showManageActions ? (
-            <View style={[styles.actionRow, styles.actionRowManage]}>
-              <IconBtn
-                icon="bookmark"
-                onPress={onSave}
-                active={saved}
-                activeColor={colors.white}
-                label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
-              />
-              <IconBtn icon="share-2" onPress={onShare} label="Share" />
+            <View style={styles.manageRow}>
               {sold ? (
                 <IconBtn
                   icon="rotate-ccw"
@@ -259,36 +336,6 @@ function ProductCardBase({
               )}
               <IconBtn icon="trash-2" onPress={onDelete} color={colors.errorText} label="Delete" />
             </View>
-          ) : showEngagementOnly ? (
-            <View style={styles.actionRow}>
-              <IconBtn
-                icon="bookmark"
-                onPress={onSave}
-                active={saved}
-                activeColor={colors.white}
-                label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
-              />
-              <IconBtn icon="share-2" onPress={onShare} label="Share" />
-              {firstName ? (
-                <View style={styles.sellerTag}>
-                  {sellerAvatarUrl ? (
-                    <Image
-                      source={{ uri: sellerAvatarUrl }}
-                      style={styles.sellerAvatar}
-                      contentFit="cover"
-                      transition={200}
-                    />
-                  ) : (
-                    <View style={styles.sellerAvatarFallback}>
-                      <Text style={styles.sellerInitial}>{sellerInitial}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.sellerName} numberOfLines={1}>
-                    {firstName}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
           ) : null}
         </View>
       </View>
@@ -296,7 +343,8 @@ function ProductCardBase({
   );
 }
 
-/** Reusable across the dashboard, public profile and (later) the marketplace. */
+/** Reusable across the marketplace, the dashboard, the public profile, the
+ *  swipe deck and the sell screen's live preview. */
 export const ProductCard = memo(ProductCardBase);
 
 export default ProductCard;
@@ -318,6 +366,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.985 }],
   },
   inner: {
+    // Fills the card when a grid row stretches it — see `info`'s flex and the
+    // footer's `marginTop: 'auto'`. In a parent with no height of its own (the
+    // sell preview, the swipe deck) flex-basis falls back to content, so this
+    // is inert there rather than collapsing to zero.
+    flex: 1,
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.cardSurface,
@@ -354,17 +407,20 @@ const styles = StyleSheet.create({
   },
   soldText: {
     fontFamily: font.family.serif,
-    fontSize: 22,
+    fontSize: font.sizes.headline,
     letterSpacing: 3,
     color: colors.white,
   },
   info: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 12,
-    gap: 5,
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    paddingBottom: 10,
+    gap: 4,
   },
-  metaRow: {
+
+  /* Row 1 — badge + like */
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -372,88 +428,147 @@ const styles = StyleSheet.create({
   },
   conditionBadge: {
     flexShrink: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 999,
   },
+  // `nano` (9) — one of the two places in the app allowed below the 11dp floor
+  // (the other is `sellerInitials` below). A few uppercase characters in
+  // ExtraBold on a saturated pill read as a colour-coded chip rather than as
+  // text, which is why the floor does not apply. Nothing else qualifies; see
+  // the note beside `nano` in src/theme/index.ts before reaching for it.
   conditionText: {
     fontFamily: font.family.extrabold,
-    fontSize: 8.5,
-    letterSpacing: 0.5,
+    fontSize: font.sizes.nano,
+    letterSpacing: 0.4,
   },
-  price: {
-    flexShrink: 0,
-    fontFamily: font.family.serif,
-    fontSize: 16,
-    color: colors.purple,
-  },
-  location: {
-    fontFamily: font.family.bold,
-    fontSize: 9,
-    letterSpacing: 0.5,
-    color: colors.mutedText,
-    marginTop: -2,
-  },
-  title: {
-    fontFamily: font.family.bold,
-    fontSize: 13.5,
-    color: colors.blackSoft,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // 8, not 10. Four items plus three gaps have to fit the card's inner width,
-    // and that width varies with the device: the same 2-column grid is ~10dp
-    // narrower per card on an OPPO K14 than on a POCO X2, which was enough to
-    // push the timestamp off the edge.
-    gap: 8,
-    marginTop: 2,
-  },
-  stat: {
+  like: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    // ⚠ React Native defaults flex children to flexShrink: 0 — the opposite of
-    // the web. Without this the row simply overflows the card and whatever sits
-    // last (the timestamp) is clipped, with no ellipsis and no warning. The
-    // counts are short, so shrinking these three costs nothing in practice; it
-    // just gives the row somewhere to give.
+    flexShrink: 0,
+  },
+  // `body` (13) with a 16dp heart: the one number left on the tile reads a
+  // step above the timestamp and seller name in the footer, which are `micro`.
+  likeCount: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.body,
+    color: colors.mutedText,
+  },
+  likeCountLiked: {
+    color: colors.pinkDark,
+  },
+
+  /* Row 2 — price */
+  price: {
+    // Pulled 4dp towards the like row: Bree Serif's tall line box left the
+    // price floating further below the heart than the `info` gap intends.
+    marginTop: -4,
+    textAlign: 'right',
+    fontFamily: font.family.serif,
+    fontSize: font.sizes.headline,
+    color: colors.purple,
+  },
+
+  /* Row 3 — location (one reserved line) */
+  location: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.micro,
+    lineHeight: LOCATION_LINE_HEIGHT,
+    color: colors.mutedText,
+  },
+
+  /* Row 4 — title (two reserved lines) */
+  title: {
+    fontFamily: font.family.bold,
+    fontSize: font.sizes.body,
+    lineHeight: TITLE_LINE_HEIGHT,
+    color: colors.blackSoft,
+  },
+
+  /* Row 5 — divider + timestamp + seller */
+  footer: {
+    marginTop: 'auto',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth * 2,
+    backgroundColor: colors.hairline,
+    marginTop: 6,
+    marginBottom: 7,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: SELLER_AVATAR,
+  },
+  time: {
+    fontFamily: font.family.medium,
+    fontSize: font.sizes.micro,
+    color: colors.mutedLabel,
+    // ⚠ React Native defaults flex children to flexShrink: 0, but say it out
+    // loud here: the timestamp is short, fixed and the thing that was being
+    // clipped before. The seller group beside it is what gives up space.
+    flexShrink: 0,
+  },
+  seller: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginLeft: 'auto',
+    // The name yields first — `minWidth: 0` is what actually lets this group
+    // shrink below its content width, which is where a long full name would
+    // otherwise push the timestamp off the tile.
     flexShrink: 1,
     minWidth: 0,
   },
-  statText: {
-    fontFamily: font.family.semibold,
-    fontSize: 11,
+  sellerAvatar: {
+    width: SELLER_AVATAR,
+    height: SELLER_AVATAR,
+    borderRadius: SELLER_AVATAR / 2,
+    backgroundColor: colors.inputBg,
+    // The purple ring the website's card already puts on a seller photo
+    // (`.sellerAvatar` in frontend/.../ProductCard.module.css: 1.5px solid
+    // --purple-emphasis). It is what stops a light or washed-out photo from
+    // dissolving into the card surface at 20dp. The initials fallback below
+    // does NOT get one — it is already a solid purple disc, and the web
+    // fallback has no border either.
+    borderWidth: 1.5,
+    borderColor: colors.purpleDark,
+  },
+  sellerAvatarFallback: {
+    width: SELLER_AVATAR,
+    height: SELLER_AVATAR,
+    borderRadius: SELLER_AVATAR / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.purple,
+  },
+  // `nano` (9), the second of its two call sites: one or two capitals on a
+  // solid 20dp disc read as a chip, not as text — the same case as the
+  // condition badge. At `micro` "AM" filled the disc edge to edge.
+  sellerInitials: {
+    fontFamily: font.family.bold,
+    fontSize: font.sizes.nano,
+    color: colors.white,
+  },
+  sellerName: {
+    flexShrink: 1,
+    fontFamily: font.family.bold,
+    fontSize: font.sizes.micro,
     color: colors.mutedText,
   },
-  statTextLiked: {
-    color: colors.pinkDark,
-  },
-  time: {
-    marginLeft: 'auto',
-    fontFamily: font.family.regular,
-    fontSize: 10.5,
-    color: colors.mutedLabel,
-    // Never shrink and never wrap: this is the element that was being cut off.
-    // It keeps its measured width and the stats to its left yield instead.
-    flexShrink: 0,
-  },
 
-  // Engagement toolbar (2 icons) — left-aligned with a gap.
-  actionRow: {
+  /* Owner toolbar (dashboard only) — must stay on one line inside a narrow
+     2-up card, so the buttons spread across the full width. */
+  manageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginTop: 8,
-    paddingTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: colors.hairline,
-  },
-  // Owner toolbar (up to 5 icons) — must stay on a single line inside the
-  // narrow 2-up dashboard card, so spread the buttons across the full width.
-  actionRowManage: {
-    justifyContent: 'space-between',
-    gap: 0,
   },
   iconBtn: {
     width: 26,
@@ -464,17 +579,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inputBg,
     borderWidth: 1,
     borderColor: colors.hairline,
-  },
-  /**
-   * Saved. Only the bookmark uses this, and it is the one state on the card
-   * that has to survive being glanced at: a pale pink disc with a purple
-   * outline read as "slightly different", not as "this is in your wishlist".
-   * Filled brand purple with a white edge makes it the darkest thing in the
-   * row, which is what tells you at a glance which cards you kept.
-   */
-  iconBtnActive: {
-    backgroundColor: colors.purple,
-    borderColor: colors.white,
   },
   iconBtnPressed: {
     backgroundColor: colors.pinkLight,
@@ -493,42 +597,7 @@ const styles = StyleSheet.create({
   },
   imageCounterText: {
     fontFamily: font.family.bold,
-    fontSize: 10.5,
+    fontSize: font.sizes.micro,
     color: colors.white,
-  },
-
-  /* Seller tag (marketplace feed only) — first name, truncates with … */
-  sellerTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginLeft: 'auto',
-    flexShrink: 1,
-    maxWidth: '58%',
-  },
-  sellerAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.inputBg,
-  },
-  sellerAvatarFallback: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.purple,
-  },
-  sellerInitial: {
-    fontFamily: font.family.bold,
-    fontSize: 9,
-    color: colors.white,
-  },
-  sellerName: {
-    flexShrink: 1,
-    fontFamily: font.family.semibold,
-    fontSize: 11,
-    color: colors.mutedText,
   },
 });
