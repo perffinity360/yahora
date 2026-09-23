@@ -15,6 +15,21 @@
   justify-content: center;
   width: 100%;
   padding: 20px 0 8px;
+  /* Both chat lists are `display: flex; flex-direction: column` scrollers, and
+     a flex child there is shrinkable by default — the reserved row would be
+     squeezed to nothing by the messages above it. */
+  flex: 0 0 auto;
+}
+
+/* The upward-paging variant: a fixed box that is in the layout whether or not
+   the spinner is in it. Its height must not depend on its contents, or the
+   list below it moves when a fetch starts — which on the chat thread is the
+   jump this whole block exists to prevent. */
+.spinnerRowReserved {
+  box-sizing: border-box;
+  height: 42px;
+  flex: 0 0 42px;
+  padding: 10px 0;
 }
 
 .spinner {

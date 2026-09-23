@@ -5,8 +5,14 @@
 // both use it.
 //
 // The browser has no onEndReached, so the trigger is an IntersectionObserver
-// watching an empty sentinel element the caller renders at the bottom of the
+// watching an empty sentinel element the caller renders at the edge of the
 // list (see components/InfiniteScrollSentinel).
+//
+// Phase 5 Block N-C added `root`. The hook does not care WHICH edge the
+// sentinel sits at: the marketplace and the comment list put it at the bottom
+// and page forwards, the chat thread puts it at the TOP and pages backwards.
+// All the hook does is say "that element came into view" — where the element
+// is, and what loading a page does to the list, is the caller's business.
 //
 // ── THE TWO THINGS THIS HOOK EXISTS TO GET RIGHT ─────────────────────────────
 //
@@ -35,6 +41,7 @@ export default function useInfiniteScroll({
   hasMore,
   isLoading,
   onLoadMore,
+  root = null,
   rootMargin = "400px",
 }) {
   // The sentinel node lives in state, not a ref: attaching it has to re-run the
@@ -60,7 +67,11 @@ export default function useInfiniteScroll({
           onLoadMoreRef.current();
         }
       },
-      { rootMargin },
+      // `root: null` means the viewport, which is what a page-level list wants.
+      // A list that scrolls inside its own element — the chat thread and the
+      // inbox both do — must pass that element, or the sentinel is measured
+      // against the wrong box and either never fires or fires constantly.
+      { root, rootMargin },
     );
 
     observer.observe(sentinel);
@@ -68,7 +79,10 @@ export default function useInfiniteScroll({
     // Runs on unmount and before every rebuild, so no observer outlives the
     // element it was watching.
     return () => observer.disconnect();
-  }, [sentinel, hasMore, isLoading, rootMargin]);
+    // `root` is in here so that a caller whose scroll container mounts after
+    // the first render (it arrives via a callback ref) gets the observer
+    // rebuilt against the real element rather than being stuck on the viewport.
+  }, [sentinel, hasMore, isLoading, root, rootMargin]);
 
   // Callback ref for the caller to spread onto its sentinel element.
   return useCallback((node) => setSentinel(node ?? null), []);
