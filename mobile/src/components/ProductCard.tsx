@@ -432,11 +432,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 999,
   },
-  // `nano` (9) — the ONE place in the app allowed below the 11dp floor, and the
-  // only call site of the token. A few uppercase characters in ExtraBold on a
-  // saturated pill read as a colour-coded chip rather than as text, which is
-  // why the floor does not apply. Nothing else qualifies; see the note beside
-  // `nano` in src/theme/index.ts before reaching for it.
+  // `nano` (9) — one of the two places in the app allowed below the 11dp floor
+  // (the other is `sellerInitials` below). A few uppercase characters in
+  // ExtraBold on a saturated pill read as a colour-coded chip rather than as
+  // text, which is why the floor does not apply. Nothing else qualifies; see
+  // the note beside `nano` in src/theme/index.ts before reaching for it.
   conditionText: {
     fontFamily: font.family.extrabold,
     fontSize: font.sizes.nano,
@@ -461,9 +461,9 @@ const styles = StyleSheet.create({
 
   /* Row 2 — price */
   price: {
-    // Pulled 2dp towards the like row: Bree Serif's tall line box left the
+    // Pulled 4dp towards the like row: Bree Serif's tall line box left the
     // price floating further below the heart than the `info` gap intends.
-    marginTop: -2,
+    marginTop: -4,
     textAlign: 'right',
     fontFamily: font.family.serif,
     fontSize: font.sizes.headline,
@@ -544,9 +544,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.purple,
   },
+  // `nano` (9), the second of its two call sites: one or two capitals on a
+  // solid 20dp disc read as a chip, not as text — the same case as the
+  // condition badge. At `micro` "AM" filled the disc edge to edge.
   sellerInitials: {
     fontFamily: font.family.bold,
-    fontSize: font.sizes.micro,
+    fontSize: font.sizes.nano,
     color: colors.white,
   },
   sellerName: {

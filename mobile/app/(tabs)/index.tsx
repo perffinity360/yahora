@@ -4,6 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
   Pressable,
   RefreshControl,
@@ -95,6 +97,15 @@ const SWIPE_HREF = '/(tabs)?view=swipe';
 let gridScrollMemo: { signature: string; offset: number } | null = null;
 
 /**
+ * The campus being browsed, for the same reason and with the same lifetime as
+ * `gridScrollMemo`: the screen is rebuilt on the way back from a product, and
+ * `viewedUniversityId` used to reset to the home campus — so a student browsing
+ * another campus came back to their own, at the top. The website keeps the
+ * same thing in sessionStorage (`yahora_last_visited_uni`).
+ */
+let viewedUniversityMemo: { userId: string; universityId: string } | null = null;
+
+/**
  * The identity of the list an offset was measured against.
  *
  * An offset is POSITIONAL: 1,400dp down is only "where I was" if the same items
@@ -116,7 +127,14 @@ export default function MarketplaceScreen() {
   const myUserId = profile?.id;
   const homeUniversityId = profile?.university_id ?? undefined;
 
-  const [viewedUniversityId, setViewedUniversityId] = useState<string | undefined>(homeUniversityId);
+  const [viewedUniversityId, setViewedUniversityId] = useState<string | undefined>(
+    // Keyed to the student: sign out and in as someone else in the same app
+    // session and the previous student's campus must not carry over.
+    () =>
+      (viewedUniversityMemo && viewedUniversityMemo.userId === myUserId
+        ? viewedUniversityMemo.universityId
+        : undefined) ?? homeUniversityId,
+  );
   // Read once, on mount: after that the toggle owns the mode, so landing here
   // with ?view=swipe never fights a later switch back to the grid.
   const [viewMode, setViewMode] = useState<ViewMode>(view === 'swipe' ? 'swipe' : 'grid');
@@ -163,6 +181,7 @@ export default function MarketplaceScreen() {
       setDemoAlertOpen(true);
       return;
     }
+    if (myUserId) viewedUniversityMemo = { userId: myUserId, universityId: u.id };
     setViewedUniversityId(u.id);
   };
 
@@ -184,6 +203,30 @@ export default function MarketplaceScreen() {
     />
   );
 
+  /** The branch below that renders the FlashList grid — mirrors its conditions. */
+  const showsGrid =
+    !isLoading && !(isError && !hasData) && viewMode !== 'swipe' && displayProducts.length > 0;
+
+  /** Shared by the pinned banner and the grid-header one. The first line is one
+   *  line, always: the campus name is the only part allowed to give up space
+   *  (long names end in "…"); "view only" is the point, so it never truncates. */
+  const foreignBannerBody = (
+    <>
+      <Feather name="globe" size={14} color={colors.purpleDark} />
+      <View style={styles.foreignBody}>
+        <View style={styles.foreignLine}>
+          <AppText style={[styles.foreignText, styles.foreignName]} numberOfLines={1}>
+            Browsing {campusName}
+          </AppText>
+          <AppText style={styles.foreignText} numberOfLines={1}>
+            {' — view only.'}
+          </AppText>
+        </View>
+        <AppText style={styles.foreignText}>Buying and listing stay on your home campus.</AppText>
+      </View>
+    </>
+  );
+
   /* ── Keeping your place in the feed (see `gridScrollMemo` above) ──────── */
 
   // Drives the grid's scroll position: to the top when the sort order changes,
@@ -200,6 +243,29 @@ export default function MarketplaceScreen() {
   feedRef.current = displayProducts;
   /** One restore per mount, whether or not there was anything to restore. */
   const restoredRef = useRef(false);
+
+  /**
+   * ── NO FLASH OF THE TOP ON THE WAY BACK ──
+   * FlashList can only be scrolled once it has drawn, so a return trip used to
+   * paint the first rows for a frame or two and THEN jump to the saved offset —
+   * a visible flicker of the top of the feed. FlashList 2.0's
+   * `initialScrollIndex` would start at the right ROW but not the right pixel.
+   *
+   * So when there is a position to go back to, the grid starts invisible, is
+   * scrolled while nobody can see it, and fades in already in place. Every
+   * other arrival starts at full opacity and never waits on this.
+   */
+  const [gridOpacity] = useState(
+    () => new Animated.Value(gridScrollMemo && gridScrollMemo.offset > 0 ? 0 : 1),
+  );
+  const revealGrid = useCallback(() => {
+    Animated.timing(gridOpacity, {
+      toValue: 1,
+      duration: 140,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [gridOpacity]);
 
   const rememberGridPosition = useCallback(() => {
     gridScrollMemo = {
@@ -220,13 +286,27 @@ export default function MarketplaceScreen() {
 
     const memo = gridScrollMemo;
     gridScrollMemo = null;
-    if (!memo || memo.offset <= 0) return;
-    if (memo.signature !== feedSignature(feedRef.current)) return;
+    if (!memo || memo.offset <= 0 || memo.signature !== feedSignature(feedRef.current)) {
+      revealGrid();
+      return;
+    }
 
     // Not animated: this is a restore, not a movement. The student should find
     // the feed where they left it, not watch it scroll there.
     gridRef.current?.scrollToOffset({ offset: memo.offset, animated: false });
-  }, []);
+    // Two frames: one for the scroll to land, one for FlashList to draw the
+    // rows at the new offset. Revealing any sooner shows blank cells.
+    requestAnimationFrame(() => requestAnimationFrame(revealGrid));
+  }, [revealGrid]);
+
+  // Belt and braces for the hidden grid: if `onLoad` never fires (it should),
+  // the feed must not stay invisible. Armed only once the grid is actually on
+  // screen, so a slow first load behind the skeleton cannot trip it early.
+  useEffect(() => {
+    if (!showsGrid) return;
+    const t = setTimeout(revealGrid, 800);
+    return () => clearTimeout(t);
+  }, [showsGrid, revealGrid]);
 
   const openProduct = useCallback(
     (id: string) => {
@@ -443,22 +523,10 @@ export default function MarketplaceScreen() {
         </Pressable>
       </View>
 
-      {/* Foreign-campus (view-only) banner */}
-      {isForeignCampus ? (
-        <View style={styles.foreignBanner}>
-          <Feather name="globe" size={14} color={colors.purpleDark} />
-          {/* One line, always. The campus name is the only part allowed to
-              give up space (long names end in "…"); "view only" is the point
-              of the banner, so it never truncates. */}
-          <View style={styles.foreignLine}>
-            <AppText style={[styles.foreignText, styles.foreignName]} numberOfLines={1}>
-              Browsing {campusName}
-            </AppText>
-            <AppText style={styles.foreignText} numberOfLines={1}>
-              {' — view only.'}
-            </AppText>
-          </View>
-        </View>
+      {/* Foreign-campus banner, pinned — only where there is no grid to ride
+          inside. With listings on screen it is the grid's header instead. */}
+      {isForeignCampus && !showsGrid ? (
+        <View style={[styles.foreignBanner, styles.foreignBannerPinned]}>{foreignBannerBody}</View>
       ) : null}
 
       {/* Content */}
@@ -514,8 +582,18 @@ export default function MarketplaceScreen() {
           />
         </ScrollView>
       ) : (
+        <Animated.View style={[styles.gridWrap, { opacity: gridOpacity }]}>
         <FlashList
           ref={gridRef}
+          // The foreign-campus banner rides at the top of the scroll, so it
+          // slides away with the first row as soon as the student scrolls and
+          // comes back when they return to the top. Pinned above the list it
+          // cost ~50dp of every screenful for the whole visit.
+          ListHeaderComponent={
+            isForeignCampus ? (
+              <View style={[styles.foreignBanner, styles.foreignBannerInList]}>{foreignBannerBody}</View>
+            ) : null
+          }
           // ⚠ OFF, and this is the fix for "switching sort leaves a sliver of
           // the old first row on screen".
           //
@@ -533,7 +611,11 @@ export default function MarketplaceScreen() {
           keyExtractor={(item) => item.id}
           numColumns={2}
           renderItem={renderCard}
-          contentContainerStyle={styles.listContent}
+          // Flattened: FlashList reads its padding off a plain object.
+          contentContainerStyle={StyleSheet.flatten([
+            styles.listContent,
+            isForeignCampus && styles.listContentBanner,
+          ])}
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
           // Recording where the student is, so opening a card can remember it.
@@ -545,6 +627,7 @@ export default function MarketplaceScreen() {
           scrollEventThrottle={16}
           onLoad={restoreGridPosition}
         />
+        </Animated.View>
       )}
 
       {/* List-an-item FAB (home campus only) */}
@@ -757,6 +840,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.md + 4,
     backgroundColor: colors.inputBg,
+    // Same thin purple edge as the sort pill, so the three controls read as
+    // one set instead of two outlined and two floating.
+    borderWidth: 1,
+    borderColor: colors.inputBorderFocus,
   },
   searchInput: {
     flex: 1,
@@ -779,6 +866,8 @@ const styles = StyleSheet.create({
     padding: 3,
     borderRadius: 999,
     backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.inputBorderFocus,
     gap: 3,
   },
   segmentBtn: {
@@ -872,8 +961,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginHorizontal: SCREEN_PAD,
-    marginTop: spacing.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
@@ -881,8 +968,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.inputBorderFocus,
   },
-  foreignLine: {
+  /** Loading, empty, error and swipe: there is nothing to scroll it away with. */
+  foreignBannerPinned: {
+    marginHorizontal: SCREEN_PAD,
+    marginTop: GRID_ROW_GAP,
+  },
+  /** Inside the grid. The sides: `listContent` already pads to
+   *  GRID_PAD - GRID_COL_GAP / 2, so this adds only the rest of SCREEN_PAD.
+   *  The spacing: GRID_ROW_GAP above (`listContentBanner`) and below — half
+   *  here plus the first row's own half-gap cell padding — so the banner sits
+   *  in the grid's rhythm, the same distance from its neighbours as one row of
+   *  cards is from the next. */
+  foreignBannerInList: {
+    marginHorizontal: SCREEN_PAD - (GRID_PAD - GRID_COL_GAP / 2),
+    marginBottom: GRID_ROW_GAP / 2,
+  },
+  foreignBody: {
     flex: 1,
+    gap: 1,
+  },
+  foreignLine: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -899,12 +1004,23 @@ const styles = StyleSheet.create({
   },
 
   /* Grid */
+  gridWrap: {
+    flex: 1,
+  },
   listContent: {
     // Each cell carries half a column gutter on each side, so the list pads
     // only the remainder out to the screen edge.
     paddingHorizontal: GRID_PAD - GRID_COL_GAP / 2,
-    paddingTop: spacing.md,
+    // Half a row gap: the first row's cells add the other half, so the grid
+    // starts GRID_ROW_GAP below the controls — the same distance as one row
+    // of cards is from the next. (Was spacing.md, which made it 22.)
+    paddingTop: GRID_ROW_GAP / 2,
     paddingBottom: spacing.xl * 3,
+  },
+  /** With the banner as the list header, the gap above it matches the gap
+   *  between two rows of cards — see `foreignBannerInList`. */
+  listContentBanner: {
+    paddingTop: GRID_ROW_GAP,
   },
   cell: {
     flex: 1,
@@ -923,7 +1039,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: GRID_PAD - GRID_COL_GAP / 2,
-    paddingTop: spacing.md,
+    // Same as `listContent`, so the grid does not jump when the feed arrives.
+    paddingTop: GRID_ROW_GAP / 2,
   },
   skeletonLine: {
     marginTop: 10,

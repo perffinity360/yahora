@@ -277,6 +277,69 @@ diff that was never the problem.
 
 ## Entries
 
+## 2026-09-23 (evening) — One back button for the whole app; marketplace spacing and borders (Vishwajeet)
+
+Mobile only. No backend, no database, no API change. **Nothing under `frontend/` was touched.**
+
+- **New `mobile/src/components/CircleButton.tsx`** (`CircleButton` + `BackButton`). Every back
+  button now uses it: product detail, public profile, sell, edit profile, onboarding (floating
+  42dp white disc, thin purple border, soft purple shadow, spring press), and the chat header
+  (`variant="plain"`). The product screen's share button uses `CircleButton` too. Each screen
+  keeps its own `onPress`, disabled and loading behaviour; its style is now position only.
+- **The white octagon** inside the product screen's back button was Android drawing the
+  `elevation` shadow behind a translucent surface (`glassBorder`, white at 75%). The new surface
+  is opaque. Do not make it translucent again while it carries an elevation.
+- **Campus banner spacing:** 12dp above and below, the same as the gap between two rows of cards
+  (`GRID_ROW_GAP`). It was 16 above and 22 below.
+- **Search bar and Grid/Swipe toggle** get the sort pill's thin purple border
+  (`colors.inputBorderFocus`).
+
+`npx tsc --noEmit` passes. **Not verified on a device.**
+
+---
+
+## 2026-09-23 (later) — Back from a product lands in place with no flash of the top (BOTH clients), plus a second card round (Vishwajeet)
+
+No backend, no database, no migration, no API change.
+
+**⚠️ NEERAJ: I EDITED ONE FILE IN YOUR SCOPE** — `frontend/src/pages/marketplace/Marketplace.jsx`.
+The founders asked for the fix on both clients. Nothing else under `frontend/` changed. Pull
+before you keep working in that file.
+
+### Back from a product: no glimpse of the top
+
+**Web.** On Back the page mounted with no campus and no listings, showed the loader, fetched
+`/universities`, then the feed, and only then scrolled — two round trips of the top of the page.
+`openProduct()` now also keeps a module-scope `feedSnapshot` (campus list, campus, home campus,
+listings). On a POP the page's state starts from it, so the grid is in the DOM on the first
+render and the existing `useLayoutEffect` scrolls before paint. Both fetches still run and
+refresh the listings in place, without the loader (`quietRefreshRef`), and the campus fetch keeps
+the same `university` object when the id has not changed so the feed effect does not re-run.
+A full reload of the product page still falls back to fetch-then-restore. `npx vite build` passes.
+
+**Mobile.** FlashList can only scroll once it has drawn, so the first rows showed for a frame or
+two before the jump. When there is a saved position the grid now starts at opacity 0, is scrolled
+unseen, and fades in (140ms, native driver) already in place; an 800ms fallback reveals it if
+`onLoad` never fires. Also: the campus being browsed now survives the round trip
+(`viewedUniversityMemo`, keyed to the user) — it used to reset to the home campus, which also
+defeated the scroll restore for anyone browsing another campus.
+
+### Mobile, the rest
+
+- **Campus banner** is the grid's `ListHeaderComponent` when listings are showing, so it scrolls
+  away with the first row and comes back at the top. Pinned as before in swipe, loading, empty and
+  error states. "Buying and listing stay on your home campus." is back, as a second line at
+  `micro` (11).
+- Card price pulled 4dp (was 2dp) towards the like row.
+- **Initials.** The card's seller initials are now `nano` (9) — **the second `nano` call site**,
+  same justification as the condition badge (capitals on a solid chip); the note in
+  `src/theme/index.ts` says so. The shared `Avatar` (detail screen, inbox, chat, comments) sizes
+  initials at 0.34 of the disc instead of 0.38, still floored at 11.
+
+**Not verified on a device or in a browser.**
+
+---
+
 ## 2026-09-23 — Founder feedback round on the card and product screen, and the like button that stopped working (Vishwajeet)
 
 Mobile only. No backend, no database, no migration, no API change. **Nothing under `frontend/`

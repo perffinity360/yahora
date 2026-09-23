@@ -47,11 +47,12 @@ export function Avatar({
   }
   return (
     <View style={[styles.avatar, dims, { backgroundColor: avatarHue(name) }]}>
-      {/* 0.38 of the disc, but never under the 11dp floor: the inbox and comment
-          avatars are 26dp, where 0.38 lands at 10 and the initials read as a
-          smudge. See font.sizes in src/theme. */}
+      {/* 0.34 of the disc (was 0.38 — two initials crowded the edge), but never
+          under the 11dp floor: the chat and comment avatars are 26–30dp, where
+          the ratio lands at 9–10 and the initials read as a smudge. See
+          font.sizes in src/theme. */}
       <AppText
-        style={[styles.initials, { fontSize: Math.max(font.sizes.micro, Math.round(size * 0.38)) }]}
+        style={[styles.initials, { fontSize: Math.max(font.sizes.micro, Math.round(size * 0.34)) }]}
       >
         {initialsOf(name) || '?'}
       </AppText>

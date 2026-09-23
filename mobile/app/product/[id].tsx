@@ -19,6 +19,7 @@ import {
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton, CircleButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
@@ -144,25 +145,15 @@ export default function ProductDetailScreen() {
           ) : null}
 
           {/* Floating top controls — always reachable over the hero. */}
-          <Pressable
-            onPress={goBack}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            style={({ pressed }) => [styles.topBtn, styles.topBtnLeft, { top: floatingTop }, pressed && styles.topBtnPressed]}
-          >
-            <Feather name="arrow-left" size={22} color={colors.purpleDark} />
-          </Pressable>
+          <BackButton onPress={goBack} style={[styles.topBtn, styles.topBtnLeft, { top: floatingTop }]} />
           {product ? (
-            <Pressable
+            <CircleButton
+              icon="share-2"
+              iconSize={18}
               onPress={handleShare}
-              hitSlop={8}
-              accessibilityRole="button"
               accessibilityLabel="Share this item"
-              style={({ pressed }) => [styles.topBtn, styles.topBtnRight, { top: floatingTop }, pressed && styles.topBtnPressed]}
-            >
-              <Feather name="share-2" size={19} color={colors.purpleDark} />
-            </Pressable>
+              style={[styles.topBtn, styles.topBtnRight, { top: floatingTop }]}
+            />
           ) : null}
         </SafeAreaView>
       </KeyboardAvoider>
@@ -662,26 +653,12 @@ const styles = StyleSheet.create({
   topBtn: {
     // `top` is applied inline from the safe-area inset: an absolutely
     // positioned child ignores the padding SafeAreaView adds, so a static
-    // `top` here slides under the status bar in full-screen mode.
+    // `top` here slides under the status bar in full-screen mode. Position
+    // only — the look lives in src/components/CircleButton.tsx.
     position: 'absolute',
-    zIndex: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.glassBorder,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    shadowColor: colors.black,
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
   },
   topBtnLeft: { left: spacing.lg },
   topBtnRight: { right: spacing.lg },
-  topBtnPressed: { backgroundColor: colors.pinkLight },
 
   /* Gallery */
   gallery: {

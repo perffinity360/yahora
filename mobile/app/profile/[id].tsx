@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BackButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { ProductCard } from '../../src/components/ProductCard';
@@ -174,15 +175,7 @@ export default function PublicProfileScreen() {
           ) : null}
         </ScrollView>
 
-        <Pressable
-          onPress={goBack}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          style={({ pressed }) => [styles.backBtn, { top: floatingTop }, pressed && styles.backBtnPressed]}
-        >
-          <Feather name="arrow-left" size={22} color={colors.purpleDark} />
-        </Pressable>
+        <BackButton onPress={goBack} style={[styles.backBtn, { top: floatingTop }]} />
       </SafeAreaView>
     </View>
   );
@@ -347,26 +340,10 @@ const styles = StyleSheet.create({
   backBtn: {
     // `top` is applied inline from useFloatingTopInset(): an absolutely
     // positioned child ignores the padding SafeAreaView adds, so a static
-    // `top` here slides under the status bar in full-screen mode.
+    // `top` here slides under the status bar in full-screen mode. Position
+    // only — the look lives in src/components/CircleButton.tsx.
     position: 'absolute',
     left: spacing.lg,
-    zIndex: 20,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.cardSurface,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-    shadowColor: colors.purple,
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  backBtnPressed: {
-    backgroundColor: colors.pinkLight,
   },
 
   /* Own-profile banner */

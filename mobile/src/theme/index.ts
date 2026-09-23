@@ -183,11 +183,12 @@ export const font = {
    * in the product, and they are not coming back.
    *
    * `nano` (9) is the one token allowed below that floor, and it has exactly
-   * ONE call site: `conditionText` in src/components/ProductCard.tsx. That is
-   * the one shape that justifies 9dp — a few uppercase characters, ExtraBold,
-   * in their own saturated pill, which the eye reads as a colour-coded chip
-   * rather than as text. Nothing else qualifies. If you are reaching for `nano`
-   * for a label, a count or anything inside a sentence, the answer is `micro`.
+   * TWO call sites, both in src/components/ProductCard.tsx: `conditionText`
+   * and `sellerInitials`. That is the one shape that justifies 9dp — one to a
+   * few uppercase characters, bold, on their own saturated pill or disc, which
+   * the eye reads as a colour-coded chip rather than as text. Nothing else
+   * qualifies. If you are reaching for `nano` for a label, a count or anything
+   * inside a sentence, the answer is `micro`.
    *
    * The scale moved DOWN at the top (40/34/30 -> 24) and UP at the bottom
    * (8/10 -> 11): airier where it was shouting, readable where it was mumbling.
@@ -196,7 +197,7 @@ export const font = {
    * own font setting multiplies them.
    */
   sizes: {
-    /** 9 — Heavy uppercase reads at 9dp; nothing else may use nano. Read the note above first. */
+    /** 9 — Condition badge and card initials only. Read the note above first. */
     nano: 9,
     micro: 11,
     caption: 12,

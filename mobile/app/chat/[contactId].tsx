@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BackButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
@@ -290,15 +291,7 @@ export default function ChatScreen() {
 
           {/* ── Header ── */}
           <View style={styles.header}>
-            <Pressable
-              onPress={goBack}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-            >
-              <Feather name="arrow-left" size={21} color={colors.purpleDark} />
-            </Pressable>
+            <BackButton onPress={goBack} variant="plain" hitSlop={10} accessibilityLabel="Back" />
 
             <View>
               <Avatar name={contactName} uri={contactAvatar} size={42} />
@@ -747,14 +740,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.hairline,
   },
-  backBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtnPressed: { backgroundColor: colors.pinkLight },
   headerDot: {
     position: 'absolute',
     right: 0,
