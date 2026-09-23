@@ -276,6 +276,142 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-23 — 📮 Phase 5 Block N-C: web infinite scroll on chat (reverse) (Neeraj)
+
+### What changed
+- Chat thread pages BACKWARDS: a sentinel at the TOP of the scroll container
+  loads older messages, which prepend as one block. No client-side sorting.
+- Inbox list paginates with the normal bottom sentinel.
+- Dashboard "Mark as sold" buyer picker: it read only the first 50
+  conversations and filtered them to one listing, so a seller with more than
+  50 chats could be told nobody had enquired. It now follows `next_cursor` to
+  the end, bounded at 10 pages, filtering each page the same way. Not a
+  scrolling list; no sentinel.
+- Prompt: CC-N2. Files: Messages.jsx + Messages.module.css, Dashboard.jsx,
+  InfiniteScrollSentinel/, hooks/useInfiniteScroll.js.
+  No backend, supabase or mobile changes.
+
+### The bug that took the time: the view jumped by exactly one page
+Chrome's own scroll anchoring was already shifting scrollTop when a page
+prepended, and our layout effect shifted it again — a double correction. Fix:
+`overflow-anchor: none` on .messagesContainer, so the JS is the only thing
+that moves this container. The compensation was also changed from a
+scrollHeight delta to re-measuring a specific message's position
+(`data-msg-id` + `measureAnchor`), which is immune both to anything else
+touching scrollTop and to a realtime message being appended in the same commit.
+
+### Checkpoint N-C (localhost:3000, arjun@iiitk.ac.in + priya@iiitk.ac.in,
+### tested at 375x600 with history limit temporarily set to 5)
+| Check | Result |
+|---|---|
+| 1. Opens on the newest messages | ✅ |
+| 2. Older messages load on scroll up | ✅ |
+| 3. The view does not jump | ✅ after the overflow-anchor fix; failed before it |
+| 4. Loading stops at the beginning | ✅ 23 requests then none; final page 0.3 kB, next_cursor null; no spinner |
+| 5. Realtime message appears and survives history loading | ✅ |
+| Extra: scrolled up + new message = no yank to bottom | ✅ |
+| Re-check: N-B marketplace still works after the shared-hook changes | ✅ 20 + 12, stops cleanly |
+Temporary limit=5 reverted and verified: 2 requests of 7.6 kB at the real page size.
+
+### For Vishwajeet
+- A server-side `?product_id=` filter on the inbox would turn the Dashboard
+  buyer lookup into one request instead of up to 10. Backend, your module.
+## 2026-09-21 — 📮 Phase 5 Block N-C: web infinite scroll on the chat thread (reverse) + the inbox (Neeraj)
+
+### What changed
+- **Chat thread pages BACKWARDS.** The sentinel is at the TOP of
+  `.messagesContainer`; scrolling up loads the page before the oldest message
+  on screen and prepends it as one block. `GET /api/messages/history` with the
+  `next_cursor` sent back verbatim.
+- **Scroll compensation** — the point of the block. The container's
+  `scrollHeight` is measured immediately before the page is handed to React and
+  again in a `useLayoutEffect` once it has been laid out; the difference is
+  added to `scrollTop`, so the reader stays on the message they were reading.
+  Layout effect, not a passive one, so the correction is in the same frame as
+  the insertion and never paints.
+- **Inbox sidebar now pages too** (normal bottom sentinel). It had been reading
+  only `items` from page one since Phase 4 Block N-C, so a student with more
+  than 20 conversations simply could not reach the rest.
+- **Dashboard "Mark as sold" buyer picker** now follows `next_cursor` through
+  the inbox (cap: 10 pages of 50) instead of reading one page of 50 and
+  filtering it. A seller with many conversations could be told nobody had
+  enquired about a listing somebody had definitely asked about — the old code
+  said as much in a comment.
+- Prompt: CC-N2. Files: `Messages.jsx`, `Dashboard.jsx`,
+  `hooks/useInfiniteScroll.js` (gained an optional `root`, so an observer can
+  watch a list that scrolls inside its own element — the default is unchanged
+  and the N-B surfaces are untouched), `components/InfiniteScrollSentinel/`
+  (gained `reserveSpace`). **No backend, supabase or mobile changes.** No API
+  path or response key changed. No dependency added.
+
+### Two behaviours worth knowing about
+- **Messages are never sorted or re-ordered on the client.** Each page arrives
+  oldest-first from the backend and is prepended whole. If the order ever looks
+  wrong on screen, the page arrived wrong.
+- **The chat welcome banner** ("This is the beginning of your conversation…")
+  is now held back until `next_cursor` is null. It was claiming to be the start
+  of a thread that had 200 unloaded messages under it. One line to revert if
+  you disagree.
+
+### Checkpoint N-C — NOT YET RUN
+Written and building clean (`npm run build`), but I have not driven it in a
+browser yet. Still to do, on a thread with more than 30 messages: opens at the
+bottom · scroll up loads older · **the view does not jump** · loading stops at
+the first message · a message arriving mid-scroll still lands at the bottom and
+does not yank the reader down.
+
+### For Vishwajeet (backend, not changed by me)
+- `GET /api/messages/inbox/:userId` is the only way to find who enquired about
+  one listing, so the Dashboard walks up to 10 pages of it to fill the
+  "mark as sold" picker. A `?product_id=` filter on that endpoint would make it
+  a single request. Your module, your call — noting it rather than asking.
+## 2026-09-20 — 📮 Phase 5 Block N-B: web infinite scroll on the marketplace and comments (Neeraj)
+
+### What changed
+- Marketplace grid and product-detail comments now load the next page when an
+  invisible sentinel at the bottom of the list scrolls into view
+  (IntersectionObserver). The cursor from each response is sent back as `cursor=`.
+- Prompt: CC-N1. Files: Marketplace.jsx + Marketplace.module.css,
+  ProductDetail.jsx, new frontend/src/components/InfiniteScrollSentinel/,
+  new frontend/src/hooks/. No backend or mobile changes.
+
+### Checkpoint N-B (tested on localhost:3000, logged in as arjun@iiitk.ac.in)
+| Check | Result |
+|---|---|
+| Marketplace: more listings on scroll | ✅ page 1 = 20, page 2 = 12 (32 total: 24 seed + 8 hand-made) |
+| Marketplace: stops cleanly | ✅ page 2 has `next_cursor: null`, no third request, no spinner |
+| Marketplace: no duplicates / gaps | ✅ compared ids of both pages: no overlap, all 24 seed ids present |
+| Filter (Condition = Good) still applied on page 2 | ✅ page 2 loaded, every card GOOD |
+| Search for a page-2-only listing ("Godrej") | ✅ found; page 2 loaded automatically without scrolling |
+| Comments: three pages, stops, no duplicates | ✅ tested with a temporary limit=2 and 5 test comments: 3 requests (2+2+1), each comment once, in order. Temporary change reverted and verified |
+
+### Notes
+- Filters and search run in the browser, not on the backend: GET /api/products
+  accepts no filter params. So "the cursor request drops the filter" cannot
+  happen; what we tested instead is that page 2 still gets filtered, and that
+  pages keep loading while a filter leaves few cards on screen.
+- Runbook says localhost:5173; the dev server runs on localhost:3000.
+
+### For Vishwajeet (backend, not changed by me)
+- Loading older comments re-calls GET /api/products/:id with a cursor, and that
+  endpoint adds +1 to `views` every time. Scrolling through comments inflates
+  the view count. Not fixed; backend is yours this phase.
+- The frontend still sends `user_id=` on product requests. The backend ignores
+  it since V-A, so it is harmless leftover; can be cleaned up later.
+## 2026-09-19 — Phase 5 Block N-A part 2: user search works on production (Neeraj)
+
+### Result
+- After Vishwajeet's migration: GET /api/users/search?q=a on production
+  returns STATUS 200 with 3 users (ananya_roy, amit.gupta, arjun.singh).
+- The response uses the Phase 4 shape: `{ "items": [...], "next_cursor": null }`.
+  This is the first time the renamed key has actually run. It works.
+- `grep -rn "\.users\b" frontend/src/ | grep -i search` finds nothing.
+  No frontend code reads the old `users` key, so nothing needed fixing.
+  This closes the open Phase 4 sign-off line about the search key.
+
+### Still open
+- "The web renders search results" cannot be checked: no web or mobile screen
+  calls this endpoint yet (see the N-A part 1 entry). Waiting on our decision.
 
 ## 2026-09-19 — Phase 5 Block V-A: `search_users()` type fix — user search has never worked (Vishwajeet)
 

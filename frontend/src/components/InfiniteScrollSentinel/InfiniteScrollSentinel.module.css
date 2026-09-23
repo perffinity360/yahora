@@ -1,0 +1,65 @@
+/* frontend/src/components/InfiniteScrollSentinel/InfiniteScrollSentinel.module.css */
+
+/* The observed element itself. Empty and zero-content, but it needs a height:
+   a 0px box sitting flush against the last row can end up reported as not
+   intersecting on some browsers, and the list stops paging. */
+.sentinel {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 auto;
+}
+
+.spinnerRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 20px 0 8px;
+  /* Both chat lists are `display: flex; flex-direction: column` scrollers, and
+     a flex child there is shrinkable by default — the reserved row would be
+     squeezed to nothing by the messages above it. */
+  flex: 0 0 auto;
+}
+
+/* The upward-paging variant: a fixed box that is in the layout whether or not
+   the spinner is in it. Its height must not depend on its contents, or the
+   list below it moves when a fetch starts — which on the chat thread is the
+   jump this whole block exists to prevent. */
+.spinnerRowReserved {
+  box-sizing: border-box;
+  height: 42px;
+  flex: 0 0 42px;
+  padding: 10px 0;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(128, 128, 128, 0.25);
+  border-top-color: #2bb7ff;
+  animation: sentinelSpin 0.7s linear infinite;
+}
+
+@keyframes sentinelSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Users who ask for less motion get a pulse instead of a rotation. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: sentinelPulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes sentinelPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}

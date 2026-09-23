@@ -620,6 +620,15 @@ export default function Dashboard() {
 
  /* ── Dashboard Product Card Actions ── */
 
+ /* 📄 Phase 5 Block N-C. How far this will walk the inbox looking for the
+    buyer: 10 pages of 50 is 500 conversations. A bound is needed because the
+    loop below is driven by a cursor the server issues, and an unbounded
+    client-side "keep going until it says stop" is a request storm waiting for
+    a bad day. Reaching it would mean a seller with 500 conversations none of
+    which are about this listing — at which point the honest fix is the
+    server-side product filter noted below, not a bigger number here. */
+ const BUYER_LOOKUP_MAX_PAGES = 10;
+
  const handleMarkSoldClick = async (product) => {
    setSoldModal({ isOpen: true, product, buyers: [], loading: true });
    try {
@@ -627,23 +636,49 @@ export default function Dashboard() {
      // 🔒 requireAuth since Block V-A — without the token this was a silent 401
      // and the buyer list came back empty, which reads as "nobody messaged me".
      const token = localStorage.getItem("yahora_session");
-     // 📄 `{ items, next_cursor }` since Block N-C; the key was `inbox`.
-     //
-     // limit=50 is the server cap, asked for explicitly because this list is
-     // then FILTERED down to one product: at the default of 20 a seller with
-     // many conversations could page past the buyer they are looking for and be
-     // told nobody had enquired. 50 makes that far less likely but does not
-     // remove it — the real fix is an endpoint that filters by product server
-     // side, which is Phase 5 work and needs Vishwajeet.
-     const res = await fetch(
-       `${API_BASE_URL}/messages/inbox/${userId}?limit=50`,
-       { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-     );
-     const result = await res.json();
 
-     const productChats = (result.items || []).filter(
-       (chat) => chat.product_id === product.id,
-     );
+     /* 📄 `{ items, next_cursor }` since Block N-C; the key was `inbox`.
+        This is NOT an infinite-scroll list — nobody scrolls it, it is a
+        picker that shows conversations about ONE listing — so it does not get
+        a sentinel. What it does get is the rest of the pages.
+
+        Before Block N-C it read one page of 50 and filtered that down to the
+        listing, which meant a seller with more than 50 conversations could be
+        told nobody had enquired about an item somebody had definitely asked
+        about. `next_cursor` is followed to the end (or to the page bound
+        above) and every page is filtered the same way, so the buyer is found
+        wherever they are in the list.
+
+        A server-side `?product_id=` filter would make all of this one request.
+        That is a backend change, it is Vishwajeet's module, and it is not in
+        this block. */
+     const headers = token ? { Authorization: `Bearer ${token}` } : {};
+     const productChats = [];
+     let cursor = null;
+
+     for (let page = 0; page < BUYER_LOOKUP_MAX_PAGES; page += 1) {
+       const params = new URLSearchParams({ limit: "50" });
+       // Verbatim, never rebuilt — the value is the server's to define.
+       if (cursor) params.append("cursor", cursor);
+
+       const res = await fetch(
+         `${API_BASE_URL}/messages/inbox/${userId}?${params.toString()}`,
+         { headers },
+       );
+       if (!res.ok) throw new Error(`inbox ${res.status}`);
+
+       const result = await res.json();
+       productChats.push(
+         ...(result.items || []).filter(
+           (chat) => chat.product_id === product.id,
+         ),
+       );
+
+       // null is the ONLY end-of-list signal: not an empty page, and not a
+       // page shorter than the limit.
+       cursor = result.next_cursor ?? null;
+       if (cursor === null) break;
+     }
 
      setSoldModal({
        isOpen: true,
