@@ -206,6 +206,9 @@ export default function MarketplaceScreen() {
   /** The branch below that renders the FlashList grid — mirrors its conditions. */
   const showsGrid =
     !isLoading && !(isError && !hasData) && viewMode !== 'swipe' && displayProducts.length > 0;
+  /** The branch below that renders the swipe deck — same idea. The deck carries
+   *  its own round + for listing, so the pill FAB stands down while it is up. */
+  const showsDeck = !isLoading && !(isError && !hasData) && viewMode === 'swipe';
 
   /** Shared by the pinned banner and the grid-header one. The first line is one
    *  line, always: the campus name is the only part allowed to give up space
@@ -524,8 +527,10 @@ export default function MarketplaceScreen() {
       </View>
 
       {/* Foreign-campus banner, pinned — only where there is no grid to ride
-          inside. With listings on screen it is the grid's header instead. */}
-      {isForeignCampus && !showsGrid ? (
+          inside. With listings on screen it is the grid's header instead.
+          Grid mode only: in swipe mode every dp goes to the deck, and the
+          missing + already says listing is off on this campus. */}
+      {isForeignCampus && viewMode === 'grid' && !showsGrid ? (
         <View style={[styles.foreignBanner, styles.foreignBannerPinned]}>{foreignBannerBody}</View>
       ) : null}
 
@@ -559,6 +564,7 @@ export default function MarketplaceScreen() {
           onLikeProduct={(id) => toggleLike.mutate({ productId: id })}
           onOpenProduct={(id) => router.push(hrefWithFrom(`/product/${id}`, SWIPE_HREF))}
           onBackToGrid={() => setViewMode('grid')}
+          onListItem={!isForeignCampus ? () => router.push('/sell') : undefined}
         />
       ) : displayProducts.length === 0 ? (
         <ScrollView
@@ -630,8 +636,8 @@ export default function MarketplaceScreen() {
         </Animated.View>
       )}
 
-      {/* List-an-item FAB (home campus only) */}
-      {!isForeignCampus ? (
+      {/* List-an-item FAB (home campus only; the swipe deck has its own) */}
+      {!isForeignCampus && !showsDeck ? (
         <Pressable
           onPress={() => router.push('/sell')}
           accessibilityRole="button"

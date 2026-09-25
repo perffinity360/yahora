@@ -276,6 +276,71 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-25 — Phase 5 Block V-D: layouts that broke on small screens (Vishwajeet)
+
+Mobile only. No backend, no database, no API change. **Nothing under `frontend/` was touched.**
+No fontSize, theme token, fontWeight or dependency changed. No `numberOfLines` removed.
+
+**Auth (`app/(auth)/login.tsx`)**
+- Tabs are now **"College Email"** and **"Username"** (were "College Email & OTP" /
+  "Username & Password", truncated at every size). The Password tab's helper line is now
+  "New to Yahora? Sign up with College Email." Only `login.tsx` named the old tabs.
+- Tagline is now "Buy, sell and share with students on your campus." Style unchanged.
+- The screen fits 360×800 at font scale 1.0 with the keyboard closed, on both tabs. Only vertical
+  spacing changed:
+
+  | Where | Before | After |
+  |---|---|---|
+  | ScrollView top/bottom padding | 32 | 8 |
+  | Logo → headline (`logoWrap` marginBottom) | 16 | −12 (the PNG has ~24dp transparent padding below the artwork) |
+  | Headline → tagline | 10 | 6 |
+  | Tagline → card | 24 + 16 | 14 + 16 |
+  | Round badge above the card | 62dp, top −30, icon 38 | 52dp, top −24, icon 32 |
+  | Card padding top / bottom | 40 / 24 | 34 / 20 |
+  | Tab bar → subtitle | 16 | 12 |
+  | Subtitle → field label | 24 | 16 |
+  | Under each input pill | 16 | 12 |
+  | Pill → Supported Universities row | 16 | 12 |
+  | Username → password field | 10 | 8 |
+  | Password → Sign in | 16 | 12 |
+  | Sign in → "New to Yahora?" | 16 | 10 |
+  | Card → "Because every item has a memory." | 24 | pinned to the bottom, at least 16 |
+
+  The column is now **top-anchored** instead of centred. The two tabs are different heights, so a
+  centred column moved the logo and the headline every time the tab changed. Modelled from the
+  font files: the Password tab comes to ~678dp against ~720dp of usable screen at T1, and ~730dp
+  at T2, where it may scroll a little. That is allowed.
+- The Send Code button no longer covers the email field: the row was already `flex: 1` input +
+  fixed button. Not changed.
+
+**Marketplace swipe mode (`app/(tabs)/index.tsx`, `SwipeDeck.tsx`, `SwipeCard.tsx`, `ProductCard.tsx`)**
+- The deck's height comes from flex: whatever is left after the header, the controls, the
+  "N items left" line and the action row. It was `cardWidth + 116`, a fixed number. On a tall
+  phone it is capped so the photo stops at about square.
+- Every swipe card fills the deck, and the **photo** is the part that shrinks. So every card is the
+  same size, whether its title is one line or two. **`ProductCard` gained one optional prop,
+  `fillPhoto`**, which only the swipe deck passes. Grid cards render exactly as before.
+- Cards behind show a 6dp edge (narrower and lower, no longer uniformly scaled). No text, badge,
+  price or footer from a card behind is visible any more.
+- Pass/like buttons are 48dp (were 56) and centred. "List an item" is a 48dp gradient **+** in the
+  right slot of the same row. It sits in the row rather than floating, because a flex row cannot
+  overlap anything. It also shows on the "You've seen everything" screen. The pill FAB is hidden
+  while the deck is showing.
+- The "view only" campus banner no longer shows in swipe mode. It shows in grid mode only.
+
+**Dashboard + public profile tiles (`app/(tabs)/profile.tsx`, `app/profile/[id].tsx`)**
+- "SPECIALIZATION" broke mid-word. Label letterSpacing is now 0 (was 0.8) and tile horizontal
+  padding is 8 (was 12). Neither change alone was enough at 1.15. No `adjustsFontSizeToFit`.
+- Checked every other uppercase or letter-spaced label in the app. They are all short, and all in
+  full-width rows. None can break mid-word at 360dp.
+
+Also fixed the stale comment on `condText` in `app/product/[id].tsx`, which the 2026-09-21 entry
+left for V-D (comment only).
+
+`npx tsc --noEmit` passes. **Not verified on a device.**
+
+---
+
 ## 2026-09-23 (merge) — ⚠️ NEERAJ: your marketplace infinite scroll now skips its reset when someone comes back from a product (Vishwajeet)
 
 Merging `main` into `infiniper` conflicted in `frontend/src/pages/marketplace/Marketplace.jsx`:
