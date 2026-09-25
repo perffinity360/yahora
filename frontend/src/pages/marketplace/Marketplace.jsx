@@ -115,6 +115,25 @@ function rememberFeedPosition(signature) {
  */
 let feedSnapshot = null;
 
+/* ────────── THE ENTRANCE STAGGER, AND WHY IT IS CAPPED ──────────
+ *
+ * `.gridItem` runs `cardIn` with `animation-fill-mode: both`, so a card sits at
+ * opacity 0 for the whole of its delay. Staggering by absolute position in the
+ * feed meant the 40th card waited 1.6s and the 100th waited 4s — fine for the
+ * first screenful on a cold load, wrong everywhere else:
+ *
+ *   • Back out of a product restored the student to their place in the feed
+ *     (see above) and then showed them blank space for a second or more while
+ *     the stagger counted up to where they were standing. That is the bug this
+ *     cap and `gridItemSettled` fix — the cards were there, just invisible.
+ *   • An infinite-scroll page appends at index 40+, so a whole new page of
+ *     listings arrived invisible and faded in seconds later.
+ *
+ * The cap keeps the stagger as a texture on the cards that arrive together and
+ * stops it from being a queue the student has to wait in. */
+const CARD_STAGGER_STEP_MS = 40;
+const CARD_STAGGER_MAX_STEPS = 8;
+
 /** Reads AND clears — one saved position is good for exactly one return trip. */
 function takeFeedPosition() {
   try {
@@ -644,6 +663,18 @@ export default function Marketplace() {
    *  `feedSnapshot`. Keyed by id rather than a one-shot flag so React's
    *  StrictMode double-run of effects in development cannot reset it anyway. */
   const snapshotCampusRef = useRef(returnSnapshot?.university?.id ?? null);
+
+  /** Ids the grid already had at the instant this mount began, i.e. everything
+   *  that came back in the snapshot on a Back. Those cards render SETTLED —
+   *  no entrance animation at all, because they never left. Anything that
+   *  arrives later (a page of infinite scroll, a campus switch) is not in here
+   *  and animates in normally. Same idea as `openingIdsRef` in Messages.jsx.
+   *  `returnSnapshot` is useState-held and never changes, so this is built
+   *  once. */
+  const settledIds = useMemo(
+    () => new Set((returnSnapshot?.products ?? []).map((p) => p.id)),
+    [returnSnapshot],
+  );
 
   useEffect(() => {
     feedSnapshot = null;
@@ -1241,7 +1272,14 @@ export default function Marketplace() {
     if (navigationType !== "POP") return;
     if (saved.signature !== feedSignature) return;
 
-    window.scrollTo(0, saved.y);
+    // `behavior: "instant"`, spelled out, and never the `scrollTo(x, y)` form:
+    // the two-argument form means behaviour "auto", which defers to the CSS
+    // `scroll-behavior` — and a third-party stylesheet setting that to `smooth`
+    // turns this line into a visible animated scroll down from the top, which
+    // is exactly what restoring a position is meant to avoid. global.css takes
+    // Bootstrap's rule back out; this is the belt to that braces, so the
+    // landing stays instant whatever any future stylesheet does.
+    window.scrollTo({ top: saved.y, left: 0, behavior: "instant" });
   }, [
     loading,
     viewMode,
@@ -1659,8 +1697,15 @@ export default function Marketplace() {
                 {displayProducts.map((product, i) => (
                   <div
                     key={product.id}
-                    className={styles.gridItem}
-                    style={{ animationDelay: `${i * 40}ms` }}
+                    className={`${styles.gridItem} ${
+                      settledIds.has(product.id) ? styles.gridItemSettled : ""
+                    }`}
+                    style={{
+                      animationDelay: `${
+                        Math.min(i, CARD_STAGGER_MAX_STEPS) *
+                        CARD_STAGGER_STEP_MS
+                      }ms`,
+                    }}
                   >
                     <ProductCard
                       product={product}
