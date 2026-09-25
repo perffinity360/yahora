@@ -197,7 +197,6 @@ export const font = {
    * own font setting multiplies them.
    */
   sizes: {
-    /** 9 — Condition badge and card initials only. Read the note above first. */
     nano: 9,
     micro: 11,
     caption: 12,
