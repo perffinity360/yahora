@@ -467,13 +467,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.hairline,
-    paddingHorizontal: 12,
+    // 8, not 12, and no letterSpacing on the label below (was 0.8): together
+    // they are what keeps "SPECIALIZATION" on one line in a half-width tile on
+    // a 360dp phone at the 1.15 font cap — ~106dp of text in 110dp of tile.
+    // Either change alone still broke it mid-word. Phase 5 V-D.
+    paddingHorizontal: 8,
     paddingVertical: 10,
   },
   acadLabel: {
     fontFamily: font.family.bold,
     fontSize: font.sizes.micro,
-    letterSpacing: 0.8,
+    letterSpacing: 0,
     textTransform: 'uppercase',
     color: colors.mutedLabel,
     marginBottom: 3,

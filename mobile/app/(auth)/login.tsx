@@ -502,8 +502,7 @@ export default function LoginScreen() {
                 <GradientHeading text="Keep the story going." />
 
                 <AppText style={styles.tagline}>
-                  Find, share, and pass on the things that made campus home, with the
-                  students right beside you.
+                  Buy, sell and share with students on your campus.
                 </AppText>
               </Animated.View>
 
@@ -511,9 +510,10 @@ export default function LoginScreen() {
                 <View style={styles.card}>
                   <AppText style={styles.cardTitle}>Join Yahora</AppText>
 
-                  {/* Segmented control. The labels are fixed copy from runbook
-                      §0.6 — "College Email & OTP", not just "Email": students
-                      think of it as their college ID.
+                  {/* Segmented control. "College Email", not just "Email":
+                      students think of it as their college ID. Shortened from
+                      "College Email & OTP" / "Username & Password" in Phase 5
+                      V-D — the long pair truncated at every font size.
 
                       Hidden once a code has been sent. Mid-OTP the card is a
                       one-way step with its own "wrong email? go back", and a
@@ -522,8 +522,8 @@ export default function LoginScreen() {
                   {step === 'email' ? (
                     <View style={styles.tabBar} accessibilityRole="tablist">
                       {([
-                        ['otp', 'College Email & OTP'],
-                        ['password', 'Username & Password'],
+                        ['otp', 'College Email'],
+                        ['password', 'Username'],
                       ] as const).map(([key, label]) => {
                         const active = tab === key;
                         return (
@@ -619,8 +619,7 @@ export default function LoginScreen() {
                           only place that guidance can live, because the failure
                           message is deliberately identical for every cause. */}
                       <AppText style={styles.helperNote}>
-                        New to Yahora? Use the College Email &amp; OTP{'\n'}tab to create your
-                        account.
+                        New to Yahora? Sign up with College Email.
                       </AppText>
                     </>
                   ) : step === 'email' ? (
@@ -946,11 +945,19 @@ const styles = StyleSheet.create({
   },
   safe: { flex: 1 },
   flex: { flex: 1 },
+  // ── FITS A 360 x 800 PHONE WITHOUT SCROLLING (Phase 5 V-D) ──
+  // Top-anchored, not centred: the two tabs are different heights, and a
+  // centred column moved the logo and the headline every time the tab changed.
+  // Anchored, only the card's own bottom edge moves; the footer note is pinned
+  // to the bottom by `formWrapper` + `footerNote`'s auto margin. The spacing
+  // below was cut to fit the Password tab (the taller one) at font scale 1.0
+  // with the keyboard closed — see the V-D entry in docs/CHANGELOG.md for the
+  // before and after of every value. Nothing here shrinks text. At 1.15 or with
+  // the keyboard up it may scroll, and that is fine.
   scroll: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.sm,
   },
   // Scroll room while the keyboard is up. The reveal above can only scroll if
   // there is somewhere to scroll TO, and the footer note is only a few points
@@ -960,6 +967,7 @@ const styles = StyleSheet.create({
     paddingBottom: 160,
   },
   formWrapper: {
+    flexGrow: 1,
     width: '100%',
     maxWidth: 440,
     alignSelf: 'center',
@@ -967,7 +975,10 @@ const styles = StyleSheet.create({
 
   logoWrap: {
     alignItems: 'center',
-    marginBottom: spacing.md,
+    // Negative on purpose: yahora-logo.png carries ~24dp of transparent padding
+    // under the artwork at this size, so this closes an invisible gap and leaves
+    // the logo itself exactly as big as it was.
+    marginBottom: -12,
   },
   logo: {
     width: 208,
@@ -975,7 +986,7 @@ const styles = StyleSheet.create({
   },
 
   headingWrap: {
-    marginBottom: spacing.sm + 2,
+    marginBottom: 6,
   },
   headingMask: {
     flexDirection: 'row',
@@ -998,7 +1009,7 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.body,
     lineHeight: 21,
     color: colors.mutedText,
-    marginBottom: spacing.lg,
+    marginBottom: 14,
     maxWidth: 380,
   },
 
@@ -1008,7 +1019,9 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.cardSurface,
     padding: spacing.lg,
-    paddingTop: spacing.xl + spacing.sm,
+    paddingBottom: 20,
+    // Clears the badge's 28dp overhang into the card (52 - 24) with a small gap.
+    paddingTop: 34,
     borderRadius: 28,
     borderWidth: 1,
     borderColor: colors.glassBorder,
@@ -1020,16 +1033,16 @@ const styles = StyleSheet.create({
   },
   floatingIcon: {
     position: 'absolute',
-    top: -30,
+    top: -24,
     alignSelf: 'center',
     left: 0,
     right: 0,
     alignItems: 'center',
   },
   floatingIconInner: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1042,8 +1055,8 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   floatingIconImg: {
-    width: 38,
-    height: 38,
+    width: 32,
+    height: 32,
   },
 
   cardTitle: {
@@ -1059,7 +1072,7 @@ const styles = StyleSheet.create({
     gap: 4,
     padding: 4,
     marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.md - 4,
     borderRadius: 999,
     backgroundColor: colors.inputBg,
   },
@@ -1081,8 +1094,9 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontFamily: font.family.semibold,
-    // 11.5 so both labels hold on one line at 375pt. "College Email & OTP" is
-    // fixed copy, so the type gives way rather than the words.
+    // "College Email" is ~91dp at the 1.15 cap against ~107dp of tab on a
+    // 360dp phone, so both labels show whole. numberOfLines={1} stays as the
+    // guard, not as the plan.
     fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
@@ -1092,10 +1106,10 @@ const styles = StyleSheet.create({
   },
 
   passwordWrap: {
-    marginTop: spacing.sm + 2,
+    marginTop: spacing.sm,
   },
   signInRow: {
-    marginTop: spacing.md,
+    marginTop: spacing.md - 4,
     alignSelf: 'center',
   },
   helperNote: {
@@ -1104,7 +1118,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'center',
     color: colors.mutedText,
-    marginTop: spacing.md,
+    marginTop: 10,
   },
 
   subtitle: {
@@ -1112,7 +1126,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.mutedText,
     fontSize: font.sizes.body,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   subtitleEmphasis: {
     fontFamily: font.family.bold,
@@ -1139,7 +1153,7 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.md + 4,
     paddingRight: 7,
     paddingVertical: 7,
-    marginBottom: spacing.md,
+    marginBottom: spacing.md - 4,
     borderWidth: 1.5,
     borderColor: 'transparent',
   },
@@ -1210,7 +1224,7 @@ const styles = StyleSheet.create({
   },
 
   pillRow: {
-    marginTop: spacing.md,
+    marginTop: spacing.md - 4,
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
@@ -1274,6 +1288,9 @@ const styles = StyleSheet.create({
     color: colors.purpleDark,
     opacity: 0.65,
     fontSize: font.sizes.body,
-    marginTop: spacing.lg,
+    // Pinned to the bottom of the screen (the wrapper grows to fill it), with
+    // at least spacing.md above it when the content runs long.
+    marginTop: 'auto',
+    paddingTop: spacing.md,
   },
 });

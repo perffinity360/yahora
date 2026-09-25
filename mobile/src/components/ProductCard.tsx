@@ -120,6 +120,15 @@ export interface ProductCardProps {
   sellerAvatarUrl?: string | null;
   /** When true, render the owner toolbar (sold / available / edit / delete). */
   showManageActions?: boolean;
+  /**
+   * SWIPE DECK ONLY. The card fills whatever height its parent gives it and the
+   * PHOTO takes the slack, instead of being square: every row under the photo
+   * keeps its natural height, so they are always fully visible and every card
+   * in the deck is the same size whether its title is one line or two. Pass it
+   * with a `style` that gives the card a height (`flex: 1` in a sized box).
+   * Off by default, so every grid card renders exactly as before.
+   */
+  fillPhoto?: boolean;
 }
 
 /** Compact round icon button, used only by the owner toolbar. */
@@ -161,6 +170,7 @@ function ProductCardBase({
   sellerName,
   sellerAvatarUrl,
   showManageActions,
+  fillPhoto,
 }: ProductCardProps) {
   // Listing photos are minted by the backend against its own SUPABASE_URL,
   // which is loopback in local dev and unreachable from a phone — the tile just
@@ -193,7 +203,7 @@ function ProductCardBase({
       style={({ pressed }) => [styles.shadow, style, pressed && !!onPress && styles.pressed]}
     >
       <View style={styles.inner}>
-        <View style={styles.imageWrap}>
+        <View style={[styles.imageWrap, fillPhoto ? styles.imageWrapFill : styles.imageWrapSquare]}>
           {image ? (
             <Image source={{ uri: image }} style={styles.image} contentFit="cover" transition={220} />
           ) : (
@@ -213,7 +223,7 @@ function ProductCardBase({
           ) : null}
         </View>
 
-        <View style={styles.info}>
+        <View style={[styles.info, fillPhoto && styles.infoFit]}>
           {/* Row 1 — condition badge left, like button right. */}
           <View style={styles.topRow}>
             <View style={[styles.conditionBadge, { backgroundColor: cond.bg }]}>
@@ -368,8 +378,9 @@ const styles = StyleSheet.create({
   inner: {
     // Fills the card when a grid row stretches it — see `info`'s flex and the
     // footer's `marginTop: 'auto'`. In a parent with no height of its own (the
-    // sell preview, the swipe deck) flex-basis falls back to content, so this
-    // is inert there rather than collapsing to zero.
+    // sell preview) flex-basis falls back to content, so this is inert there
+    // rather than collapsing to zero. The swipe deck DOES give it a height —
+    // see `fillPhoto`.
     flex: 1,
     borderRadius: radius.lg,
     overflow: 'hidden',
@@ -379,8 +390,15 @@ const styles = StyleSheet.create({
   },
   imageWrap: {
     width: '100%',
-    aspectRatio: 1,
     backgroundColor: colors.inputBg,
+  },
+  imageWrapSquare: {
+    aspectRatio: 1,
+  },
+  /** `fillPhoto`: the photo is the one part of the card that gives way. */
+  imageWrapFill: {
+    flex: 1,
+    minHeight: 0,
   },
   image: {
     width: '100%',
@@ -417,6 +435,10 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 10,
     gap: 4,
+  },
+  /** `fillPhoto`: the rows take their natural height; the photo takes the rest. */
+  infoFit: {
+    flex: 0,
   },
 
   /* Row 1 — badge + like */

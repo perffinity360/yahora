@@ -18,6 +18,14 @@ export const SWIPE_THRESHOLD = 100;
 const FLING_MS = 320;
 /** How far a finger may travel and still count as a tap, not a drag. */
 const TAP_SLOP = 12;
+/**
+ * How much of each card behind the front one shows, in dp, below the front
+ * card's bottom edge. Every card is the same box (the deck minus two edges),
+ * so a card behind is covered by the one in front of it everywhere except this
+ * strip, and the strip is inside the card's own bottom padding: the stack reads
+ * as depth, and none of the cards behind show a word of their content.
+ */
+const STACK_EDGE = 6;
 
 export interface SwipeCardHandle {
   /** Programmatically fling the card (used by the Like / Pass buttons). */
@@ -118,9 +126,11 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
 
   const cardStyle = useAnimatedStyle(() => {
     if (!isTop) {
-      const scale = depth === 1 ? 0.96 : 0.92;
-      const offsetY = depth === 1 ? 15 : 30;
-      return { transform: [{ translateY: offsetY }, { scale }] };
+      // Narrower and lower, never shorter: a uniform scale shrank the card's
+      // height too, and the offset needed to make up for it is what pushed the
+      // card behind's footer out below the front card.
+      const scaleX = depth === 1 ? 0.95 : 0.9;
+      return { transform: [{ translateY: depth * STACK_EDGE }, { scaleX }] };
     }
     return {
       transform: [
@@ -156,6 +166,8 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
           product={product}
           sellerName={product.seller?.full_name}
           sellerAvatarUrl={product.seller?.avatar_url}
+          style={styles.fill}
+          fillPhoto
         />
       </Animated.View>
     </GestureDetector>
@@ -163,11 +175,17 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
 });
 
 const styles = StyleSheet.create({
+  // Every card, front or behind, fills the deck less the two stack edges. The
+  // deck's height comes from the screen's flex layout, so the card's does too.
   card: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    bottom: STACK_EDGE * 2,
+  },
+  fill: {
+    flex: 1,
   },
   stamp: {
     position: 'absolute',

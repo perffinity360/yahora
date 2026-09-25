@@ -1,4 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
@@ -8,6 +9,15 @@ import type { MarketplaceProduct } from '../types';
 import { SwipeCard, type SwipeCardHandle } from './SwipeCard';
 
 const SCREEN_PAD = spacing.lg;
+/** Pass, like and list-an-item: one size, so the row reads as one set. */
+const ACTION_SIZE = 48;
+/**
+ * The most the INFO half of a card can need (two-line title, 1.15 font cap).
+ * Only used to cap the deck on a tall phone so the photo stops at about square;
+ * on every phone we target the deck is shorter than the cap and it never bites.
+ */
+const INFO_ALLOWANCE = 180;
+const BRAND = [colors.purple, colors.pinkDark] as const;
 
 /**
  * Cards already swiped away, remembered OUTSIDE the component tree.
@@ -34,14 +44,23 @@ interface Props {
   /** Tap the front card — opens the product detail screen. */
   onOpenProduct: (id: string) => void;
   onBackToGrid: () => void;
+  /** List a new item. Omitted on another campus, where listing is not allowed. */
+  onListItem?: () => void;
 }
 
 /** The Tinder-style deck: top 3 cards stacked, only the front one interactive. */
-export function SwipeDeck({ products, onLikeProduct, onOpenProduct, onBackToGrid }: Props) {
+export function SwipeDeck({
+  products,
+  onLikeProduct,
+  onOpenProduct,
+  onBackToGrid,
+  onListItem,
+}: Props) {
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(width - SCREEN_PAD * 2, 340);
-  // Sized to the actual card (image + info) so there's no dead space beneath it.
-  const deckHeight = cardWidth + 116;
+  // The deck's HEIGHT is not computed: it is whatever flex leaves after the
+  // counter and the action row (see `deckArea`). This is only a ceiling.
+  const deckMaxHeight = cardWidth + INFO_ALLOWANCE;
 
   const [deck, setDeck] = useState<MarketplaceProduct[]>([]);
   const topRef = useRef<SwipeCardHandle>(null);
@@ -79,32 +98,66 @@ export function SwipeDeck({ products, onLikeProduct, onOpenProduct, onBackToGrid
     setDeck([...products].reverse());
   };
 
+  /**
+   * List an item, as a round + the same size as pass and like, in the right
+   * slot of the action row. In the row, not floating: a flex row cannot
+   * overlap its neighbours, so it can never cover the buttons, the counter or
+   * the card on any screen size, and it sits where a thumb already is.
+   */
+  const listItemBtn = onListItem ? (
+    <Pressable
+      onPress={onListItem}
+      accessibilityRole="button"
+      accessibilityLabel="List an item"
+      style={({ pressed }) => [styles.circleBtn, styles.listBtn, pressed && styles.circlePressed]}
+    >
+      <LinearGradient
+        colors={BRAND}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.listBtnFill}
+      >
+        <Feather name="plus" size={22} color={colors.white} />
+      </LinearGradient>
+    </Pressable>
+  ) : null;
+
   if (deck.length === 0) {
     return (
-      <View style={styles.emptyWrap}>
-        <View style={styles.emptyIcon}>
-          <Feather name="check-circle" size={28} color={colors.purple} />
-        </View>
-        <Text style={styles.emptyTitle}>You&apos;ve seen everything!</Text>
-        <Text style={styles.emptyText}>Check back later for new listings, or browse the grid.</Text>
-        <View style={styles.emptyActions}>
-          <Pressable
-            onPress={onBackToGrid}
-            style={({ pressed }) => [styles.ghostBtn, pressed && styles.ghostBtnPressed]}
-          >
-            <Feather name="grid" size={16} color={colors.purpleDark} />
-            <AppText style={styles.ghostBtnText}>Back to grid</AppText>
-          </Pressable>
-          {products.length > 0 ? (
+      <View style={styles.emptyOuter}>
+        <View style={styles.emptyWrap}>
+          <View style={styles.emptyIcon}>
+            <Feather name="check-circle" size={28} color={colors.purple} />
+          </View>
+          <Text style={styles.emptyTitle}>You&apos;ve seen everything!</Text>
+          <Text style={styles.emptyText}>Check back later for new listings, or browse the grid.</Text>
+          <View style={styles.emptyActions}>
             <Pressable
-              onPress={resetDeck}
-              style={({ pressed }) => [styles.solidBtn, pressed && styles.solidBtnPressed]}
+              onPress={onBackToGrid}
+              style={({ pressed }) => [styles.ghostBtn, pressed && styles.ghostBtnPressed]}
             >
-              <Feather name="rotate-ccw" size={16} color={colors.white} />
-              <AppText style={styles.solidBtnText}>See again</AppText>
+              <Feather name="grid" size={16} color={colors.purpleDark} />
+              <AppText style={styles.ghostBtnText}>Back to grid</AppText>
             </Pressable>
-          ) : null}
+            {products.length > 0 ? (
+              <Pressable
+                onPress={resetDeck}
+                style={({ pressed }) => [styles.solidBtn, pressed && styles.solidBtnPressed]}
+              >
+                <Feather name="rotate-ccw" size={16} color={colors.white} />
+                <AppText style={styles.solidBtnText}>See again</AppText>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
+        {/* Nothing to pass or like, but listing is still one tap away, in the
+            same place as when there are cards. */}
+        {listItemBtn ? (
+          <View style={[styles.actionRow, { width: cardWidth }]}>
+            <View style={styles.actionSide} />
+            <View style={[styles.actionSide, styles.actionSideEnd]}>{listItemBtn}</View>
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -113,48 +166,55 @@ export function SwipeDeck({ products, onLikeProduct, onOpenProduct, onBackToGrid
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.deck, { width: cardWidth, height: deckHeight }]}>
-        {visible.map((product, i, arr) => {
-          const depth = arr.length - 1 - i;
-          return (
-            <SwipeCard
-              key={product.id}
-              ref={depth === 0 ? topRef : undefined}
-              product={product}
-              depth={depth}
-              onLike={handleLike}
-              onPass={remove}
-              onOpen={onOpenProduct}
-            />
-          );
-        })}
+      {/* Takes every dp the counter and the action row do not need, so the
+          buttons below are never pushed under the tab bar. */}
+      <View style={styles.deckArea}>
+        <View style={[styles.deck, { width: cardWidth, maxHeight: deckMaxHeight }]}>
+          {visible.map((product, i, arr) => {
+            const depth = arr.length - 1 - i;
+            return (
+              <SwipeCard
+                key={product.id}
+                ref={depth === 0 ? topRef : undefined}
+                product={product}
+                depth={depth}
+                onLike={handleLike}
+                onPass={remove}
+                onOpen={onOpenProduct}
+              />
+            );
+          })}
+        </View>
       </View>
 
-      <AppText style={styles.counter}>
+      <AppText style={styles.counter} numberOfLines={1}>
         {deck.length} item{deck.length !== 1 ? 's' : ''} left
       </AppText>
 
-      <View style={styles.spacer} />
-
-      {/* Bottom-left, sitting level with the List-an-item FAB (rendered by the
-          screen at bottom-right) so the two never collide. */}
-      <View style={styles.buttons}>
-        <Pressable
-          onPress={() => topRef.current?.swipe('pass')}
-          accessibilityRole="button"
-          accessibilityLabel="Pass"
-          style={({ pressed }) => [styles.circleBtn, styles.passBtn, pressed && styles.circlePressed]}
-        >
-          <Feather name="x" size={26} color={colors.swipePass} />
-        </Pressable>
-        <Pressable
-          onPress={() => topRef.current?.swipe('like')}
-          accessibilityRole="button"
-          accessibilityLabel="Like"
-          style={({ pressed }) => [styles.circleBtn, styles.likeBtn, pressed && styles.circlePressed]}
-        >
-          <Feather name="heart" size={24} color={colors.swipeLike} />
-        </Pressable>
+      {/* Three slots: an empty one left, pass + like centred, list-an-item
+          right. The two sides are equal flex, so pass and like stay centred
+          whether or not the + is there (it is not on another campus). */}
+      <View style={[styles.actionRow, { width: cardWidth }]}>
+        <View style={styles.actionSide} />
+        <View style={styles.buttons}>
+          <Pressable
+            onPress={() => topRef.current?.swipe('pass')}
+            accessibilityRole="button"
+            accessibilityLabel="Pass"
+            style={({ pressed }) => [styles.circleBtn, styles.passBtn, pressed && styles.circlePressed]}
+          >
+            <Feather name="x" size={22} color={colors.swipePass} />
+          </Pressable>
+          <Pressable
+            onPress={() => topRef.current?.swipe('like')}
+            accessibilityRole="button"
+            accessibilityLabel="Like"
+            style={({ pressed }) => [styles.circleBtn, styles.likeBtn, pressed && styles.circlePressed]}
+          >
+            <Feather name="heart" size={20} color={colors.swipeLike} />
+          </Pressable>
+        </View>
+        <View style={[styles.actionSide, styles.actionSideEnd]}>{listItemBtn}</View>
       </View>
     </View>
   );
@@ -164,28 +224,45 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: spacing.md,
+    paddingTop: spacing.md - 4,
     paddingHorizontal: SCREEN_PAD,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md - 4,
+  },
+  deckArea: {
+    flex: 1,
+    // Without this a flex child refuses to shrink below its content, and the
+    // content (the card) is exactly what has to give way on a short screen.
+    minHeight: 0,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deck: {
-    alignSelf: 'center',
+    flex: 1,
     position: 'relative',
   },
-  // Absorbs the space between the card and the bottom action row so the circles
-  // pin to the bottom (level with the FAB) regardless of screen height.
-  spacer: {
+  actionRow: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  actionSide: {
     flex: 1,
+  },
+  actionSideEnd: {
+    alignItems: 'flex-end',
   },
   buttons: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    alignSelf: 'flex-start',
+    gap: spacing.md,
   },
+  // 48, down from 56: the 16dp goes to the photo. Still over the 44dp minimum
+  // touch target.
   circleBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: ACTION_SIZE,
+    height: ACTION_SIZE,
+    borderRadius: ACTION_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,
@@ -202,6 +279,18 @@ const styles = StyleSheet.create({
   likeBtn: {
     borderColor: colors.swipeLike,
   },
+  listBtn: {
+    borderWidth: 0,
+    overflow: 'hidden',
+    shadowColor: colors.purple,
+    shadowOpacity: 0.3,
+  },
+  listBtnFill: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   circlePressed: {
     transform: [{ scale: 0.92 }],
   },
@@ -213,6 +302,12 @@ const styles = StyleSheet.create({
   },
 
   /* Empty */
+  // The action row carries its own width, so no side padding here: the empty
+  // state's text and buttons keep exactly the width they had.
+  emptyOuter: {
+    flex: 1,
+    paddingBottom: spacing.md - 4,
+  },
   emptyWrap: {
     flex: 1,
     alignItems: 'center',

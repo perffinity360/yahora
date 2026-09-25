@@ -1247,71 +1247,131 @@ VERIFY AFTER -- report each
 ## CC-V4 — The four layout fixes
 
 ```
-Phase 5, Block V-D. Fix four layouts that break on small or dense
-screens. The font-scale clamp (V-B) and the type scale (V-C) are
-already in.
+Phase 5, Block V-D. Fix layouts that break on small or dense screens.
+MOBILE ONLY. The font-scale clamp (V-B, cap 1.15), the type scale (V-C)
+and the product card redesign are already in and are FINAL.
 
 BEFORE YOU CHANGE ANYTHING
-V-B and V-C may have already resolved some of these. For EACH of the
-four, first inspect the current code and state plainly whether the
-problem still exists. If it does not, say so and change nothing there.
-Do not apply a fix to a bug that is already gone -- that leaves a hack
-in the codebase with no problem attached to it.
+For EACH fix below, first inspect the current code and state plainly
+whether the problem still exists. If it does not, say so and change
+nothing there. Never apply a fix to a bug that is already gone.
 
-TEST TARGET
-The smallest supported viewport is about 360 x 800 dp (Samsung Galaxy
-A03s at default display size) with font scale 1.15. Every fix must hold
-there.
+Check the screenshots in docs/screenshots/post-VC.
 
-FIX 1 -- product card stats row
-mobile/src/components/ProductCard.tsx, the metaRow and statsRow styles.
-metaRow is flexDirection row with justifyContent 'space-between' and
-gap 6, and the stats group has no shrink handling, so at larger text
-the counts run into the timestamp and render as "1350 1 0 09h ago".
-Give the stats group flexShrink: 1 with minWidth: 0, and let the
-timestamp shrink or drop rather than overlap.
-NOTE: V-C cut this row from four items to two, so this may already be
-comfortable. Check first.
+TEST TARGETS
+- T1: 360 x 800 dp (Samsung Galaxy A03s, default display size),
+  font scale 1.0.
+- T2: the same screen at font scale 1.15 (our cap).
+Unless a fix says otherwise: at T1 and T2 nothing overlaps, nothing
+is clipped, nothing is unreachable, and no word is broken mid-word.
 
-FIX 2 -- auth email field
-The Send Code button overlays the email input and covers the
-you@uni.edu placeholder at larger text.
-Make the input and the button a flex row: input flex 1 with
-minWidth: 0, button flexShrink: 0. If the row cannot fit at the test
-size, stack the button BELOW the input rather than overlapping it.
+FIX A -- auth tab labels (copy change)
+mobile/app/(auth)/login.tsx. The two tabs read "College Email & OTP"
+and "Username & Password" and truncate at every size.
+- Rename the tabs to exactly: "College Email" and "Username".
+- The line at the bottom of the Password tab currently says
+  "New to Yahora? Use the College Email & OTP ..." Change it to
+  exactly: "New to Yahora? Sign up with College Email."
+- Search mobile/ for every other string that names the old tabs
+  (hints, errors, accessibility labels) and update them to the new
+  names.
+- Both tab labels must show in full at T1 and T2.
 
-FIX 3 -- auth headline vs settings gear
-"Keep the story going." is clipped by the floating gear button.
-Reserve horizontal space for the gear so the headline wraps before
-reaching it instead of running underneath. Allow the headline two
-lines.
-NOTE: V-C brought the display size down from 34 to 28. This one in
-particular may already be fixed. Check before touching it.
+FIX B -- auth tagline (copy change)
+The paragraph under "Keep the story going." currently reads
+"Find, share, and pass on the things that made campus home, with the
+students right beside you." Replace it with exactly:
+"Buy, sell and share with students on your campus."
+Keep its existing text style.
 
-FIX 4 -- swipe screen vertical overflow
-mobile/app/(tabs)/index.tsx, swipe mode.
-At 360x800 the "N items left" label is hidden behind the card stack and
-the List an item FAB overlaps the pass/like buttons.
-Make the swipe area flexible rather than fixed height: the card deck
-takes the remaining space after the header, the action row and the
-label, using flex rather than a hardcoded height. The FAB must not
-overlap the pass/like buttons at any viewport.
+FIX C -- auth screen must fit without scrolling
+At T1, with the keyboard CLOSED, the whole auth screen must fit on
+screen without scrolling on BOTH tabs: logo, headline, tagline, the
+card with all its content (including the Password tab's two fields,
+Sign in button and the "New to Yahora?" line, and the Email tab's
+Supported Universities and Live Demo buttons), and the bottom line
+"Because every item has a memory." fully visible above the system
+navigation bar (respect the bottom safe-area inset).
+How: reduce vertical spacing only — top padding, the gaps between
+logo, headline, tagline and card, the size/overlap of the round logo
+badge above the card, gaps inside the card. Take space from the
+biggest gaps first. Do NOT shrink any text.
+Keep the ScrollView (or equivalent) in place: at T2, or with the
+keyboard open, scrolling is allowed and correct. The goal is that the
+DEFAULT state needs no scroll, not that scrolling is impossible.
+Switching tabs must not make the screen jump or need a scroll at T1.
+
+FIX 2 -- auth email field vs Send Code (check first)
+Most probabaly this is already fixed but check it.
+At larger text the Send Code button may cover the email input.
+If still broken at T2: make the input and button a flex row — input
+flex: 1 with minWidth: 0, button flexShrink: 0. If it cannot fit at
+T2, stack the button below the input rather than overlap it.
+
+FIX 3 -- auth headline vs a floating gear (check first)
+When we are in swipe mode and in viewing any other campus instead of home capmus, the campus banner should not appear. It should appear only in grid mode.
+
+FIX 4 -- swipe mode (mobile/app/(tabs)/index.tsx, SwipeDeck.tsx,
+SwipeCard.tsx)
+Current state at the POCO X2's default size: the pass (X) and like (heart) buttons are hidden behind, the
+"List an item" button is hidden behind, the "N items left" label
+is hidden, and the card BEHIND the front card shows its own footer
+text below the front card.
+Required result, at T1 and T2:
+1. The deck takes only the space left after the header, the controls
+   row, the pass/like action row and the "N items left" label. Use
+   flex layout, not a hardcoded height.
+2. The FRONT card fits entirely inside the deck: its photo area
+   flexes (shrinks) so the badge row, price, location, title, divider
+   and footer are always fully visible. The product card's content
+   rows must not be removed or restyled; if SwipeCard needs the photo
+   to flex instead of using its grid aspect ratio, add an optional
+   prop to ProductCard for that. The grid card must look exactly as
+   it does now.
+3. Cards BEHIND the front card show only a thin edge (a few dp) of
+   the stack effect. None of their content — text, badge, price,
+   footer — may be visible.
+  Important thing to consider is that the product card title can go upto one or two lines depending on the size user has types in. So if its two lines the cards size id different from the one line title card. So we need to handle this so each card is of the same size in swipe mode. Nothing should be disturbed in the grid mode. It should stay as it is.
+
+4. Make the pass and like buttons a bit small so the product card get space, and the "N items left" label are fully
+   visible and tappable, above the tab bar.
+5. Make the "List an item" as a plus icon and remove the text, it stays reachable in swipe mode and never overlaps
+   the pass/like buttons, the label or the front card. Choose the
+   simplest placement that achieves this and explains the choice. the plus icon should be of the same size as the pass/like buttons.
+
+FIX D -- dashboard info tiles break words
+mobile/app/(tabs)/profile.tsx, the four info tiles (Qualification,
+Current Year, Course, Specialization). The uppercase label
+"SPECIALIZATION" wraps mid-word to "SPECIALIZATIO / N" in a half-width
+tile.
+Required: every tile label shows on ONE line, whole, at T1 and T2.
+Fix in this order, stopping at the first that works:
+  (a) reduce that label style's letterSpacing;
+  (b) reduce the tile's horizontal padding;
+  (c) as a last resort, adjustsFontSizeToFit with numberOfLines={1}
+      and minimumFontScale no lower than 0.85.
+Then search the whole app for any other label or text that can break
+mid-word (uppercase, letterSpaced labels in narrow containers) and
+report each place, fixing it the same way.
 
 HARD CONSTRAINTS
-- Do NOT remove any numberOfLines. Deliberate truncation stays; a title
-  ending in ".." is the design working, not a bug.
-- Do NOT change fontSize values, colours, or theme tokens. Those were
-  settled in V-C and must stay separately attributable.
+- Do NOT change any fontSize or theme token. The scale is final:
+  nano 9, micro 11, caption 12, body 13, bodyLg 14, title 16,
+  headline 20, display 24.
+- Do NOT add fontWeight anywhere; use the theme's font families.
+- Do NOT remove any numberOfLines. Deliberate truncation stays.
+- Do NOT change the product card's design; FIX 4 may only add an
+  optional layout prop for swipe.
 - Do NOT add a dependency.
-- Do NOT touch backend/ , supabase/ or frontend/ .
-- Do NOT attempt to make screens pixel-identical across devices. The
-  goal is that nothing overlaps, nothing is clipped and nothing is
-  unreachable. Anything beyond that is out of scope and will be
-  rejected in review.
+- Do NOT touch backend/, supabase/ or frontend/.
+- Do NOT try to make screens pixel-identical across devices.
 
 VERIFY AFTER -- report each
-For each of the four: whether it was still broken, what changed, which
-file, and plainly whether it holds at 360x800 dp with font scale 1.15.
+For each of A, B, C, 2, 3, 4, D: whether it was still broken, what
+changed, which file, and plainly whether it holds at T1 and at T2.
+Also: every old tab-name string found and changed (FIX A), the
+vertical spacing values changed on the auth screen with before and
+after (FIX C), and npx tsc --noEmit in mobile/ passes.
 ```
 
 ## CC-V5 — Mobile infinite scroll

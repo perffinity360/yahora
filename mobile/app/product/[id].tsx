@@ -683,8 +683,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  // Same badge as the card's, so the same weight and size. See
-  // `conditionText` in src/components/ProductCard.tsx.
+  // Deliberately NOT the card's badge: the card's is ExtraBold at `nano` (9)
+  // because the tile has no room; this screen does, so Bold at `micro` (11).
+  // Colours still come from `conditionColors`, same as the card.
   condText: {
     fontFamily: font.family.bold,
     fontSize: font.sizes.micro,
