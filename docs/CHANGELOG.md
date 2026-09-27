@@ -276,6 +276,29 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-27 (evening) — Tab labels cut off at large font sizes; back-to-top arrow tail (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
+
+- **Tab bar labels were clipped**: "Marketplace" cut on both axes at Samsung's largest font
+  size, and its descenders shaved by about a dp on the POCO at default size.
+  - **Cause:** the labels were React Navigation's own `<Text>`, which scales with the system
+    font with no cap. They never got `AppText`'s 1.15× limit.
+  - **Cause:** the bar is a fixed 49dp: 5dp padding + a 28dp icon slot + 5dp padding leaves
+    the label 11dp, and Inter's line box at the default 10dp label is about 12dp.
+  - **Fix (`app/(tabs)/_layout.tsx`):** labels render through `AppText` (capped, one line,
+    `micro` 11, line height 14), and the bar is sized from its parts at the cap:
+    10 + 28 + ⌈14 × 1.15⌉ + 1 = 56dp plus the bottom inset. That is 7dp taller than before.
+- **Back-to-top arrow's tail** was faint and a pixel off centre. It was a trapezoid built from
+  transparent borders, which Android draws badly at sub-dp widths. It is now two mirrored,
+  round-ended bars meeting at the tip. Same taper, centred by construction, every edge
+  snapped to a device pixel (`BackToTop.tsx`).
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
 ## 2026-09-27 (later) — Swipe deck: the next card is live on release; web-style back-to-top; posting no longer flickers (Vishwajeet)
 
 Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.

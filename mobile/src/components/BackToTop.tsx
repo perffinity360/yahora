@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { PixelRatio, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -113,61 +113,59 @@ export function BackToTop({
  *   head — round-capped strokes from (5.6, 9.6) and (18.4, 9.6) to the apex at
  *          (12, 3.3), 2.2 wide;
  *   tail — 2.7 wide at y 4.3, narrowing to 1.2 at y 21.3, with a round end.
+ *
+ * THE TAIL IS TWO BARS, not one shape. Each is a round-ended bar as wide as the
+ * tail's tip; both start at the tip, (12, 21.3), and lean apart by the few
+ * degrees that put their tops 2.7 apart at y 4.3. Together they make exactly
+ * the web's taper. It was a single trapezoid built from transparent side
+ * borders, and Android draws sub-dp mixed-colour borders badly: the tail came
+ * out faint and rounded a pixel off centre. Two mirrored bars are centred by
+ * construction, and every edge here is snapped to a whole device pixel.
  */
 function ArrowUpGlyph({ size, color }: { size: number; color: string }) {
   const s = size / 24;
+  const px = PixelRatio.roundToNearestPixel;
 
-  const stroke = 2.2 * s;
+  // Head: two round-capped strokes meeting at the apex.
+  const stroke = px(2.2 * s);
   const arm = Math.hypot(6.4, 6.3) * s;
-  const angle = (Math.atan2(6.3, 6.4) * 180) / Math.PI;
+  const armAngle = (Math.atan2(6.3, 6.4) * 180) / Math.PI;
   const armStyle = (midX: number, deg: number): ViewStyle => ({
     position: 'absolute',
-    left: midX * s - (arm + stroke) / 2,
-    top: 6.45 * s - stroke / 2,
-    width: arm + stroke,
+    left: px(midX * s - (arm + stroke) / 2),
+    top: px(6.45 * s - stroke / 2),
+    width: px(arm + stroke),
     height: stroke,
     borderRadius: stroke / 2,
     backgroundColor: color,
     transform: [{ rotate: `${deg}deg` }],
   });
 
-  const tailTop = 4.3 * s;
-  const tailBottom = 21.3 * s;
-  const tailTopW = 2.7 * s;
-  const tailEndW = 1.2 * s;
+  // Tail: two bars from the tip, leaning apart.
+  const tipW = Math.max(px(1.2 * s), 1);
+  const rise = 21.3 - 4.3;
+  const spread = (2.7 - 1.2) / 2; // how far each top edge moves out, in units
+  const lean = (Math.atan2(spread, rise) * 180) / Math.PI;
+  const barLen = Math.hypot(rise, spread) * s + tipW; // + tipW: the round ends
+  const barStyle = (dir: -1 | 1): ViewStyle => ({
+    position: 'absolute',
+    // Centred on the midpoint of its own centre line; RN rotates about there.
+    left: px((12 + (dir * spread) / 2) * s - tipW / 2),
+    top: px(((21.3 + 4.3) / 2) * s - barLen / 2),
+    width: tipW,
+    height: px(barLen),
+    borderRadius: tipW / 2,
+    backgroundColor: color,
+    // A top leaning left is an anticlockwise (negative) turn.
+    transform: [{ rotate: `${dir * lean}deg` }],
+  });
 
   return (
     <View style={{ width: size, height: size }} pointerEvents="none">
-      {/* Tail: a trapezoid from borders — the top border is the fill, the side
-          borders are transparent wedges that narrow it towards the bottom. */}
-      <View
-        style={{
-          position: 'absolute',
-          left: 12 * s - tailTopW / 2,
-          top: tailTop,
-          width: tailEndW,
-          height: 0,
-          borderTopWidth: tailBottom - tailTop,
-          borderTopColor: color,
-          borderLeftWidth: (tailTopW - tailEndW) / 2,
-          borderRightWidth: (tailTopW - tailEndW) / 2,
-          borderLeftColor: 'transparent',
-          borderRightColor: 'transparent',
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          left: 12 * s - tailEndW / 2,
-          top: tailBottom - tailEndW / 2,
-          width: tailEndW,
-          height: tailEndW,
-          borderRadius: tailEndW / 2,
-          backgroundColor: color,
-        }}
-      />
-      <View style={armStyle(8.8, -angle)} />
-      <View style={armStyle(15.2, angle)} />
+      <View style={barStyle(-1)} />
+      <View style={barStyle(1)} />
+      <View style={armStyle(8.8, -armAngle)} />
+      <View style={armStyle(15.2, armAngle)} />
     </View>
   );
 }
