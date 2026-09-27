@@ -1,3 +1,5 @@
+import type { InfiniteData } from '@tanstack/react-query';
+
 import type { Message, PendingMessage } from '../types';
 
 /**
@@ -6,15 +8,55 @@ import type { Message, PendingMessage } from '../types';
  * Every path that can add a message to a chat — the realtime INSERT, the send
  * response, the history refetch — goes through here, so the dedupe logic exists
  * exactly once. Getting this wrong is what produces double bubbles.
+ *
+ * ── NOTHING HERE SORTS (Phase 5 V-E) ──
+ * The order on screen is the order the server sent: each history page arrives
+ * oldest-first, pages are stacked newest page first, and a new message is
+ * appended to the end of the newest page. If a thread ever renders out of
+ * order, the backend sent it out of order — fix it there, not here.
  */
 
-/** Chronological order. Realtime can deliver out of order after a reconnect. */
-export function sortByTime(list: PendingMessage[]): PendingMessage[] {
-  return [...list].sort((a, b) => {
-    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    // Equal timestamps (bulk inserts) — fall back to id so the order is stable.
-    return diff !== 0 ? diff : a.id.localeCompare(b.id);
-  });
+/** One page of `GET /api/messages/history`, as cached. Items oldest-first. */
+export interface ChatPage {
+  items: PendingMessage[];
+  next_cursor: string | null;
+}
+
+/**
+ * The `['chat', contactId, productId]` cache: a `useInfiniteQuery` result.
+ * `pages[0]` is the NEWEST page (the one a thread opens on); each later page is
+ * the stretch of conversation immediately before the one above it in the array.
+ */
+export type ChatCache = InfiniteData<ChatPage>;
+
+/**
+ * Rewrite the newest page — where a new message, sent or received, always lands.
+ * With no cache yet (a send before the first page has arrived) it starts one.
+ */
+export function updateNewestPage(
+  data: ChatCache | undefined,
+  update: (items: PendingMessage[]) => PendingMessage[],
+): ChatCache {
+  if (!data || data.pages.length === 0) {
+    return { pages: [{ items: update([]), next_cursor: null }], pageParams: [undefined] };
+  }
+  const [newest, ...older] = data.pages;
+  return { ...data, pages: [{ ...newest, items: update(newest.items) }, ...older] };
+}
+
+/** Rewrite every loaded page — for changes to a message that may be anywhere. */
+export function updateEveryPage(
+  data: ChatCache | undefined,
+  update: (items: PendingMessage[]) => PendingMessage[],
+): ChatCache | undefined {
+  if (!data) return data;
+  return { ...data, pages: data.pages.map((page) => ({ ...page, items: update(page.items) })) };
+}
+
+/** The whole loaded thread, oldest first: the older pages, then the newer. */
+export function flattenThread(data: ChatCache | undefined): PendingMessage[] {
+  if (!data) return [];
+  return [...data.pages].reverse().flatMap((page) => page.items);
 }
 
 /**
@@ -24,7 +66,7 @@ export function sortByTime(list: PendingMessage[]): PendingMessage[] {
  * 2. Otherwise, if an optimistic message is waiting on this exact send — matched
  *    by `client_tag` when we know it, else by same sender + product + identical
  *    content — swap the real one in and drop the placeholder.
- * 3. Otherwise it is genuinely new: append and re-sort.
+ * 3. Otherwise it is genuinely new: append it, at the bottom of the thread.
  */
 export function mergeMessage(
   list: PendingMessage[] | undefined,
@@ -51,18 +93,14 @@ export function mergeMessage(
   if (pendingIdx > -1) {
     const next = [...current];
     next[pendingIdx] = { ...incoming };
-    return sortByTime(next);
+    return next;
   }
 
-  return sortByTime([...current, { ...incoming }]);
+  return [...current, { ...incoming }];
 }
 
 /** Replace a message after an UPDATE (the read/delivered ticks). */
-export function replaceMessage(
-  list: PendingMessage[] | undefined,
-  updated: Message,
-): PendingMessage[] | undefined {
-  if (!list) return list;
+export function replaceMessage(list: PendingMessage[], updated: Message): PendingMessage[] {
   return list.map((m) => (m.id === updated.id ? { ...updated } : m));
 }
 

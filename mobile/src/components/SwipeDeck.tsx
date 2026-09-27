@@ -1,12 +1,13 @@
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 
 import { AppText } from './AppText';
 import { colors, font, spacing } from '../theme';
 import type { MarketplaceProduct } from '../types';
-import { SwipeCard, type SwipeCardHandle } from './SwipeCard';
+import { SwipeCard, type DeckMotion, type SwipeCardHandle } from './SwipeCard';
 
 const SCREEN_PAD = spacing.lg;
 /** Pass, like and list-an-item: one size, so the row reads as one set. */
@@ -62,8 +63,36 @@ export function SwipeDeck({
   // counter and the action row (see `deckArea`). This is only a ceiling.
   const deckMaxHeight = cardWidth + INFO_ALLOWANCE;
 
+  /** Cards still to swipe, front card LAST. */
   const [deck, setDeck] = useState<MarketplaceProduct[]>([]);
+  /**
+   * Cards already decided that are still flying off the screen. They left
+   * `deck` the moment the finger lifted, so the next card is the front card
+   * and can be swiped straight away; they stay mounted here only to finish
+   * their animation, on top and untouchable (see SwipeCard).
+   */
+  const [leaving, setLeaving] = useState<MarketplaceProduct[]>([]);
+  /** Each card's place as dealt, front = 0. Fixed until the next deal. */
+  const [orders, setOrders] = useState<Map<string, number>>(() => new Map());
   const topRef = useRef<SwipeCardHandle>(null);
+  // The stack's shared motion — see DeckMotion in SwipeCard for each value.
+  const frontOrder = useSharedValue(0);
+  const drag = useSharedValue(0);
+  const settle = useSharedValue(0);
+  const motion = useMemo<DeckMotion>(
+    () => ({ frontOrder, drag, settle }),
+    [frontOrder, drag, settle],
+  );
+
+  /** Put `stacked` (front card LAST) on the table as a fresh deal. */
+  const deal = (stacked: MarketplaceProduct[]) => {
+    setOrders(new Map(stacked.map((p, i) => [p.id, stacked.length - 1 - i])));
+    frontOrder.value = 0;
+    drag.value = 0;
+    settle.value = 0;
+    setLeaving([]);
+    setDeck(stacked);
+  };
 
   // Rebuild only when the filtered id SET changes (order-independent), so a
   // like — which flips is_liked but not the set — never re-adds swiped cards.
@@ -72,30 +101,51 @@ export function SwipeDeck({
     const stacked = [...products].reverse(); // newest ends up on top of the stack
     if (swipedMemo?.idsKey === idsKey) {
       const seen = new Set(swipedMemo.ids);
-      setDeck(stacked.filter((p) => !seen.has(p.id)));
+      deal(stacked.filter((p) => !seen.has(p.id)));
     } else {
       swipedMemo = { idsKey, ids: [] };
-      setDeck(stacked);
+      deal(stacked);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey]);
 
-  const remove = (id: string) => {
-    if (swipedMemo?.idsKey === idsKey) {
+  // STABLE callbacks, read through refs. The cards are memoised, and a commit
+  // re-renders the deck at exactly the moment the next card has to be ready —
+  // a fresh function here would re-render every card on every swipe.
+  const deckRef = useRef(deck);
+  deckRef.current = deck;
+  const idsKeyRef = useRef(idsKey);
+  idsKeyRef.current = idsKey;
+  const onLikeRef = useRef(onLikeProduct);
+  onLikeRef.current = onLikeProduct;
+  const onOpenRef = useRef(onOpenProduct);
+  onOpenRef.current = onOpenProduct;
+
+  /** A card was swiped. It leaves the deck NOW (the next card is live) and
+   *  finishes flying off from `leaving`. */
+  const handleCommit = useCallback((id: string, liked: boolean) => {
+    const key = idsKeyRef.current;
+    if (swipedMemo?.idsKey === key) {
       if (!swipedMemo.ids.includes(id)) swipedMemo.ids.push(id);
     } else {
-      swipedMemo = { idsKey, ids: [id] };
+      swipedMemo = { idsKey: key, ids: [id] };
     }
+    const card = deckRef.current.find((p) => p.id === id);
+    if (card) setLeaving((l) => (l.some((p) => p.id === id) ? l : [...l, card]));
     setDeck((prev) => prev.filter((p) => p.id !== id));
-  };
-  const handleLike = (id: string) => {
-    remove(id);
-    onLikeProduct(id);
-  };
+    if (liked) onLikeRef.current(id);
+  }, []);
+
+  /** Its fling has finished; it can go. */
+  const handleGone = useCallback((id: string) => {
+    setLeaving((l) => l.filter((p) => p.id !== id));
+  }, []);
+
+  const handleOpen = useCallback((id: string) => onOpenRef.current(id), []);
   /** "See again" — deal the whole feed back out and forget what was swiped. */
   const resetDeck = () => {
     swipedMemo = { idsKey, ids: [] };
-    setDeck([...products].reverse());
+    deal([...products].reverse());
   };
 
   /**
@@ -122,7 +172,8 @@ export function SwipeDeck({
     </Pressable>
   ) : null;
 
-  if (deck.length === 0) {
+  // Not while the last card is still flying off — the empty state waits for it.
+  if (deck.length === 0 && leaving.length === 0) {
     return (
       <View style={styles.emptyOuter}>
         <View style={styles.emptyWrap}>
@@ -162,7 +213,10 @@ export function SwipeDeck({
     );
   }
 
-  const visible = deck.slice(-3); // last element = front card
+  // Three show; a fourth is mounted exactly under the third (see MAX_BACK in
+  // SwipeCard), so when a card goes, the one that moves up into view is already
+  // there instead of popping in. Last element = front card.
+  const visible = deck.slice(-4);
 
   return (
     <View style={styles.wrap}>
@@ -170,17 +224,26 @@ export function SwipeDeck({
           buttons below are never pushed under the tab bar. */}
       <View style={styles.deckArea}>
         <View style={[styles.deck, { width: cardWidth, maxHeight: deckMaxHeight }]}>
-          {visible.map((product, i, arr) => {
-            const depth = arr.length - 1 - i;
+          {/* One list, deck then leaving, all keyed by id: a card moving from
+              the deck to `leaving` stays the same mounted component, so its
+              fling carries on uninterrupted. */}
+          {[...visible, ...leaving].map((product, i) => {
+            const isLeaving = i >= visible.length;
+            const depth = isLeaving ? 0 : visible.length - 1 - i;
             return (
               <SwipeCard
                 key={product.id}
-                ref={depth === 0 ? topRef : undefined}
+                ref={!isLeaving && depth === 0 ? topRef : undefined}
                 product={product}
                 depth={depth}
-                onLike={handleLike}
-                onPass={remove}
-                onOpen={onOpenProduct}
+                leaving={isLeaving}
+                // `deck` and `orders` are always set together in deal(), so every
+                // card here has an order; the fallback only satisfies the type.
+                order={orders.get(product.id) ?? depth}
+                motion={motion}
+                onCommit={handleCommit}
+                onGone={handleGone}
+                onOpen={handleOpen}
               />
             );
           })}

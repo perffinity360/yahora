@@ -9,7 +9,7 @@ import { useFonts } from 'expo-font';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -67,7 +67,17 @@ function AuthGate() {
     );
   }
 
-  return <Slot />;
+  // A STACK, not a <Slot/>. The Slot was a stack too, but it rendered only
+  // its top route, so pushing /product unmounted the whole (tabs) navigator —
+  // and React Navigation throws away a navigator's state when it unmounts. Back
+  // then re-created the tabs at their first route, which is why a product
+  // opened from the Dashboard came back to the Marketplace. A Stack keeps the
+  // screens underneath mounted, so back returns to the tab, and the scroll
+  // position, exactly as they were.
+  //
+  // No header (every screen draws its own) and no transition animation: the
+  // Slot switched screens instantly, and this changes navigation, not looks.
+  return <Stack screenOptions={{ headerShown: false, animation: 'none' }} />;
 }
 
 export default function RootLayout() {
@@ -95,7 +105,12 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <PersistQueryClientProvider
           client={queryClient}
-          persistOptions={{ persister, maxAge: CACHE_MAX_AGE }}
+          // `buster`: bump it whenever a cached query CHANGES SHAPE, and the
+          // restored cache is thrown away once instead of being handed to code
+          // that cannot read it. Phase 5 V-E turned the marketplace, product and
+          // chat caches into infinite queries (`{ pages, pageParams }`); a phone
+          // restoring the old flat shapes would crash on `data.pages`.
+          persistOptions={{ persister, maxAge: CACHE_MAX_AGE, buster: 'v5e-infinite' }}
         >
           <AuthProvider>
             {/* Owns the app's only realtime channel. It must sit above the

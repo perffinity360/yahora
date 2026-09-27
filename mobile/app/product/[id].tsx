@@ -2,13 +2,15 @@ import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   FlatList,
   Keyboard,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,8 +25,13 @@ import { BackButton, CircleButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
+import { BackToTop } from '../../src/components/BackToTop';
 import { CommentSection, MAX_COMMENT_LENGTH } from '../../src/components/CommentThread';
-import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import {
+  dismissKeyboard,
+  KeyboardAvoider,
+  onKeyboardDismissStart,
+} from '../../src/components/KeyboardAvoider';
 import { formatPrice } from '../../src/components/ProductCard';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
@@ -51,6 +58,7 @@ function formatDate(iso: string): string {
 
 export default function ProductDetailScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const floatingTop = insets.top + spacing.sm;
   const { width } = useWindowDimensions();
@@ -62,7 +70,15 @@ export default function ProductDetailScreen() {
   const myUserId = profile?.id;
   const myUniversityId = profile?.university_id;
 
-  const { data: product, isLoading, isError, refetch } = useProductDetail(productId);
+  const {
+    data: product,
+    isLoading,
+    isError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useProductDetail(productId);
 
   // Bind the like/save toggles to this product's cache; `false` skips the
   // on-settle refetch — a GET here would re-increment the server view counter.
@@ -86,14 +102,53 @@ export default function ProductDetailScreen() {
   // notes at the top of components/PinchToZoom.tsx.
   const lift = usePinchLift();
 
-  // Root layout is a <Slot/>, so back() re-mounts the tabs at their initial
-  // route. Prefer the explicit `from` origin each opener passes; else fall back
-  // to history, then home.
-  const goBack = () => {
-    if (fromParam) router.replace(fromParam);
-    else if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)');
-  };
+  /**
+   * ── BACK IS THE ROUTER'S OWN HISTORY ──
+   * The root layout is a Stack (see app/_layout.tsx), so whatever opened this
+   * listing — a Dashboard tab, the Marketplace grid or deck, a public profile —
+   * is still mounted underneath it, exactly as it was left. Going back is
+   * popping this screen. No breadcrumb decides it, so opening several listings
+   * in a row, or backgrounding the app in between, cannot confuse it.
+   *
+   * One wrinkle. The chat and seller-profile screens this one opens still come
+   * back with `router.replace(from)`, which leaves a second copy of THIS listing
+   * in the history where the first one already was. Popping one would land on
+   * that copy — the same page again. So any copies directly underneath are
+   * dismissed together with this one.
+   *
+   * `from` is used only when there is no history to go back to: a listing
+   * opened cold from a shared link.
+   */
+  const goBack = useCallback(() => {
+    const { routes, index } = navigation.getState() ?? { routes: [], index: 0 };
+    let copies = 0;
+    for (let i = index - 1; i >= 0; i--) {
+      const r = routes[i];
+      const sameListing =
+        r.name === 'product/[id]' && (r.params as { id?: string } | undefined)?.id === productId;
+      if (!sameListing) break;
+      copies += 1;
+    }
+    if (index - copies > 0) {
+      if (copies === 0) router.back();
+      else router.dismiss(copies + 1);
+    } else {
+      router.replace(fromParam ?? '/(tabs)');
+    }
+  }, [navigation, router, productId, fromParam]);
+
+  // Android's system back takes the same path, so it can never land on one of
+  // those copies. Registered only while this screen is on top: a listing left
+  // underneath a chat stays mounted now, and must not answer that screen's back.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        goBack();
+        return true;
+      });
+      return () => sub.remove();
+    }, [goBack]),
+  );
 
   // See src/lib/share.ts. What was here shared the bare title with no price,
   // no campus and — the part that mattered — no link, so nobody who received it
@@ -141,6 +196,13 @@ export default function ProductDetailScreen() {
               onOpenChat={(href) =>
                 router.push(hrefWithFrom(href, hrefWithFrom(`/product/${product.id}`, fromParam)))
               }
+              // Older questions. The guard is what stops a scroll that keeps
+              // reporting "near the bottom" from sending the same request again
+              // while one is in flight; with no next page it does nothing.
+              onReachEnd={() => {
+                if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+              }}
+              loadingMoreComments={isFetchingNextPage}
             />
           ) : null}
 
@@ -181,6 +243,8 @@ function Content({
   onSave,
   onOpenSeller,
   onOpenChat,
+  onReachEnd,
+  loadingMoreComments,
 }: {
   product: ProductDetailData;
   lift: PinchLift;
@@ -196,6 +260,9 @@ function Content({
   onSave: () => void;
   onOpenSeller: () => void;
   onOpenChat: (href: string) => void;
+  /** The page has been scrolled to within half a screen of its end. */
+  onReachEnd: () => void;
+  loadingMoreComments: boolean;
 }) {
   const galleryHeight = Math.min(width, 460);
 
@@ -243,15 +310,19 @@ function Content({
      composer is open (that one owns the space above the keyboard instead). */
   const scrollRef = useRef<ScrollView>(null);
   const scrollOffset = useRef(0);
+  const keyboardUp = useKeyboardVisible();
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const addComment = useAddComment(product.id);
 
+  // dismissKeyboard, not Keyboard.dismiss: the page drops its keyboard padding
+  // in this same render, so the keyboard slides away over a page that is
+  // already in its final place (see KeyboardAvoider).
   const closeComposer = () => {
     setComposerOpen(false);
     setDraft('');
-    Keyboard.dismiss();
+    dismissKeyboard();
   };
 
   const submitQuestion = () => {
@@ -269,6 +340,24 @@ function Content({
   const canComment = !isForeignCampus;
   const canSend = !!draft.trim() && !addComment.isPending;
 
+  /* ── Back to top ──
+     Once the page is scrolled more than a screen down — deep in the questions,
+     usually — a small arrow floats above the action bar and scrolls back up.
+     Only a boolean crossing the line is state; the offset itself stays a ref. */
+  const [pastFold, setPastFold] = useState(false);
+  const pastFoldRef = useRef(false);
+  /** The action bar's measured height, so the arrow sits just above it. */
+  const [dockHeight, setDockHeight] = useState(72 + bottomInset);
+
+  /* ── The action bar never shows while the keyboard is up ──
+     Shown mid-keyboard it would sit on top of the keyboard's padding, halfway
+     up the screen, over the questions. When the app closes the keyboard itself
+     (posting, cancelling) `keyboardUp` goes false at the START of the slide,
+     together with KeyboardAvoider dropping its padding, so the bar is already
+     at the bottom when the keyboard uncovers it. A keyboard the student closes
+     themselves flips it when the slide ends. */
+  const showActionBar = !replyingTo && !composerOpen && !keyboardUp;
+
   return (
     <>
       <ScrollView
@@ -277,7 +366,23 @@ function Content({
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-          scrollOffset.current = e.nativeEvent.contentOffset.y;
+          const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+          scrollOffset.current = contentOffset.y;
+          const past = contentOffset.y > layoutMeasurement.height;
+          if (past !== pastFoldRef.current) {
+            pastFoldRef.current = past;
+            setPastFold(past);
+          }
+          // The questions are the last thing on the page, inside this one
+          // ScrollView rather than a list of their own, so "near the end" is
+          // measured here: half a screen from the bottom, the same distance as
+          // a list's onEndReachedThreshold={0.5}.
+          if (
+            contentOffset.y + layoutMeasurement.height >=
+            contentSize.height - layoutMeasurement.height * 0.5
+          ) {
+            onReachEnd();
+          }
         }}
         contentContainerStyle={{ paddingBottom: 104 + bottomInset }}
       >
@@ -448,12 +553,23 @@ function Content({
             scrollRef={scrollRef}
             scrollOffsetRef={scrollOffset}
           />
+          {/* Only while an older page is loading. When there are no more pages
+              nothing is drawn: the last question is simply the last thing. */}
+          {loadingMoreComments ? (
+            <ActivityIndicator color={colors.purple} style={styles.moreComments} />
+          ) : null}
         </View>
       </ScrollView>
 
       {/* ── Bottom dock: question composer, or the action bar ──
            Hidden entirely while an inline reply composer is open so the two
            never fight for the strip above the keyboard. */}
+      <BackToTop
+        visible={pastFold && showActionBar}
+        style={[styles.toTop, { bottom: dockHeight + spacing.md }]}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+      />
+
       {replyingTo ? null : composerOpen ? (
         // The keyboard is up whenever this is mounted (the input autofocuses),
         // so it already covers the home indicator — no bottom inset needed.
@@ -478,7 +594,7 @@ function Content({
               autoFocus
               multiline
               maxLength={MAX_COMMENT_LENGTH}
-              placeholder="Is it still available? Any scratches?"
+              placeholder="Is it still available?"
               placeholderTextColor={colors.mutedPlaceholder}
               style={styles.composerInput}
               accessibilityLabel="Your question"
@@ -510,8 +626,11 @@ function Content({
             </Pressable>
           </View>
         </View>
-      ) : (
-      <View style={[styles.actionWrap, { paddingBottom: bottomInset + spacing.sm }]}>
+      ) : !showActionBar ? null : (
+      <View
+        style={[styles.actionWrap, { paddingBottom: bottomInset + spacing.sm }]}
+        onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}
+      >
         {isForeignCampus && !isOwnListing ? (
           <AppText style={styles.foreignNote}>
             Viewing another campus — messaging is limited to your home campus.
@@ -581,6 +700,36 @@ function Content({
 }
 
 /* ────────────────────────── Small pieces ────────────────────────── */
+
+/**
+ * Whether the keyboard is on screen. Android only reports that the keyboard has
+ * FINISHED moving (`keyboardDid*`), which is the moment KeyboardAvoider drops
+ * its padding too, so the two change together. iOS also says it is ABOUT to
+ * move (`keyboardWill*`), which lines the change up with KeyboardAvoidingView's
+ * own animation there.
+ */
+function useKeyboardVisible(): boolean {
+  const [visible, setVisible] = useState(() => Keyboard.isVisible());
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const shown = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () =>
+      setVisible(true),
+    );
+    const hidden = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () =>
+      setVisible(false),
+    );
+    // A dismiss the app started: gone as of now (see dismissKeyboard).
+    const dismissing = onKeyboardDismissStart(() => setVisible(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+      dismissing();
+    };
+  }, []);
+  return visible;
+}
+
+
 function MetaChip({ icon, label }: { icon: keyof typeof Feather.glyphMap; label: string }) {
   return (
     <View style={styles.metaChip}>
@@ -645,6 +794,9 @@ function ErrorState({ onRetry, onBack }: { onRetry: () => void; onBack: () => vo
 }
 
 const styles = StyleSheet.create({
+  moreComments: {
+    paddingVertical: spacing.md,
+  },
   root: { flex: 1, backgroundColor: colors.appBgBottom },
   flex: { flex: 1 },
   safe: { flex: 1 },
@@ -928,6 +1080,10 @@ const styles = StyleSheet.create({
   },
 
   /* Action bar */
+  toTop: {
+    position: 'absolute',
+    right: spacing.lg,
+  },
   actionWrap: {
     position: 'absolute',
     left: 0,

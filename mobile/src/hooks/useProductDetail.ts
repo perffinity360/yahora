@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -22,25 +22,69 @@ import type { ProductDetailData, ProductDetailWire } from '../types';
  * `.filter()` / `.map()` straight on it, so left alone that is a crash on open,
  * not an empty list.
  *
- * It is flattened back to an array before it reaches the cache, which keeps one
- * cache shape shared with `useProduct` and keeps the optimistic vote patches in
- * `useComments` working unchanged. Phase 5 reads `next_cursor` here for "load
- * earlier comments".
+ * Each page is flattened back to an array before it reaches the cache, and
+ * `select` joins the pages into ONE product whose `comments` is the plain array
+ * CommentThread has always read. Threading is untouched: the server returns
+ * every reply on the same page as its top-level comment (API.md), so the
+ * joined array holds each thread whole, exactly as one big response would.
+ *
+ * ── INFINITE SCROLL (Phase 5 V-E) ──────────────────────────────────────────
+ * `useInfiniteQuery`. Page one is the whole product plus the newest 20
+ * top-level questions; `fetchNextPage()` re-requests the product with
+ * `?cursor=<comments.next_cursor>` for the next 20. `next_cursor: null` is the
+ * end, and the only end signal.
+ *
+ * ⚠ Every page is a full GET /api/products/:id, and that endpoint adds a view
+ * each time — so reading older questions inflates `views`. Known, backend-side
+ * (Neeraj flagged the same on the web, CHANGELOG 2026-09-20); not fixable here.
+ *
+ * ⚠ The cache holds `InfiniteData`, so this key can no longer be shared with a
+ * plain `useQuery`. `useProduct` (the Sell edit prefill) reads its own
+ * `['product', id, 'edit']` for that reason. Writers into this cache — the
+ * like/save toggles (useProductActions) and the comment add/vote patches
+ * (useComments) — walk `pages`.
  */
 export function useProductDetail(productId: string | undefined) {
   const { profile } = useAuth();
   const visitorId = profile?.id;
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['product', productId],
-    queryFn: () => {
-      const query = visitorId ? `?user_id=${visitorId}` : '';
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }): Promise<ProductDetailPage> => {
+      const params = new URLSearchParams();
+      if (visitorId) params.append('user_id', visitorId);
+      if (pageParam) params.append('cursor', pageParam);
+      const query = params.toString();
       return api
-        .get<{ product: ProductDetailWire }>(`/api/products/${productId}${query}`)
-        .then((r) => unwrapComments(r.product));
+        .get<{ product: ProductDetailWire }>(`/api/products/${productId}${query ? `?${query}` : ''}`)
+        .then((r) => ({
+          ...unwrapComments(r.product),
+          commentsNextCursor: r.product.comments?.next_cursor ?? null,
+        }));
     },
+    getNextPageParam: (lastPage) => lastPage.commentsNextCursor ?? undefined,
+    select: joinPages,
     enabled: !!productId,
   });
+}
+
+/**
+ * One cached page: the product exactly as `unwrapComments` leaves it, plus the
+ * cursor for the page after it. A page IS a product object on purpose — the
+ * like/save patch recognises a listing by its `id`, so it works on every page
+ * without knowing this hook exists.
+ */
+export type ProductDetailPage = ProductDetailData & { commentsNextCursor: string | null };
+
+/**
+ * The newest page's product fields (it is the one the patches keep current),
+ * with every loaded page's comments, newest page first — the order a single
+ * response would have had. Module scope so `select` keeps a stable identity.
+ */
+function joinPages(data: InfiniteData<ProductDetailPage>): ProductDetailData {
+  const [first] = data.pages;
+  return { ...first, comments: data.pages.flatMap((page) => page.comments) };
 }
 
 /**

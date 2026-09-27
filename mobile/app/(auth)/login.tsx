@@ -565,7 +565,7 @@ export default function LoginScreen() {
                           onChangeText={setIdentifier}
                           onFocus={() => setIdentifierFocused(true)}
                           onBlur={() => setIdentifierFocused(false)}
-                          placeholder="rahul.sharma"
+                          placeholder="user.name"
                           placeholderTextColor={colors.mutedPlaceholder}
                           autoCapitalize="none"
                           autoCorrect={false}
@@ -948,8 +948,8 @@ const styles = StyleSheet.create({
   // ── FITS A 360 x 800 PHONE WITHOUT SCROLLING (Phase 5 V-D) ──
   // Top-anchored, not centred: the two tabs are different heights, and a
   // centred column moved the logo and the headline every time the tab changed.
-  // Anchored, only the card's own bottom edge moves; the footer note is pinned
-  // to the bottom by `formWrapper` + `footerNote`'s auto margin. The spacing
+  // Anchored, only the card's own bottom edge moves; the footer note follows
+  // the card (see `footerNote`) and any spare height is left below it. The spacing
   // below was cut to fit the Password tab (the taller one) at font scale 1.0
   // with the keyboard closed — see the V-D entry in docs/CHANGELOG.md for the
   // before and after of every value. Nothing here shrinks text. At 1.15 or with
@@ -1288,9 +1288,11 @@ const styles = StyleSheet.create({
     color: colors.purpleDark,
     opacity: 0.65,
     fontSize: font.sizes.body,
-    // Pinned to the bottom of the screen (the wrapper grows to fill it), with
-    // at least spacing.md above it when the content runs long.
-    marginTop: 'auto',
-    paddingTop: spacing.md,
+    // Under the card, as its sign-off. It was pinned to the bottom of the
+    // screen with an auto margin, which on a tall phone stranded it ~130dp
+    // below the card on its own, reading as a stray line rather than part of
+    // the page. Following the card, it moves with the card's bottom edge when
+    // the tab changes (the Password tab is taller), same as the card does.
+    marginTop: spacing.lg,
   },
 });

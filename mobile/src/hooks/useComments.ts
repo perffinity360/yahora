@@ -1,12 +1,15 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
-import type { ProductComment, ProductDetailData } from '../types';
+import type { ProductComment } from '../types';
+import type { ProductDetailPage } from './useProductDetail';
 
 /**
  * Q&A mutations for the product detail screen. Both write straight into the
- * `['product', productId]` cache that `useProductDetail` owns.
+ * `['product', productId]` cache that `useProductDetail` owns — an infinite
+ * query since Phase 5 V-E, so the cache is `pages` of products, each carrying
+ * its own page of comments.
  *
  * Neither invalidates on settle: a refetch of GET /api/products/:id re-runs the
  * `increment_product_views` RPC, so every posted comment or vote would inflate
@@ -29,16 +32,23 @@ type VoteVars = {
   voteValue: 1 | -1;
 };
 
-/** Replace one comment inside the cached product, leaving everything else alone. */
+type DetailCache = InfiniteData<ProductDetailPage>;
+
+/** Replace one comment wherever it is — on any loaded page — leaving everything
+ *  else alone. */
 function patchComment(
-  data: ProductDetailData | undefined,
+  data: DetailCache | undefined,
   commentId: string,
   patch: (comment: ProductComment) => ProductComment,
-): ProductDetailData | undefined {
-  if (!data?.comments) return data;
+): DetailCache | undefined {
+  if (!data) return data;
   return {
     ...data,
-    comments: data.comments.map((c) => (c.id === commentId ? patch(c) : c)),
+    pages: data.pages.map((page) =>
+      page.comments?.some((c) => c.id === commentId)
+        ? { ...page, comments: page.comments.map((c) => (c.id === commentId ? patch(c) : c)) }
+        : page,
+    ),
   };
 }
 
@@ -92,15 +102,25 @@ export function useAddComment(productId: string | undefined) {
       );
     },
     onSuccess: (data) => {
-      queryClient.setQueryData<ProductDetailData>(queryKey, (prev) =>
-        prev
-          ? {
-              ...prev,
-              comments: [{ ...data.comment, user_vote: 0 }, ...(prev.comments ?? [])],
-              comments_count: (prev.comments_count ?? 0) + 1,
-            }
-          : prev,
-      );
+      // Onto the NEWEST page, which is where a brand-new comment belongs and
+      // whose product fields the screen reads. A reply lands there too and
+      // still renders under its parent, whichever page the parent came from:
+      // threading matches on parent_comment_id across the joined list.
+      queryClient.setQueryData<DetailCache>(queryKey, (prev) => {
+        if (!prev?.pages.length) return prev;
+        const [first, ...rest] = prev.pages;
+        return {
+          ...prev,
+          pages: [
+            {
+              ...first,
+              comments: [{ ...data.comment, user_vote: 0 }, ...(first.comments ?? [])],
+              comments_count: (first.comments_count ?? 0) + 1,
+            },
+            ...rest,
+          ],
+        };
+      });
     },
   });
 }
@@ -122,10 +142,10 @@ export function useVoteComment(productId: string | undefined) {
         vote_value: vars.voteValue,
       });
     },
-    onMutate: async (vars): Promise<{ prev: ProductDetailData | undefined }> => {
+    onMutate: async (vars): Promise<{ prev: DetailCache | undefined }> => {
       await queryClient.cancelQueries({ queryKey });
-      const prev = queryClient.getQueryData<ProductDetailData>(queryKey);
-      queryClient.setQueryData<ProductDetailData>(queryKey, (data) =>
+      const prev = queryClient.getQueryData<DetailCache>(queryKey);
+      queryClient.setQueryData<DetailCache>(queryKey, (data) =>
         patchComment(data, vars.commentId, (c) => applyVote(c, vars.voteValue)),
       );
       return { prev };

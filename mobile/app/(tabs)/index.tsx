@@ -1,9 +1,10 @@
 import Feather from '@expo/vector-icons/Feather';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Modal,
@@ -82,10 +83,12 @@ const SWIPE_HREF = '/(tabs)?view=swipe';
  * to scroll past everything they had already looked at.
  *
  * ── WRITTEN IN EXACTLY ONE PLACE ──
- * `rememberGridPosition()`, called as a card is opened. That is what makes this
- * "restore only when coming back from a product". Arriving any other way — cold
- * start, the tab bar, back from /sell — finds no memo and lands at the top,
- * which is what those entries should do.
+ * `rememberGridPosition()`, called as a card is opened and as "List an item"
+ * opens /sell. That is what makes this "restore only when coming back from a
+ * product, or backing out of /sell". Arriving any other way — cold start, the
+ * tab bar — finds no memo and lands at the top, which is what those entries
+ * should do. A listing that was actually posted changes the feed, so the
+ * signature check below turns its stale memo into a no-op.
  *
  * ── AND READ EXACTLY ONCE ──
  * The restore consumes it (`gridScrollMemo = null`), so one saved position is
@@ -153,7 +156,8 @@ export default function MarketplaceScreen() {
   const { data: universities } = useUniversities();
   const campusName = universities?.find((u) => u.id === viewedUniversityId)?.name ?? 'Your campus';
 
-  const { data, isLoading, isError, refetch } = useMarketplaceFeed(viewedUniversityId);
+  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useMarketplaceFeed(viewedUniversityId);
   const hasData = !!data;
 
   const filters = useMarketplaceFilters(data?.products ?? [], myUserId);
@@ -302,6 +306,18 @@ export default function MarketplaceScreen() {
     requestAnimationFrame(() => requestAnimationFrame(revealGrid));
   }, [revealGrid]);
 
+  // Since the root layout became a Stack (Phase 5 V-F), coming back from a
+  // product is a pop: this screen was never torn down and is still exactly where
+  // it was, so the memo `openProduct` wrote is not needed. Left in place it would
+  // be restored by some LATER, unrelated remount. A focus after this mount's own
+  // restore is that pop, so drop it. The memo still does its job for a return
+  // that rebuilds this screen (Sell's back is a replace).
+  useFocusEffect(
+    useCallback(() => {
+      if (restoredRef.current) gridScrollMemo = null;
+    }, []),
+  );
+
   // Belt and braces for the hidden grid: if `onLoad` never fires (it should),
   // the feed must not stay invisible. Armed only once the grid is actually on
   // screen, so a slow first load behind the skeleton cannot trip it early.
@@ -318,6 +334,17 @@ export default function MarketplaceScreen() {
     },
     [rememberGridPosition, router],
   );
+
+  /**
+   * "List an item", from any of its three buttons. Passes this screen as the
+   * `from` breadcrumb so Sell's back button comes back HERE, in the mode the
+   * student was in, rather than to the dashboard. The grid's place is kept the
+   * same way a product round trip keeps it.
+   */
+  const openSell = useCallback(() => {
+    if (viewMode === 'grid') rememberGridPosition();
+    router.push(hrefWithFrom('/sell', viewMode === 'swipe' ? SWIPE_HREF : '/(tabs)'));
+  }, [viewMode, rememberGridPosition, router]);
 
   const renderCard = useCallback(
     ({ item }: { item: MarketplaceProduct }) => (
@@ -564,7 +591,7 @@ export default function MarketplaceScreen() {
           onLikeProduct={(id) => toggleLike.mutate({ productId: id })}
           onOpenProduct={(id) => router.push(hrefWithFrom(`/product/${id}`, SWIPE_HREF))}
           onBackToGrid={() => setViewMode('grid')}
-          onListItem={!isForeignCampus ? () => router.push('/sell') : undefined}
+          onListItem={!isForeignCampus ? openSell : undefined}
         />
       ) : displayProducts.length === 0 ? (
         <ScrollView
@@ -582,7 +609,7 @@ export default function MarketplaceScreen() {
               activeFilterCount > 0
                 ? filters.clearFilters
                 : !isForeignCampus
-                  ? () => router.push('/sell')
+                  ? openSell
                   : undefined
             }
           />
@@ -632,6 +659,22 @@ export default function MarketplaceScreen() {
           }}
           scrollEventThrottle={16}
           onLoad={restoreGridPosition}
+          // ── MORE LISTINGS (Phase 5 V-E) ──
+          // Half a screen from the bottom, load the next page. The guard is not
+          // optional: onEndReached fires again on every layout while the page is
+          // in flight, and without it the same cursor goes out several times.
+          // With a filter that leaves the grid short, it keeps firing as pages
+          // land, until the grid fills or next_cursor comes back null.
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+          }}
+          onEndReachedThreshold={0.5}
+          // A spinner while a page loads; nothing once the feed has ended.
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator color={colors.purple} style={styles.moreSpinner} />
+            ) : null
+          }
         />
         </Animated.View>
       )}
@@ -639,7 +682,7 @@ export default function MarketplaceScreen() {
       {/* List-an-item FAB (home campus only; the swipe deck has its own) */}
       {!isForeignCampus && !showsDeck ? (
         <Pressable
-          onPress={() => router.push('/sell')}
+          onPress={openSell}
           accessibilityRole="button"
           accessibilityLabel="List an item"
           style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
@@ -1038,6 +1081,10 @@ const styles = StyleSheet.create({
    *  a HEIGHT. The profile grids lay their cards out in a row and must not. */
   cardFill: {
     flex: 1,
+  },
+
+  moreSpinner: {
+    paddingVertical: spacing.md,
   },
 
   /* Skeleton */

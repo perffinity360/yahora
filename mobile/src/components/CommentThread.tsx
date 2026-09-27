@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
+import Animated, { Easing, FadeIn, LinearTransition } from 'react-native-reanimated';
 
 import { AppText } from './AppText';
 import { AppTextInput } from './AppTextInput';
@@ -19,6 +20,7 @@ import { useAddComment, useVoteComment } from '../hooks/useComments';
 import { colors, font, radius, spacing } from '../theme';
 import type { ProductComment } from '../types';
 import { Avatar } from './Avatar';
+import { dismissKeyboard } from './KeyboardAvoider';
 import { timeAgo } from './ProductCard';
 
 /**
@@ -36,6 +38,22 @@ const DOWN_TINT = colors.pinkDark;
 
 /** Shared by both composers (this one and the screen's docked question box). */
 export const MAX_COMMENT_LENGTH = 500;
+
+/**
+ * ── A NEW COMMENT ARRIVES WITHOUT SHOVING THE THREAD ──
+ * A posted question goes to the top of the list, and a reply to the top of its
+ * thread, so everything under it has to move down by one comment. That move
+ * used to be instant: the whole list jumped a comment's height in one frame,
+ * under the reader's eyes, which read as a flicker. Now the new comment fades
+ * in while the comments around it glide to their new places.
+ *
+ * GLIDE is on every thread and reply, so it also smooths the other layout
+ * changes in here (a reply composer opening and closing). ENTER is only on a
+ * comment that was not on screen in the previous render — never on the
+ * first render, so opening a listing does not fade its whole thread in.
+ */
+const GLIDE = LinearTransition.duration(260).easing(Easing.out(Easing.cubic));
+const ENTER = FadeIn.duration(260).easing(Easing.out(Easing.cubic));
 
 export interface CommentSectionProps {
   productId: string;
@@ -74,6 +92,14 @@ export function CommentSection({
   const addReply = useAddComment(productId);
   const voteComment = useVoteComment(productId);
 
+  // Ids on screen as of the last commit; null until the first one. A comment
+  // missing from it is new in this render (see ENTER above).
+  const seenIds = useRef<Set<string> | null>(null);
+  const isNew = (id: string) => seenIds.current !== null && !seenIds.current.has(id);
+  useEffect(() => {
+    seenIds.current = new Set(comments.map((c) => c.id));
+  }, [comments]);
+
   // The backend returns the whole thread newest-first; split it into roots and
   // their replies exactly like the web does.
   const topLevel = comments.filter((c) => !c.parent_comment_id);
@@ -84,6 +110,10 @@ export function CommentSection({
     setReplyingTo(commentId);
     setReplyDraft('');
     onReplyingChange?.(commentId);
+    // Closing the composer (posted or cancelled) closes the keyboard in the
+    // same render, so nothing waits on the keyboard's slide to move into place.
+    // Moving to another reply keeps it up.
+    if (!commentId) dismissKeyboard();
   };
 
   const submitReply = (parentId: string) => {
@@ -92,10 +122,7 @@ export function CommentSection({
     addReply.mutate(
       { content, parentCommentId: parentId },
       {
-        onSuccess: () => {
-          setReplyTarget(null);
-          Keyboard.dismiss();
-        },
+        onSuccess: () => setReplyTarget(null),
         onError: (err) => Alert.alert("Couldn't post your reply", err.message),
       },
     );
@@ -155,7 +182,12 @@ export function CommentSection({
             const isReplying = replyingTo === comment.id;
 
             return (
-              <View key={comment.id} style={styles.thread}>
+              <Animated.View
+                key={comment.id}
+                entering={isNew(comment.id) ? ENTER : undefined}
+                layout={GLIDE}
+                style={styles.thread}
+              >
                 <CommentCard
                   comment={comment}
                   canInteract={canInteract}
@@ -207,18 +239,23 @@ export function CommentSection({
                     <View style={styles.rail} />
                     <View style={styles.repliesList}>
                       {replies.map((reply) => (
-                        <CommentCard
+                        <Animated.View
                           key={reply.id}
-                          comment={reply}
-                          compact
-                          canInteract={canInteract}
-                          onVote={(value) => handleVote(reply.id, value)}
-                        />
+                          entering={isNew(reply.id) ? ENTER : undefined}
+                          layout={GLIDE}
+                        >
+                          <CommentCard
+                            comment={reply}
+                            compact
+                            canInteract={canInteract}
+                            onVote={(value) => handleVote(reply.id, value)}
+                          />
+                        </Animated.View>
                       ))}
                     </View>
                   </View>
                 ) : null}
-              </View>
+              </Animated.View>
             );
           })}
         </View>
