@@ -6,9 +6,16 @@ import { AppState } from 'react-native';
 import type { AppStateStatus } from 'react-native';
 
 import { api } from '../lib/api';
-import { contactIdOf, mergeMessage, replaceMessage } from '../lib/messages';
+import {
+  contactIdOf,
+  mergeMessage,
+  replaceMessage,
+  updateEveryPage,
+  updateNewestPage,
+  type ChatCache,
+} from '../lib/messages';
 import { supabase } from '../lib/supabase';
-import type { InboxItem, Message, PendingMessage } from '../types';
+import type { InboxItem, Message } from '../types';
 
 /**
  * The app's single realtime connection.
@@ -106,8 +113,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       // 1. The thread itself. Only touch a cache that already exists — if the
       //    chat was never opened, its next fetch brings this message anyway.
       const chatKey = ['chat', contactId, msg.product_id];
-      if (queryClient.getQueryData<PendingMessage[]>(chatKey)) {
-        queryClient.setQueryData<PendingMessage[]>(chatKey, (prev) => mergeMessage(prev, msg));
+      //    A new message joins the NEWEST page, at the bottom of the thread;
+      //    loading an older page never touches that page, so it cannot undo this.
+      if (queryClient.getQueryData<ChatCache>(chatKey)) {
+        queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+          updateNewestPage(prev, (items) => mergeMessage(items, msg)),
+        );
       }
 
       // 2. The inbox row: freshen the preview, float it to the top, and count it
@@ -161,8 +172,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
       const contactId = contactIdOf(msg, myId);
       const chatKey = ['chat', contactId, msg.product_id];
-      if (!queryClient.getQueryData<PendingMessage[]>(chatKey)) return;
-      queryClient.setQueryData<PendingMessage[]>(chatKey, (prev) => replaceMessage(prev, msg));
+      if (!queryClient.getQueryData<ChatCache>(chatKey)) return;
+      // Any page: a tick can land on a message you have scrolled far above.
+      queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+        updateEveryPage(prev, (items) => replaceMessage(items, msg)),
+      );
     },
     [queryClient],
   );

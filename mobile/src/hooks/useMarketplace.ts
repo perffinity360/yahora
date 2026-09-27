@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -27,31 +27,48 @@ import type { MarketplaceProduct, Paged } from '../types';
  * reading `data.products`, which is also why this returns that name rather than
  * `items`: it is a feed of products, `items` is just the envelope's word for it.
  *
- * ⚠ ONE PAGE ONLY. The server now returns at most 20 (max 50) and this hook
- * ignores `next_cursor`. On a campus with more than 20 listings the rest are
- * not reachable until infinite scroll lands in Phase 5 — which plugs in here,
- * by switching this to `useInfiniteQuery` and feeding `next_cursor` back as
- * `?cursor=`. `nextCursor` is returned already so the caller can tell whether
- * there is more behind it.
+ * ── INFINITE SCROLL (Phase 5 V-E) ────────────────────────────────────────────
+ * `useInfiniteQuery`: the cache holds the pages exactly as the server sent them
+ * (`{ items, next_cursor }`), and `fetchNextPage()` sends the last page's
+ * `next_cursor` back as `?cursor=`. `next_cursor: null` is the end of the feed
+ * and the ONLY end signal — a short or empty page is not one.
+ *
+ * `select` flattens the pages into `{ products, nextCursor }`, so the screen and
+ * the filters hook still read `data.products` exactly as before. The optimistic
+ * like/save patch in useProductActions writes to the CACHE, not to this
+ * flattened view, so it walks `pages[].items` — see `patchCachedListing`.
+ *
+ * Filters and search run on the loaded products, in the client (the endpoint
+ * takes none). A filter that leaves the grid short keeps loading pages through
+ * the list's own end-reached handler until it fills or the feed ends.
  */
 export function useMarketplaceFeed(universityId: string | null | undefined) {
   const { profile } = useAuth();
   const visitorId = profile?.id;
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ['marketplace', universityId],
-    queryFn: () => {
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ university_id: String(universityId) });
       if (visitorId) params.append('user_id', visitorId);
-      return api
-        .get<Paged<MarketplaceProduct>>(`/api/products?${params.toString()}`)
-        .then((page) => ({
-          // `?? []` so a malformed or older response yields an empty feed
-          // rather than crashing the screen on `undefined.length`.
-          products: page?.items ?? [],
-          nextCursor: page?.next_cursor ?? null,
-        }));
+      if (pageParam) params.append('cursor', pageParam);
+      return api.get<Paged<MarketplaceProduct>>(`/api/products?${params.toString()}`);
     },
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
+    select: flattenFeed,
     enabled: !!universityId,
   });
+}
+
+/**
+ * The pages, as the one feed every caller reads. `?? []` so a malformed or
+ * older response yields an empty page rather than crashing the screen on
+ * `undefined.length`. Module scope so `select` keeps a stable identity.
+ */
+function flattenFeed(data: InfiniteData<Paged<MarketplaceProduct>>) {
+  return {
+    products: data.pages.flatMap((page) => page?.items ?? []),
+    nextCursor: data.pages[data.pages.length - 1]?.next_cursor ?? null,
+  };
 }

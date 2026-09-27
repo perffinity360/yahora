@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -67,8 +68,12 @@ const CONDITIONS: PickerOption[] = [
 export default function SellScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  const { edit, from } = useLocalSearchParams<{ edit?: string; from?: string }>();
   const isEditing = !!edit;
+  // Where the student opened this screen from (see src/lib/nav.ts). The
+  // marketplace passes its own href, grid or swipe; the dashboard passes none,
+  // and falls back to itself below.
+  const fromParam = typeof from === 'string' ? from : undefined;
 
   const { profile } = useAuth();
   const userId = profile?.id;
@@ -111,7 +116,22 @@ export default function SellScreen() {
     setSeeded(true);
   }, [editProduct, seeded]);
 
-  const goBack = () => router.replace('/(tabs)/profile');
+  // Back leaves without listing anything, so it returns to wherever the student
+  // came from. It used to always go to the dashboard, which dropped anyone who
+  // tapped "List an item" on the marketplace somewhere they had never been.
+  // (A successful save still lands on the dashboard: that is where the new
+  // listing shows up.)
+  const goBack = () => router.replace(fromParam ?? '/(tabs)/profile');
+
+  // Android's system back does the same. The root layout is a <Slot/>, so left
+  // to itself it has no history to walk back through.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.replace(fromParam ?? '/(tabs)/profile');
+      return true;
+    });
+    return () => sub.remove();
+  }, [router, fromParam]);
 
   const pickImages = async () => {
     setError(null);
