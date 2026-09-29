@@ -276,6 +276,39 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-29 — 📮 Phase 5 Block N-D: device matrix on three phones, and V-D verification (Neeraj)
+
+Testing only. No code changed.
+
+### Result: everything passes
+Samsung A03s, POCO X2 and OPPO K14, each at default font/display size and
+again at maximum font size. All tested by me, over Expo Go 56.0.0 against
+Vishwajeet's dev server.
+
+| Screen | Samsung | POCO | OPPO |
+|---|---|---|---|
+| Auth (both tabs) | ✅ | ✅ | ✅ |
+| Marketplace grid | ✅ | ✅ | ✅ |
+| Marketplace swipe | ✅ | ✅ | ✅ |
+| Product detail | ✅ | ✅ | ✅ |
+| Chat thread | ✅ | ✅ | ✅ |
+| Dashboard | ✅ | ✅ | ✅ |
+
+No clipped text, no overlapping controls, nothing unreachable, at either font
+size, on any phone. V-D's own checks 1-7 all pass too: tab labels read in full,
+the login screen fits without scrolling at default size, tab switching does not
+move the logo, the swipe controls are all visible, no text from the card behind
+shows, and SPECIALIZATION stays on one line. V-D was marked "not verified on a
+device"; it is now verified on three.
+
+### The judgement call
+The simplified product card reads well. Fewer stats and smaller type make the
+cards calmer, not empty, including on the Samsung, which is the smallest screen
+we have.
+
+### Outstanding
+- The six screenshots per phone for docs/screenshots/post-VD/ (V-D check 8 /
+  N-D checkpoint) have not been taken yet.
 ## 2026-09-27 (evening) — Tab labels cut off at large font sizes; back-to-top arrow tail (Vishwajeet)
 
 Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
