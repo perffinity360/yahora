@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   FlatList,
   Linking,
   Pressable,
@@ -110,6 +111,8 @@ export default function ChatScreen() {
     isLoading,
     isError,
     refetch,
+    dataUpdatedAt,
+    errorUpdatedAt,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -172,6 +175,8 @@ export default function ChatScreen() {
   const thread = useMemo(() => flattenThread(history), [history]);
   const lastMessageId = thread.length ? thread[thread.length - 1].id : null;
   const lastSenderId = thread.length ? thread[thread.length - 1].sender_id : null;
+  const lastMessageIdRef = useRef(lastMessageId);
+  lastMessageIdRef.current = lastMessageId;
 
   /* Their message arriving means they have stopped typing. */
   useEffect(() => {
@@ -244,6 +249,85 @@ export default function ChatScreen() {
     if (unread.length > 0) setUnreadMarker({ firstId: unread[0].id, count: unread.length });
   }, [thread, myId]);
 
+  /* ── AWAY FROM THE CHAT (web parity: Messages.jsx flushAwayUnread) ──────
+     The phone going to the home screen leaves this screen mounted and focused,
+     but nobody is reading it. So while the app is away:
+
+       - this chat stands down as the realtime "active chat". A message that
+         arrives is delivered (two grey ticks) and counted unread in the inbox,
+         NOT marked read.
+       - the newest message on screen is remembered: everything after it that
+         the contact sent is what the student has not seen.
+
+     On return, once the thread has been re-read from the server (the socket
+     misses messages in the background, so the cache alone is not enough),
+     those messages get the "N unread messages" line, replacing any earlier
+     one, and only after that line is on screen does PUT /messages/read go out
+     and the sender's ticks turn blue. The inbox badge counts them until then.
+
+     Registered on focus only: a chat under another screen is not on screen. */
+  const awayRef = useRef<{ lastSeenId: string | null } | null>(null);
+  /** When the app came back with a return still to flush; null otherwise. */
+  const [returnedAt, setReturnedAt] = useState<number | null>(null);
+  /** The away line's first message id, until PUT /messages/read has gone out
+   *  for it — which waits for the line to be among the rendered rows. */
+  const readAfterLineRef = useRef<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!contactId || !productId || isSelfChat) return;
+      const sub = AppState.addEventListener('change', (next) => {
+        if (next !== 'active') {
+          if (!awayRef.current) {
+            awayRef.current = { lastSeenId: lastMessageIdRef.current };
+            setActiveChat(null);
+          }
+          return;
+        }
+        if (awayRef.current) {
+          setReturnedAt(Date.now());
+          // Joins the resync's refetch if that one started first.
+          refetch({ cancelRefetch: false });
+        }
+      });
+      return () => {
+        sub.remove();
+        // Leaving the chat: the focus effect above reads it on the way back in.
+        awayRef.current = null;
+        setReturnedAt(null);
+      };
+    }, [contactId, productId, isSelfChat, setActiveChat, refetch]),
+  );
+
+  useEffect(() => {
+    const away = awayRef.current;
+    if (returnedAt === null || !away || !contactId || !productId) return;
+    // Wait for the re-read. A failed one still flushes, from what is cached.
+    if (dataUpdatedAt < returnedAt && errorUpdatedAt < returnedAt) return;
+
+    awayRef.current = null;
+    setReturnedAt(null);
+    setActiveChat({ contactId, productId });
+
+    const seenAt = away.lastSeenId ? thread.findIndex((m) => m.id === away.lastSeenId) : -1;
+    const run =
+      away.lastSeenId && seenAt === -1
+        ? // The remembered message is gone (a send that was still in flight
+          // got its real id): fall back to the server's own unread flag.
+          thread.filter((m) => m.sender_id !== myId && m.is_read === false)
+        : thread.slice(seenAt + 1).filter((m) => m.sender_id !== myId);
+
+    if (run.length === 0) {
+      markReadRef.current.mutate({ contactId, productId });
+      return;
+    }
+    unreadPinned.current = true;
+    readAfterLineRef.current = run[0].id;
+    setUnreadMarker({ firstId: run[0].id, count: run.length });
+  }, [returnedAt, dataUpdatedAt, errorUpdatedAt, thread, myId, contactId, productId, setActiveChat]);
+
+  const listRef = useRef<FlatList<ChatRow>>(null);
+
   /* ── Rows: day separators + grouping, built oldest-first then reversed
         because the list is inverted (index 0 renders at the bottom). ────── */
   const rows = useMemo<ChatRow[]>(() => {
@@ -270,6 +354,23 @@ export default function ChatScreen() {
     });
     return out.reverse();
   }, [thread, myId, unreadMarker]);
+
+  /* The away line is committed: bring it into view — a long run would leave it
+     above the top of the screen — and now it is true that they have read it. */
+  useEffect(() => {
+    const firstId = readAfterLineRef.current;
+    if (!firstId || !contactId || !productId) return;
+    // This effect can run in the same commit that scheduled the line, before
+    // the line is in `rows`. Only once it is here has it reached the screen.
+    const index = rows.findIndex((row) => row.kind === 'unread' && row.key === `unread-${firstId}`);
+    if (index === -1) return;
+    readAfterLineRef.current = null;
+    // Inverted list: viewPosition 1 is the TOP of the screen. From near the
+    // bottom the offset clamps and nothing moves, which is right — the line is
+    // already in view.
+    listRef.current?.scrollToIndex({ index, viewPosition: 1, animated: true });
+    markReadRef.current.mutate({ contactId, productId });
+  }, [unreadMarker, rows, contactId, productId]);
 
   const canSend = !!draft.trim() && !!contactId && !!productId;
 
@@ -383,8 +484,20 @@ export default function ChatScreen() {
             </ScrollView>
           ) : (
             <FlatList
+              ref={listRef}
               data={rows}
               inverted
+              // Only the away line scrolls by index. A row not laid out yet is
+              // reached by estimate, then exactly on the next frame.
+              onScrollToIndexFailed={(info) => {
+                listRef.current?.scrollToOffset({
+                  offset: info.averageItemLength * info.index,
+                  animated: false,
+                });
+                requestAnimationFrame(() =>
+                  listRef.current?.scrollToIndex({ index: info.index, viewPosition: 1, animated: true }),
+                );
+              }}
               keyExtractor={(row) => row.key}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"

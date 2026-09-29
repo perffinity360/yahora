@@ -87,7 +87,16 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     userIdRef.current = userId;
   }, [userId]);
 
-  /** Pull everything back from the server — used after a reconnect or resume. */
+  /**
+   * Pull everything back from the server — used after a reconnect or resume.
+   *
+   * Deliberately does NOT mark the open chat read. A chat left open in the
+   * background has not been read just because the app came back: the chat
+   * screen stood down as the active chat when the app left (so nothing here
+   * counts as "being read" meanwhile), and on return it draws the "N unread
+   * messages" line over what arrived and only THEN sends PUT /messages/read.
+   * See "AWAY FROM THE CHAT" in app/chat/[contactId].tsx.
+   */
   const resync = useCallback(() => {
     const myId = userIdRef.current;
     if (!myId) return;
@@ -107,8 +116,18 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 
       const contactId = contactIdOf(msg, myId);
       const active = activeChatRef.current;
+      // "Reading it" needs the app in the FOREGROUND as well as the chat open.
+      // The chat screen stays mounted (and registered) when the phone goes to
+      // the home screen, and the socket can keep delivering for a while after —
+      // without this, a message arriving then was marked read on the spot and
+      // the sender saw blue ticks for a message nobody had looked at. (The chat
+      // screen also stands down as the active chat while the app is away; this
+      // covers the moment before its own AppState listener runs.)
       const isActiveChat =
-        !!active && active.contactId === contactId && active.productId === msg.product_id;
+        !!active &&
+        active.contactId === contactId &&
+        active.productId === msg.product_id &&
+        AppState.currentState === 'active';
 
       // 1. The thread itself. Only touch a cache that already exists — if the
       //    chat was never opened, its next fetch brings this message anyway.
@@ -150,6 +169,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       }
 
       // 3. Reading it right now → tell the server, so the sender sees blue ticks.
+      //    Otherwise it has still reached this phone → delivered (two grey
+      //    ticks), as the web does for every incoming message (navbar.jsx).
+      //    Before this, a message that arrived anywhere but the open chat
+      //    stayed on one tick until the app was next reopened.
       if (msg.receiver_id === myId && isActiveChat) {
         api
           .put('/api/messages/read', {
@@ -158,6 +181,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             productId: msg.product_id,
           })
           .catch(() => {});
+      } else if (msg.receiver_id === myId && !msg.is_delivered) {
+        api.put('/api/messages/deliver', { userId: myId }).catch(() => {});
       }
     },
     [queryClient],

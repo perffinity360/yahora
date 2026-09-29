@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,6 +16,17 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import {
+  cancelAnimation,
+  Easing as ReEasing,
+  runOnJS,
+  scrollTo,
+  useAnimatedReaction,
+  useAnimatedRef,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '../../src/components/AppText';
@@ -23,6 +34,7 @@ import { AppTextInput } from '../../src/components/AppTextInput';
 import { CampusSwitcherModal } from '../../src/components/CampusSwitcherModal';
 import { DemoCampusAlert } from '../../src/components/DemoCampusAlert';
 import { FilterSheet } from '../../src/components/FilterSheet';
+import { ListItemFab } from '../../src/components/ListItemFab';
 import { ProductCard } from '../../src/components/ProductCard';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
@@ -58,6 +70,8 @@ const GRID_PAD = 12;
 const GRID_COL_GAP = 10;
 const GRID_ROW_GAP = 12;
 const SKELETON_COUNT = 6;
+/** Scrolled further than this, the "List an item" pill folds to a round +. */
+const FAB_FOLD_AT = 24;
 
 type ViewMode = 'grid' | 'swipe';
 
@@ -125,6 +139,7 @@ function feedSignature(items: MarketplaceProduct[]): string {
 
 export default function MarketplaceScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { view } = useLocalSearchParams<{ view?: string }>();
   const { profile, isDemoUser, signOut } = useAuth();
   const myUserId = profile?.id;
@@ -166,15 +181,22 @@ export default function MarketplaceScreen() {
   const feedKey = ['marketplace', viewedUniversityId] as const;
   const toggleLike = useToggleLike(feedKey);
 
-  const { width } = useWindowDimensions();
+  const { width, height: windowHeight } = useWindowDimensions();
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
   const swipeCardW = Math.min(width - SCREEN_PAD * 2, 340);
 
+  /** A second refresh while one is in flight is dropped, not restarted:
+   *  `refetch()` cancels and re-sends by default, so a double tap on the tab
+   *  bar would otherwise throw away a page that was nearly back. */
+  const refreshingRef = useRef(false);
   const onRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
     setRefreshing(true);
     try {
       await refetch();
     } finally {
+      refreshingRef.current = false;
       setRefreshing(false);
     }
   }, [refetch]);
@@ -326,6 +348,171 @@ export default function MarketplaceScreen() {
     const t = setTimeout(revealGrid, 800);
     return () => clearTimeout(t);
   }, [showsGrid, revealGrid]);
+
+  /**
+   * ── THE FAB FOLDS WHILE THE GRID IS SCROLLED ──
+   * 1 = folded to a round +, 0 = the "List an item" pill. Written from the
+   * scroll handler only when the offset crosses FAB_FOLD_AT (the ref is the
+   * last value written), so scrolling costs no renders; ListItemFab animates
+   * the change on the UI thread.
+   */
+  const fabFolded = useSharedValue(0);
+  const fabFoldedRef = useRef(false);
+  const setFabFolded = useCallback(
+    (folded: boolean) => {
+      if (folded === fabFoldedRef.current) return;
+      fabFoldedRef.current = folded;
+      fabFolded.value = folded ? 1 : 0;
+    },
+    [fabFolded],
+  );
+  // A grid that comes back (from swipe, or out of an empty state) starts at the
+  // top, so the pill does too. A restored position scrolls, and folds it again.
+  useEffect(() => {
+    setFabFolded(false);
+  }, [showsGrid, setFabFolded]);
+
+  /**
+   * ── A SMOOTH RIDE BACK TO THE TOP ──
+   * `scrollToOffset({ animated: true })` was abrupt. Android's smooth scroll
+   * has a short fixed duration whatever the distance, so twenty rows went by in
+   * a blink. FlashList could not draw rows that fast, so there were blank cells
+   * on the way.
+   *
+   * Instead the scroll is driven frame by frame on the UI thread (Reanimated
+   * `scrollTo`), easing out into the top over a time that grows with the
+   * distance. From far down it does not travel the whole way: the grid dips
+   * out, jumps to a screen and a half from the top, and fades back in as it
+   * glides the rest. The student sees one gentle deceleration, not a blur of
+   * every listing they passed.
+   *
+   * A finger on the grid stops it where it is (onScrollBeginDrag).
+   */
+  const gridScrollRef = useAnimatedRef();
+  const topScrollY = useSharedValue(0);
+  /** Frames are being driven — read by the UI-thread reaction below. */
+  const topScrolling = useSharedValue(false);
+  /** A run is under way, including the fade before any frame is driven. A
+   *  second tap in that time is ignored rather than starting a second run. */
+  const topRunRef = useRef(false);
+  /** Which run a completion belongs to, so a cancelled run finishing late
+   *  cannot end the one that replaced it. */
+  const topRunId = useRef(0);
+  const reduceMotion = useReducedMotion();
+
+  useAnimatedReaction(
+    () => (topScrolling.value ? topScrollY.value : -1),
+    (y) => {
+      if (y >= 0) scrollTo(gridScrollRef, 0, y, false);
+    },
+  );
+
+  const scrollGridToTop = useCallback(
+    (then: () => void) => {
+      const list = gridRef.current;
+      const from = gridOffset.current;
+      if (topRunRef.current) return;
+      if (!list || from <= 1) {
+        then();
+        return;
+      }
+      if (reduceMotion) {
+        list.scrollToOffset({ offset: 0, animated: false });
+        then();
+        return;
+      }
+      // Pointed at the grid on every run, not once: switching to swipe and
+      // back mounts a new FlashList. Reanimated reaches its native scroll view
+      // through `getNativeScrollRef()`.
+      try {
+        (gridScrollRef as unknown as (r: unknown) => void)(list);
+      } catch {
+        list.scrollToOffset({ offset: 0, animated: true });
+        then();
+        return;
+      }
+
+      topRunRef.current = true;
+      const runId = ++topRunId.current;
+      const finish = (landed: boolean) => {
+        if (runId !== topRunId.current) return;
+        topRunRef.current = false;
+        if (landed) then();
+      };
+      const far = windowHeight * 1.5;
+      const glide = (start: number) => {
+        topScrollY.value = start;
+        topScrolling.value = true;
+        topScrollY.value = withTiming(
+          0,
+          {
+            duration: 260 + Math.round(220 * Math.min(start / far, 1)),
+            easing: ReEasing.out(ReEasing.cubic),
+          },
+          (finished) => {
+            topScrolling.value = false;
+            runOnJS(finish)(!!finished);
+          },
+        );
+      };
+
+      if (from <= far) {
+        glide(from);
+        return;
+      }
+      Animated.timing(gridOpacity, {
+        toValue: 0,
+        duration: 100,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }).start(() => {
+        // Grabbed during the fade: stopScrollToTop already put it back.
+        if (!topRunRef.current) return;
+        list.scrollToOffset({ offset: far, animated: false });
+        // One frame for the jump to land, one for FlashList to draw the rows
+        // there — the same wait as the restore above.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (!topRunRef.current) return;
+            revealGrid();
+            glide(far);
+          }),
+        );
+      });
+    },
+    [gridScrollRef, topScrollY, topScrolling, reduceMotion, windowHeight, gridOpacity, revealGrid],
+  );
+
+  /** The student took hold of the grid: they are in charge now. */
+  const stopScrollToTop = useCallback(() => {
+    if (!topRunRef.current) return;
+    topRunRef.current = false;
+    cancelAnimation(topScrollY);
+    topScrolling.value = false;
+    gridOpacity.stopAnimation();
+    gridOpacity.setValue(1);
+  }, [topScrollY, topScrolling, gridOpacity]);
+
+  /**
+   * ── TAPPING THE MARKETPLACE TAB WHILE ON IT ──
+   * Back to the top of the grid and a fresh feed, like a pull-to-refresh
+   * without the pull. Only while this tab is already showing: the press that
+   * switches TO it from another tab is a plain switch and leaves the grid alone.
+   * Swipe mode is left alone too — there is no scroll, and a refetch under the
+   * deck would reshuffle the cards the student is working through.
+   *
+   * The refresh waits for the grid to reach the top. Started together, the new
+   * feed landed mid-scroll and the spinner pushed in under a moving list.
+   */
+  useEffect(() => {
+    // @ts-expect-error `tabPress` exists only on a tab navigator's screens,
+    // which this is; expo-router's useNavigation() is not typed per navigator.
+    return navigation.addListener('tabPress', () => {
+      if (!navigation.isFocused() || viewMode === 'swipe') return;
+      if (showsGrid) scrollGridToTop(onRefresh);
+      else onRefresh();
+    });
+  }, [navigation, viewMode, showsGrid, scrollGridToTop, onRefresh]);
 
   const openProduct = useCallback(
     (id: string) => {
@@ -656,8 +843,10 @@ export default function MarketplaceScreen() {
           // means the offset is current at the instant a card is tapped.
           onScroll={(e) => {
             gridOffset.current = e.nativeEvent.contentOffset.y;
+            setFabFolded(gridOffset.current > FAB_FOLD_AT);
           }}
           scrollEventThrottle={16}
+          onScrollBeginDrag={stopScrollToTop}
           onLoad={restoreGridPosition}
           // ── MORE LISTINGS (Phase 5 V-E) ──
           // Half a screen from the bottom, load the next page. The guard is not
@@ -681,17 +870,7 @@ export default function MarketplaceScreen() {
 
       {/* List-an-item FAB (home campus only; the swipe deck has its own) */}
       {!isForeignCampus && !showsDeck ? (
-        <Pressable
-          onPress={openSell}
-          accessibilityRole="button"
-          accessibilityLabel="List an item"
-          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        >
-          <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGradient}>
-            <Feather name="plus" size={17} color={colors.white} />
-            <AppText style={styles.fabText}>List an item</AppText>
-          </LinearGradient>
-        </Pressable>
+        <ListItemFab collapsed={fabFolded} onPress={openSell} style={styles.fab} />
       ) : null}
 
       {/* Rendered as a Modal so it escapes the list's stacking context — an
@@ -1165,37 +1344,9 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 
-  /* FAB */
+  /* FAB — position only; ListItemFab draws it. */
   fab: {
-    position: 'absolute',
     right: SCREEN_PAD,
     bottom: spacing.lg,
-    borderRadius: 999,
-    overflow: 'hidden',
-    shadowColor: colors.purple,
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  fabPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.97 }],
-  },
-  fabGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // Trimmed from 52/lg/14 — it was sitting over two rows of cards and reading
-    // as the loudest thing on a screen whose job is the listings. 44 is still
-    // over the 44dp minimum touch target, so nothing is harder to hit.
-    gap: spacing.xs + 2,
-    height: 44,
-    paddingHorizontal: spacing.md,
-    borderRadius: 999,
-  },
-  fabText: {
-    fontFamily: font.family.semibold,
-    fontSize: font.sizes.body,
-    color: colors.white,
   },
 });
