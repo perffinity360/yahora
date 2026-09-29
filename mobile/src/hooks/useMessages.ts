@@ -1,9 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
-import { mergeMessage, sortByTime } from '../lib/messages';
-import type { InboxItem, Message, PendingMessage } from '../types';
+import {
+  mergeMessage,
+  updateNewestPage,
+  type ChatCache,
+  type ChatPage,
+} from '../lib/messages';
+import type { InboxItem, Message, Paged, PendingMessage } from '../types';
 
 /**
  * Messaging queries and the send path.
@@ -12,7 +17,15 @@ import type { InboxItem, Message, PendingMessage } from '../types';
  * stays live without any screen subscribing to anything.
  */
 
-/** All my conversations, newest first. */
+/**
+ * My conversations, newest first.
+ *
+ * ⚠ FIRST PAGE ONLY (the newest 20). Phase 4 Block N-C renamed the envelope
+ * `inbox` -> `items` and this hook was never updated, so it read `undefined`
+ * and showed an empty inbox; fixed in Phase 5 V-E. Paging the inbox was not
+ * part of V-E — `next_cursor` is ignored here, and a student with more than 20
+ * conversations cannot reach the rest yet.
+ */
 export function useInbox() {
   const { profile } = useAuth();
   const userId = profile?.id;
@@ -20,9 +33,9 @@ export function useInbox() {
   return useQuery({
     queryKey: ['inbox', userId],
     queryFn: () =>
-      api.get<{ inbox: InboxItem[] }>(`/api/messages/inbox/${userId}`).then((r) =>
+      api.get<Paged<InboxItem>>(`/api/messages/inbox/${userId}`).then((r) =>
         // The RPC can hand back counts as strings; normalise once, here.
-        (r.inbox ?? []).map((row) => ({ ...row, unread_count: Number(row.unread_count || 0) })),
+        (r?.items ?? []).map((row) => ({ ...row, unread_count: Number(row.unread_count || 0) })),
       ),
     enabled: !!userId,
     // Inert on native (TanStack's focusManager is web-only unless wired up).
@@ -39,33 +52,57 @@ export function useUnreadTotal(): number {
   return (data ?? []).reduce((sum, row) => sum + Number(row.unread_count || 0), 0);
 }
 
-/** One thread, oldest first. Shares its key with the realtime writer. */
+/**
+ * One thread, paged BACKWARDS (Phase 5 V-E).
+ *
+ * The first page is the NEWEST 20 messages — the end of the conversation, which
+ * is what a thread opens on. Each `fetchNextPage()` loads the stretch
+ * immediately before the oldest one loaded, using that page's `next_cursor`
+ * (the server makes it the page's OLDEST message). `next_cursor: null` is the
+ * start of the conversation and the only end-of-list signal.
+ *
+ * Every page arrives oldest-first and is cached exactly as sent. Nothing sorts —
+ * see src/lib/messages.ts. The screen reads it through `flattenThread()`.
+ *
+ * Shares its key with the realtime writer and the send path below, which both
+ * add new messages to the end of `pages[0]`.
+ */
 export function useChatHistory(contactId?: string, productId?: string) {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const myId = profile?.id;
   const queryKey = ['chat', contactId, productId];
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey,
-    queryFn: async () => {
-      const response = await api.get<{ messages: Message[] }>(
-        `/api/messages/history?userId=${myId}&contactId=${contactId}&productId=${productId}`,
-      );
-      const server = sortByTime((response.messages ?? []) as PendingMessage[]);
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }): Promise<ChatPage> => {
+      const params = new URLSearchParams({
+        userId: String(myId),
+        contactId: String(contactId),
+        productId: String(productId),
+      });
+      if (pageParam) params.append('cursor', pageParam);
+      const page = await api.get<Paged<PendingMessage>>(`/api/messages/history?${params.toString()}`);
+      const items = page?.items ?? [];
+      const next_cursor = page?.next_cursor ?? null;
 
-      // A refetch (foreground resync, reconnect) replaces the whole thread. Carry
-      // over anything still in flight or failed, or a send that was interrupted
-      // by backgrounding would vanish along with its retry button.
-      const cached = queryClient.getQueryData<PendingMessage[]>(queryKey) ?? [];
+      // An older page is just older messages. Only the NEWEST page competes
+      // with sends in flight, so only it carries anything over.
+      if (pageParam) return { items, next_cursor };
+
+      // A refetch (foreground resync, reconnect) replaces the newest page.
+      // Carry over anything still in flight or failed, or a send that was
+      // interrupted by backgrounding would vanish along with its retry button.
+      const cached = queryClient.getQueryData<ChatCache>(queryKey)?.pages[0]?.items ?? [];
       const unsent = cached.filter(
         (m) =>
           (m.pending || m.failed) &&
-          !server.some((s) => s.sender_id === m.sender_id && s.content === m.content),
+          !items.some((s) => s.sender_id === m.sender_id && s.content === m.content),
       );
-
-      return unsent.length ? sortByTime([...server, ...unsent]) : server;
+      return { items: unsent.length ? [...items, ...unsent] : items, next_cursor };
     },
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!myId && !!contactId && !!productId,
   });
 }
@@ -106,48 +143,54 @@ export function useSendMessage(contactId?: string, productId?: string) {
 
     onMutate: (vars) => {
       if (!myId || !contactId || !productId) return;
-      queryClient.setQueryData<PendingMessage[]>(chatKey, (prev) => {
-        const list = prev ?? [];
-        const existing = list.findIndex((m) => m.client_tag === vars.clientTag);
-        if (existing > -1) {
-          // Retry of a failed send — flip it back to pending in place.
-          const next = [...list];
-          next[existing] = { ...next[existing], pending: true, failed: false };
-          return next;
-        }
-        const optimistic: PendingMessage = {
-          id: vars.clientTag,
-          client_tag: vars.clientTag,
-          pending: true,
-          sender_id: myId,
-          receiver_id: contactId,
-          product_id: productId,
-          university_id: profile?.university_id ?? '',
-          content: vars.content,
-          is_read: false,
-          is_delivered: false,
-          created_at: new Date().toISOString(),
-        };
-        return sortByTime([...list, optimistic]);
-      });
+      queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+        updateNewestPage(prev, (list) => {
+          const existing = list.findIndex((m) => m.client_tag === vars.clientTag);
+          if (existing > -1) {
+            // Retry of a failed send — flip it back to pending in place.
+            const next = [...list];
+            next[existing] = { ...next[existing], pending: true, failed: false };
+            return next;
+          }
+          const optimistic: PendingMessage = {
+            id: vars.clientTag,
+            client_tag: vars.clientTag,
+            pending: true,
+            sender_id: myId,
+            receiver_id: contactId,
+            product_id: productId,
+            university_id: profile?.university_id ?? '',
+            content: vars.content,
+            is_read: false,
+            is_delivered: false,
+            created_at: new Date().toISOString(),
+          };
+          // At the bottom of the thread, where it was typed. Not sorted.
+          return [...list, optimistic];
+        }),
+      );
     },
 
     onSuccess: (data, vars) => {
-      queryClient.setQueryData<PendingMessage[]>(chatKey, (prev) => {
-        const withoutPlaceholder = (prev ?? []).filter((m) => m.client_tag !== vars.clientTag);
-        // Realtime may already have inserted the real row while we waited —
-        // mergeMessage refreshes it rather than appending a duplicate.
-        return mergeMessage(withoutPlaceholder, data.message);
-      });
+      queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+        updateNewestPage(prev, (list) => {
+          const withoutPlaceholder = list.filter((m) => m.client_tag !== vars.clientTag);
+          // Realtime may already have inserted the real row while we waited —
+          // mergeMessage refreshes it rather than appending a duplicate.
+          return mergeMessage(withoutPlaceholder, data.message);
+        }),
+      );
       // A first message creates a conversation the inbox has never seen.
       queryClient.invalidateQueries({ queryKey: ['inbox', myId] });
     },
 
     onError: (_err, vars) => {
-      queryClient.setQueryData<PendingMessage[]>(chatKey, (prev) =>
+      queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
         prev
-          ? prev.map((m) =>
-              m.client_tag === vars.clientTag ? { ...m, pending: false, failed: true } : m,
+          ? updateNewestPage(prev, (list) =>
+              list.map((m) =>
+                m.client_tag === vars.clientTag ? { ...m, pending: false, failed: true } : m,
+              ),
             )
           : prev,
       );

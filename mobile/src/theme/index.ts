@@ -12,6 +12,9 @@ export const colors = {
   black: '#0B0B0B',
   blackSoft: '#1A1A1A',
   white: '#FFFFFF',
+  // The web back-to-top button's fill runs white -> this (Marketplace.module.css
+  // `.backToTop`); the app's copy of that button uses the same pair.
+  nearWhite: '#FDFAFF',
   // Flat fallback behind the app screens. Kept because a few borders reference
   // it, and because a gradient needs a solid colour under it for the frame
   // before it paints. The screens themselves use ScreenGradient (below).

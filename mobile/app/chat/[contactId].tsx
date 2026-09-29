@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
   Linking,
@@ -35,7 +36,7 @@ import {
   useMarkRead,
   useSendMessage,
 } from '../../src/hooks/useMessages';
-import { formatClockTime, formatDayLabel, isGroupedWith, sortByTime } from '../../src/lib/messages';
+import { flattenThread, formatClockTime, formatDayLabel, isGroupedWith } from '../../src/lib/messages';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { supabase } from '../../src/lib/supabase';
 import { colors, font, radius, spacing } from '../../src/theme';
@@ -105,10 +106,13 @@ export default function ChatScreen() {
   const productImage = inboxRow?.product_image || params.productImage || null;
 
   const {
-    data: messages,
+    data: history,
     isLoading,
     isError,
     refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = useChatHistory(isSelfChat ? undefined : contactId, isSelfChat ? undefined : productId);
 
   const sendMessage = useSendMessage(contactId, productId);
@@ -163,7 +167,9 @@ export default function ChatScreen() {
     };
   }, [myId, contactId, productId, isSelfChat]);
 
-  const thread = useMemo(() => sortByTime(messages ?? []), [messages]);
+  // Oldest first, in exactly the order the server sent it — NOT sorted here.
+  // If this is ever out of order, the backend sent it out of order.
+  const thread = useMemo(() => flattenThread(history), [history]);
   const lastMessageId = thread.length ? thread[thread.length - 1].id : null;
   const lastSenderId = thread.length ? thread[thread.length - 1].sender_id : null;
 
@@ -388,10 +394,28 @@ export default function ChatScreen() {
               ListHeaderComponent={
                 contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : null
               }
+              // ── OLDER MESSAGES (Phase 5 V-E) ──
+              // Inverted, "the end" of the list is the TOP of the screen, so this
+              // fires as the student scrolls UP. The older page is appended to the
+              // end of the data, which renders above everything already on
+              // screen — nothing under the reader moves, so they keep their place.
+              // The guard is what stops it firing the same request several times
+              // while one is already in flight.
+              onEndReached={() => {
+                if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+              }}
+              onEndReachedThreshold={0.5}
+              // Inverted: the footer renders at the TOP, above the oldest message.
+              // A spinner while an older page loads; the "beginning" line only
+              // once next_cursor is null, because until then it is not true.
               ListFooterComponent={
-                <AppText style={styles.threadStart}>
-                  This is the beginning of your conversation about {productTitle}.
-                </AppText>
+                isFetchingNextPage ? (
+                  <ActivityIndicator color={colors.purple} style={styles.olderSpinner} />
+                ) : !hasNextPage ? (
+                  <AppText style={styles.threadStart}>
+                    This is the beginning of your conversation about {productTitle}.
+                  </AppText>
+                ) : null
               }
               renderItem={({ item }) =>
                 item.kind === 'day' ? (
@@ -801,6 +825,9 @@ const styles = StyleSheet.create({
   /* Thread */
   listContent: {
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  olderSpinner: {
     paddingVertical: spacing.md,
   },
   threadStart: {

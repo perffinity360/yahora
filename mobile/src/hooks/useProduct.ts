@@ -9,19 +9,18 @@ import { unwrapComments } from './useProductDetail';
  * the viewer's id so the backend can attach interaction state; disabled until
  * both ids are known so it never fires with `undefined` in the URL.
  *
- * Caches the *unwrapped* product under `['product', id]` so it shares one cache
- * shape with `useProductDetail` (which uses the same key). The backend always
- * returns seller + comments on this endpoint, so the detail screen can safely
- * read a cache this hook populated, and vice-versa.
+ * Caches the *unwrapped* product under `['product', id, 'edit']` — its own key.
+ * It used to share `['product', id]` with `useProductDetail`, but since Phase 5
+ * V-E that one is an infinite query holding pages, and a plain `useQuery` on
+ * the same key would read (and write) the wrong shape. The Sell screen's
+ * `invalidateQueries({ queryKey: ['product', edit] })` still reaches both,
+ * because it matches by prefix.
  *
- * That shared key is why this reuses `unwrapComments`: the two hooks write the
- * same cache entry, so if only one of them flattened the paged `comments`
- * envelope (Block N-B), the detail screen would crash or not depending on which
- * screen you happened to open first.
+ * It reuses `unwrapComments` so a product has one shape wherever it is read.
  */
 export function useProduct(productId: string | undefined, userId: string | null | undefined) {
   return useQuery({
-    queryKey: ['product', productId],
+    queryKey: ['product', productId, 'edit'],
     queryFn: () =>
       api
         .get<{ product: ProductDetailWire }>(`/api/products/${productId}?user_id=${userId}`)

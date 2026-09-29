@@ -276,6 +276,199 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-27 (evening) — Tab labels cut off at large font sizes; back-to-top arrow tail (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
+
+- **Tab bar labels were clipped**: "Marketplace" cut on both axes at Samsung's largest font
+  size, and its descenders shaved by about a dp on the POCO at default size.
+  - **Cause:** the labels were React Navigation's own `<Text>`, which scales with the system
+    font with no cap. They never got `AppText`'s 1.15× limit.
+  - **Cause:** the bar is a fixed 49dp: 5dp padding + a 28dp icon slot + 5dp padding leaves
+    the label 11dp, and Inter's line box at the default 10dp label is about 12dp.
+  - **Fix (`app/(tabs)/_layout.tsx`):** labels render through `AppText` (capped, one line,
+    `micro` 11, line height 14), and the bar is sized from its parts at the cap:
+    10 + 28 + ⌈14 × 1.15⌉ + 1 = 56dp plus the bottom inset. That is 7dp taller than before.
+- **Back-to-top arrow's tail** was faint and a pixel off centre. It was a trapezoid built from
+  transparent borders, which Android draws badly at sub-dp widths. It is now two mirrored,
+  round-ended bars meeting at the tip. Same taper, centred by construction, every edge
+  snapped to a device pixel (`BackToTop.tsx`).
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
+## 2026-09-27 (later) — Swipe deck: the next card is live on release; web-style back-to-top; posting no longer flickers (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
+
+- **Swiping fast dropped every other swipe.** A swiped card stayed the front card until its
+  fly-off animation ended (up to 360ms), and only then did the deck hand the gesture to the
+  next card. A swipe started in that window hit a card whose gesture was still off. Now a card
+  is *committed* on release. It leaves the deck at once and finishes flying off as a "leaving"
+  card: on top, `pointerEvents="none"`. The next card is live a frame later. Also in
+  `SwipeCard.tsx` / `SwipeDeck.tsx`:
+  - One animated style for every card, so a card changing role never jumps.
+  - The stack glides up one place on release (`frontOrder` / `drag` / `settle` shared
+    values), starting from exactly where it was leaning.
+  - A card caught mid-spring carries on from where it is instead of snapping to centre.
+  - An interrupted gesture springs home.
+  - One finger only.
+  - A fourth card is mounted, hidden under the third, so nothing pops in.
+  - Cards are memoised with stable callbacks, so a swipe re-renders only the cards that changed.
+- **Back-to-top arrow now matches the web marketplace's.** New
+  `src/components/BackToTop.tsx`: near-white disc in a purple→pink gradient ring, and the same
+  chevron-plus-tapered-tail glyph (drawn with Views on the web SVG's 24-unit grid; there is no
+  SVG in the app). It has the web's upward drift, its overshoot on entry, and fills with the
+  gradient on press. Still 42dp. New theme token `nearWhite` (#FDFAFF), the web's fill.
+- **The posting flicker, properly this time.** Android only reports a keyboard move once it
+  has finished. So after posting, `KeyboardAvoider` kept its full padding for the whole slide:
+  the keyboard uncovered an empty band, then the page snapped down. On top of that, the new
+  comment pushed the whole thread down in one frame.
+  - `KeyboardAvoider` gained an additive `dismissKeyboard()`. When the app closes the keyboard
+    itself, every mounted avoider drops its padding at the start, so the keyboard slides off a
+    page that is already in place.
+  - The question composer, a posted reply and a cancelled reply all use it.
+  - In `CommentThread`, a new comment fades in and the others glide aside (Reanimated
+    `FadeIn` / `LinearTransition`). Never on first render.
+  - Existing `KeyboardAvoider` callers are unchanged.
+- The question box placeholder is now "Is it still available?"; it wrapped to two lines.
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
+## 2026-09-27 — Phase 5 Block V-F: back from a product returns to where it was opened; focusManager stays unwired (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency. No visual
+change.
+
+### The bug: product opened from the Dashboard, back lands on the Marketplace
+
+**Cause.** The root layout rendered a `<Slot/>`. In Expo Router 57 that is a stack router
+that renders only its top route. So pushing `/product/:id` unmounted the whole `(tabs)`
+navigator, and React Navigation deletes a navigator's state when it unmounts
+(`useNavigationBuilder`). Going back through history therefore rebuilt the tabs at their first
+route, `index`, the Marketplace. Marketplace only looked right because it IS that first route.
+A public profile looked right because `profile/[id]` is its own root route. The openers
+correctly used `push`, and a root-level product route is normal. The product screen's back
+button hid the problem by doing `router.replace(from)`. That added a fresh `(tabs)` on top
+instead of going back, so Android's system back later landed on the stale one: the Marketplace.
+
+**Fix.**
+- `app/_layout.tsx`: the root is now a `<Stack>` (`headerShown: false`, `animation: 'none'`,
+  so it still switches screens instantly, as before). Screens underneath stay mounted, so the
+  tab you were on, and its scroll position, are still there when you come back.
+- `app/product/[id].tsx`: back is `router.back()`, and Android's system back takes the same
+  path while the screen is focused. `from` is only a fallback for a listing opened cold from a
+  shared link, when there is no history. There is no module-level or context "last screen".
+- The chat and seller-profile screens still come back with `router.replace(from)`, which
+  leaves a second copy of the listing in the history. Product back dismisses any copies of
+  itself directly underneath (`router.dismiss(n)`), so you never land on the same page twice.
+- `app/(tabs)/index.tsx`: the grid's saved scroll position is now dropped when the Marketplace
+  regains focus without being rebuilt (the normal case after a pop). Otherwise a later,
+  unrelated remount could restore it.
+
+**Where back lands now:** Dashboard → Dashboard (same tab, same scroll). Marketplace grid →
+grid, same scroll. Marketplace swipe → deck, same card. Public profile → that profile. Search
+results: there is no search screen (decision 2026-09-19); whatever opens a product later
+gets the right back for free, because back is the history.
+
+**Still `router.replace(from)`, outside this block's files:** `sell.tsx`, `edit-profile.tsx`,
+`profile/[id].tsx`, `chat/[contactId].tsx`. They still reach the right screen. But on a Stack
+each one leaves a duplicate entry, so the system back needs one extra press to leave the app.
+Switching them to `router.back()` is the follow-up. `mobile/CLAUDE.md`'s "Root navigation is a
+`<Slot/>`" gotcha and the header in `src/lib/nav.ts` are now out of date.
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+### Decisions
+
+**TanStack Query's `focusManager` stays unwired on mobile.** `refetchOnWindowFocus` is inert
+on React Native: `focusManager` only listens to browser focus unless it is wired to
+`AppState`. That was deliberate, and it is now the decision:
+
+- Wiring `focusManager` globally re-runs every active query on every foreground, including
+  `GET /api/products/:id` for any open listing.
+- Every one of those calls increments `products.views`.
+- `YAHORA_BUILD_PLAN.md` already flags `products.views` as incremented by two uncoordinated
+  paths (browser RPC + the GET handler), so the number cannot be trusted. It schedules the fix
+  for **Phase 6**.
+- Wiring it now would add a third, foreground-driven source of view inflation. That makes a
+  Phase 6 problem harder to solve, to fix a problem we do not have.
+- The explicit `AppState` resync in `src/contexts/RealtimeContext.tsx` already does the real
+  work. It re-reads messaging on every return to the foreground, the one place where stale
+  data actually loses something.
+
+Revisit only after Phase 6 has made `products.views` single-sourced. The
+`refetchOnWindowFocus: true` in `useMessages.ts` stays as a harmless no-op, with its comment.
+
+---
+
+## 2026-09-27 — Five app fixes from founder testing: Sell's back, back-to-top, login tagline, posting flicker, swipe feel (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
+
+- **Sell's back button returned to the dashboard** no matter where Sell was opened from.
+  `sell.tsx` now takes the same `from` breadcrumb as the detail screens (`src/lib/nav.ts`).
+  The marketplace passes itself, grid or `?view=swipe`, and remembers the grid's scroll
+  position the way opening a product does. Android's system back does the same. A listing
+  that is actually saved still lands on the dashboard.
+- **Back-to-top arrow on the product screen.** Past one screen of scrolling, a small
+  `CircleButton` (`arrow-up`) fades in above the action bar and scrolls to the top. It is
+  hidden while a composer or the keyboard is up.
+- **Login: "Because every item has a memory."** now sits 24dp under the card instead of being
+  pinned to the bottom of the screen (`footerNote` lost its `marginTop: 'auto'`).
+- **Flicker when posting a question or reply.** On success the composer closed and the action
+  bar mounted at once, while the keyboard and KeyboardAvoider's padding were still up. So the
+  bar showed halfway up the screen, over the questions, then snapped down when the keyboard
+  finished. The bar now waits for the keyboard to be gone (`keyboardDidHide` on Android,
+  `keyboardWillHide` on iOS).
+- **Swipe deck (`SwipeCard.tsx`, `SwipeDeck.tsx`).** A release now commits on a flick
+  (>600dp/s in the direction the card leans, at least 24dp of travel) as well as on distance
+  (25% of screen width, was a fixed 100dp). A card past the line but thrown back returns. The
+  card follows the finger on both axes, tilts about where it was grabbed, and leaves at the
+  speed it was released. The cards behind lean forward as you drag and move up in the same
+  UI-thread frame the front card leaves (`frontOrder` shared value), not a render later.
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
+## 2026-09-25 — Phase 5 Block V-E: mobile infinite scroll (marketplace, comments, chat) (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency. No `limit` sent
+(server default, 20).
+
+- **Marketplace** (`useMarketplace.ts`, `(tabs)/index.tsx`): `useInfiniteQuery`; the FlashList
+  loads the next page from `onEndReached` (threshold 0.5, guarded by
+  `hasNextPage && !isFetchingNextPage`). `select` still hands the screen `data.products`.
+- **Product comments** (`useProductDetail.ts`, `product/[id].tsx`): `useInfiniteQuery` on
+  `['product', id]`; each page re-requests the product with `?cursor=`. The comments live inside
+  the page's ScrollView, so the trigger is the ScrollView's `onScroll`, half a screen from the
+  bottom. Threading is unchanged: the server keeps every reply on its parent's page. **Each older
+  page is a full GET and adds a view**, the same backend issue Neeraj flagged on the web.
+- **Chat** (`useMessages.ts`, `chat/[contactId].tsx`): pages backwards on the `inverted` list
+  that was already there. `pages[0]` is the newest page. Realtime and sends append to its end,
+  so loading an older page never touches them. **Nothing sorts messages any more**:
+  `sortByTime` is deleted, so an out-of-order thread now means the backend sent it that way.
+- **🐛 Found and fixed: mobile never picked up Phase 4 N-C's envelope rename.** `useInbox` read
+  `r.inbox` and `useChatHistory` read `response.messages`; both are `items` now. So on today's
+  backend the Messages tab and every chat thread rendered EMPTY. The inbox now reads `items`,
+  but only its first page (20 conversations): it was not one of V-E's three surfaces.
+- **Cache shape changes:** `useProduct` (Sell edit prefill) moved to `['product', id, 'edit']`,
+  because it can't share a key with an infinite query. The like/save patch and the comment
+  add/vote patches now walk `pages`. The persisted cache got `buster: 'v5e-infinite'`, so a
+  phone drops its old-shape cache once instead of crashing on `data.pages`.
+
+`npx tsc --noEmit` passes. **Not verified on a device.**
+
+---
+
 ## 2026-09-25 — Phase 5 Block V-D: layouts that broke on small screens (Vishwajeet)
 
 Mobile only. No backend, no database, no API change. **Nothing under `frontend/` was touched.**

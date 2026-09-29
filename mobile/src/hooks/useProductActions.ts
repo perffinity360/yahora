@@ -8,8 +8,8 @@ import { api } from '../lib/api';
  * Visitor-side like/save toggles that optimistically patch a listing inside a
  * cached feed — powering both the public profile (`['publicProfile', id]`, whose
  * items live under `.listings`) and the marketplace (`['marketplace', uniId]`,
- * items under `.products`). Pass the query key to update; the flip finds the
- * right array either way. Cancel in-flight fetches → snapshot → flip in cache →
+ * an infinite query since Phase 5 V-E: `pages[].items`). Pass the query key to
+ * update; the flip finds the right array either way. Cancel in-flight fetches → snapshot → flip in cache →
  * rollback on error → reconcile on settle, so taps feel instant on slow campus
  * networks but never drift from the backend.
  *
@@ -44,12 +44,26 @@ type ToggleResult = { is_liked?: boolean; is_saved?: boolean } | undefined;
  */
 function patchCachedListing(data: unknown, productId: string, patch: Patch): unknown {
   if (!data || typeof data !== 'object') return data;
+  // An infinite query (`useInfiniteQuery`: the marketplace feed, the product
+  // detail screen) caches `{ pages, pageParams }`. Patch each page on its own
+  // terms, and hand back `data` untouched when no page held the listing.
+  const infinite = data as { pages?: unknown[] };
+  if (Array.isArray(infinite.pages)) {
+    let changed = false;
+    const pages = infinite.pages.map((page) => {
+      const next = patchCachedListing(page, productId, patch);
+      if (next !== page) changed = true;
+      return next;
+    });
+    return changed ? { ...infinite, pages } : data;
+  }
   // Product-detail cache (`['product', id]`) is a single listing object, not a
   // feed — patch it in place so a like on the detail screen updates instantly.
   const single = data as ListingLike;
   if (single.id === productId) return patch(single);
-  const feed = data as { products?: ListingLike[]; listings?: ListingLike[] };
-  for (const field of ['products', 'listings'] as const) {
+  // `items` is a raw marketplace page ({ items, next_cursor }).
+  const feed = data as { products?: ListingLike[]; listings?: ListingLike[]; items?: ListingLike[] };
+  for (const field of ['products', 'listings', 'items'] as const) {
     const list = feed[field];
     if (!Array.isArray(list)) continue;
     const i = list.findIndex((p) => p?.id === productId);

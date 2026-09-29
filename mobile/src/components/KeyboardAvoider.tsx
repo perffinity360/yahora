@@ -44,6 +44,40 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
  * iOS never resizes the window and `KeyboardAvoidingView` is already correct
  * there (it accounts for the home indicator), so iOS keeps using it.
  */
+/**
+ * ── CLOSING THE KEYBOARD OURSELVES ──
+ *
+ * Android only reports a keyboard move once it has FINISHED (`keyboardDidHide`).
+ * So when the keyboard slides away, every avoider keeps its full padding for
+ * the whole ~250ms slide — the keyboard uncovers an empty band where the page
+ * should be — and then the page snaps down all at once. On the product screen
+ * that read as a flicker every time a question or reply was posted.
+ *
+ * When the app is the one closing the keyboard, it knows the moment it starts.
+ * `dismissKeyboard()` tells every mounted avoider to drop its padding NOW, then
+ * dismisses. The page is laid out in its final place under the keyboard before
+ * the slide begins, and the keyboard simply uncovers it.
+ *
+ * Use it in place of `Keyboard.dismiss()` wherever the keyboard is closed by
+ * an action (send, cancel). A keyboard the student closes themselves still
+ * takes the `keyboardDidHide` path; there is no earlier signal for that one.
+ */
+const dismissStartListeners = new Set<() => void>();
+
+/** Subscribe to the start of an app-initiated dismiss. Returns the unsubscribe. */
+export function onKeyboardDismissStart(listener: () => void): () => void {
+  dismissStartListeners.add(listener);
+  return () => {
+    dismissStartListeners.delete(listener);
+  };
+}
+
+/** `Keyboard.dismiss()`, with every avoider dropping its padding first. */
+export function dismissKeyboard() {
+  dismissStartListeners.forEach((listener) => listener());
+  Keyboard.dismiss();
+}
+
 export function KeyboardAvoider({
   style,
   children,
@@ -117,9 +151,15 @@ export function KeyboardAvoider({
       keyboardInset.current = 0;
       recompute();
     });
+    // Same as a hide, but at the START of a dismiss the app itself began.
+    const dismissing = onKeyboardDismissStart(() => {
+      keyboardInset.current = 0;
+      recompute();
+    });
     return () => {
       shown.remove();
       hidden.remove();
+      dismissing();
     };
   }, [measure, recompute]);
 
