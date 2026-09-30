@@ -72,6 +72,9 @@ const GRID_ROW_GAP = 12;
 const SKELETON_COUNT = 6;
 /** Scrolled further than this, the "List an item" pill folds to a round +. */
 const FAB_FOLD_AT = 24;
+/** Longest a tap-to-top ride may take, however far down the grid is: past
+ *  this, a longer ride would feel slower than it is worth. */
+const TOP_GLIDE_MAX_MS = 1400;
 
 type ViewMode = 'grid' | 'swipe';
 
@@ -181,7 +184,7 @@ export default function MarketplaceScreen() {
   const feedKey = ['marketplace', viewedUniversityId] as const;
   const toggleLike = useToggleLike(feedKey);
 
-  const { width, height: windowHeight } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
   const swipeCardW = Math.min(width - SCREEN_PAD * 2, 340);
 
@@ -380,11 +383,17 @@ export default function MarketplaceScreen() {
    * on the way.
    *
    * Instead the scroll is driven frame by frame on the UI thread (Reanimated
-   * `scrollTo`), easing out into the top over a time that grows with the
-   * distance. From far down it does not travel the whole way: the grid dips
-   * out, jumps to a screen and a half from the top, and fades back in as it
-   * glides the rest. The student sees one gentle deceleration, not a blur of
-   * every listing they passed.
+   * `scrollTo`), in one continuous glide from wherever the student is. It
+   * starts moving on the tap's own frame and settles softly into the top.
+   *
+   * It used to fade the grid out and jump to a screen and a half from the top
+   * when it was far down. That read as a blank flash before the scroll began,
+   * so it is gone. What keeps FlashList drawing on the way now is the speed:
+   * the time grows with the square root of the distance, so a long ride is
+   * quicker per screen than a short one but never faster than the grid can
+   * fill (about 10dp/ms on average from twelve screens down). The curve is
+   * close to a sine in-out, which has the lowest top speed of the smooth
+   * curves: no lurch at the start, no bump at the end.
    *
    * A finger on the grid stops it where it is (onScrollBeginDrag).
    */
@@ -439,48 +448,20 @@ export default function MarketplaceScreen() {
         topRunRef.current = false;
         if (landed) then();
       };
-      const far = windowHeight * 1.5;
-      const glide = (start: number) => {
-        topScrollY.value = start;
-        topScrolling.value = true;
-        topScrollY.value = withTiming(
-          0,
-          {
-            duration: 260 + Math.round(220 * Math.min(start / far, 1)),
-            easing: ReEasing.out(ReEasing.cubic),
-          },
-          (finished) => {
-            topScrolling.value = false;
-            runOnJS(finish)(!!finished);
-          },
-        );
-      };
-
-      if (from <= far) {
-        glide(from);
-        return;
-      }
-      Animated.timing(gridOpacity, {
-        toValue: 0,
-        duration: 100,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }).start(() => {
-        // Grabbed during the fade: stopScrollToTop already put it back.
-        if (!topRunRef.current) return;
-        list.scrollToOffset({ offset: far, animated: false });
-        // One frame for the jump to land, one for FlashList to draw the rows
-        // there — the same wait as the restore above.
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            if (!topRunRef.current) return;
-            revealGrid();
-            glide(far);
-          }),
-        );
-      });
+      // One screen ≈ 490ms, three ≈ 650ms, eight ≈ 900ms, twelve ≈ 1.1s.
+      const duration = Math.min(TOP_GLIDE_MAX_MS, 260 + Math.round(8 * Math.sqrt(from)));
+      topScrollY.value = from;
+      topScrolling.value = true;
+      topScrollY.value = withTiming(
+        0,
+        { duration, easing: ReEasing.bezier(0.35, 0, 0.25, 1) },
+        (finished) => {
+          topScrolling.value = false;
+          runOnJS(finish)(!!finished);
+        },
+      );
     },
-    [gridScrollRef, topScrollY, topScrolling, reduceMotion, windowHeight, gridOpacity, revealGrid],
+    [gridScrollRef, topScrollY, topScrolling, reduceMotion],
   );
 
   /** The student took hold of the grid: they are in charge now. */
@@ -489,9 +470,7 @@ export default function MarketplaceScreen() {
     topRunRef.current = false;
     cancelAnimation(topScrollY);
     topScrolling.value = false;
-    gridOpacity.stopAnimation();
-    gridOpacity.setValue(1);
-  }, [topScrollY, topScrolling, gridOpacity]);
+  }, [topScrollY, topScrolling]);
 
   /**
    * ── TAPPING THE MARKETPLACE TAB WHILE ON IT ──

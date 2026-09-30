@@ -90,7 +90,7 @@ export default function ChatScreen() {
 
   const { profile, isDemoUser } = useAuth();
   const myId = profile?.id;
-  const { onlineUsers, setActiveChat } = useRealtime();
+  const { onlineUsers, setActiveChat, connection, isOffline } = useRealtime();
 
   const isSelfChat = !!myId && !!contactId && myId === contactId;
 
@@ -111,8 +111,7 @@ export default function ChatScreen() {
     isLoading,
     isError,
     refetch,
-    dataUpdatedAt,
-    errorUpdatedAt,
+    isFetching,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -136,15 +135,27 @@ export default function ChatScreen() {
 
   const isOnline = isDemoUser || (!!contactId && onlineUsers.has(contactId) && !isSelfChat);
 
-  /* ── Tell realtime which chat is open, and clear the unread badge ────── */
+  /* Whether this chat is on screen and receiving live. Registering as the
+     realtime "active chat" and marking read both wait on it — see "AWAY FROM
+     THE CHAT" below. Leaving the screen stands down at once, in the cleanup,
+     so no message is counted read during the render it takes to notice. */
+  const [focused, setFocused] = useState(false);
   useFocusEffect(
     useCallback(() => {
-      if (!contactId || !productId || isSelfChat) return;
-      setActiveChat({ contactId, productId });
-      markReadRef.current.mutate({ contactId, productId });
-      return () => setActiveChat(null);
-    }, [contactId, productId, isSelfChat, setActiveChat]),
+      setFocused(true);
+      return () => {
+        setFocused(false);
+        setActiveChat(null);
+      };
+    }, [setActiveChat]),
   );
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => setAppActive(next === 'active'));
+    return () => sub.remove();
+  }, []);
+  // Offline (NetInfo) or the socket retrying: nothing reaches this phone live.
+  const reachable = appActive && !isOffline && connection !== 'reconnecting';
 
   /* ── Typing indicator: the ONLY chat-scoped channel ──────────────────── */
   useEffect(() => {
@@ -175,8 +186,6 @@ export default function ChatScreen() {
   const thread = useMemo(() => flattenThread(history), [history]);
   const lastMessageId = thread.length ? thread[thread.length - 1].id : null;
   const lastSenderId = thread.length ? thread[thread.length - 1].sender_id : null;
-  const lastMessageIdRef = useRef(lastMessageId);
-  lastMessageIdRef.current = lastMessageId;
 
   /* Their message arriving means they have stopped typing. */
   useEffect(() => {
@@ -205,6 +214,7 @@ export default function ChatScreen() {
     if (!content || !contactId || !productId) return;
     setDraft('');
     setShowEmoji(false);
+    clearUnreadLine();
     sendMessage.mutate({ content, clientTag: newClientTag() });
 
     // Demo campus: the bot is about to reply, so show its typing bubble now.
@@ -231,100 +241,146 @@ export default function ChatScreen() {
      thread fires PUT /messages/read within a second or two, which flips every
      is_read to true — a derived marker would appear and then vanish while you
      were still looking for where you left off, which is the one moment it is
-     for. Pinned, it stays put until you leave the thread. */
-  const unreadPinned = useRef(false);
-  const [unreadMarker, setUnreadMarker] = useState<{ firstId: string; count: number } | null>(null);
+     for. Pinned, it stays put until you leave the thread or reply.
+
+     `undefined` = not pinned yet. Until then it is derived, so the first render
+     that has messages already has the line — pinning it in an effect alone
+     would paint the messages one frame without it. */
+  type UnreadMarker = { firstId: string; count: number };
+  const [unreadMarker, setUnreadMarker] = useState<UnreadMarker | null | undefined>(undefined);
 
   // A different conversation is a different marker.
   useEffect(() => {
-    unreadPinned.current = false;
-    setUnreadMarker(null);
+    setUnreadMarker(undefined);
   }, [contactId, productId]);
 
-  useEffect(() => {
-    if (unreadPinned.current || thread.length === 0) return;
-    unreadPinned.current = true;
-
+  const openMarker = useMemo(() => {
+    if (unreadMarker !== undefined) return unreadMarker;
     const unread = thread.filter((m) => m.sender_id !== myId && m.is_read === false);
-    if (unread.length > 0) setUnreadMarker({ firstId: unread[0].id, count: unread.length });
-  }, [thread, myId]);
+    return unread.length ? { firstId: unread[0].id, count: unread.length } : null;
+  }, [unreadMarker, thread, myId]);
+
+  useEffect(() => {
+    if (unreadMarker === undefined && thread.length > 0) setUnreadMarker(openMarker);
+  }, [unreadMarker, openMarker, thread.length]);
 
   /* ── AWAY FROM THE CHAT (web parity: Messages.jsx flushAwayUnread) ──────
-     The phone going to the home screen leaves this screen mounted and focused,
-     but nobody is reading it. So while the app is away:
+     "Away" is any stretch where this chat is open but nothing reaches it live:
+     the app in the background (the screen stays mounted and focused, but
+     nobody is reading it), the phone offline (hostels, lifts), or the socket
+     retrying. While away:
 
        - this chat stands down as the realtime "active chat". A message that
          arrives is delivered (two grey ticks) and counted unread in the inbox,
          NOT marked read.
-       - the newest message on screen is remembered: everything after it that
-         the contact sent is what the student has not seen.
+       - the contact's newest message on screen is remembered. Everything they
+         sent after it is what the student has not seen, and it gets the
+         "N unread messages" line.
 
-     On return, once the thread has been re-read from the server (the socket
-     misses messages in the background, so the cache alone is not enough),
-     those messages get the "N unread messages" line, replacing any earlier
-     one, and only after that line is on screen does PUT /messages/read go out
-     and the sender's ticks turn blue. The inbox badge counts them until then.
+     That line is DERIVED from the thread while away, in the same render as
+     the messages it covers, so they can never appear first and the line a
+     render later. Messages the socket delivers in the background already sit
+     under it before the app is back on screen.
+
+     On return, the thread is re-read from the server (the socket misses
+     messages while away, so the cache alone is not enough). Once that re-read
+     has rendered, the line is pinned — same message, same count, so nothing on
+     screen moves — and only then does PUT /messages/read go out and the
+     sender's ticks turn blue. The inbox badge counts them until then.
 
      Registered on focus only: a chat under another screen is not on screen. */
-  const awayRef = useRef<{ lastSeenId: string | null } | null>(null);
-  /** When the app came back with a return still to flush; null otherwise. */
-  const [returnedAt, setReturnedAt] = useState<number | null>(null);
+  const [away, setAway] = useState<{ lastSeenId: string | null } | null>(null);
+  const awayRef = useRef(away);
+  awayRef.current = away;
+  /** The re-read after a return has finished; the line can be pinned. */
+  const [resynced, setResynced] = useState(false);
+  /** Bumped by every departure and return, so a stale re-read cannot flush. */
+  const returnSeqRef = useRef(0);
   /** The away line's first message id, until PUT /messages/read has gone out
    *  for it — which waits for the line to be among the rendered rows. */
   const readAfterLineRef = useRef<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!contactId || !productId || isSelfChat) return;
-      const sub = AppState.addEventListener('change', (next) => {
-        if (next !== 'active') {
-          if (!awayRef.current) {
-            awayRef.current = { lastSeenId: lastMessageIdRef.current };
-            setActiveChat(null);
-          }
-          return;
-        }
-        if (awayRef.current) {
-          setReturnedAt(Date.now());
-          // Joins the resync's refetch if that one started first.
-          refetch({ cancelRefetch: false });
-        }
-      });
-      return () => {
-        sub.remove();
-        // Leaving the chat: the focus effect above reads it on the way back in.
-        awayRef.current = null;
-        setReturnedAt(null);
-      };
-    }, [contactId, productId, isSelfChat, setActiveChat, refetch]),
-  );
+  // The contact's messages always carry server ids, so this survives a refetch;
+  // one of mine could still be an optimistic `local-…` placeholder.
+  const lastContactMessageId = useMemo(() => {
+    for (let i = thread.length - 1; i >= 0; i--) {
+      if (thread[i].sender_id === contactId) return thread[i].id;
+    }
+    return null;
+  }, [thread, contactId]);
+  const lastContactMessageIdRef = useRef(lastContactMessageId);
+  lastContactMessageIdRef.current = lastContactMessageId;
 
   useEffect(() => {
-    const away = awayRef.current;
-    if (returnedAt === null || !away || !contactId || !productId) return;
-    // Wait for the re-read. A failed one still flushes, from what is cached.
-    if (dataUpdatedAt < returnedAt && errorUpdatedAt < returnedAt) return;
-
-    awayRef.current = null;
-    setReturnedAt(null);
-    setActiveChat({ contactId, productId });
-
-    const seenAt = away.lastSeenId ? thread.findIndex((m) => m.id === away.lastSeenId) : -1;
-    const run =
-      away.lastSeenId && seenAt === -1
-        ? // The remembered message is gone (a send that was still in flight
-          // got its real id): fall back to the server's own unread flag.
-          thread.filter((m) => m.sender_id !== myId && m.is_read === false)
-        : thread.slice(seenAt + 1).filter((m) => m.sender_id !== myId);
-
-    if (run.length === 0) {
+    if (!contactId || !productId || isSelfChat) return;
+    if (!focused) {
+      // Leaving the chat: coming back in is a fresh open, marked read on focus.
+      returnSeqRef.current += 1;
+      setAway(null);
+      setResynced(false);
+      return;
+    }
+    if (!reachable) {
+      returnSeqRef.current += 1;
+      setResynced(false);
+      setActiveChat(null);
+      setAway((prev) => prev ?? { lastSeenId: lastContactMessageIdRef.current });
+      return;
+    }
+    if (!awayRef.current) {
+      // Opened (or refocused) while live: reading it now.
+      setActiveChat({ contactId, productId });
       markReadRef.current.mutate({ contactId, productId });
       return;
     }
-    unreadPinned.current = true;
-    readAfterLineRef.current = run[0].id;
-    setUnreadMarker({ firstId: run[0].id, count: run.length });
-  }, [returnedAt, dataUpdatedAt, errorUpdatedAt, thread, myId, contactId, productId, setActiveChat]);
+    // Back. Joins the resync's refetch if that one started first.
+    const seq = ++returnSeqRef.current;
+    refetch({ cancelRefetch: false }).then(() => {
+      if (returnSeqRef.current === seq) setResynced(true);
+    });
+  }, [focused, reachable, contactId, productId, isSelfChat, setActiveChat, refetch]);
+
+  const awayMarker = useMemo(() => {
+    if (!away) return null;
+    const seenAt = away.lastSeenId ? thread.findIndex((m) => m.id === away.lastSeenId) : -1;
+    const run =
+      away.lastSeenId && seenAt === -1
+        ? // The remembered message is no longer loaded (more arrived than the
+          // re-read's pages hold): fall back to the server's own unread flag.
+          thread.filter((m) => m.sender_id !== myId && m.is_read === false)
+        : thread.slice(seenAt + 1).filter((m) => m.sender_id !== myId);
+    return run.length ? { firstId: run[0].id, count: run.length } : null;
+  }, [away, thread, myId]);
+
+  // A line from being away replaces the one from opening; none leaves it be.
+  const marker = awayMarker ?? openMarker;
+
+  useEffect(() => {
+    // `isFetching` goes false in the same render that brings the re-read's
+    // data, so `awayMarker` here already counts everything it brought.
+    if (!away || !resynced || isFetching || !contactId || !productId) return;
+    setAway(null);
+    setResynced(false);
+    setActiveChat({ contactId, productId });
+    if (!awayMarker) {
+      markReadRef.current.mutate({ contactId, productId });
+      return;
+    }
+    readAfterLineRef.current = awayMarker.firstId;
+    setUnreadMarker(awayMarker);
+  }, [away, resynced, isFetching, awayMarker, contactId, productId, setActiveChat]);
+
+  /** Replying is reading (WhatsApp): the line goes, and stays gone. */
+  const clearUnreadLine = () => {
+    setUnreadMarker(null);
+    // Still away (a reply typed offline): what is on screen now has been
+    // seen, but anything that arrives after it still gets a line.
+    if (awayRef.current) setAway({ lastSeenId: lastContactMessageIdRef.current });
+    if (readAfterLineRef.current && contactId && productId) {
+      readAfterLineRef.current = null;
+      markReadRef.current.mutate({ contactId, productId });
+    }
+  };
 
   const listRef = useRef<FlatList<ChatRow>>(null);
 
@@ -340,8 +396,8 @@ export default function ChatScreen() {
         out.push({ kind: 'day', key: `day-${day}-${message.id}`, label: day });
       }
       // Above the first message they had not read, below everything they had.
-      if (unreadMarker && message.id === unreadMarker.firstId) {
-        out.push({ kind: 'unread', key: `unread-${message.id}`, count: unreadMarker.count });
+      if (marker && message.id === marker.firstId) {
+        out.push({ kind: 'unread', key: `unread-${message.id}`, count: marker.count });
       }
       out.push({
         kind: 'msg',
@@ -353,7 +409,7 @@ export default function ChatScreen() {
       });
     });
     return out.reverse();
-  }, [thread, myId, unreadMarker]);
+  }, [thread, myId, marker]);
 
   /* The away line is committed: bring it into view — a long run would leave it
      above the top of the screen — and now it is true that they have read it. */
