@@ -276,6 +276,127 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-09-30 (later) — Marketplace: tapping the tab glides to the top in one continuous scroll (Vishwajeet)
+
+Mobile only (`app/(tabs)/index.tsx`). No backend, API.md, migration or `frontend/` change. No
+dependency.
+
+- **A blank flash came before the scroll to the top.** From more than 1.5 screens down, the
+  2026-09-29 version faded the grid out for 100ms, jumped closer to the top, and faded it back
+  in. That fade and jump are gone. The grid now glides from wherever it is, starting on the
+  frame of the tap, still driven on the UI thread by Reanimated `scrollTo`.
+  - **Duration:** `260 + 8·√distance` ms, capped at 1.4s. That is about 490ms for one screen,
+    650ms for three and 1.1s for twelve.
+  - **Easing:** `bezier(0.35, 0, 0.25, 1)`, close to a sine in-out. It has the lowest top speed
+    of the smooth curves, which is what keeps FlashList drawing rows on the way up. The
+    average is about 10dp/ms from twelve screens down.
+  - Unchanged: a finger on the grid cancels it, reduced motion jumps straight to the top, and
+    the refresh starts once the grid reaches the top.
+- **Blank rows during the ride, worst past the first 20 items.** FlashList draws only ~350dp
+  ahead (`drawDistance` 250), on the JS thread, and the glide covers that in a couple of
+  frames. Past page one it is worse: those photos have left the image memory cache and are
+  decoded again. For the length of a ride the grid now draws **2 screen heights** of
+  `drawDistance`, ~2.8 screens ahead, so rows and photos are ready before they come on
+  screen. It goes back to 250 when the ride ends or a finger stops it. 250 is passed
+  explicitly because FlashList keeps the last value when the prop is `undefined`.
+  - Judge smoothness in a production-like bundle (`npx expo start --no-dev --minify`). A dev
+    bundle runs the JS thread several times slower and shows blanks a release build won't.
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
+## 2026-09-30 — Chat: the unread line arrives with the messages, survives going offline, and goes when you reply (Vishwajeet)
+
+Mobile only (`app/chat/[contactId].tsx`). No backend, API.md, migration or `frontend/` change.
+No dependency.
+
+- **🐛 After coming back from the home screen, the new messages showed first and the unread line
+  a moment later.** The line was only worked out after the thread had been re-read from the
+  server, one network round trip after the messages were already on screen.
+  - While the chat is away, the line is now worked out from the thread in the same render as
+    the messages. Messages the socket delivers in the background are already under it before
+    the app is back on screen.
+  - After the re-read, the line is pinned (same message, same count, so nothing moves). Only
+    then does `PUT /messages/read` go out. The order is unchanged.
+  - The line when a chat is first opened had the same one-frame gap. It is now worked out during
+    render too, and pinned straight after.
+- **🐛 Losing signal with the chat open (hostels, lifts): the missed messages came back with no
+  unread line.** The line only appeared after leaving the chat and opening it again. "Away"
+  now covers more than the background. It is any stretch where the chat is open but nothing
+  reaches it live: app in the background, NetInfo offline, or the realtime socket
+  `reconnecting`. Coming back online behaves like coming back from the home screen: re-read,
+  line, then read receipts. Because it has been read, the line does not show again on the next
+  open.
+- **🐛 Replying didn't clear the unread line.** Sending a message now removes it, as WhatsApp
+  does. If you reply while offline, anything that arrives after the reply still gets a line.
+  - **Neeraj:** the web keeps the line after a reply too (`Messages.jsx` only clears
+    `unreadMarker` when you switch chats). Worth matching if you want both clients to behave the
+    same. Your call.
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
+## 2026-09-29 (later) — Unread line and read receipts after returning from the background; smooth scroll-to-top (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
+
+- **🐛 Messages that arrived while the app was in the background came back wrong.** B has a
+  chat open and goes to the home screen. A sends a message. When B came back the message was
+  on screen, but there was no unread line and A's ticks stayed grey. The server still counted
+  it unread, so the next cold start showed B an unread badge for it, and A's ticks turned blue
+  only then, when the chat re-focused.
+  **Fix, the web's `flushAwayUnread` behaviour ("AWAY FROM THE CHAT" in
+  `app/chat/[contactId].tsx`):**
+  - When the app leaves the foreground, the open chat stops being the realtime "active chat"
+    and remembers the newest message on screen. Anything that arrives is delivered (two grey
+    ticks) and counted unread, not marked read.
+  - On return, the chat waits for the thread to be re-read from the server. It then draws the
+    "N unread messages" line over what the contact sent since, scrolls it into view, and only
+    after the line is on screen sends `PUT /messages/read`. That is when A's ticks turn blue.
+  - `RealtimeContext`: an incoming message counts as "being read" only while the app is in the
+    foreground. This covers the moment before the chat's own AppState listener runs.
+    `resync()` still does not mark anything read.
+  - Every incoming message now sends `PUT /messages/deliver`, as the web navbar does. Before,
+    a message that arrived anywhere but the open chat stayed on one tick until the app was
+    next reopened.
+- **Tapping the Marketplace tab again now scrolls to the top smoothly** (`(tabs)/index.tsx`).
+  - The scroll is driven on the UI thread (Reanimated `scrollTo` on FlashList's native scroll
+    view) and eases out over 260–480ms, depending on the distance.
+  - From more than 1.5 screens down, the grid fades out for 100ms, jumps to 1.5 screens from
+    the top, and fades back in as it glides the rest of the way.
+  - The refresh starts once the grid reaches the top, not during the scroll.
+  - Touching the grid cancels the scroll. Reduced motion jumps straight to the top.
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
+## 2026-09-29 — Marketplace: the list button folds to a + on scroll; tapping the tab again goes to the top and refreshes (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
+
+- **"List an item" folds to a round + once the grid is scrolled** (past 24dp), and opens back
+  out at the top. The folded button is the swipe deck's list button: a 48dp gradient disc with
+  a 22dp plus. It lives in the new `src/components/ListItemFab.tsx`, animated on the UI thread
+  (Reanimated, 260ms). The screen only writes a shared value when the offset crosses the line,
+  so scrolling triggers no re-renders. The open width is measured, not hardcoded.
+- **Tapping the Marketplace tab while already on it** scrolls the grid to the top and refetches
+  the feed, the same as pull-to-refresh. A tap that switches to the tab from another one just
+  switches. Swipe mode ignores it: there is nothing to scroll, and a refetch would reshuffle the
+  deck. `onRefresh` now ignores a second call while one is running, because `refetch()`
+  otherwise cancels and restarts.
+  - Like pull-to-refresh, this refetches every page already loaded, not just the first.
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
 ## 2026-09-27 (evening) — Tab labels cut off at large font sizes; back-to-top arrow tail (Vishwajeet)
 
 Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
