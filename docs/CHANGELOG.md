@@ -292,8 +292,15 @@ dependency.
     average is about 10dp/ms from twelve screens down.
   - Unchanged: a finger on the grid cancels it, reduced motion jumps straight to the top, and
     the refresh starts once the grid reaches the top.
-  - If empty cells still show on a very long ride on the POCO, the next step is a larger
-    `drawDistance` on the grid.
+- **Blank rows during the ride, worst past the first 20 items.** FlashList draws only ~350dp
+  ahead (`drawDistance` 250), on the JS thread, and the glide covers that in a couple of
+  frames. Past page one it is worse: those photos have left the image memory cache and are
+  decoded again. For the length of a ride the grid now draws **2 screen heights** of
+  `drawDistance`, ~2.8 screens ahead, so rows and photos are ready before they come on
+  screen. It goes back to 250 when the ride ends or a finger stops it. 250 is passed
+  explicitly because FlashList keeps the last value when the prop is `undefined`.
+  - Judge smoothness in a production-like bundle (`npx expo start --no-dev --minify`). A dev
+    bundle runs the JS thread several times slower and shows blanks a release build won't.
 
 `npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
 device.**

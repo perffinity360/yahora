@@ -75,6 +75,14 @@ const FAB_FOLD_AT = 24;
 /** Longest a tap-to-top ride may take, however far down the grid is: past
  *  this, a longer ride would feel slower than it is worth. */
 const TOP_GLIDE_MAX_MS = 1400;
+/** FlashList's own default draw distance (Android and iOS), restored after a
+ *  ride. It has to be passed back explicitly: FlashList keeps the last value
+ *  it was given when the prop goes `undefined`. */
+const GRID_DRAW_DISTANCE = 250;
+/** Draw distance during a tap-to-top ride, in screen heights. FlashList puts
+ *  70% of twice this ahead of the scroll, so 2 screens is ~2.8 screens of rows,
+ *  photos included, drawn before they come into view. */
+const GLIDE_DRAW_SCREENS = 2;
 
 type ViewMode = 'grid' | 'swipe';
 
@@ -184,7 +192,7 @@ export default function MarketplaceScreen() {
   const feedKey = ['marketplace', viewedUniversityId] as const;
   const toggleLike = useToggleLike(feedKey);
 
-  const { width } = useWindowDimensions();
+  const { width, height: windowHeight } = useWindowDimensions();
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
   const swipeCardW = Math.min(width - SCREEN_PAD * 2, 340);
 
@@ -395,14 +403,25 @@ export default function MarketplaceScreen() {
    * close to a sine in-out, which has the lowest top speed of the smooth
    * curves: no lurch at the start, no bump at the end.
    *
+   * Speed alone was not enough: rows still came in blank, most of all past the
+   * first page. FlashList draws only ~350dp ahead by default, on the JS thread,
+   * and the glide covers that in a couple of frames. Past the first 20 items
+   * it is worse, because page one's photos have long since left the image
+   * memory cache and must be decoded again. So for the length of the ride the
+   * grid draws ~2.8 screens ahead (`gliding`, GLIDE_DRAW_SCREENS). Rows and
+   * their photos are ready well before they reach the screen. The extra rows
+   * are drawn while the glide is still easing out of its start, over rows
+   * already on screen. After the ride the grid goes back to the default.
+   *
    * A finger on the grid stops it where it is (onScrollBeginDrag).
    */
+  const [gliding, setGliding] = useState(false);
   const gridScrollRef = useAnimatedRef();
   const topScrollY = useSharedValue(0);
   /** Frames are being driven — read by the UI-thread reaction below. */
   const topScrolling = useSharedValue(false);
-  /** A run is under way, including the fade before any frame is driven. A
-   *  second tap in that time is ignored rather than starting a second run. */
+  /** A run is under way. A second tap in that time is ignored rather than
+   *  starting a second run. */
   const topRunRef = useRef(false);
   /** Which run a completion belongs to, so a cancelled run finishing late
    *  cannot end the one that replaced it. */
@@ -442,10 +461,12 @@ export default function MarketplaceScreen() {
       }
 
       topRunRef.current = true;
+      setGliding(true);
       const runId = ++topRunId.current;
       const finish = (landed: boolean) => {
         if (runId !== topRunId.current) return;
         topRunRef.current = false;
+        setGliding(false);
         if (landed) then();
       };
       // One screen ≈ 490ms, three ≈ 650ms, eight ≈ 900ms, twelve ≈ 1.1s.
@@ -468,6 +489,7 @@ export default function MarketplaceScreen() {
   const stopScrollToTop = useCallback(() => {
     if (!topRunRef.current) return;
     topRunRef.current = false;
+    setGliding(false);
     cancelAnimation(topScrollY);
     topScrolling.value = false;
   }, [topScrollY, topScrolling]);
@@ -810,6 +832,8 @@ export default function MarketplaceScreen() {
           keyExtractor={(item) => item.id}
           numColumns={2}
           renderItem={renderCard}
+          // Far ahead only while tap-to-top is gliding; see "A SMOOTH RIDE".
+          drawDistance={gliding ? Math.round(windowHeight * GLIDE_DRAW_SCREENS) : GRID_DRAW_DISTANCE}
           // Flattened: FlashList reads its padding off a plain object.
           contentContainerStyle={StyleSheet.flatten([
             styles.listContent,
