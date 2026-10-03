@@ -1,3 +1,7 @@
+> **FROZEN as of 2026-09-27.** New entries live in docs/changelog/,
+> one file per entry. Run `node scripts/changelog.mjs recent 8`.
+> This file stays for its history and inbound links.
+
 # Changelog
 
 How Vishwajeet and Neeraj tell each other what changed.
@@ -20,6 +24,36 @@ Copy the right one, fill it in, and paste it under [Entries](#entries) — newes
 
 All six sections are required. The last one — "What NOT to do yet" — is the one people skip
 and the one that saves the most time.
+
+## 2026-09-29 — 📮 Phase 5 Block N-D: device matrix on three phones, and V-D verification (Neeraj)
+
+Testing only. No code changed.
+
+### Result: everything passes
+Samsung A03s, POCO X2 and OPPO K14, each at default font/display size and
+again at maximum font size. All tested by me, over Expo Go 56.0.0 against
+Vishwajeet's dev server.
+
+| Screen | Samsung | POCO | OPPO |
+|---|---|---|---|
+| Auth (both tabs) | ✅ | ✅ | ✅ |
+| Marketplace grid | ✅ | ✅ | ✅ |
+| Marketplace swipe | ✅ | ✅ | ✅ |
+| Product detail | ✅ | ✅ | ✅ |
+| Chat thread | ✅ | ✅ | ✅ |
+| Dashboard | ✅ | ✅ | ✅ |
+
+No clipped text, no overlapping controls, nothing unreachable, at either font
+size, on any phone. V-D's own checks 1-7 all pass too: tab labels read in full,
+the login screen fits without scrolling at default size, tab switching does not
+move the logo, the swipe controls are all visible, no text from the card behind
+shows, and SPECIALIZATION stays on one line. V-D was marked "not verified on a
+device"; it is now verified on three.
+
+### The judgement call
+The simplified product card reads well. Fewer stats and smaller type make the
+cards calmer, not empty, including on the Samsung, which is the smallest screen
+we have.
 
 ```markdown
 ## 2026-08-XX — Phase N complete (Vishwajeet)

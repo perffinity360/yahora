@@ -90,8 +90,8 @@ yahora/
 ├── supabase/
 │   ├── migrations/   every schema change  OWNER: Vishwajeet
 │   └── seed.sql      reference data (universities, courses, specializations)
-├── scripts/          repo tooling (verify-baseline.sh, verify-domains.sh)
-├── docs/             this file, CHANGELOG, CURRENT_STATE, runbooks
+├── scripts/          repo tooling (verify-baseline.sh, verify-domains.sh, changelog.mjs)
+├── docs/             this file, changelog/ (one file per entry), CURRENT_STATE, runbooks
 └── .claude/
 ```
 
@@ -164,7 +164,9 @@ They work in **separate Claude conversations** that cannot see each other. So:
 
 **Files are the shared memory. Chat history is not.**
 
-- `docs/CHANGELOG.md` — every handoff, every migration request, every test finding
+- `docs/changelog/` — every handoff, every migration request, every test finding, one file
+  per entry (`scripts/changelog.mjs`; see `docs/changelog/README.md`). The old
+  `docs/CHANGELOG.md` is frozen as of 2026-09-27 and kept for its history.
 - `backend/API.md` — the API contract, authoritative
 - `docs/CURRENT_STATE.md` — verified database and security posture
 - `CLAUDE.md` files — conventions Claude Code reads automatically
@@ -172,25 +174,32 @@ They work in **separate Claude conversations** that cannot see each other. So:
 **Every Claude Code session starts with:**
 
 ```
-Before we start: read CLAUDE.md, docs/CHANGELOG.md, backend/API.md,
-and docs/CURRENT_STATE.md. Summarise in 5 bullets what changed most
-recently and what I should be careful about.
+Before we start: read CLAUDE.md, then run
+`node scripts/changelog.mjs recent 8` and read everything it prints,
+then read backend/API.md and docs/CURRENT_STATE.md. Summarise in 5
+bullets what changed most recently and what I should be careful about.
 ```
 
 ## 2.5 The handoff format
 
-When one of them finishes something the other depends on, it goes in `docs/CHANGELOG.md`
-with six sections:
+When one of them finishes something the other depends on, it goes in a new file under
+`docs/changelog/`, created by the script so the name and template are always right:
+
+```
+node scripts/changelog.mjs new vishwajeet "Phase N complete" --phase N --block V-X --for neeraj
+```
+
+The file it creates has six sections:
 
 ```markdown
-## 2026-09-XX — Phase N complete (Vishwajeet)
+# Phase N complete
 
-### Migrations applied
-### New endpoints
-### Changed endpoints (BREAKING)
-### New fields on existing responses
-### Test data
-### What NOT to do yet
+## Migrations applied
+## New endpoints
+## Changed endpoints (BREAKING)
+## New fields on existing responses
+## Test data
+## What NOT to do yet
 ```
 
 The last section is the one people skip and the one that saves the most time.
@@ -780,7 +789,8 @@ Please read these first, in this order:
 
   1. docs/YAHORA_BUILD_PLAN.md   — the master plan. Read it fully.
   2. docs/CURRENT_STATE.md        — verified database and security posture
-  3. docs/CHANGELOG.md            — the handoff record between the two of us
+  3. docs/changelog/               — the handoff notes, one file per entry.
+                                       Run `node scripts/changelog.mjs recent 8`
   4. backend/API.md               — the API contract
 
 Then look at the code itself, especially:

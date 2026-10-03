@@ -154,7 +154,8 @@ function App() {
   // back/forward) leaves the restored scroll position intact, so returning to a
   // feed keeps your place. Runs before paint to avoid a scroll-position flash.
   useLayoutEffect(() => {
-    if (navigationType !== "POP") window.scrollTo(0, 0);
+    if (navigationType !== "POP")
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [location.pathname, navigationType]);
 
   return (
