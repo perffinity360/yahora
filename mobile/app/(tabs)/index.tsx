@@ -540,6 +540,7 @@ export default function MarketplaceScreen() {
         <ProductCard
           product={item}
           style={styles.cardFill}
+          swipePhotos
           isLiked={item.is_liked}
           sellerName={item.seller?.full_name}
           sellerAvatarUrl={item.seller?.avatar_url}

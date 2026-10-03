@@ -2098,6 +2098,17 @@ full name. Ordering is fixed inside the RPC: exact match first, then same-campus
 similarity `rank`. **Do not re-sort in JavaScript** — §2.5 relies on the backend order.
 **Notes:** `p_viewer` is what makes `is_same_campus` meaningful, so pass `req.user.id`. Fuzzy
 matching means "rahl" still finds "rahul". Clients debounce 300ms (§2.5).
+**Results are always from the viewer's own world (Phase 6A Block V-A, 2026-10-01):**
+- A real student sees only real students, on every campus. Campus is still not a filter, only
+  the second sort key.
+- A demo account sees only demo accounts.
+- A viewer the database cannot place gets `{ "items": [], "next_cursor": null }` with **200**,
+  not an error. That covers no `users` row, or a row whose `university_id` is null.
+
+`p_viewer` decides which world a viewer is in, so it must come from the token. The demo world is
+`universities.is_demo`, a column generated from `domain = 'demo.yahora.com'`. Enforced in
+`search_users()` by `20261001122844_search_demo_isolation.sql` (018). The request and response
+shapes are unchanged, and so is the controller.
 **✅ RESOLVED 2026-09-15 (Phase 4 Block N-C) — both TODOs that stood here.**
 
 **1. Search is EXEMPT from cursor pagination, deliberately — this is not an oversight.**
