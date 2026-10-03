@@ -2075,7 +2075,8 @@ Drive the Follow button entirely off `follow_status`: `null` → "Follow", `"pen
 "Requested", `"accepted"` → "Following".
 **TODO — ambiguous in plan:** §1.5 specifies `is_blocked`; Handoff B specifies
 `is_blocked_by_me`. **Is this a rename in Phase 3 (breaking any Phase 1–2 client), or do both
-ship?** A rename needs a `BREAKING` entry in `docs/CHANGELOG.md`.
+ship?** A rename needs a changelog entry (`scripts/changelog.mjs new`, in `docs/changelog/`) with
+its "Changed endpoints (BREAKING)" section filled in.
 **TODO — ambiguous in plan:** when `can_view_content` is false, §3.2 says the response still
 carries handle, name, avatar, university and counts but hides bio, course and year. **Are
 `bio`, `course` and `year_of_study` omitted from the JSON, or present as `null`?** The two

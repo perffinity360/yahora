@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --purple:#800080; --pinkDark:#EB487F; --pinkLight:#FFF4F7;
+    --black:#0B0B0B; --blackSoft:#1A1A1A; --white:#FFFFFF;
+    --mutedText:#6B6879; --hairline:#EEE6E2; --inputBg:#F3F0EF;
+    --appTop:#FFF0F7; --appMid:#FBE9F8; --appBottom:#F1E6FF;
+    --chatGround:#EDE6F5; --amber:#FDE68A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,sans-serif;background:#2a2230;padding:28px;display:flex;gap:28px;align-items:flex-start}
+  .label{color:#fff;font:600 13px Inter;margin:0 0 10px 4px;opacity:.85}
+  .phone{width:360px;height:740px;border-radius:26px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+  .status{height:26px;flex:none}
+  /* ---------- INBOX ---------- */
+  .inbox{background:linear-gradient(170deg,var(--appTop) 0%,var(--appMid) 50%,var(--appBottom) 100%)}
+  .ihead{padding:8px 16px 12px}
+  .ihead h1{font:400 20px 'Bree Serif';color:var(--black)}
+  .ihead p{font:500 12px Inter;color:var(--mutedText);margin-top:2px}
+  .filter{margin:10px 16px 6px;height:38px;border-radius:19px;background:rgba(255,255,255,.78);border:1px solid rgba(128,0,128,.08);display:flex;align-items:center;padding:0 14px;color:var(--mutedText);font:400 13px Inter;gap:8px}
+  .row{display:flex;gap:12px;padding:10px 16px;align-items:center;position:relative}
+  .row+.row::before{content:"";position:absolute;top:0;left:76px;right:16px;height:1px;background:rgba(128,0,128,.08)}
+  .av{width:48px;height:48px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:700 16px Inter;color:#fff}
+  .meta{flex:1;min-width:0}
+  .top{display:flex;align-items:baseline;gap:8px}
+  .name{font:600 14px Inter;color:var(--black);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .time{font:500 11px Inter;color:var(--mutedText);flex:none}
+  .unread .name{font-weight:800}
+  .unread .time{color:var(--purple);font-weight:700}
+  .bot{display:flex;align-items:center;gap:8px;margin-top:3px}
+  .prev{font:400 13px Inter;color:var(--mutedText);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .unread .prev{color:var(--blackSoft);font-weight:500}
+  .badge{min-width:20px;height:20px;border-radius:10px;padding:0 6px;background:linear-gradient(135deg,var(--purple),var(--pinkDark));color:#fff;font:700 11px Inter;display:flex;align-items:center;justify-content:center;flex:none}
+  .chip{display:inline-block;margin-top:5px;font:600 11px Inter;color:var(--pinkDark);background:rgba(235,72,127,.09);border-radius:8px;padding:2px 8px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* ---------- CONVERSATION ---------- */
+  .convo{background-color:var(--ground)}
+  .convo .wall{flex:1;min-height:0;background-color:var(--ground);background-image:url("assets/chat-pattern.svg");background-size:420px 420px;background-repeat:repeat;padding:10px 12px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;overflow:hidden}
+  .chead{background:#fff;display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid rgba(128,0,128,.07)}
+  .back{font:600 20px Inter;color:var(--purple);width:24px}
+  .cav{width:36px;height:36px;border-radius:50%;background:#5b7cfa;color:#fff;font:700 13px Inter;display:flex;align-items:center;justify-content:center}
+  .cname{font:600 16px Inter;color:var(--black)}
+  .cstat{font:500 11px Inter;color:var(--mutedText)}
+  .snip{background:#fff;padding:6px 12px 8px;border-bottom:1px solid rgba(128,0,128,.07)}
+  .snip div{display:flex;align-items:center;gap:8px;background:var(--pinkLight);border-radius:12px;padding:6px 8px}
+  .snip i{width:30px;height:30px;border-radius:8px;background:#d8c6e8;display:block}
+  .snip b{font:600 12px Inter;color:var(--black)} .snip span{font:400 11px 'Bree Serif';color:var(--purple);margin-left:auto}
+  .date{align-self:center;margin:10px 0 6px;font:700 11px Inter;letter-spacing:.6px;text-transform:uppercase;color:var(--mutedText);background:rgba(255,255,255,.92);border-radius:99px;padding:4px 11px}
+  .unreadline{align-self:stretch;text-align:center;margin:8px -12px;padding:5px 0;background:rgba(255,255,255,.88);font:700 11px Inter;color:var(--purple)}
+  .b{max-width:78%;padding:8px 12px 6px;border-radius:18px;font:400 14px/20px Inter;position:relative}
+  .mine{align-self:flex-end;color:#fff;background:linear-gradient(135deg,var(--purple) 0%,#C02B7F 100%)}
+  .theirs{align-self:flex-start;color:var(--blackSoft);background:#fff;border:1px solid rgba(128,0,128,.08)}
+  .mine.tail{border-bottom-right-radius:5px} .theirs.tail{border-bottom-left-radius:5px}
+  .gap{height:6px}
+  .bm{display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-top:2px;font:500 11px Inter}
+  .mine .bm{color:rgba(255,255,255,.90)} .theirs .bm{color:var(--mutedText)}
+  .tick{font:700 12px Inter;letter-spacing:-3px;padding-right:3px}
+  .read{color:var(--amber)} .dlv{color:rgba(255,255,255,.90)}
+  .comp{background:#fff;display:flex;align-items:center;gap:8px;padding:8px 10px 12px;border-top:1px solid rgba(128,0,128,.07)}
+  .inp{flex:1;height:40px;border-radius:20px;background:var(--inputBg);display:flex;align-items:center;padding:0 14px;font:400 14px Inter;color:#9a95a6}
+  .send{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--pinkDark));color:#fff;display:flex;align-items:center;justify-content:center;font:700 16px Inter}
+</style>
+</head>
+<body>
+<div id="inboxCol">
+  <div class="label" id="inboxLabel">Inbox — proposed</div>
+  <div class="phone inbox">
+    <div class="status"></div>
+    <div class="ihead"><h1>Messages</h1><p>3 unread conversations</p></div>
+    <div class="filter">⌕ &nbsp;Search conversations</div>
+    <div class="row unread"><div class="av" style="background:#5b7cfa">RS</div><div class="meta"><div class="top"><div class="name">Rahul Sharma</div><div class="time">2m</div></div><div class="bot"><div class="prev">Can I see it today after 5, near the canteen?</div><div class="badge">3</div></div><span class="chip">Hero Sprint 26T Cycle</span></div></div>
+    <div class="row unread"><div class="av" style="background:#e0668f">PV</div><div class="meta"><div class="top"><div class="name">Priya Verma</div><div class="time">18m</div></div><div class="bot"><div class="prev">Is the price negotiable? I'm a first year too 🙂</div><div class="badge">1</div></div><span class="chip">Casio FX-991ES Plus</span></div></div>
+    <div class="row"><div class="av" style="background:#8a5cc7">AG</div><div class="meta"><div class="top"><div class="name">Amit Gupta</div><div class="time">1h</div></div><div class="bot"><div class="prev">You: Sure, the charger is included as well</div></div><span class="chip">Samsung 24" FHD Monitor</span></div></div>
+    <div class="row"><div class="av" style="background:#2bb7ff">SK</div><div class="meta"><div class="top"><div class="name">Sarah Khan</div><div class="time">Yesterday</div></div><div class="bot"><div class="prev">Thanks! Picked it up, works perfectly</div></div></div></div>
+    <div class="row unread"><div class="av" style="background:#f59e0b">NB</div><div class="meta"><div class="top"><div class="name">Nikhil Bansal</div><div class="time">Mon</div></div><div class="bot"><div class="prev">Still available?</div><div class="badge">1</div></div><span class="chip">DSA Made Easy — Karumanchi</span></div></div>
+    <div class="row"><div class="av" style="background:#10b981">MJ</div><div class="meta"><div class="top"><div class="name">Meera Joshi</div><div class="time">Sun</div></div><div class="bot"><div class="prev">You: I can drop it at the library</div></div></div></div>
+  </div>
+</div>
+
+<div id="convoCol">
+  <div class="label" id="convoLabel">Conversation</div>
+  <div class="phone convo" id="convo">
+    <div class="status" style="background:#fff"></div>
+    <div class="chead"><span class="back">‹</span><div class="cav">RS</div><div><div class="cname">Rahul Sharma</div><div class="cstat">IIIT Kurnool · online</div></div></div>
+    <div class="snip"><div><i></i><b>Hero Sprint 26T Cycle</b><span>₹3,200</span></div></div>
+    <div class="wall">
+      <div class="date">Yesterday</div>
+      <div class="b theirs tail">Hi! Is the cycle still available?<div class="bm">9:02 PM</div></div>
+      <div class="gap"></div>
+      <div class="b mine">Yes it is 🙂</div>
+      <div class="b mine tail">Barely used, new tyres last month<div class="bm">9:04 PM <span class="tick read">✓✓</span></div></div>
+      <div class="date">Today</div>
+      <div class="unreadline">3 unread messages</div>
+      <div class="b theirs">What condition are the brakes in?</div>
+      <div class="b theirs">And does the lock come with it?</div>
+      <div class="b theirs tail">Can I see it today after 5, near the canteen?<div class="bm">4:41 PM</div></div>
+      <div class="gap"></div>
+      <div class="b mine tail">Brakes are good, lock included. 5:15 works!<div class="bm">4:43 PM <span class="tick dlv">✓✓</span></div></div>
+    </div>
+    <div class="comp"><div class="inp">Message</div><div class="send">➤</div></div>
+  </div>
+</div>
+<script>
+  // ?ground=#HEX&label=... lets one file render several variants
+  const q = new URLSearchParams(location.search);
+  const ground = q.get('ground') || '#EDE6F5';
+  document.getElementById('convo').style.setProperty('--ground', ground);
+  document.getElementById('convoLabel').textContent = q.get('label') || ('Conversation — ground ' + ground);
+  if (q.get('only') === 'convo') document.getElementById('inboxCol').style.display = 'none';
+</script>
+</body>
+</html>

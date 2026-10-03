@@ -1,5 +1,29 @@
 /* frontend/src/styles/global.css */
 
+/* ── 🛑 UNDO BOOTSTRAP'S GLOBAL SMOOTH SCROLL ──────────────────────────────
+   bootstrap/dist/css/bootstrap.min.css — imported one line above this file in
+   main.jsx — ships this in its reboot:
+
+     @media (prefers-reduced-motion: no-preference) { :root { scroll-behavior: smooth } }
+
+   Nothing in this app asked for it, and it silently rewrites what
+   `window.scrollTo(x, y)` means everywhere. The two-argument form is specified
+   as behaviour "auto", which means "whatever the CSS says" — so with this rule
+   in place every positional scroll in the app became an ANIMATION. Returning
+   from a product detail page, the marketplace restored the student's place in
+   the feed by smooth-scrolling down to it from the top, in full view, which is
+   the opposite of the instant landing that restore exists to give.
+
+   Deliberate smooth scrolling is unaffected: every place in this app that
+   wants it (the back-to-top button, the jump to #comments) asks for
+   `behavior: "smooth"` in JS, and an explicit behaviour always beats the CSS.
+
+   Same specificity as Bootstrap's `:root`, later in the cascade, so this wins.
+   Media queries add no specificity. */
+:root {
+  scroll-behavior: auto;
+}
+
 :root {  
   /* Purple */
   --purple: #800080;

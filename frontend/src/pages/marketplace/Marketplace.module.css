@@ -917,6 +917,17 @@
   }
 }
 
+/* Cards that were already on screen a moment ago — coming Back out of a
+   product brings the whole feed back from the snapshot at once. They are not
+   entering, so they must not animate: `cardIn` has `both` fill, so a card
+   waiting out its stagger sits at opacity 0, and a student restored to their
+   place deep in the feed would be looking at blank space until the stagger
+   caught up. Must stay AFTER .gridItem — both are single-class selectors, so
+   source order is what decides which animation-name wins. */
+.gridItemSettled {
+  animation: none;
+}
+
 /* ──────────────────────────────────────
    SKELETON LOADING
 ────────────────────────────────────── */

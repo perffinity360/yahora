@@ -384,7 +384,8 @@ zero-risk half of the rollout — do it first and separately from the four in §
 1. **Enable RLS, no policies, on the 8 backend-only tables + `posts`** (9 tables). Nothing
    observable changes; the service-role backend is unaffected.
 2. **Fix `frontend/src/contexts/AuthContext.jsx` to call `supabase.auth.setSession()`**
-   (§0.1). This is Neeraj's file — needs a `docs/CHANGELOG.md` handoff. Until it lands,
+   (§0.1). This is Neeraj's file — needs a changelog handoff (a new entry in `docs/changelog/`,
+   via `scripts/changelog.mjs`). Until it lands,
    `auth.uid()`-based policies cannot be used for web, and the web avatar upload is anonymous.
 3. **`visitor_metrics`** — independent of step 2 (it is anon by design). Make
    `increment_page_view()` `SECURITY DEFINER` and add a public `SELECT` policy.
