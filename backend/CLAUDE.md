@@ -31,7 +31,7 @@ person, do not edit the file. Say so in your response and stop.
 | `backend/scripts/seedDemo.js` | **Vishwajeet** | Neeraj requests additions |
 | Website (`frontend/`) | **Neeraj** | Vishwajeet doesn't touch this |
 | Mobile app (`mobile/`) | **Vishwajeet** | Neeraj doesn't touch this |
-| `docs/CHANGELOG.md` | Both append | How you tell each other things |
+| `docs/changelog/` | Both add entries | How you tell each other things — one new file per entry via `node scripts/changelog.mjs new …`; `docs/CHANGELOG.md` is frozen history |
 
 **The principle behind this split:** Vishwajeet owns everything where **a mistake is silent and
 permanent** — the database, security-critical paths, shared infrastructure. Neeraj owns things
@@ -50,9 +50,11 @@ shape, or error code in this backend, you MUST update backend/API.md
 in the SAME response. This is not optional and does not need to be
 requested.
 
-If you change a response shape, also add a line to docs/CHANGELOG.md
-under a "BREAKING" heading, because a separate developer is building
-a client against this API and cannot see this conversation.
+If you change a response shape, also file a changelog entry
+(`node scripts/changelog.mjs new <you> "<title>" --for <the other person>`)
+and fill in its "Changed endpoints (BREAKING)" section, because a
+separate developer is building a client against this API and cannot
+see this conversation.
 
 Never mark a backend task complete until API.md reflects the change.
 
@@ -133,11 +135,13 @@ bug — replace it with loopback or with runtime resolution.
 
 **When you need a schema change — the migration request protocol:**
 
-1. Append a request to `docs/CHANGELOG.md` under `## MIGRATION REQUESTS`, and message
-   Vishwajeet. Say what you need, why, and what it is blocking:
+1. File a changelog entry addressed to Vishwajeet —
+   `node scripts/changelog.mjs new neeraj "Migration request: <what>" --for vishwajeet` —
+   and message him. Say what you need, why, and what it is blocking:
    > *Need: `users.last_seen_at TIMESTAMPTZ` — for the "active recently" badge on profile
    > cards. Blocking: social module follower list.*
-2. Vishwajeet writes the migration, applies it, and replies with the migration number.
+2. Vishwajeet writes the migration, applies it, and replies with his own entry naming the
+   migration file.
 3. Target turnaround is **same day**. If it will take longer, work around it and revisit.
 
 **Business rules live in the database, not in your controller.** Follow status, block checks,
@@ -175,4 +179,5 @@ controller is the only thing standing between a caller and the data. Identity co
 - Rebase on `main` before opening a backend PR, always.
 - **One module per PR.** Don't bundle `social` and `notifications` into one review.
 - Merge promptly — a long-lived backend branch is where conflicts breed.
-- Post a handoff entry in `docs/CHANGELOG.md` when a module lands. Use the template there.
+- File a handoff entry with `node scripts/changelog.mjs new …` when a module lands. It writes
+  the six-section template for you; see `docs/changelog/README.md`.

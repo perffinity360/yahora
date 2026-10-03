@@ -13,15 +13,22 @@ working on before writing any code.
 
 - Vishwajeet owns: supabase/, backend/, mobile/
 - Neeraj owns: frontend/
-- Shared, both may append: docs/CHANGELOG.md
+- Shared, both add entries: docs/changelog/ — one new file per entry,
+  created with `node scripts/changelog.mjs new …`. Never edit another
+  person's entry except to fix a broken link. (docs/CHANGELOG.md is
+  frozen history — read it, never append to it.)
 
 Never modify a directory outside the owner's scope without saying so
 loudly in your response. The two developers work in separate Claude
 sessions and cannot see each other's conversations. Files in this
 repo are the ONLY shared memory between them.
 
-At the start of every session, read docs/CHANGELOG.md to find out
-what the other developer changed.
+At the start of every session, run `node scripts/changelog.mjs recent 8`
+and open the entries it lists to find out what the other developer
+changed; `node scripts/changelog.mjs for <your name>` lists every entry
+addressed to you. Do not read the whole of the frozen docs/CHANGELOG.md
+at startup — open it only to follow a link into its history. How the
+system works: docs/changelog/README.md.
 
 > **`backend/` is now split between both of them.** The line above predates the shared-backend
 > split in plan §0.5. Neeraj owns four backend modules (`user`, `social`, `notifications`,
