@@ -1,11 +1,12 @@
 import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { AppText } from './AppText';
+import { CardPhotoPager } from './CardPhotoPager';
 import { resolveMediaUrl } from '../lib/config';
 import { colors, conditionColors, font, MAX_FONT_SCALE, radius } from '../theme';
 import type { ProductCardItem } from '../types';
@@ -129,6 +130,13 @@ export interface ProductCardProps {
    * Off by default, so every grid card renders exactly as before.
    */
   fillPhoto?: boolean;
+  /**
+   * MARKETPLACE GRID ONLY. A listing with more than one photo can be swiped
+   * through on the card itself, without opening it — see CardPhotoPager.
+   * Off by default: the swipe deck must not get it (a sideways drag there is
+   * the like / pass gesture), and every other card renders as before.
+   */
+  swipePhotos?: boolean;
 }
 
 /** Compact round icon button, used only by the owner toolbar. */
@@ -171,6 +179,7 @@ function ProductCardBase({
   sellerAvatarUrl,
   showManageActions,
   fillPhoto,
+  swipePhotos,
 }: ProductCardProps) {
   // Listing photos are minted by the backend against its own SUPABASE_URL,
   // which is loopback in local dev and unreachable from a phone — the tile just
@@ -183,6 +192,13 @@ function ProductCardBase({
   const sold = product.status === 'sold';
   const liked = isLiked ?? product.is_liked ?? false;
   const imageCount = product.image_urls?.length ?? 0;
+  // The photos to swipe through, or null for the single still photo.
+  const pagerUris = useMemo(() => {
+    if (!swipePhotos || imageCount < 2) return null;
+    const uris = product.image_urls.map((u) => resolveMediaUrl(u)).filter((u): u is string => !!u);
+    return uris.length > 1 ? uris : null;
+  }, [swipePhotos, imageCount, product.image_urls]);
+  const pager = pagerUris !== null;
 
   const location = product.location?.trim();
   const locationLabel = location ? sentenceCase(location) : '';
@@ -204,7 +220,9 @@ function ProductCardBase({
     >
       <View style={styles.inner}>
         <View style={[styles.imageWrap, fillPhoto ? styles.imageWrapFill : styles.imageWrapSquare]}>
-          {image ? (
+          {pagerUris ? (
+            <CardPhotoPager productId={product.id} uris={pagerUris} />
+          ) : image ? (
             <Image source={{ uri: image }} style={styles.image} contentFit="cover" transition={220} />
           ) : (
             <View style={styles.imageFallback}>
@@ -212,11 +230,13 @@ function ProductCardBase({
             </View>
           )}
           {sold ? (
-            <View style={styles.soldOverlay}>
+            // Never takes a touch, so it cannot block a photo swipe under it.
+            <View style={styles.soldOverlay} pointerEvents="none">
               <AppText style={styles.soldText}>SOLD</AppText>
             </View>
           ) : null}
-          {imageCount > 1 ? (
+          {/* The pager draws its own, live counter. */}
+          {imageCount > 1 && !pager ? (
             <View style={styles.imageCounter}>
               <AppText style={styles.imageCounterText}>1/{imageCount}</AppText>
             </View>

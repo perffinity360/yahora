@@ -1,1 +1,1 @@
-select * from search_users('a', 'b0000000-0000-4000-8000-000000000006', 10);
+select count(*) from public.search_users('a', '00000000-0000-4000-8000-000000000000', 50);

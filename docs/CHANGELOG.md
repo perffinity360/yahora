@@ -310,6 +310,31 @@ diff that was never the problem.
 ---
 
 ## Entries
+## 2026-10-03 — Marketplace grid: swipe through a listing's photos on the card (Vishwajeet)
+
+Mobile only. No backend, API.md, migration or `frontend/` change. No dependency.
+
+- **A grid card with more than one photo can now be swiped sideways** to see the others
+  without opening the listing, Blinkit / Zepto style. New `src/components/CardPhotoPager.tsx`,
+  switched on by a new `swipePhotos` prop on `ProductCard`. Only `(tabs)/index.tsx`'s grid
+  passes it. The swipe deck (where a sideways drag is like / pass), the dashboard, the public
+  profile and the sell preview are unchanged.
+  - Tap still opens the listing. A sideways drag pages the photos and never opens it. An
+    up/down drag that starts on a photo still scrolls the feed.
+  - One flick moves one photo. Pill dots (the detail page's, scaled down) follow the finger,
+    and the existing `1/N` counter is now live.
+  - **Data:** only the first photo loads with the card, as before. The next one starts loading
+    when a finger touches the photo, and each photo reached loads the one after it. Cards
+    nobody touches cost nothing extra.
+  - FlashList recycling: a recycled cell resets to photo one before it is painted
+    (`useRecyclingState` + a layout effect).
+- The SOLD overlay on `ProductCard` no longer takes touches (`pointerEvents="none"`).
+
+`npx tsc --noEmit` passes; `npx expo export --platform android` bundles. **Not verified on a
+device.**
+
+---
+
 ## 2026-09-30 (later) — Marketplace: tapping the tab glides to the top in one continuous scroll (Vishwajeet)
 
 Mobile only (`app/(tabs)/index.tsx`). No backend, API.md, migration or `frontend/` change. No
