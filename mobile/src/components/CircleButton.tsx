@@ -38,6 +38,8 @@ type Props = {
    */
   variant?: 'floating' | 'plain';
   iconSize?: number;
+  /** Defaults to purpleDark. The chat header's back chevron is purple (MESSAGES_SPEC.md §2). */
+  iconColor?: string;
   style?: StyleProp<ViewStyle>;
   hitSlop?: number;
 };
@@ -50,6 +52,7 @@ export function CircleButton({
   loading,
   variant = 'floating',
   iconSize = 20,
+  iconColor = colors.purpleDark,
   style,
   hitSlop = 8,
 }: Props) {
@@ -82,9 +85,9 @@ export function CircleButton({
           ]}
         >
           {loading ? (
-            <ActivityIndicator size="small" color={colors.purpleDark} />
+            <ActivityIndicator size="small" color={iconColor} />
           ) : (
-            <Feather name={icon} size={iconSize} color={colors.purpleDark} />
+            <Feather name={icon} size={iconSize} color={iconColor} />
           )}
         </Animated.View>
       )}

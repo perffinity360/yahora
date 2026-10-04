@@ -1,8 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
 import { FlashList } from '@shopify/flash-list';
-import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -17,7 +17,6 @@ import { AppText } from '../../src/components/AppText';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
-import { resolveMediaUrl } from '../../src/lib/config';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -25,10 +24,12 @@ import { useRealtime } from '../../src/contexts/RealtimeContext';
 import { useInbox } from '../../src/hooks/useMessages';
 import { formatInboxTime } from '../../src/lib/messages';
 import { hrefWithFrom } from '../../src/lib/nav';
-import { colors, font, radius, spacing } from '../../src/theme';
+import { colors, font, spacing } from '../../src/theme';
 import type { InboxItem } from '../../src/types';
 
 const INBOX_HREF = '/(tabs)/messages';
+/** The unread badge's 135° gradient (MESSAGES_SPEC.md §1). */
+const BADGE = [colors.purple, colors.pinkDark] as const;
 
 export default function MessagesScreen() {
   const router = useRouter();
@@ -51,11 +52,34 @@ export default function MessagesScreen() {
     );
   }, [conversations, query]);
 
-  const openChat = (row: InboxItem) => {
-    router.push(
-      hrefWithFrom(`/chat/${row.contact_id}?productId=${row.product_id}`, INBOX_HREF),
-    );
-  };
+  // Over every conversation, not the filtered rows: the header counts the inbox.
+  const unreadConversations = useMemo(
+    () => conversations.filter((row) => Number(row.unread_count || 0) > 0).length,
+    [conversations],
+  );
+
+  const openChat = useCallback(
+    (row: InboxItem) => {
+      router.push(
+        hrefWithFrom(`/chat/${row.contact_id}?productId=${row.product_id}`, INBOX_HREF),
+      );
+    },
+    [router],
+  );
+
+  const renderRow = useCallback(
+    ({ item, index }: { item: InboxItem; index: number }) => (
+      <ConversationRow
+        row={item}
+        first={index === 0}
+        // Demo campus contacts are always shown online, mirroring the web.
+        online={isDemoUser || (onlineUsers.has(item.contact_id) && item.contact_id !== myId)}
+        isSelf={item.contact_id === myId}
+        onOpen={openChat}
+      />
+    ),
+    [isDemoUser, onlineUsers, myId, openChat],
+  );
 
   const refreshControl = (
     <RefreshControl
@@ -68,34 +92,40 @@ export default function MessagesScreen() {
 
   return (
     <View style={styles.root}>
-      <ScreenGradient variant="inbox" />
+      <ScreenGradient variant="app" />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ConnectionBanner />
 
       <View style={styles.header}>
         <AppText style={styles.title}>Messages</AppText>
-        <View style={styles.searchBar}>
-          <Feather name="search" size={15} color={colors.mutedLabel} />
-          <AppTextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search conversations…"
-            placeholderTextColor={colors.mutedPlaceholder}
-            style={styles.searchInput}
-            returnKeyType="search"
-            accessibilityLabel="Search conversations"
-          />
-          {query ? (
-            <Pressable
-              onPress={() => setQuery('')}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-            >
-              <Feather name="x" size={15} color={colors.mutedLabel} />
-            </Pressable>
-          ) : null}
-        </View>
+        {unreadConversations > 0 ? (
+          <AppText style={styles.subtitle}>
+            {unreadConversations} unread conversation{unreadConversations === 1 ? '' : 's'}
+          </AppText>
+        ) : null}
+      </View>
+
+      <View style={styles.filter}>
+        <Feather name="search" size={15} color={colors.mutedText} />
+        <AppTextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search conversations"
+          placeholderTextColor={colors.mutedText}
+          style={styles.filterInput}
+          returnKeyType="search"
+          accessibilityLabel="Search conversations"
+        />
+        {query ? (
+          <Pressable
+            onPress={() => setQuery('')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
+            <Feather name="x" size={15} color={colors.mutedText} />
+          </Pressable>
+        ) : null}
       </View>
 
       {isLoading ? (
@@ -128,15 +158,7 @@ export default function MessagesScreen() {
         <FlashList
           data={rows}
           keyExtractor={(row) => `${row.contact_id}-${row.product_id}`}
-          renderItem={({ item }) => (
-            <ConversationRow
-              row={item}
-              // Demo campus contacts are always shown online, mirroring the web.
-              online={isDemoUser || (onlineUsers.has(item.contact_id) && item.contact_id !== myId)}
-              isSelf={item.contact_id === myId}
-              onPress={() => openChat(item)}
-            />
-          )}
+          renderItem={renderRow}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
@@ -147,76 +169,76 @@ export default function MessagesScreen() {
   );
 }
 
-/* ────────────────────────── Row ────────────────────────── */
-function ConversationRow({
+/* ────────────────────────── Row ──────────────────────────
+   MESSAGES_SPEC.md §1 "Row". No card: rows sit straight on the canvas, split by
+   a hairline that starts at the text column. Unread is carried by weight and
+   colour on all three lines, plus the badge. Memoised — the inbox re-renders on
+   every presence change, and only the rows whose props moved should follow. */
+const ConversationRow = memo(function ConversationRow({
   row,
+  first,
   online,
   isSelf,
-  onPress,
+  onOpen,
 }: {
   row: InboxItem;
+  /** No divider above the first row. */
+  first: boolean;
   online: boolean;
   isSelf: boolean;
-  onPress: () => void;
+  onOpen: (row: InboxItem) => void;
 }) {
   const unread = Number(row.unread_count || 0);
+  const isUnread = unread > 0;
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onOpen(row)}
       accessibilityRole="button"
-      accessibilityLabel={`Chat with ${row.contact_name ?? 'this student'} about ${row.product_title ?? 'an item'}${unread > 0 ? `, ${unread} unread` : ''}`}
+      accessibilityLabel={`Chat with ${row.contact_name ?? 'this student'} about ${row.product_title ?? 'an item'}${isUnread ? `, ${unread} unread` : ''}`}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
+      {first ? null : <View style={styles.divider} />}
+
       <View>
-        <Avatar name={row.contact_name} uri={row.contact_avatar} size={50} />
+        <Avatar name={row.contact_name} uri={row.contact_avatar} size={48} />
         {online ? <View style={styles.onlineDot} /> : null}
       </View>
 
       <View style={styles.rowBody}>
         <View style={styles.rowTop}>
-          <AppText style={styles.name} numberOfLines={1}>
+          <AppText style={[styles.name, isUnread && styles.nameUnread]} numberOfLines={1}>
             {row.contact_name || 'Yahora student'}
             {isSelf ? ' (You)' : ''}
           </AppText>
-          <AppText style={styles.time}>{formatInboxTime(row.last_message_time)}</AppText>
-        </View>
-
-        <View style={styles.productChip}>
-          {row.product_image ? (
-            <Image
-              // Loopback-safe in local dev; see src/lib/config.ts.
-              source={{ uri: resolveMediaUrl(row.product_image) ?? row.product_image }}
-              style={styles.productThumb}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={[styles.productThumb, styles.productThumbFallback]}>
-              <Feather name="image" size={9} color={colors.mutedPlaceholder} />
-            </View>
-          )}
-          <AppText style={styles.productTitle} numberOfLines={1}>
-            {row.product_title || 'Item'}
+          <AppText style={[styles.time, isUnread && styles.timeUnread]}>
+            {formatInboxTime(row.last_message_time)}
           </AppText>
         </View>
 
         <View style={styles.rowBottom}>
-          <AppText
-            style={[styles.preview, unread > 0 && styles.previewUnread]}
-            numberOfLines={1}
-          >
+          <AppText style={[styles.preview, isUnread && styles.previewUnread]} numberOfLines={1}>
             {row.last_message || 'Start the conversation ✨'}
           </AppText>
-          {unread > 0 ? (
-            <View style={styles.unreadBadge}>
-              <AppText style={styles.unreadText}>{unread > 99 ? '99+' : unread}</AppText>
-            </View>
+          {isUnread ? (
+            <LinearGradient
+              colors={BADGE}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.badge}
+            >
+              <AppText style={styles.badgeText}>{unread > 99 ? '99+' : unread}</AppText>
+            </LinearGradient>
           ) : null}
         </View>
+
+        <AppText style={styles.productChip} numberOfLines={1}>
+          {row.product_title || 'Item'}
+        </AppText>
       </View>
     </Pressable>
   );
-}
+});
 
 /* ────────────────────────── States ────────────────────────── */
 function InboxState({
@@ -239,16 +261,17 @@ function InboxState({
   );
 }
 
+/** Spec §1 "Loading": avatar circle + two bars, laid out like a real row. */
 function InboxSkeleton() {
   return (
     <View style={styles.listContent}>
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <View key={i} style={styles.row}>
-          <Skeleton width={50} height={50} rounded={25} />
+          {i === 0 ? null : <View style={styles.divider} />}
+          <Skeleton width={48} height={48} rounded={24} />
           <View style={styles.rowBody}>
             <Skeleton width="55%" height={14} rounded={7} />
-            <Skeleton width={120} height={18} rounded={9} style={{ marginTop: 8 }} />
-            <Skeleton width="80%" height={12} rounded={6} style={{ marginTop: 8 }} />
+            <Skeleton width="80%" height={12} rounded={6} style={styles.skeletonBar} />
           </View>
         </View>
       ))}
@@ -256,34 +279,46 @@ function InboxSkeleton() {
   );
 }
 
+/* Every value below is MESSAGES_SPEC.md §1; where the spec is silent, the
+   mockup (docs/design/messages-mockup.html) — noted inline. */
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.inboxBottom },
+  root: { flex: 1, backgroundColor: colors.appBgBottom },
   // The root holds the gradient; the safe area sits transparently on top of it.
   safe: { flex: 1 },
 
+  // Padding: mockup `.ihead`.
   header: {
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 12,
   },
   title: {
     fontFamily: font.family.serif,
-    fontSize: font.sizes.display,
-    color: colors.blackSoft,
+    fontSize: font.sizes.headline,
+    color: colors.black,
   },
-  searchBar: {
+  subtitle: {
+    fontFamily: font.family.medium,
+    fontSize: font.sizes.caption,
+    color: colors.mutedText,
+    marginTop: 2, // mockup
+  },
+
+  filter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: colors.cardSurface,
+    gap: spacing.sm, // mockup
+    height: 38,
+    marginTop: 10,
+    marginHorizontal: spacing.md,
+    marginBottom: 6,
+    paddingHorizontal: 14, // mockup
+    borderRadius: 19,
+    backgroundColor: colors.inboxFilterBg,
     borderWidth: 1,
-    borderColor: colors.hairline,
+    borderColor: colors.messagesLine,
   },
-  searchInput: {
+  filterInput: {
     flex: 1,
     fontFamily: font.family.regular,
     fontSize: font.sizes.body,
@@ -292,25 +327,25 @@ const styles = StyleSheet.create({
   },
 
   listContent: {
-    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },
 
   /* Conversation row */
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: radius.lg,
-    backgroundColor: colors.cardSurface,
-    borderWidth: 1,
-    borderColor: colors.hairline,
+    alignItems: 'center', // mockup
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
   },
-  rowPressed: {
-    backgroundColor: colors.pinkLight,
-    borderColor: colors.inputBorderFocus,
+  rowPressed: { backgroundColor: colors.inboxRowPressed },
+  divider: {
+    position: 'absolute',
+    top: 0,
+    left: 76,
+    right: spacing.md,
+    height: 1,
+    backgroundColor: colors.messagesLine,
   },
   onlineDot: {
     position: 'absolute',
@@ -329,57 +364,30 @@ const styles = StyleSheet.create({
   },
   rowTop: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'baseline', // mockup
     gap: spacing.sm,
   },
   name: {
     flex: 1,
-    fontFamily: font.family.bold,
-    fontSize: font.sizes.body,
-    color: colors.blackSoft,
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.bodyLg,
+    color: colors.black,
   },
+  nameUnread: { fontFamily: font.family.extrabold },
   time: {
     fontFamily: font.family.medium,
-    fontSize: font.sizes.caption,
-    color: colors.mutedLabel,
-  },
-  productChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    gap: 6,
-    marginTop: 6,
-    paddingRight: 10,
-    paddingLeft: 4,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: colors.pinkLight,
-    borderWidth: 1,
-    borderColor: colors.hairline,
-  },
-  productThumb: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.inputBg,
-  },
-  productThumbFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  productTitle: {
-    flexShrink: 1,
-    fontFamily: font.family.semibold,
-    fontSize: font.sizes.caption,
+    fontSize: font.sizes.micro,
     color: colors.mutedText,
+  },
+  timeUnread: {
+    fontFamily: font.family.bold,
+    color: colors.purple,
   },
   rowBottom: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: 6,
+    gap: spacing.sm, // mockup
+    marginTop: 3, // mockup
   },
   preview: {
     flex: 1,
@@ -388,25 +396,38 @@ const styles = StyleSheet.create({
     color: colors.mutedText,
   },
   previewUnread: {
-    fontFamily: font.family.bold,
+    fontFamily: font.family.medium,
     color: colors.blackSoft,
   },
-  unreadBadge: {
+  badge: {
     minWidth: 20,
     height: 20,
     paddingHorizontal: 6,
-    borderRadius: 999,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.purple,
   },
-  unreadText: {
-    fontFamily: font.family.extrabold,
+  badgeText: {
+    fontFamily: font.family.bold,
     fontSize: font.sizes.micro,
     color: colors.white,
   },
+  productChip: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    marginTop: 5,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.inboxProductChipBg,
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.micro,
+    color: colors.pinkDark,
+  },
+  skeletonBar: { marginTop: spacing.sm },
 
-  /* States */
+  /* States — the existing empty state, its text on the row tokens above. */
   stateScroll: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -428,9 +449,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   stateTitle: {
-    fontFamily: font.family.bold,
-    fontSize: font.sizes.title,
-    color: colors.blackSoft,
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.bodyLg,
+    color: colors.black,
     textAlign: 'center',
   },
   stateText: {

@@ -4,29 +4,30 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   AppState,
   FlatList,
+  Image as RNImage,
   Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackButton } from '../../src/components/CircleButton';
+import { CircleButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { resolveMediaUrl } from '../../src/lib/config';
-import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRealtime } from '../../src/contexts/RealtimeContext';
@@ -37,15 +38,42 @@ import {
   useMarkRead,
   useSendMessage,
 } from '../../src/hooks/useMessages';
-import { flattenThread, formatClockTime, formatDayLabel, isGroupedWith } from '../../src/lib/messages';
+import { useUniversities } from '../../src/hooks/useUniversities';
+import {
+  flattenThread,
+  formatClockTime,
+  formatDayLabel,
+  isGroupedWith,
+  isSameDay,
+} from '../../src/lib/messages';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { supabase } from '../../src/lib/supabase';
-import { colors, font, radius, spacing } from '../../src/theme';
+import { CHAT_WALLPAPER_OPACITY, colors, font, radius, SENT_BUBBLE_STYLE, spacing } from '../../src/theme';
 import type { PendingMessage } from '../../src/types';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
+/** The sent bubble's 135° gradient (MESSAGES_SPEC.md §2), or null for 'solid'.
+ *  Module-level, with the points below, so a bubble's gradient props never
+ *  change identity and it is never rebuilt on a re-render. */
+const SENT_GRADIENT =
+  SENT_BUBBLE_STYLE === 'gradient' ? ([colors.purple, colors.bubbleMineEnd] as const) : null;
+const GRADIENT_START = { x: 0, y: 0 };
+const GRADIENT_END = { x: 1, y: 1 };
+/** Composer bottom padding (spec §2), raised to the home-indicator inset. */
+const COMPOSER_BOTTOM = 12;
+/** Bubble corner radius; the tail corner is BUBBLE_TAIL (spec §2). */
+const BUBBLE_RADIUS = 18;
+const BUBBLE_TAIL = 5;
+/** Thread side padding (mockup `.wall`); the unread band bleeds past it. */
+const THREAD_PAD = 12;
+/** Bubble max width: 78% of the thread, never above 520 (spec §2). */
+const BUBBLE_MAX = 520;
 const MESSAGES_HREF = '/(tabs)/messages';
 const MAX_MESSAGE_LENGTH = 2000;
+/** Seamless 420×420 doodle tile; copies of docs/design/assets/. Never edit the PNGs. */
+const CHAT_PATTERN = require('../../assets/chat-pattern.png');
+/** The tile's size in dp — the web tiles the same artwork at 420 px. */
+const TILE = 420;
 
 /** Broadcast at most one typing ping every 2s, and hide theirs after 3s of silence. */
 const TYPING_THROTTLE_MS = 2000;
@@ -134,6 +162,17 @@ export default function ChatScreen() {
   const lastTypingSentRef = useRef(0);
 
   const isOnline = isDemoUser || (!!contactId && onlineUsers.has(contactId) && !isSelfChat);
+
+  /* Header status line (spec §2): "<University> · online", or the university
+     alone. A chat is always within one campus — the backend refuses a send
+     across two — so the contact's university is the viewer's own. Read from
+     the cached universities list the app already holds; no new request shape. */
+  const { data: universities } = useUniversities();
+  const campusName = useMemo(
+    () => universities?.find((u) => u.id === profile?.university_id)?.name ?? null,
+    [universities, profile?.university_id],
+  );
+  const statusLine = [campusName, isOnline ? 'online' : null].filter(Boolean).join(' · ');
 
   /* Whether this chat is on screen and receiving live. Registering as the
      realtime "active chat" and marking read both wait on it — see "AWAY FROM
@@ -229,6 +268,11 @@ export default function ChatScreen() {
     if (!message.client_tag) return;
     sendMessage.mutate({ content: message.content, clientTag: message.client_tag });
   };
+  // One stable function for every row, so the memoised bubbles do not
+  // re-render each time the screen does. Same send, same mutation.
+  const retryRef = useRef(handleRetry);
+  retryRef.current = handleRetry;
+  const onRetry = useCallback((message: PendingMessage) => retryRef.current(message), []);
 
   const goBack = () => {
     if (fromParam) router.replace(fromParam);
@@ -391,8 +435,8 @@ export default function ChatScreen() {
     thread.forEach((message, i) => {
       const previous = thread[i - 1];
       const next = thread[i + 1];
-      const day = formatDayLabel(message.created_at);
-      if (!previous || formatDayLabel(previous.created_at) !== day) {
+      if (!previous || !isSameDay(previous.created_at, message.created_at)) {
+        const day = formatDayLabel(message.created_at);
         out.push({ kind: 'day', key: `day-${day}-${message.id}`, label: day });
       }
       // Above the first message they had not read, below everything they had.
@@ -430,6 +474,33 @@ export default function ChatScreen() {
 
   const canSend = !!draft.trim() && !!contactId && !!productId;
 
+  const { width: windowWidth } = useWindowDimensions();
+  const bubbleWidth = useMemo(
+    () => ({ maxWidth: Math.min(Math.round((windowWidth - THREAD_PAD * 2) * 0.78), BUBBLE_MAX) }),
+    [windowWidth],
+  );
+
+  const renderRow = useCallback(
+    ({ item }: { item: ChatRow }) =>
+      item.kind === 'day' ? (
+        <DaySeparator label={item.label} />
+      ) : item.kind === 'unread' ? (
+        <UnreadDivider count={item.count} />
+      ) : (
+        <MessageBubble
+          message={item.message}
+          mine={item.mine}
+          firstOfRun={item.firstOfRun}
+          lastOfRun={item.lastOfRun}
+          contactName={contactName}
+          contactAvatar={contactAvatar}
+          widthStyle={bubbleWidth}
+          onRetry={onRetry}
+        />
+      ),
+    [contactName, contactAvatar, bubbleWidth, onRetry],
+  );
+
   /* ── Self-chat guard ─────────────────────────────────────────────────── */
   if (isSelfChat) {
     return (
@@ -447,164 +518,173 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.root}>
-      <ScreenGradient variant="chat" />
       <KeyboardAvoider style={styles.flex}>
         <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
           <ConnectionBanner />
 
           {/* ── Header ── */}
           <View style={styles.header}>
-            <BackButton onPress={goBack} variant="plain" hitSlop={10} accessibilityLabel="Back" />
+            <CircleButton
+              icon="chevron-left"
+              iconSize={24}
+              iconColor={colors.purple}
+              onPress={goBack}
+              variant="plain"
+              hitSlop={10}
+              accessibilityLabel="Back"
+            />
 
             <View>
-              <Avatar name={contactName} uri={contactAvatar} size={42} />
+              <Avatar name={contactName} uri={contactAvatar} size={36} />
               {isOnline ? <View style={styles.headerDot} /> : null}
             </View>
 
             <View style={styles.headerInfo}>
-              <View style={styles.headerNameRow}>
-                <AppText style={styles.headerName} numberOfLines={1}>
-                  {contactName}
+              <AppText style={styles.headerName} numberOfLines={1}>
+                {contactName}
+              </AppText>
+              {statusLine ? (
+                <AppText style={styles.headerStatus} numberOfLines={1}>
+                  {statusLine}
                 </AppText>
-                {isOnline ? <AppText style={styles.onlineLabel}>Online</AppText> : null}
-              </View>
-
-              <Pressable
-                onPress={() =>
-                  productId &&
-                  router.push(
-                    hrefWithFrom(
-                      `/product/${productId}`,
-                      hrefWithFrom(`/chat/${contactId}?productId=${productId}`, fromParam),
-                    ),
-                  )
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`View ${productTitle}`}
-                style={({ pressed }) => [styles.productStrip, pressed && styles.productStripPressed]}
-              >
-                {productImage ? (
-                  <Image
-                    // Loopback-safe in local dev; see src/lib/config.ts.
-                    source={{ uri: resolveMediaUrl(productImage) ?? productImage }}
-                    style={styles.productThumb}
-                    contentFit="cover"
-                  />
-                ) : (
-                  <View style={[styles.productThumb, styles.productThumbFallback]}>
-                    <Feather name="image" size={9} color={colors.mutedPlaceholder} />
-                  </View>
-                )}
-                <AppText style={styles.productTitle} numberOfLines={1}>
-                  {productTitle}
-                </AppText>
-                <Feather name="chevron-right" size={13} color={colors.purple} />
-              </Pressable>
+              ) : null}
             </View>
           </View>
 
-          {/* ── Thread ── */}
-          {isLoading ? (
-            <ChatSkeleton />
-          ) : isError && thread.length === 0 ? (
-            <ChatState
-              icon="wifi-off"
-              title="Couldn't load this chat"
-              subtitle="Check your connection and try again."
-              actionLabel="Retry"
-              onAction={refetch}
-            />
-          ) : thread.length === 0 ? (
-            <ScrollView contentContainerStyle={styles.emptyScroll} keyboardShouldPersistTaps="handled">
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyEmoji}>👋</Text>
-                <Text style={styles.emptyTitle}>Start the conversation about {productTitle}.</Text>
-                <Text style={styles.emptyText}>
-                  Ask if it&apos;s still available, agree a price, and meet somewhere public on campus.
-                </Text>
-                <View style={styles.suggestions}>
-                  {['Hi! Is this still available? 😊', "What's the condition?", 'Can we meet on campus?'].map(
-                    (suggestion) => (
-                      <Pressable
-                        key={suggestion}
-                        onPress={() => setDraft(suggestion)}
-                        accessibilityRole="button"
-                        style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
-                      >
-                        <AppText style={styles.suggestionText}>{suggestion}</AppText>
-                      </Pressable>
-                    ),
-                  )}
-                </View>
-              </View>
-            </ScrollView>
-          ) : (
-            <FlatList
-              ref={listRef}
-              data={rows}
-              inverted
-              // Only the away line scrolls by index. A row not laid out yet is
-              // reached by estimate, then exactly on the next frame.
-              onScrollToIndexFailed={(info) => {
-                listRef.current?.scrollToOffset({
-                  offset: info.averageItemLength * info.index,
-                  animated: false,
-                });
-                requestAnimationFrame(() =>
-                  listRef.current?.scrollToIndex({ index: info.index, viewPosition: 1, animated: true }),
-                );
-              }}
-              keyExtractor={(row) => row.key}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.listContent}
-              // Inverted: the header renders at the BOTTOM, under the newest message.
-              ListHeaderComponent={
-                contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : null
-              }
-              // ── OLDER MESSAGES (Phase 5 V-E) ──
-              // Inverted, "the end" of the list is the TOP of the screen, so this
-              // fires as the student scrolls UP. The older page is appended to the
-              // end of the data, which renders above everything already on
-              // screen — nothing under the reader moves, so they keep their place.
-              // The guard is what stops it firing the same request several times
-              // while one is already in flight.
-              onEndReached={() => {
-                if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-              }}
-              onEndReachedThreshold={0.5}
-              // Inverted: the footer renders at the TOP, above the oldest message.
-              // A spinner while an older page loads; the "beginning" line only
-              // once next_cursor is null, because until then it is not true.
-              ListFooterComponent={
-                isFetchingNextPage ? (
-                  <ActivityIndicator color={colors.purple} style={styles.olderSpinner} />
-                ) : !hasNextPage ? (
-                  <AppText style={styles.threadStart}>
-                    This is the beginning of your conversation about {productTitle}.
-                  </AppText>
-                ) : null
-              }
-              renderItem={({ item }) =>
-                item.kind === 'day' ? (
-                  <DaySeparator label={item.label} />
-                ) : item.kind === 'unread' ? (
-                  <UnreadDivider count={item.count} />
-                ) : (
-                  <MessageBubble
-                    message={item.message}
-                    mine={item.mine}
-                    firstOfRun={item.firstOfRun}
-                    lastOfRun={item.lastOfRun}
-                    contactName={contactName}
-                    contactAvatar={contactAvatar}
-                    onRetry={() => handleRetry(item.message)}
-                  />
+          {/* ── Product snippet: on the header's white surface (spec §2) ── */}
+          <View style={styles.snippetBar}>
+            <Pressable
+              onPress={() =>
+                productId &&
+                router.push(
+                  hrefWithFrom(
+                    `/product/${productId}`,
+                    hrefWithFrom(`/chat/${contactId}?productId=${productId}`, fromParam),
+                  ),
                 )
               }
-            />
-          )}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${productTitle}`}
+              style={({ pressed }) => [styles.snippet, pressed && styles.snippetPressed]}
+            >
+              {productImage ? (
+                <Image
+                  // Loopback-safe in local dev; see src/lib/config.ts.
+                  source={{ uri: resolveMediaUrl(productImage) ?? productImage }}
+                  style={styles.productThumb}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.productThumb, styles.productThumbFallback]}>
+                  <Feather name="image" size={13} color={colors.mutedPlaceholder} />
+                </View>
+              )}
+              <AppText style={styles.productTitle} numberOfLines={1}>
+                {productTitle}
+              </AppText>
+              <Feather name="chevron-right" size={13} color={colors.purple} />
+            </Pressable>
+          </View>
+
+          {/* ── Thread ── */}
+          <View style={styles.thread}>
+            {/* OUTSIDE the inverted FlatList on purpose: inside, it would be
+                flipped and would scroll with the messages. */}
+            <ChatWallpaper />
+            {isLoading ? (
+              <ChatSkeleton />
+            ) : isError && thread.length === 0 ? (
+              <ChatState
+                icon="wifi-off"
+                title="Couldn't load this chat"
+                subtitle="Check your connection and try again."
+                actionLabel="Retry"
+                onAction={refetch}
+              />
+            ) : thread.length === 0 ? (
+              <ScrollView contentContainerStyle={styles.emptyScroll} keyboardShouldPersistTaps="handled">
+                <View style={styles.emptyWrap}>
+                  {/* On a card, so the wallpaper never runs through the words. */}
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyEmoji}>👋</Text>
+                    <Text style={styles.emptyTitle}>Start the conversation about {productTitle}.</Text>
+                    <Text style={styles.emptyText}>
+                      Ask if it&apos;s still available, agree a price, and meet somewhere public on campus.
+                    </Text>
+                  </View>
+                  <View style={styles.suggestions}>
+                    {['Hi! Is this still available? 😊', "What's the condition?", 'Can we meet on campus?'].map(
+                      (suggestion) => (
+                        <Pressable
+                          key={suggestion}
+                          onPress={() => setDraft(suggestion)}
+                          accessibilityRole="button"
+                          style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
+                        >
+                          <AppText style={styles.suggestionText}>{suggestion}</AppText>
+                        </Pressable>
+                      ),
+                    )}
+                  </View>
+                </View>
+              </ScrollView>
+            ) : (
+              <FlatList
+                ref={listRef}
+                data={rows}
+                inverted
+                // Only the away line scrolls by index. A row not laid out yet is
+                // reached by estimate, then exactly on the next frame.
+                onScrollToIndexFailed={(info) => {
+                  listRef.current?.scrollToOffset({
+                    offset: info.averageItemLength * info.index,
+                    animated: false,
+                  });
+                  requestAnimationFrame(() =>
+                    listRef.current?.scrollToIndex({ index: info.index, viewPosition: 1, animated: true }),
+                  );
+                }}
+                keyExtractor={(row) => row.key}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                showsVerticalScrollIndicator={false}
+                // Both must stay transparent — either one painting a colour hides
+                // the wallpaper behind it completely.
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                // Inverted: the header renders at the BOTTOM, under the newest message.
+                ListHeaderComponent={
+                  contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : null
+                }
+                // ── OLDER MESSAGES (Phase 5 V-E) ──
+                // Inverted, "the end" of the list is the TOP of the screen, so this
+                // fires as the student scrolls UP. The older page is appended to the
+                // end of the data, which renders above everything already on
+                // screen — nothing under the reader moves, so they keep their place.
+                // The guard is what stops it firing the same request several times
+                // while one is already in flight.
+                onEndReached={() => {
+                  if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+                }}
+                onEndReachedThreshold={0.5}
+                // Inverted: the footer renders at the TOP, above the oldest message.
+                // A spinner while an older page loads; the "beginning" line only
+                // once next_cursor is null, because until then it is not true.
+                ListFooterComponent={
+                  isFetchingNextPage ? (
+                    <ActivityIndicator color={colors.purple} style={styles.olderSpinner} />
+                  ) : !hasNextPage ? (
+                    <View style={styles.threadStartPill}>
+                      <AppText style={styles.threadStart}>
+                        This is the beginning of your conversation about {productTitle}.
+                      </AppText>
+                    </View>
+                  ) : null
+                }
+                renderItem={renderRow}
+              />
+            )}
+          </View>
 
           {/* ── Emoji tray ── */}
           {showEmoji ? (
@@ -641,7 +721,7 @@ export default function ChatScreen() {
           ) : null}
 
           {/* ── Composer ── */}
-          <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+          <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, COMPOSER_BOTTOM) }]}>
             <Pressable
               onPress={() => setShowEmoji((prev) => !prev)}
               hitSlop={8}
@@ -660,7 +740,7 @@ export default function ChatScreen() {
               value={draft}
               onChangeText={handleChangeText}
               onFocus={() => setShowEmoji(false)}
-              placeholder="Type a message…"
+              placeholder="Message"
               placeholderTextColor={colors.mutedPlaceholder}
               style={styles.input}
               multiline
@@ -696,14 +776,59 @@ export default function ChatScreen() {
   );
 }
 
-/* ────────────────────────── Bubble ────────────────────────── */
-function MessageBubble({
+/* ────────────────────────── Wallpaper ────────────────────────── */
+/**
+ * The doodle wallpaper behind the thread (MESSAGES_SPEC.md §2): the 420×420
+ * tile, unscaled, repeated over the whole thread area and never moving.
+ *
+ * TILED BY HAND, NOT `resizeMode="repeat"`. On Android, repeat is a Fresco
+ * post-process that paints one bitmap sized to the view with a "start inside"
+ * scale, and on device it drew a single tile at the top and left the rest of
+ * the thread bare. Here every tile is its own 420×420 dp image, so the size and
+ * the coverage are the same on every phone. A phone needs 2–4 of them.
+ *
+ * React Native's own Image, with the 1x path only: RN picks @2x/@3x by suffix.
+ * The tile size on device was confirmed with exactly this component.
+ */
+function ChatWallpaper() {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const cols = Math.ceil(box.w / TILE);
+  const rows = Math.ceil(box.h / TILE);
+  return (
+    // RN's Image takes no pointerEvents prop, so the wrapper carries it.
+    <View
+      style={[StyleSheet.absoluteFill, styles.wallpaper]}
+      pointerEvents="none"
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        // The keyboard resizes the thread; a layout pass at the same size
+        // must not re-render.
+        setBox((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
+      }}
+    >
+      {Array.from({ length: rows * cols }, (_, i) => (
+        <RNImage
+          key={i}
+          source={CHAT_PATTERN}
+          style={[styles.wallpaperTile, { left: (i % cols) * TILE, top: Math.floor(i / cols) * TILE }]}
+        />
+      ))}
+    </View>
+  );
+}
+
+/* ────────────────────────── Bubble ──────────────────────────
+   MESSAGES_SPEC.md §2 "Bubbles". Memoised: every prop is either a message from
+   the cache (whose identity only changes when that message does) or stable, so
+   a new message re-renders one row, not the thread. No shadows on mobile (§5). */
+const MessageBubble = memo(function MessageBubble({
   message,
   mine,
   firstOfRun,
   lastOfRun,
   contactName,
   contactAvatar,
+  widthStyle,
   onRetry,
 }: {
   message: PendingMessage;
@@ -712,10 +837,11 @@ function MessageBubble({
   lastOfRun: boolean;
   contactName: string;
   contactAvatar: string | null;
-  onRetry: () => void;
+  widthStyle: { maxWidth: number };
+  onRetry: (message: PendingMessage) => void;
 }) {
   return (
-    <View style={{ marginTop: firstOfRun ? spacing.md : 3 }}>
+    <View style={firstOfRun ? styles.runStart : styles.runNext}>
       <View style={[styles.messageRow, mine ? styles.rowMine : styles.rowTheirs]}>
         {!mine ? (
           lastOfRun ? (
@@ -728,15 +854,28 @@ function MessageBubble({
         <View
           style={[
             styles.bubble,
+            widthStyle,
             mine ? styles.bubbleMine : styles.bubbleTheirs,
             mine && lastOfRun && styles.bubbleMineTail,
             !mine && lastOfRun && styles.bubbleTheirsTail,
             message.failed && styles.bubbleFailed,
           ]}
         >
+          {/* Always the first child of a sent bubble, with constant props, so it
+              is created once per bubble and never rebuilt. The bubble clips it
+              to its corners. */}
+          {mine && SENT_GRADIENT ? (
+            <LinearGradient
+              colors={SENT_GRADIENT}
+              start={GRADIENT_START}
+              end={GRADIENT_END}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+          ) : null}
           <MessageText content={message.content} mine={mine} />
           <View style={styles.bubbleMeta}>
-            <AppText style={[styles.bubbleTime, mine ? styles.bubbleTimeMine : styles.bubbleTimeTheirs]}>
+            <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
               {formatClockTime(message.created_at)}
             </AppText>
             {mine ? <Ticks message={message} /> : null}
@@ -746,7 +885,7 @@ function MessageBubble({
 
       {message.failed ? (
         <Pressable
-          onPress={onRetry}
+          onPress={() => onRetry(message)}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel="Retry sending this message"
@@ -758,7 +897,7 @@ function MessageBubble({
       ) : null}
     </View>
   );
-}
+});
 
 /** Message body with tappable links. */
 function MessageText({ content, mine }: { content: string; mine: boolean }) {
@@ -782,29 +921,29 @@ function MessageText({ content, mine }: { content: string; mine: boolean }) {
   );
 }
 
-/** Sending → clock · sent → ✓ · delivered → ✓✓ · read → ✓✓ in blue. */
+/** MESSAGES_SPEC.md §2 "Ticks": clock · ✓ · ✓✓ · ✓✓ in amber when read · alert. */
 function Ticks({ message }: { message: PendingMessage }) {
   if (message.failed) {
-    return <Feather name="alert-circle" size={12} color={colors.swipePass} />;
+    return <Feather name="alert-circle" size={12} color={colors.chatFailedTick} />;
   }
   if (message.pending) {
-    return <Feather name="clock" size={11} color={colors.pinkBg} />;
+    return <Feather name="clock" size={11} color={colors.bubbleMineMeta} />;
   }
   if (message.is_read) {
-    return <MaterialCommunityIcons name="check-all" size={15} color={colors.blueLight} />;
+    return <MaterialCommunityIcons name="check-all" size={15} color={colors.chatReadTick} />;
   }
   if (message.is_delivered) {
-    return <MaterialCommunityIcons name="check-all" size={15} color={colors.pinkBg} />;
+    return <MaterialCommunityIcons name="check-all" size={15} color={colors.bubbleMineMeta} />;
   }
-  return <MaterialCommunityIcons name="check" size={14} color={colors.pinkBg} />;
+  return <MaterialCommunityIcons name="check" size={14} color={colors.bubbleMineMeta} />;
 }
 
 function DaySeparator({ label }: { label: string }) {
+  // A chip, not a label between hairlines: on the wallpaper, bare text has the
+  // doodles running through it. MESSAGES_SPEC.md §2 "Date chip".
   return (
-    <View style={styles.daySeparator}>
-      <View style={styles.dayLine} />
+    <View style={styles.dayChip}>
       <AppText style={styles.dayLabel}>{label}</AppText>
-      <View style={styles.dayLine} />
     </View>
   );
 }
@@ -816,12 +955,12 @@ function DaySeparator({ label }: { label: string }) {
  */
 function UnreadDivider({ count }: { count: number }) {
   return (
-    <View style={styles.unreadSeparator}>
-      <View style={styles.unreadLine} />
+    // A full-bleed band rather than a line, so the label sits on a backing
+    // instead of on the wallpaper. MESSAGES_SPEC.md §2 "Unread band".
+    <View style={styles.unreadBand}>
       <AppText style={styles.unreadLabel}>
         {count} unread message{count > 1 ? 's' : ''}
       </AppText>
-      <View style={styles.unreadLine} />
     </View>
   );
 }
@@ -871,7 +1010,7 @@ function ChatSkeleton() {
         { mine: false, width: '55%' as const },
       ].map((row, i) => (
         <View key={i} style={[styles.skeletonRow, row.mine ? styles.rowMine : styles.rowTheirs]}>
-          <Skeleton width={row.width} height={44} rounded={radius.lg} />
+          <Skeleton width={row.width} height={44} rounded={BUBBLE_RADIUS} />
         </View>
       ))}
     </View>
@@ -922,92 +1061,112 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.chatCanvas },
   flex: { flex: 1 },
 
-  /* Header */
+  /* Header — MESSAGES_SPEC.md §2; paddings and gap from the mockup `.chead`. */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
+    gap: 10,
+    paddingHorizontal: THREAD_PAD,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.cardSurface,
+    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
+    borderBottomColor: colors.messagesBarBorder,
   },
   headerDot: {
     position: 'absolute',
     right: 0,
     bottom: 0,
-    width: 12,
-    height: 12,
+    width: 11,
+    height: 11,
     borderRadius: 6,
     backgroundColor: colors.swipeLike,
     borderWidth: 2,
-    borderColor: colors.cardSurface,
+    borderColor: colors.white,
   },
   headerInfo: { flex: 1, minWidth: 0 },
-  headerNameRow: {
+  headerName: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.title,
+    color: colors.black,
+  },
+  headerStatus: {
+    fontFamily: font.family.medium,
+    fontSize: font.sizes.micro,
+    color: colors.mutedText,
+  },
+
+  /* Product snippet — spec §2; bar padding from the mockup `.snip`. */
+  snippetBar: {
+    paddingTop: 6,
+    paddingHorizontal: THREAD_PAD,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.messagesBarBorder,
+  },
+  snippet: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  headerName: {
-    flexShrink: 1,
-    fontFamily: font.family.bold,
-    fontSize: font.sizes.bodyLg,
-    color: colors.blackSoft,
-  },
-  onlineLabel: {
-    fontFamily: font.family.semibold,
-    fontSize: font.sizes.micro,
-    color: colors.successText,
-  },
-  productStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    maxWidth: '100%',
-    gap: 5,
-    marginTop: 4,
-    paddingLeft: 3,
-    paddingRight: 6,
-    paddingVertical: 3,
-    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
     backgroundColor: colors.pinkLight,
-    borderWidth: 1,
-    borderColor: colors.inputBorderFocus,
   },
-  productStripPressed: { backgroundColor: colors.demoCardPinkBg },
+  snippetPressed: { backgroundColor: colors.demoCardPinkBg },
   productThumb: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 30,
+    height: 30,
+    borderRadius: radius.sm,
     backgroundColor: colors.inputBg,
   },
   productThumbFallback: { alignItems: 'center', justifyContent: 'center' },
   productTitle: {
-    flexShrink: 1,
+    flex: 1,
     fontFamily: font.family.semibold,
     fontSize: font.sizes.caption,
-    color: colors.purpleDark,
+    color: colors.black,
   },
 
   /* Thread */
+  // Ground is the root's colors.chatCanvas; the wallpaper tiles over it here.
+  thread: { flex: 1, position: 'relative' },
+  wallpaper: { overflow: 'hidden' },
+  wallpaperTile: {
+    position: 'absolute',
+    width: TILE,
+    height: TILE,
+    opacity: CHAT_WALLPAPER_OPACITY,
+  },
+  list: { backgroundColor: 'transparent' },
   listContent: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingHorizontal: THREAD_PAD,
+    paddingVertical: 10,
+    backgroundColor: 'transparent',
   },
   olderSpinner: {
     paddingVertical: spacing.md,
+  },
+  // Backed, like every other piece of text on the wallpaper.
+  threadStartPill: {
+    alignSelf: 'center',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.chatNoteSurface,
   },
   threadStart: {
     fontFamily: font.family.regular,
     fontSize: font.sizes.caption,
     lineHeight: 17,
-    color: colors.mutedLabel,
+    color: colors.mutedText,
     textAlign: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
   },
+  // Spec §2: 8 between runs, 2 inside one.
+  runStart: { marginTop: spacing.sm },
+  runNext: { marginTop: 2 },
   messageRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -1016,25 +1175,29 @@ const styles = StyleSheet.create({
   rowMine: { justifyContent: 'flex-end' },
   rowTheirs: { justifyContent: 'flex-start' },
   avatarSpacer: { width: 26 },
+  // maxWidth comes from `bubbleWidth`: 78% of the thread, capped at 520.
   bubble: {
-    maxWidth: '78%',
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: spacing.sm,
     paddingBottom: 6,
-    borderRadius: 18,
+    borderRadius: BUBBLE_RADIUS,
   },
-  bubbleMine: { backgroundColor: colors.purple },
+  bubbleMine: {
+    // 'solid' paints this; 'gradient' paints over it, clipped to the corners.
+    backgroundColor: colors.bubbleMineSolid,
+    overflow: 'hidden',
+  },
   bubbleTheirs: {
-    backgroundColor: colors.cardSurface,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.hairline,
+    borderColor: colors.bubbleTheirsBorder,
   },
-  bubbleMineTail: { borderBottomRightRadius: 5 },
-  bubbleTheirsTail: { borderBottomLeftRadius: 5 },
+  bubbleMineTail: { borderBottomRightRadius: BUBBLE_TAIL },
+  bubbleTheirsTail: { borderBottomLeftRadius: BUBBLE_TAIL },
   bubbleFailed: { opacity: 0.72 },
   bubbleText: {
     fontFamily: font.family.regular,
-    fontSize: font.sizes.body,
+    fontSize: font.sizes.bodyLg,
     lineHeight: 20,
   },
   bubbleTextMine: { color: colors.white },
@@ -1050,11 +1213,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   bubbleTime: {
-    fontFamily: font.family.regular,
+    fontFamily: font.family.medium,
     fontSize: font.sizes.micro,
   },
-  bubbleTimeMine: { color: colors.pinkBg },
-  bubbleTimeTheirs: { color: colors.mutedLabel },
+  bubbleMetaMine: { color: colors.bubbleMineMeta },
+  bubbleMetaTheirs: { color: colors.mutedText },
   retryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1072,35 +1235,35 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.micro,
     color: colors.errorText,
   },
-  daySeparator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-    marginBottom: 2,
-  },
-  dayLine: { flex: 1, height: 1, backgroundColor: colors.hairline },
-
-  unreadSeparator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginVertical: spacing.sm + 2,
-  },
-  unreadLine: { flex: 1, height: 1, backgroundColor: colors.inputBorderFocus },
-  unreadLabel: {
-    fontFamily: font.family.bold,
-    fontSize: font.sizes.micro,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: colors.pinkDark,
+  dayChip: {
+    alignSelf: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 11,
+    borderRadius: 99,
+    backgroundColor: colors.chatDateChip,
+    marginTop: 10,
+    marginBottom: 6,
   },
   dayLabel: {
     fontFamily: font.family.bold,
     fontSize: font.sizes.micro,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: colors.mutedLabel,
+    color: colors.mutedText,
+  },
+
+  unreadBand: {
+    // Full-bleed: undo the list's side padding.
+    marginHorizontal: -THREAD_PAD,
+    marginVertical: spacing.sm,
+    paddingVertical: 5,
+    backgroundColor: colors.chatUnreadBand,
+  },
+  unreadLabel: {
+    fontFamily: font.family.bold,
+    fontSize: font.sizes.micro,
+    textAlign: 'center',
+    color: colors.purple,
   },
 
   /* Typing */
@@ -1125,6 +1288,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
   },
   emptyWrap: { alignItems: 'center' },
+  emptyCard: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.chatNoteSurface,
+  },
   emptyEmoji: { fontSize: font.sizes.display },
   emptyTitle: {
     fontFamily: font.family.bold,
@@ -1202,16 +1373,16 @@ const styles = StyleSheet.create({
   emojiBtnPressed: { backgroundColor: colors.pinkLight },
   emoji: { fontSize: font.sizes.headline },
 
-  /* Composer */
+  /* Composer — spec §2; the gap between controls is the mockup's `.comp`. */
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 10,
     paddingTop: spacing.sm,
-    backgroundColor: colors.cardSurface,
+    backgroundColor: colors.white,
     borderTopWidth: 1,
-    borderTopColor: colors.hairline,
+    borderTopColor: colors.messagesBarBorder,
   },
   emojiToggle: {
     width: 40,
@@ -1226,24 +1397,23 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minHeight: 40,
-    maxHeight: 110,
-    paddingHorizontal: spacing.md,
+    // Five lines of 20, plus the vertical padding.
+    maxHeight: 5 * 20 + 20,
+    paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 10,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.inputBorderFocus,
-    backgroundColor: colors.white,
+    borderRadius: 20,
+    backgroundColor: colors.inputBg,
     fontFamily: font.family.regular,
-    fontSize: font.sizes.body,
-    lineHeight: 19,
+    fontSize: font.sizes.bodyLg,
+    lineHeight: 20,
     color: colors.blackSoft,
     textAlignVertical: 'top',
   },
   sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     overflow: 'hidden',
   },
   sendGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -1253,7 +1423,7 @@ const styles = StyleSheet.create({
   /* Skeleton + states */
   skeletonWrap: {
     flex: 1,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: THREAD_PAD,
     paddingTop: spacing.lg,
     gap: spacing.md,
   },

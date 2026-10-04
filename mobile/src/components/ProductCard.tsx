@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
@@ -131,10 +131,11 @@ export interface ProductCardProps {
    */
   fillPhoto?: boolean;
   /**
-   * MARKETPLACE GRID ONLY. A listing with more than one photo can be swiped
-   * through on the card itself, without opening it — see CardPhotoPager.
-   * Off by default: the swipe deck must not get it (a sideways drag there is
-   * the like / pass gesture), and every other card renders as before.
+   * A listing with more than one photo can be swiped through on the card
+   * itself, without opening it — see CardPhotoPager. ON by default, on every
+   * card: marketplace grid, dashboard, public profile, sell preview. The swipe
+   * deck passes `false`, because a sideways drag there is the like / pass
+   * gesture.
    */
   swipePhotos?: boolean;
 }
@@ -179,7 +180,7 @@ function ProductCardBase({
   sellerAvatarUrl,
   showManageActions,
   fillPhoto,
-  swipePhotos,
+  swipePhotos = true,
 }: ProductCardProps) {
   // Listing photos are minted by the backend against its own SUPABASE_URL,
   // which is loopback in local dev and unreachable from a phone — the tile just
@@ -199,6 +200,9 @@ function ProductCardBase({
     return uris.length > 1 ? uris : null;
   }, [swipePhotos, imageCount, product.image_urls]);
   const pager = pagerUris !== null;
+  // The pager's photo handles its own taps (see CardPhotoPager), so it reports
+  // when it is held and the card shows the same pressed state as the Pressable.
+  const [photoPressed, setPhotoPressed] = useState(false);
 
   const location = product.location?.trim();
   const locationLabel = location ? sentenceCase(location) : '';
@@ -216,12 +220,21 @@ function ProductCardBase({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      style={({ pressed }) => [styles.shadow, style, pressed && !!onPress && styles.pressed]}
+      style={({ pressed }) => [
+        styles.shadow,
+        style,
+        (pressed || photoPressed) && !!onPress && styles.pressed,
+      ]}
     >
       <View style={styles.inner}>
         <View style={[styles.imageWrap, fillPhoto ? styles.imageWrapFill : styles.imageWrapSquare]}>
           {pagerUris ? (
-            <CardPhotoPager productId={product.id} uris={pagerUris} />
+            <CardPhotoPager
+              productId={product.id}
+              uris={pagerUris}
+              onPress={onPress}
+              onPressedChange={setPhotoPressed}
+            />
           ) : image ? (
             <Image source={{ uri: image }} style={styles.image} contentFit="cover" transition={220} />
           ) : (
@@ -235,7 +248,8 @@ function ProductCardBase({
               <AppText style={styles.soldText}>SOLD</AppText>
             </View>
           ) : null}
-          {/* The pager draws its own, live counter. */}
+          {/* A pager shows dots instead. The still photo — the swipe deck's
+              card — keeps the counter, as its only sign of more photos. */}
           {imageCount > 1 && !pager ? (
             <View style={styles.imageCounter}>
               <AppText style={styles.imageCounterText}>1/{imageCount}</AppText>

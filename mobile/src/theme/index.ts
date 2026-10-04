@@ -45,25 +45,34 @@ export const colors = {
   // Measured across the whole ramp: mutedText never drops below 4.51:1. If you
   // want more presence, push SATURATION or widen the hue travel. Do not lower
   // lightness — #ECE4FF, only four steps darker, already fails at 4.41:1.
-  // ── MESSAGES, ported from the web so the two clients look like one product ──
-  //
-  // frontend/src/pages/messages/Messages.module.css is the source of truth for
-  // these four values; if it changes, change them here too.
-  //
-  // Inbox list = `.inboxSidebar`, a 170deg three-stop ramp with a magenta glow
-  // off the top-right and a pink one off the bottom-left.
-  inboxTop: '#FDF8FF',
-  inboxMid: '#F8F0FF',
-  inboxBottom: '#FFF4F9',
-  // Chat thread = `.messagesContainer`, a lavender ground carrying a purple
-  // glow at the top-left and a blue one at the bottom-right. Noticeably deeper
-  // than any other canvas in the app, and deliberately so: the bubbles are what
-  // should read as raised, which needs a ground dark enough to lift off.
-  //
-  // The web also lays a fine dot grain over this. There is no grain here — it
-  // would mean shipping a tiled asset for an effect that is nearly invisible at
-  // phone density, so the ground and the glows carry the look on their own.
+  // THE CONVERSATION GROUND (MESSAGES_SPEC.md §2). Deeper than every other
+  // canvas in the app on purpose: the bubbles are what should read as raised,
+  // and white bubbles cannot lift off a near-white ground. The chat screen
+  // paints it and tiles the doodle wallpaper over it; there are no glows.
   chatCanvas: '#EDE6F5',
+  // Text that sits straight on the chat wallpaper gets a backing, or the
+  // doodles run through it. The first two are MESSAGES_SPEC.md §3; the third
+  // backs the empty-chat welcome and the "beginning of your conversation" line.
+  chatDateChip: 'rgba(255,255,255,0.92)',
+  chatUnreadBand: 'rgba(255,255,255,0.88)',
+  chatNoteSurface: 'rgba(255,255,255,0.9)',
+
+  // ── MESSAGES_SPEC.md §3 — the redesign's new tokens (Phase 6A V-C) ──
+  bubbleMineEnd: '#C02B7F', // sent-bubble gradient end (§2)
+  bubbleMineSolid: '#9B1280', // fallback if the gradient fails N-F; see SENT_BUBBLE_STYLE
+  chatReadTick: '#FDE68A', // replaces blueLight for the read state
+  bubbleTheirsBorder: 'rgba(128,0,128,0.08)',
+
+  // ── MESSAGES_SPEC.md §1/§2 values that §3 does not name ──
+  // Exact spec values, given names only so the screens hold no colour literals.
+  // If the spec changes one, change it here.
+  messagesLine: 'rgba(128,0,128,0.08)', // inbox filter border + row divider
+  messagesBarBorder: 'rgba(128,0,128,0.07)', // chat header / snippet bottom, composer top
+  inboxFilterBg: 'rgba(255,255,255,0.78)',
+  inboxRowPressed: 'rgba(128,0,128,0.06)',
+  inboxProductChipBg: 'rgba(235,72,127,0.09)',
+  bubbleMineMeta: 'rgba(255,255,255,0.90)', // time + ticks on a sent bubble
+  chatFailedTick: '#F87171',
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
@@ -246,3 +255,21 @@ export type Font = typeof font;
  * setting in full.
  */
 export const MAX_FONT_SCALE = 1.15;
+
+/**
+ * How strongly the chat wallpaper's doodles show. The tile's strokes are purple
+ * at ~35–40% opacity; at full strength they ran through message and welcome
+ * text, so the layer is drawn at half that. Change it here, never in the PNGs
+ * (they are byte-for-byte copies of docs/design/assets/). The web must use the
+ * same value — see docs/changelog/2026-10-04-142615-vishwajeet-mobile-chat-wallpaper-fixes-*.md.
+ */
+export const CHAT_WALLPAPER_OPACITY = 0.5;
+
+/**
+ * The sent bubble, decided once for both platforms (MESSAGES_SPEC.md §2,
+ * "Performance guard"). 'gradient' = 135° colors.purple -> colors.bubbleMineEnd;
+ * 'solid' = colors.bubbleMineSolid. Block N-F measures scrolling on the Samsung
+ * Galaxy A03s with each; if the gradient costs frames, BOTH platforms flip to
+ * 'solid'. The web has the same switch — the two must never disagree.
+ */
+export const SENT_BUBBLE_STYLE: 'gradient' | 'solid' = 'gradient';
