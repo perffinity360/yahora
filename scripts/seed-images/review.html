@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seed Image Review</title>
+<!--
+  Every catalogue.json image, cropped the way the web ProductCard crops it.
+
+  The crop is copied from frontend/src/components/ProductCard/ProductCard.module.css:
+    .imageWrap { aspect-ratio: 1 / 1; overflow: hidden; background: #f0f0f0 }
+    .image     { object-fit: cover; object-position: center }
+  and the card's 1.5rem top corners. If that CSS changes, change --card-ratio below.
+
+  Credits come from credits.json (keyed by image URL: author, license, page).
+
+  Open the file directly. Browsers block fetch() on file://, so the page then asks you
+  to pick catalogue.json and credits.json (or drop both on the page). Served over http
+  it loads them by itself.
+-->
+<style>
+  :root {
+    --card-ratio: 1 / 1;
+    --card-radius: 1.5rem;
+    --card-width: 240px;
+    --bg: #f6f6f7; --fg: #1a1a1a; --muted: #6b6b6b; --line: #eaeaea;
+    --card: #fff; --well: #f0f0f0; --accent: #2bb7ff; --bad: #d93025;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 1; background: var(--bg);
+           border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  h1 { margin: 0 0 6px; font-size: 18px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); }
+  .stats b { color: var(--fg); }
+  .stats .fail b { color: var(--bad); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; align-items: center; }
+  .controls label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  input[type=search] { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+                       font: inherit; min-width: 220px; }
+  main { padding: 16px; }
+  .grid { display: grid; gap: 20px;
+          grid-template-columns: repeat(auto-fill, minmax(min(var(--card-width), 100%), 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--card-radius);
+          overflow: hidden; }
+  .crop { position: relative; aspect-ratio: var(--card-ratio); overflow: hidden; background: var(--well); }
+  .crop img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+  .card.show-full .crop img { object-fit: contain; }
+  .badge { position: absolute; left: 10px; top: 10px; padding: 2px 8px; border-radius: 999px;
+           font-size: 11px; font-weight: 600; background: rgba(20,20,20,.6); color: #fff; }
+  .badge.portrait { background: var(--accent); }
+  .counter { position: absolute; right: 10px; bottom: 10px; padding: 2px 8px; border-radius: 999px;
+             font-size: 11px; background: rgba(20,20,20,.6); color: #fff; }
+  .card.broken .crop { outline: 3px solid var(--bad); outline-offset: -3px; }
+  .card.broken .badge { background: var(--bad); }
+  .info { padding: 10px 14px 14px; }
+  .title { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+  .meta { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .meta a { color: inherit; }
+  .credit { margin-top: 4px; color: var(--muted); font-size: 12px; }
+  .credit a { color: inherit; }
+  .credit.none { color: var(--bad); }
+  .empty { padding: 48px 16px; text-align: center; color: var(--muted); }
+  .drop { border: 2px dashed var(--line); border-radius: 16px; padding: 40px 16px; text-align: center; }
+  body.dragging .drop { border-color: var(--accent); }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121214; --fg: #ececec; --muted: #9a9a9a; --line: #2c2c30;
+            --card: #1c1c1f; --well: #26262a; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Seed image review — card crop (aspect-ratio 1 / 1, object-fit: cover)</h1>
+  <div class="stats" id="stats">Loading catalogue.json…</div>
+  <div class="controls">
+    <input type="search" id="q" placeholder="Filter by title">
+    <label><input type="radio" name="o" value="all" checked> All</label>
+    <label><input type="radio" name="o" value="portrait"> Portrait only</label>
+    <label><input type="radio" name="o" value="landscape"> Landscape / square</label>
+    <label><input type="radio" name="o" value="broken"> Broken</label>
+    <label title="Show the whole photo instead of the card crop"><input type="checkbox" id="full"> Show uncropped</label>
+  </div>
+</header>
+<main>
+  <div id="picker" class="drop" hidden>
+    <p>Could not load <code>catalogue.json</code> automatically (browsers block that on <code>file://</code>).</p>
+    <p>Select <code>catalogue.json</code> and <code>credits.json</code> together:
+       <input type="file" id="file" accept=".json,application/json" multiple> or drop both here.</p>
+  </div>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+  const grid = document.getElementById('grid');
+  const stats = document.getElementById('stats');
+  const cards = [];
+  let credits = {};
+
+  function render(catalogue) {
+    document.getElementById('picker').hidden = true;
+    grid.textContent = '';
+    cards.length = 0;
+    for (const [title, urls] of Object.entries(catalogue)) {
+      (Array.isArray(urls) ? urls : []).forEach((url, i) => {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.dataset.title = title.toLowerCase();
+        card.innerHTML = `
+          <div class="crop">
+            <img loading="lazy" alt="">
+            <span class="badge">loading</span>
+            ${urls.length > 1 ? `<span class="counter">${i + 1}/${urls.length}</span>` : ''}
+          </div>
+          <div class="info">
+            <p class="title"></p>
+            <div class="meta"><span class="dims"></span> · <a target="_blank" rel="noopener">open</a></div>
+            <div class="credit"></div>
+          </div>`;
+        card.querySelector('.title').textContent = title;
+        card.querySelector('a').href = url;
+        renderCredit(card.querySelector('.credit'), credits[url]);
+        const img = card.querySelector('img');
+        const badge = card.querySelector('.badge');
+        img.alt = title;
+        img.addEventListener('load', () => {
+          const { naturalWidth: w, naturalHeight: h } = img;
+          card.dataset.orientation = h > w ? 'portrait' : 'landscape';
+          badge.textContent = h > w ? 'portrait' : w > h ? 'landscape' : 'square';
+          badge.classList.toggle('portrait', h > w);
+          card.querySelector('.dims').textContent = `${w}×${h}`;
+          update();
+        });
+        img.addEventListener('error', () => {
+          card.classList.add('broken');
+          card.dataset.orientation = 'broken';
+          badge.textContent = 'broken';
+          card.querySelector('.dims').textContent = 'failed to load';
+          update();
+        });
+        img.src = url;
+        grid.appendChild(card);
+        cards.push(card);
+      });
+    }
+    if (!cards.length) grid.innerHTML = '<p class="empty">catalogue.json has no images yet.</p>';
+    update();
+  }
+
+  function update() {
+    const products = new Set(cards.map((c) => c.dataset.title)).size;
+    const count = (o) => cards.filter((c) => c.dataset.orientation === o).length;
+    const portrait = count('portrait'), landscape = count('landscape'), broken = count('broken');
+    const pending = cards.length - portrait - landscape - broken;
+    const loaded = portrait + landscape;
+    const share = loaded ? Math.round((portrait / loaded) * 100) : 0;
+    stats.innerHTML = `
+      <span><b>${products}</b> products</span>
+      <span><b>${cards.length}</b> images</span>
+      <span class="${loaded && portrait * 3 < loaded ? 'fail' : ''}"><b>${portrait}</b> portrait (${share}%, needs ≥ 33%)</span>
+      <span><b>${landscape}</b> landscape / square</span>
+      <span class="${broken ? 'fail' : ''}"><b>${broken}</b> broken</span>
+      ${pending ? `<span>${pending} loading…</span>` : ''}`;
+    filter();
+  }
+
+  function filter() {
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const o = document.querySelector('input[name=o]:checked').value;
+    const full = document.getElementById('full').checked;
+    for (const c of cards) {
+      const okText = !q || c.dataset.title.includes(q);
+      const okOrient = o === 'all' || c.dataset.orientation === o;
+      c.hidden = !(okText && okOrient);
+      c.classList.toggle('show-full', full);
+    }
+  }
+
+  function renderCredit(el, c) {
+    if (!c) { el.textContent = 'No credit in credits.json'; el.classList.add('none'); return; }
+    const page = document.createElement('a');
+    page.href = c.page; page.target = '_blank'; page.rel = 'noopener';
+    page.textContent = 'Wikimedia Commons';
+    el.append(`© ${c.author} · ${c.license} · `, page);
+  }
+
+  // Picked or dropped files: credits.json by name, anything else is the catalogue.
+  async function loadFiles(list) {
+    let catalogue;
+    for (const f of list) {
+      try {
+        const data = JSON.parse(await f.text());
+        if (f.name === 'credits.json') credits = data; else catalogue = data;
+      } catch (e) { stats.textContent = `${f.name} is not valid JSON: ${e.message}`; return; }
+    }
+    if (catalogue) render(catalogue);
+  }
+
+  function askForFile() {
+    stats.textContent = 'Pick catalogue.json to begin.';
+    document.getElementById('picker').hidden = false;
+  }
+
+  document.getElementById('q').addEventListener('input', filter);
+  document.querySelectorAll('input[name=o]').forEach((r) => r.addEventListener('change', filter));
+  document.getElementById('full').addEventListener('change', filter);
+  document.getElementById('file').addEventListener('change', (e) => {
+    loadFiles(e.target.files);
+  });
+  addEventListener('dragover', (e) => { e.preventDefault(); document.body.classList.add('dragging'); });
+  addEventListener('dragleave', () => document.body.classList.remove('dragging'));
+  addEventListener('drop', (e) => {
+    e.preventDefault();
+    document.body.classList.remove('dragging');
+    loadFiles(e.dataTransfer.files);
+  });
+
+  const getJson = (name) => fetch(name, { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(name))));
+  Promise.all([getJson('catalogue.json'), getJson('credits.json').catch(() => ({}))])
+    .then(([catalogue, c]) => { credits = c; render(catalogue); })
+    .catch(askForFile);
+</script>
+</body>
+</html>
