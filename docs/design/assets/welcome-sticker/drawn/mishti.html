@@ -1,0 +1,313 @@
+<!doctype html>
+<!--
+  THE WELCOME STICKER — master source. Phase 6A.
+
+  "Mishti", a chubby orange kitten who waves and pops a big "Hi!" — the greeting
+  in an empty conversation on BOTH platforms (Telegram-style). Sticker look: one
+  warm dark outline round every shape, big glossy eyes, blush, toe beans.
+
+  Open this file in Chrome to watch it loop. `../build_stickers.py`
+  renders the same `draw()` frame by frame and writes `../out/mishti.webp`, the
+  one animated WebP both apps ship. Never draw the sticker anywhere else, and
+  never edit the .webp by hand: change `draw()`, rebuild, copy to both platforms
+  in one commit — the same rule as the chat wallpaper (MESSAGES_SPEC.md §4).
+
+  Everything is drawn as shapes, including the "Hi!" lettering — no fonts — so a
+  rebuild on any machine gives the same pixels.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mishti</title>
+<style>
+  body { margin: 0; display: grid; place-items: center; min-height: 100vh; background: #EDE6F5; font: 13px sans-serif; }
+  .card { background: rgba(255,255,255,.9); border-radius: 20px; padding: 24px; text-align: center; }
+  canvas { width: 180px; height: 180px; display: block; }
+</style>
+</head>
+<body>
+<div class="card"><canvas id="c" width="360" height="360"></canvas><p>Live preview · 180 px</p></div>
+<pre id="frames" hidden></pre>
+<script>
+/** Canvas size in px. Shown at 120 units, so this is 3x: sharp on every phone. */
+const SIZE = 360;
+/** One loop. FRAMES / FPS seconds. */
+const FPS = 20;
+const FRAMES = 48;
+
+// Kitten
+const FUR = '#FFA94D', STRIPE = '#E9762B', CREAM = '#FFF1DC', LINE = '#3A2416';
+const BLUSH = 'rgba(255,128,150,0.6)', NOSE = '#F06C8C', BEAN = '#FFA3B5', TONGUE = '#FF7C95';
+// Lettering — the brand's purple → pink, so the "Hi!" is ours.
+const HI_FROM = '#800080', HI_TO = '#EB487F', GOLD = '#F6B93B';
+const OUTLINE = 5;
+
+const TAU = Math.PI * 2;
+const deg = (d) => (d * Math.PI) / 180;
+
+/** Fill the current path, then trace it with the sticker outline. */
+function ink(ctx, fill) {
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = OUTLINE;
+  ctx.strokeStyle = LINE;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+/** A thick rounded stroke with the outline round it (tail, arm, letters). */
+function inkStroke(ctx, trace, width, color) {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = LINE;
+  ctx.lineWidth = width + OUTLINE * 2;
+  trace(); ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  trace(); ctx.stroke();
+}
+
+function ellipse(ctx, x, y, rx, ry, rot = 0) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, rot, 0, TAU);
+}
+
+function sparkle(ctx, x, y, r, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU - Math.PI / 2;
+    const rr = i % 2 === 0 ? r : r * 0.34;
+    ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+}
+
+function ear(ctx, side) {
+  // side: -1 left, +1 right. Rounded-tip triangle, pink inside.
+  const s = side;
+  ctx.beginPath();
+  ctx.moveTo(-50 * s, -56);
+  ctx.quadraticCurveTo(-74 * s, -118, -66 * s, -124);
+  ctx.quadraticCurveTo(-58 * s, -128, -14 * s, -78);
+  ctx.closePath();
+  ink(ctx, FUR);
+  ctx.beginPath();
+  ctx.moveTo(-50 * s, -70);
+  ctx.quadraticCurveTo(-64 * s, -108, -60 * s, -110);
+  ctx.quadraticCurveTo(-54 * s, -110, -30 * s, -82);
+  ctx.closePath();
+  ctx.fillStyle = BEAN;
+  ctx.fill();
+}
+
+function eye(ctx, x, y, open) {
+  if (open < 0.25) {
+    // Happy-shut "^" for the blink.
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = LINE;
+    ctx.beginPath();
+    ctx.moveTo(x - 14, y + 4);
+    ctx.quadraticCurveTo(x, y - 12, x + 14, y + 4);
+    ctx.stroke();
+    return;
+  }
+  ellipse(ctx, x, y, 17, 21 * open);
+  ctx.fillStyle = LINE;
+  ctx.fill();
+  ellipse(ctx, x + 5, y - 8 * open, 7, 7 * open);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fill();
+  ellipse(ctx, x - 5, y + 8 * open, 3.2, 3.2 * open);
+  ctx.fill();
+}
+
+/** "Hi!" built from strokes and dots, around its own centre. */
+function hi(ctx) {
+  const g = ctx.createLinearGradient(-44, -30, 44, 30);
+  g.addColorStop(0, HI_FROM);
+  g.addColorStop(1, HI_TO);
+  const W = 15;
+  inkStroke(ctx, () => {
+    ctx.beginPath();
+    ctx.moveTo(-40, -27); ctx.lineTo(-40, 27);   // H
+    ctx.moveTo(-10, -27); ctx.lineTo(-10, 27);
+    ctx.moveTo(-40, 0); ctx.lineTo(-10, 0);
+    ctx.moveTo(15, -4); ctx.lineTo(15, 27);       // i
+    ctx.moveTo(41, -27); ctx.lineTo(39, 12);      // !
+  }, W, g);
+  for (const [x, y, r] of [[15, -23, 8.5], [39, 28, 8]]) {
+    ellipse(ctx, x, y, r, r);
+    ink(ctx, g);
+  }
+}
+
+/** One frame. `t` runs 0 → 1 over the loop and the last frame meets the first. */
+function draw(ctx, t) {
+  ctx.clearRect(0, 0, SIZE, SIZE);
+
+  // Two little hops per loop, squashing on each landing.
+  const hop = Math.abs(Math.sin(TAU * t)); // 0 at t = 0, .5
+  const lift = 9 * hop;
+  const land = (1 - hop) ** 6;
+  const sx = 1 + 0.035 * land, sy = 1 - 0.05 * land;
+  const sway = deg(3) * Math.sin(TAU * t); // whole kitten leans with the wave
+  const wave = deg(40 + 22 * Math.sin(TAU * 3 * t)); // three waves per loop
+  const tail = 22 * Math.sin(TAU * t + 1);
+  const blink = Math.max(0, 1 - Math.abs(t - 0.62) / 0.05);
+  const open = 1 - blink;
+  // The "Hi!" pops on each landing and wiggles.
+  const pop = 1 + 0.12 * land;
+  const wiggle = deg(-8 + 6 * Math.sin(TAU * 2 * t));
+
+  // Shadow.
+  ellipse(ctx, 160, 330, 72 - lift * 2, 10 - lift * 0.4);
+  ctx.fillStyle = 'rgba(58,36,22,0.13)';
+  ctx.fill();
+
+  // Sparkles round the greeting.
+  [[232, 30, 11, GOLD, 0], [348, 128, 9, HI_TO, 0.4], [214, 108, 7, GOLD, 0.7]].forEach(([x, y, r, c, ph]) => {
+    const k = 0.5 + 0.5 * Math.sin(TAU * (t * 2 + ph));
+    sparkle(ctx, x, y, r * (0.5 + 0.5 * k), c, 0.3 + 0.7 * k);
+  });
+
+  // "Hi!"
+  ctx.save();
+  ctx.translate(296, 70);
+  ctx.rotate(wiggle);
+  ctx.scale(pop, pop);
+  hi(ctx);
+  ctx.restore();
+
+  // ── The kitten. Origin at her feet, so the squash and lean pivot there. ──
+  ctx.save();
+  ctx.translate(160, 326 - lift);
+  ctx.rotate(sway);
+  ctx.scale(sx, sy);
+
+  // Tail, behind everything: curls up on her left (the waving arm has the
+  // right), tip swishing.
+  inkStroke(ctx, () => {
+    ctx.beginPath();
+    ctx.moveTo(-52, -30);
+    ctx.bezierCurveTo(-112, -30, -118 - tail * 0.3, -86, -92 - tail, -112);
+  }, 20, FUR);
+  ellipse(ctx, -92 - tail, -112, 9, 9);
+  ink(ctx, STRIPE);
+
+  // Body and belly.
+  ellipse(ctx, 0, -56, 72, 56);
+  ink(ctx, FUR);
+  ellipse(ctx, 0, -44, 42, 33);
+  ctx.fillStyle = CREAM;
+  ctx.fill();
+
+  // Feet.
+  for (const fx of [-30, 30]) {
+    ellipse(ctx, fx, -4, 22, 12);
+    ink(ctx, CREAM);
+  }
+
+  // Ears, then the head over their bases.
+  ctx.save();
+  ctx.translate(0, -166);
+  ear(ctx, 1);
+  ear(ctx, -1);
+  ellipse(ctx, 0, 0, 96, 80);
+  ink(ctx, FUR);
+
+  // Forehead stripes.
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = STRIPE;
+  ctx.lineWidth = 7;
+  for (const [x1, y1, x2, y2] of [[-18, -78, -14, -58], [0, -80, 0, -56], [18, -78, 14, -58]]) {
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  // Muzzle, blush, eyes.
+  ellipse(ctx, 0, 30, 36, 24);
+  ctx.fillStyle = CREAM;
+  ctx.fill();
+  for (const cx of [-58, 58]) { ellipse(ctx, cx, 22, 15, 9); ctx.fillStyle = BLUSH; ctx.fill(); }
+  eye(ctx, -36, -6, open);
+  eye(ctx, 36, -6, open);
+
+  // Nose.
+  ctx.beginPath();
+  ctx.moveTo(-8, 17); ctx.quadraticCurveTo(0, 13, 8, 17);
+  ctx.quadraticCurveTo(2, 26, 0, 26); ctx.quadraticCurveTo(-2, 26, -8, 17);
+  ink(ctx, NOSE);
+
+  // Open "w" smile with a tongue.
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-15, 30);
+  ctx.quadraticCurveTo(-7, 36, 0, 29);
+  ctx.quadraticCurveTo(7, 36, 15, 30);
+  ctx.quadraticCurveTo(0, 62, -15, 30);
+  ctx.closePath();
+  ink(ctx, LINE);
+  ctx.clip();
+  ellipse(ctx, 0, 48, 9, 7);
+  ctx.fillStyle = TONGUE;
+  ctx.fill();
+  ctx.restore();
+
+  // Whiskers.
+  ctx.strokeStyle = LINE;
+  ctx.lineWidth = 3;
+  for (const s of [-1, 1]) {
+    for (const [dy, tilt] of [[-4, -8], [6, 0], [16, 8]]) {
+      ctx.beginPath();
+      ctx.moveTo(s * 40, 24 + dy);
+      ctx.lineTo(s * 74, 24 + dy + tilt);
+      ctx.stroke();
+    }
+  }
+  ctx.restore(); // head
+
+  // Waving arm, in front of the cheek, with a pink-bean paw. The shoulder sits
+  // below the head so the whole wave stays clear of it.
+  ctx.save();
+  ctx.translate(66, -70);
+  ctx.rotate(wave);
+  inkStroke(ctx, () => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -52); }, 24, FUR);
+  ellipse(ctx, 0, -60, 17, 16);
+  ink(ctx, FUR);
+  ellipse(ctx, 0, -57, 7, 6);
+  ctx.fillStyle = BEAN; ctx.fill();
+  for (const bx of [-9, 0, 9]) { ellipse(ctx, bx, -69, 3.6, 3.4); ctx.fill(); }
+  ctx.restore();
+
+  // Resting paw on the belly, in front.
+  ellipse(ctx, -40, -66, 16, 13, -0.3);
+  ink(ctx, FUR);
+
+  ctx.restore(); // kitten
+}
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+if (new URLSearchParams(location.search).has('export')) {
+  // build_sticker.py reads these back out of the DOM.
+  const out = [];
+  for (let i = 0; i < FRAMES; i++) {
+    draw(ctx, i / FRAMES);
+    out.push(canvas.toDataURL('image/webp', 0.65));
+  }
+  document.getElementById('frames').textContent =
+    JSON.stringify({ size: SIZE, fps: FPS, frames: out });
+} else {
+  let i = 0;
+  setInterval(() => draw(ctx, (i++ % FRAMES) / FRAMES), 1000 / FPS);
+}
+</script>
+</body>
+</html>

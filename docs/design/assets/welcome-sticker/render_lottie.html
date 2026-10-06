@@ -1,0 +1,55 @@
+<!doctype html>
+<!--
+  Renders one LottieFiles sticker (lottie/<id>.json) frame by frame for
+  build_stickers.py, which opens this page as  render_lottie.html?id=<id>
+  in headless Chrome and reads the frames back out of #frames.
+
+  One full loop of the animation, sampled at OUT_FPS, centred and fitted into a
+  SIZE × SIZE transparent square — the same box every sticker ships in.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lottie sticker render</title>
+<!-- Pinned: a lottie-web update must never change a rebuilt sticker silently. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie_canvas.min.js"></script>
+</head>
+<body>
+<canvas id="c" width="360" height="360"></canvas>
+<pre id="frames"></pre>
+<script>
+const SIZE = 360;
+const OUT_FPS = 20;
+const QUALITY = 0.7;
+
+const id = new URLSearchParams(location.search).get('id');
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const anim = lottie.loadAnimation({
+  renderer: 'canvas',
+  loop: false,
+  autoplay: false,
+  path: `lottie/${id}.json`,
+  rendererSettings: { context: ctx, clearCanvas: true, preserveAspectRatio: 'xMidYMid meet' },
+});
+
+anim.addEventListener('DOMLoaded', () => {
+  const total = anim.totalFrames; // op - ip, in the animation's own frames
+  const seconds = total / anim.frameRate;
+  const n = Math.max(2, Math.round(seconds * OUT_FPS));
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    anim.goToAndStop((k * total) / n, true);
+    out.push(canvas.toDataURL('image/webp', QUALITY));
+  }
+  document.getElementById('frames').textContent = JSON.stringify({
+    size: SIZE,
+    fps: OUT_FPS,
+    frame_ms: Math.round((seconds * 1000) / n),
+    frames: out,
+  });
+});
+</script>
+</body>
+</html>

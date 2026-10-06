@@ -4,7 +4,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -13,12 +13,15 @@ import {
   Image as RNImage,
   Linking,
   Pressable,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import Reanimated, { useReducedMotion, ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CircleButton } from '../../src/components/CircleButton';
@@ -46,9 +49,19 @@ import {
   isGroupedWith,
   isSameDay,
 } from '../../src/lib/messages';
+import { jumboEmojiCount, splitEmoji } from '../../src/lib/emoji';
+import { welcomeStickerFor } from '../../src/lib/stickers';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { supabase } from '../../src/lib/supabase';
-import { CHAT_WALLPAPER_OPACITY, colors, font, radius, SENT_BUBBLE_STYLE, spacing } from '../../src/theme';
+import {
+  CHAT_WALLPAPER_OPACITY,
+  colors,
+  EMOJI_SIZES,
+  font,
+  radius,
+  SENT_BUBBLE_STYLE,
+  spacing,
+} from '../../src/theme';
 import type { PendingMessage } from '../../src/types';
 
 const BRAND = [colors.purple, colors.pinkDark] as const;
@@ -64,6 +77,11 @@ const COMPOSER_BOTTOM = 12;
 /** Bubble corner radius; the tail corner is BUBBLE_TAIL (spec §2). */
 const BUBBLE_RADIUS = 18;
 const BUBBLE_TAIL = 5;
+/** Welcome sticker display size; the files are 360 px, 3x of this. */
+const STICKER_SIZE = 120;
+/** Scrolled up further than this (dp) and the jump-to-latest button shows —
+ *  about one message, so it appears as soon as the newest one leaves view. */
+const JUMP_SHOW_AFTER = 80;
 /** Thread side padding (mockup `.wall`); the unread band bleeds past it. */
 const THREAD_PAD = 12;
 /** Bubble max width: 78% of the thread, never above 520 (spec §2). */
@@ -428,6 +446,47 @@ export default function ChatScreen() {
 
   const listRef = useRef<FlatList<ChatRow>>(null);
 
+  /* ── JUMP TO LATEST (WhatsApp's ⌄ button) ──────────────────────────────
+     Shows once the student has scrolled up past JUMP_SHOW_AFTER. The list is
+     inverted, so offset 0 is the newest message and scrolling up GROWS the
+     offset. State flips only when the threshold is crossed, never per frame.
+
+     The badge counts the contact's messages that arrived after the student
+     scrolled away — the newest message at that moment is the anchor. Purely
+     visual: it reads the thread, and changes nothing about reading, marking
+     read or the unread line. */
+  const [scrolledUp, setScrolledUp] = useState(false);
+  const [jumpAnchor, setJumpAnchor] = useState<string | null>(null);
+  const scrolledUpRef = useRef(false);
+  const lastMessageIdRef = useRef(lastMessageId);
+  lastMessageIdRef.current = lastMessageId;
+
+  const onListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const up = e.nativeEvent.contentOffset.y > JUMP_SHOW_AFTER;
+    if (up === scrolledUpRef.current) return;
+    scrolledUpRef.current = up;
+    setScrolledUp(up);
+    setJumpAnchor(up ? lastMessageIdRef.current : null);
+  }, []);
+
+  // A different conversation starts at the bottom, with no button.
+  useEffect(() => {
+    scrolledUpRef.current = false;
+    setScrolledUp(false);
+    setJumpAnchor(null);
+  }, [contactId, productId]);
+
+  const newBelow = useMemo(() => {
+    if (!scrolledUp || !jumpAnchor) return 0;
+    const at = thread.findIndex((m) => m.id === jumpAnchor);
+    if (at === -1) return 0;
+    let count = 0;
+    for (let i = at + 1; i < thread.length; i++) if (thread[i].sender_id !== myId) count++;
+    return count;
+  }, [scrolledUp, jumpAnchor, thread, myId]);
+
+  const jumpToLatest = () => listRef.current?.scrollToOffset({ offset: 0, animated: true });
+
   /* ── Rows: day separators + grouping, built oldest-first then reversed
         because the list is inverted (index 0 renders at the bottom). ────── */
   const rows = useMemo<ChatRow[]>(() => {
@@ -473,6 +532,12 @@ export default function ChatScreen() {
   }, [unreadMarker, rows, contactId, productId]);
 
   const canSend = !!draft.trim() && !!contactId && !!productId;
+
+  /** This conversation's welcome sticker — fixed per chat; see src/lib/stickers.ts. */
+  const welcomeSticker = useMemo(
+    () => welcomeStickerFor(myId, contactId, productId),
+    [myId, contactId, productId],
+  );
 
   const { width: windowWidth } = useWindowDimensions();
   const bubbleWidth = useMemo(
@@ -606,7 +671,7 @@ export default function ChatScreen() {
                 <View style={styles.emptyWrap}>
                   {/* On a card, so the wallpaper never runs through the words. */}
                   <View style={styles.emptyCard}>
-                    <Text style={styles.emptyEmoji}>👋</Text>
+                    <WelcomeSticker source={welcomeSticker.source} />
                     <Text style={styles.emptyTitle}>Start the conversation about {productTitle}.</Text>
                     <Text style={styles.emptyText}>
                       Ask if it&apos;s still available, agree a price, and meet somewhere public on campus.
@@ -648,6 +713,8 @@ export default function ChatScreen() {
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
                 showsVerticalScrollIndicator={false}
+                onScroll={onListScroll}
+                scrollEventThrottle={32}
                 // Both must stay transparent — either one painting a colour hides
                 // the wallpaper behind it completely.
                 style={styles.list}
@@ -684,6 +751,40 @@ export default function ChatScreen() {
                 renderItem={renderRow}
               />
             )}
+
+            {/* Over the thread, outside the list: it must not scroll or flip. */}
+            {scrolledUp && thread.length > 0 ? (
+              <Reanimated.View
+                entering={ZoomIn.duration(180)}
+                exiting={ZoomOut.duration(140)}
+                style={styles.jumpWrap}
+              >
+                <Pressable
+                  onPress={jumpToLatest}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    newBelow > 0
+                      ? `${newBelow} new message${newBelow > 1 ? 's' : ''}. Jump to latest`
+                      : 'Jump to latest message'
+                  }
+                  style={({ pressed }) => [styles.jumpBtn, pressed && styles.jumpBtnPressed]}
+                >
+                  <Feather name="chevrons-down" size={20} color={colors.purple} />
+                </Pressable>
+                {newBelow > 0 ? (
+                  <LinearGradient
+                    colors={BRAND}
+                    start={GRADIENT_START}
+                    end={GRADIENT_END}
+                    style={styles.jumpBadge}
+                    pointerEvents="none"
+                  >
+                    <AppText style={styles.jumpBadgeText}>{newBelow > 99 ? '99+' : newBelow}</AppText>
+                  </LinearGradient>
+                ) : null}
+              </Reanimated.View>
+            ) : null}
           </View>
 
           {/* ── Emoji tray ── */}
@@ -899,21 +1000,54 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-/** Message body with tappable links. */
+/**
+ * Message body: tappable links, and emoji drawn at emoji size (src/lib/emoji.ts).
+ * A message of only one to three emoji is drawn jumbo instead, the whole text
+ * at that size — WhatsApp's rule.
+ */
 function MessageText({ content, mine }: { content: string; mine: boolean }) {
-  const parts = content.split(/(https?:\/\/\S+|www\.\S+)/gi);
+  const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
+  const parts = useMemo(
+    () =>
+      jumbo
+        ? []
+        : content.split(/(https?:\/\/\S+|www\.\S+)/gi).map((part) => ({
+            part,
+            url: /^(https?:\/\/|www\.)/i.test(part)
+              ? part.startsWith('www.')
+                ? `https://${part}`
+                : part
+              : null,
+            runs: splitEmoji(part),
+          })),
+    [content, jumbo],
+  );
+  const textStyle = [styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextTheirs];
+
+  if (jumbo) {
+    return <AppText style={[textStyle, JUMBO_STYLES[jumbo as 1 | 2 | 3]]}>{content}</AppText>;
+  }
+
   return (
-    <AppText style={[styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextTheirs]}>
-      {parts.map((part, i) => {
-        if (!/^(https?:\/\/|www\.)/i.test(part)) return part;
-        const url = part.startsWith('www.') ? `https://${part}` : part;
+    <AppText style={textStyle}>
+      {parts.map(({ part, url, runs }, i) => {
+        const body = runs.map((run, k) =>
+          run.emoji ? (
+            <AppText key={k} style={styles.emojiInline}>
+              {run.text}
+            </AppText>
+          ) : (
+            run.text
+          ),
+        );
+        if (!url) return <Fragment key={i}>{body}</Fragment>;
         return (
           <AppText
             key={`${part}-${i}`}
             style={[styles.link, mine ? styles.linkMine : styles.linkTheirs]}
             onPress={() => Linking.openURL(url).catch(() => {})}
           >
-            {part}
+            {body}
           </AppText>
         );
       })}
@@ -962,6 +1096,26 @@ function UnreadDivider({ count }: { count: number }) {
         {count} unread message{count > 1 ? 's' : ''}
       </AppText>
     </View>
+  );
+}
+
+/* ────────────────────────── Welcome sticker ────────────────────────── */
+/**
+ * Telegram-style greeting in an empty chat: one of the welcome stickers
+ * (src/lib/stickers.ts), chosen per conversation. An animated WebP, played by
+ * expo-image. With the phone's reduce-motion setting on, it holds still on its
+ * first frame. Decorative: the card's text says everything a screen reader needs.
+ */
+function WelcomeSticker({ source }: { source: number }) {
+  const reduceMotion = useReducedMotion();
+  return (
+    <Image
+      source={source}
+      style={styles.sticker}
+      contentFit="contain"
+      autoplay={!reduceMotion}
+      accessible={false}
+    />
   );
 }
 
@@ -1200,6 +1354,8 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.bodyLg,
     lineHeight: 20,
   },
+  /** An emoji inside text. The paragraph keeps its 20 line height. */
+  emojiInline: { fontSize: EMOJI_SIZES.inline },
   bubbleTextMine: { color: colors.white },
   bubbleTextTheirs: { color: colors.blackSoft },
   link: { textDecorationLine: 'underline' },
@@ -1266,6 +1422,46 @@ const styles = StyleSheet.create({
     color: colors.purple,
   },
 
+  /* Jump to latest — sized and coloured from the composer's send button and the
+     inbox badge, so nothing new is introduced. */
+  jumpWrap: {
+    position: 'absolute',
+    right: THREAD_PAD,
+    bottom: 12,
+  },
+  jumpBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.messagesLine,
+    shadowColor: colors.purple,
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  jumpBtnPressed: { transform: [{ scale: 0.94 }], backgroundColor: colors.pinkLight },
+  jumpBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jumpBadgeText: {
+    fontFamily: font.family.bold,
+    fontSize: font.sizes.micro,
+    color: colors.white,
+  },
+
   /* Typing */
   typingBubble: {
     flexDirection: 'row',
@@ -1296,7 +1492,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.chatNoteSurface,
   },
-  emptyEmoji: { fontSize: font.sizes.display },
+  sticker: { width: STICKER_SIZE, height: STICKER_SIZE },
   emptyTitle: {
     fontFamily: font.family.bold,
     fontSize: font.sizes.bodyLg,
@@ -1478,3 +1674,13 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 });
+
+/** Emoji-only messages: 1, 2 or 3 emoji, each a size step down (EMOJI_SIZES). */
+const JUMBO_STYLES = StyleSheet.create(
+  Object.fromEntries(
+    ([1, 2, 3] as const).map((n) => [
+      n,
+      { fontSize: EMOJI_SIZES.jumbo[n], lineHeight: Math.round(EMOJI_SIZES.jumbo[n] * 1.25) },
+    ]),
+  ) as Record<1 | 2 | 3, { fontSize: number; lineHeight: number }>,
+);

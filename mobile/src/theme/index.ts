@@ -273,3 +273,18 @@ export const CHAT_WALLPAPER_OPACITY = 0.5;
  * 'solid'. The web has the same switch — the two must never disagree.
  */
 export const SENT_BUBBLE_STYLE: 'gradient' | 'solid' = 'gradient';
+
+/**
+ * Emoji sizes inside chat bubbles (WhatsApp-style; see src/lib/emoji.ts).
+ *
+ * These sit outside the type scale on purpose: an emoji is a picture, and the
+ * scale's sizes are for reading. At the bubble's 14 they read as smudges.
+ *   inline — an emoji inside text: ~1.3× the 14 around it, inside its 20 line.
+ *   jumbo  — a message of ONLY emoji: 1, 2 or 3 of them; fewer = bigger.
+ * The web uses the same numbers (in px).
+ */
+export const EMOJI_SIZES = {
+  inline: 18,
+  // Was 48 / 40 / 32 — too big on device. Now ~1.9× / 1.7× / 1.4× the inline size.
+  jumbo: { 1: 34, 2: 30, 3: 26 },
+} as const;

@@ -1,0 +1,200 @@
+<!doctype html>
+<!--
+  WELCOME STICKER — "Bagsy" (drawn in-house, Phase 6A).
+
+  A little Yahora shopping bag that hops, waves and blinks. Open in Chrome to
+  watch it loop; `../build_stickers.py` renders the same `draw()` frame by frame
+  into `../out/bagsy.webp`. Never edit the .webp — change draw() and rebuild.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bagsy</title>
+<style>
+  body { margin: 0; display: grid; place-items: center; min-height: 100vh; background: #EDE6F5; font: 13px sans-serif; }
+  .card { background: rgba(255,255,255,.9); border-radius: 20px; padding: 24px; text-align: center; }
+  canvas { width: 180px; height: 180px; display: block; }
+</style>
+</head>
+<body>
+<div class="card"><canvas id="c" width="360" height="360"></canvas><p>Bagsy · live preview</p></div>
+<pre id="frames" hidden></pre>
+<script>
+const SIZE = 360;
+const FPS = 20;
+const FRAMES = 48;
+const QUALITY = 0.8;
+
+const PURPLE = '#800080', PURPLE_DARK = '#4F014F', PINK_DARK = '#EB487F', PINK = '#FF78A6';
+const ARM = '#C02B7F', INK = '#1A1A1A', GOLD = '#F6B93B';
+
+const TAU = Math.PI * 2;
+const ease = (x) => 0.5 - 0.5 * Math.cos(TAU * x);
+
+function sparkle(ctx, x, y, r, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU - Math.PI / 2;
+    const rr = i % 2 === 0 ? r : r * 0.32;
+    ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function roundedBag(ctx) {
+  const tl = [-75, -148], tr = [75, -148], br = [88, 0], bl = [-88, 0], r = 22;
+  ctx.beginPath();
+  ctx.moveTo(tl[0] + r, tl[1]);
+  ctx.lineTo(tr[0] - r, tr[1]);
+  ctx.quadraticCurveTo(tr[0], tr[1], tr[0] + 3, tr[1] + r);
+  ctx.lineTo(br[0] - 1, br[1] - r);
+  ctx.quadraticCurveTo(br[0], br[1], br[0] - r, br[1]);
+  ctx.lineTo(bl[0] + r, bl[1]);
+  ctx.quadraticCurveTo(bl[0], bl[1], bl[0] + 1, bl[1] - r);
+  ctx.lineTo(tl[0] - 3, tl[1] + r);
+  ctx.quadraticCurveTo(tl[0], tl[1], tl[0] + r, tl[1]);
+  ctx.closePath();
+}
+
+function limb(ctx, x1, y1, x2, y2) {
+  ctx.strokeStyle = ARM;
+  ctx.lineWidth = 12;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.fillStyle = PURPLE_DARK;
+  ctx.beginPath();
+  ctx.arc(x2, y2, 9.5, 0, TAU);
+  ctx.fill();
+}
+
+function draw(ctx, t) {
+  ctx.clearRect(0, 0, SIZE, SIZE);
+
+  const lift = 16 * ease(t);
+  const ground = Math.max(0, Math.cos(TAU * t)) ** 4;
+  const sx = 1 + 0.045 * ground, sy = 1 - 0.06 * ground;
+  const wave = (38 + 26 * Math.sin(TAU * 3 * t)) * (Math.PI / 180);
+  const blink = Math.max(0, 1 - Math.abs(t - 0.8) / 0.035);
+  const open = 1 - 0.92 * blink;
+
+  ctx.fillStyle = 'rgba(79,1,79,0.13)';
+  ctx.beginPath();
+  ctx.ellipse(180, 318, 74 * (1 - lift / 46), 10 * (1 - lift / 60), 0, 0, TAU);
+  ctx.fill();
+
+  [[66, 118, 15, GOLD, 0], [298, 92, 11, PINK, 0.33], [306, 214, 13, GOLD, 0.66], [52, 236, 9, PINK, 0.5]]
+    .forEach(([x, y, r, c, ph]) => {
+      const k = 0.5 + 0.5 * Math.sin(TAU * (t + ph));
+      sparkle(ctx, x, y, r * (0.55 + 0.45 * k), c, 0.35 + 0.65 * k);
+    });
+
+  ctx.save();
+  ctx.translate(180, 304 - lift);
+  ctx.scale(sx, sy);
+
+  ctx.strokeStyle = PURPLE_DARK;
+  ctx.lineWidth = 13;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-42, -140);
+  ctx.bezierCurveTo(-44, -212, 44, -212, 42, -140);
+  ctx.stroke();
+
+  limb(ctx, -70, -74, -102, -40);
+  ctx.save();
+  ctx.translate(72, -84);
+  ctx.rotate(wave);
+  limb(ctx, 0, 0, 0, -48);
+  ctx.strokeStyle = 'rgba(128,0,128,0.45)';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath(); ctx.arc(0, -50, 20, -0.35 * Math.PI, -0.15 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, -50, 27, -0.33 * Math.PI, -0.17 * Math.PI); ctx.stroke();
+  ctx.restore();
+
+  const g = ctx.createLinearGradient(-88, -148, 88, 0);
+  g.addColorStop(0, PURPLE);
+  g.addColorStop(1, PINK_DARK);
+  roundedBag(ctx);
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  ctx.save();
+  roundedBag(ctx);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(-100, -150, 200, 22);
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.beginPath();
+  ctx.ellipse(-46, -110, 18, 40, -0.25, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+
+  for (const ex of [-30, 30]) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.ellipse(ex, -92, 15, 17 * open + 0.5, 0, 0, TAU);
+    ctx.fill();
+    if (open > 0.3) {
+      ctx.fillStyle = INK;
+      ctx.beginPath();
+      ctx.ellipse(ex + 2, -89, 8.5, 10.5 * open, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(ex + 5, -94, 3.4, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  ctx.fillStyle = 'rgba(255,170,200,0.8)';
+  for (const cx of [-52, 52]) {
+    ctx.beginPath();
+    ctx.ellipse(cx, -62, 12, 7.5, 0, 0, TAU);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-19, -70);
+  ctx.quadraticCurveTo(0, -64, 19, -70);
+  ctx.quadraticCurveTo(0, -30, -19, -70);
+  ctx.closePath();
+  ctx.fillStyle = PURPLE_DARK;
+  ctx.fill();
+  ctx.clip();
+  ctx.fillStyle = PINK;
+  ctx.beginPath();
+  ctx.ellipse(0, -46, 11, 8, 0, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+if (new URLSearchParams(location.search).has('export')) {
+  const out = [];
+  for (let i = 0; i < FRAMES; i++) {
+    draw(ctx, i / FRAMES);
+    out.push(canvas.toDataURL('image/webp', QUALITY));
+  }
+  document.getElementById('frames').textContent =
+    JSON.stringify({ size: SIZE, fps: FPS, frames: out });
+} else {
+  let i = 0;
+  setInterval(() => draw(ctx, (i++ % FRAMES) / FRAMES), 1000 / FPS);
+}
+</script>
+</body>
+</html>
