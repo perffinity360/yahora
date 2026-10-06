@@ -1064,8 +1064,7 @@ something you need, keep the current behaviour and list it at the end —
 do not make a design decision yourself.
 
 Visual reference: docs/design/messages-mockup.html and
-docs/design/messages_proposed.png. Where they disagree with the spec
-file, the spec file wins.
+docs/design/messages_proposed.png. But we need to make it more beautiful and comfortable than it.
 
 Also read mobile/DESIGN.md sections 6, 7 and 9 — the performance rules
 and the anti-patterns (Bree Serif ships only weight 400; no emoji as

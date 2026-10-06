@@ -347,6 +347,8 @@ export const SwipeCard = memo(
             sellerAvatarUrl={product.seller?.avatar_url}
             style={styles.fill}
             fillPhoto
+            // A sideways drag here is like / pass, never a photo swipe.
+            swipePhotos={false}
           />
         </Animated.View>
       </GestureDetector>

@@ -1,9 +1,11 @@
 // frontend/src/pages/messages/Messages.jsx
 import React, {
+  memo,
   useCallback,
   useState,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
 } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -23,8 +25,11 @@ import {
   Smile,
   Sparkles,
   Users,
+  ChevronsDown,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
+import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
+import { welcomeStickerFor } from "../../utils/stickers";
 
 /**
  * 🔒 Every /api/messages/* route went behind `requireAuth` in Phase 4 Block V-A
@@ -57,6 +62,10 @@ const UNREAD_ANCHOR_LEAD_RATIO = 0.35;
 /* How close to the bottom still counts as "reading the live end of the thread".
    Above this, an arriving message must not pull the viewport down. */
 const BOTTOM_STICK_THRESHOLD = 80;
+/* Scrolled up further than this (px) from the newest message and the
+   jump-to-latest button shows — about one message. Same value as mobile's
+   JUMP_SHOW_AFTER; the two were tuned together on a phone. */
+const JUMP_SHOW_AFTER = 80;
 
 /* 📄 Block N-C. Where one message is sitting inside the scroll container right
    now, as `{ id, top }` with top measured from the container's own top edge.
@@ -168,6 +177,40 @@ const EMOJI_ROWS = [
 ];
 
 /* ── Avatar Helper ── */
+/* Message body with WhatsApp-style emoji (src/utils/emoji.js): emoji inside
+   text at EMOJI_SIZES.inline; a message of only one to three emoji drawn whole
+   at the jumbo size. Memoised — the thread re-renders on every keystroke in
+   the composer, and splitting text is not free. */
+const MessageText = memo(function MessageText({ content }) {
+  const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
+  const runs = useMemo(() => (jumbo ? null : splitEmoji(content)), [content, jumbo]);
+
+  if (jumbo) {
+    const size = EMOJI_SIZES.jumbo[jumbo];
+    return (
+      <p
+        className={styles.messageText}
+        style={{ fontSize: size, lineHeight: `${Math.round(size * 1.25)}px` }}
+      >
+        {content}
+      </p>
+    );
+  }
+  return (
+    <p className={styles.messageText}>
+      {runs.map((run, i) =>
+        run.emoji ? (
+          <span key={i} className={styles.emojiInline}>
+            {run.text}
+          </span>
+        ) : (
+          <React.Fragment key={i}>{run.text}</React.Fragment>
+        ),
+      )}
+    </p>
+  );
+});
+
 function AvatarImg({ src, name, size = 40, className }) {
   const [err, setErr] = useState(false);
   const displayName = name || "User";
@@ -293,6 +336,12 @@ export default function Messages() {
      the wrong box for both of these — and a ref assignment does not re-render,
      so the hook would never see the node arrive. */
   const [messagesEl, setMessagesEl] = useState(null);
+  /* Jump to latest (WhatsApp's ⌄ button). `jumpAnchorId` is the newest message
+     at the moment the student scrolled away; the badge counts the other
+     person's messages after it. Flips only when JUMP_SHOW_AFTER is crossed. */
+  const [scrolledUp, setScrolledUp] = useState(false);
+  const [jumpAnchorId, setJumpAnchorId] = useState(null);
+  const scrolledUpRef = useRef(false);
   const [inboxListEl, setInboxListEl] = useState(null);
 
   const messagesContainerRef = useRef(null);
@@ -404,9 +453,18 @@ export default function Messages() {
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    isAtBottomRef.current =
-      container.scrollHeight - container.scrollTop - container.clientHeight <
-      BOTTOM_STICK_THRESHOLD;
+    const fromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    isAtBottomRef.current = fromBottom < BOTTOM_STICK_THRESHOLD;
+
+    // Jump-to-latest: React state only when the threshold is crossed.
+    const up = fromBottom > JUMP_SHOW_AFTER;
+    if (up !== scrolledUpRef.current) {
+      scrolledUpRef.current = up;
+      setScrolledUp(up);
+      const list = messagesRef.current;
+      setJumpAnchorId(up && list.length ? list[list.length - 1].id : null);
+    }
   };
 
   /* Park the viewport a lead-in short of the unread divider, so the tail of the
@@ -453,6 +511,31 @@ export default function Messages() {
   useEffect(() => {
     activeChatRef.current = activeChat;
   }, [activeChat]);
+
+  // A different conversation opens at the bottom, with no jump button.
+  useEffect(() => {
+    scrolledUpRef.current = false;
+    setScrolledUp(false);
+    setJumpAnchorId(null);
+  }, [activeChat?.contact_id, activeChat?.product_id]);
+
+  /* This conversation's welcome sticker — fixed per chat, and the same one the
+     phone shows (src/utils/stickers.js). */
+  const welcomeSticker = useMemo(
+    () => welcomeStickerFor(currentUserId, activeChat?.contact_id, activeChat?.product_id),
+    [currentUserId, activeChat?.contact_id, activeChat?.product_id],
+  );
+
+  const newBelow = useMemo(() => {
+    if (!scrolledUp || !jumpAnchorId) return 0;
+    const at = messages.findIndex((m) => m.id === jumpAnchorId);
+    if (at === -1) return 0;
+    let count = 0;
+    for (let i = at + 1; i < messages.length; i++) {
+      if (messages[i].sender_id !== currentUserId) count++;
+    }
+    return count;
+  }, [scrolledUp, jumpAnchorId, messages, currentUserId]);
 
   useEffect(() => {
     currentUserIdRef.current = currentUserId;
@@ -1544,7 +1627,9 @@ export default function Messages() {
                 </div>
               </div>
 
-              {/* Messages Container */}
+              {/* Messages Container. Wrapped so the jump button can sit over
+                  the thread without scrolling with it. */}
+              <div className={styles.threadWrap}>
               <div
                 className={styles.messagesContainer}
                 ref={attachMessagesContainer}
@@ -1596,7 +1681,22 @@ export default function Messages() {
 
                 {messages.length === 0 ? (
                   <div className={styles.emptyChat}>
-                    <div className={styles.emptyChatEmoji}>👋</div>
+                    {/* Still frame under reduced motion: a browser cannot pause
+                        an animated WebP inside an <img>. */}
+                    <picture>
+                      <source
+                        srcSet={welcomeSticker.still}
+                        media="(prefers-reduced-motion: reduce)"
+                      />
+                      <img
+                        src={welcomeSticker.animated}
+                        width={120}
+                        height={120}
+                        alt=""
+                        loading="lazy"
+                        className={styles.welcomeSticker}
+                      />
+                    </picture>
                     <p>
                       Say hello to{" "}
                       <strong>
@@ -1713,7 +1813,7 @@ export default function Messages() {
                               <div
                                 className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs}`}
                               >
-                                <p className={styles.messageText}>{msg.content}</p>
+                                <MessageText content={msg.content} />
                                 <div className={styles.messageMeta}>
                                   <span className={styles.messageTime}>
                                     {formatTime(msg.created_at)}
@@ -1756,6 +1856,36 @@ export default function Messages() {
                         <span />
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+
+                {/* Jump to latest. Always mounted while there are messages, so
+                    it can animate out as well as in; hidden, it takes no clicks
+                    and leaves the tab order. */}
+                {messages.length > 0 && (
+                  <div
+                    className={`${styles.jumpWrap} ${scrolledUp ? styles.jumpVisible : ""}`}
+                    aria-hidden={!scrolledUp}
+                  >
+                    <button
+                      type="button"
+                      className={styles.jumpBtn}
+                      onClick={() => scrollToBottom("smooth")}
+                      tabIndex={scrolledUp ? 0 : -1}
+                      aria-label={
+                        newBelow > 0
+                          ? `${newBelow} new message${newBelow > 1 ? "s" : ""}. Jump to latest`
+                          : "Jump to latest message"
+                      }
+                    >
+                      <ChevronsDown size={20} />
+                    </button>
+                    {newBelow > 0 && (
+                      <span className={styles.jumpBadge} aria-hidden="true">
+                        {newBelow > 99 ? "99+" : newBelow}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

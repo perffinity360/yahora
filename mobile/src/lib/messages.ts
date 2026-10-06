@@ -109,49 +109,86 @@ export function contactIdOf(message: Message, myId: string): string {
   return message.sender_id === myId ? message.receiver_id : message.sender_id;
 }
 
-/** "14:32" — the timestamp under each bubble and beside each inbox row. */
+/* ── TIME FORMATS — MESSAGES_SPEC.md §1 "Time format", identical on web ──
+ *
+ * One set of calendar rules serves both the inbox (`formatInboxTime`) and the
+ * conversation's date chips (`formatDayLabel`), so the two can never disagree
+ * about what "Yesterday" or "Mon" means. Names come from fixed English tables,
+ * not Intl: Hermes builds differ in what `toLocaleDateString` returns, and the
+ * spec's strings are exact. */
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const HOUR_MS = 60 * 60 * 1000;
+
+function parse(iso?: string | null): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Whole calendar days from `d` to `now`: 0 today, 1 yesterday. Never negative. */
+function daysAgo(d: Date, now: Date): number {
+  const a = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.max(0, Math.round((b - a) / (24 * HOUR_MS)));
+}
+
+/** `Yesterday` · `Mon` (2–6 days) · `12 Sep` (this year) · `12 Sep 2025`. Null for today. */
+function pastDayLabel(d: Date, now: Date): string | null {
+  const days = daysAgo(d, now);
+  if (days === 0) return null;
+  if (days === 1) return 'Yesterday';
+  if (days <= 6) return WEEKDAYS[d.getDay()];
+  const date = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === now.getFullYear() ? date : `${date} ${d.getFullYear()}`;
+}
+
+/** `4:41 PM` — the time inside every bubble, and the inbox time on the same day. */
 export function formatClockTime(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const hours = String(d.getHours()).padStart(2, '0');
+  const d = parse(iso);
+  if (!d) return '';
+  const hours = d.getHours() % 12 || 12;
   const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
+  return `${hours}:${minutes} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
 }
 
-/** "Today" / "Yesterday" / "Mon, 4 Aug" — the chat day separators. */
+/** Date chip: `Today` · `Yesterday` · `Mon` · `12 Sep` · `12 Sep 2025`. */
 export function formatDayLabel(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  const d = parse(iso);
+  if (!d) return '';
+  return pastDayLabel(d, new Date()) ?? 'Today';
 }
 
-/** Inbox timestamps: clock today, "Yesterday", else a short date. */
+/** Inbox row time: `2m` under an hour · `4:41 PM` same day · then as the chip. */
 export function formatInboxTime(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-
-  const today = new Date();
-  if (d.toDateString() === today.toDateString()) return formatClockTime(iso);
-
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const d = parse(iso);
+  if (!d) return '';
+  const now = new Date();
+  const age = now.getTime() - d.getTime();
+  // A clock a little ahead of ours reads as just now, never as negative.
+  if (age < HOUR_MS) return `${Math.max(0, Math.floor(age / 60000))}m`;
+  return pastDayLabel(d, now) ?? formatClockTime(iso);
 }
 
-/** Messages within this gap from the same sender render as one visual group. */
+/** Same calendar day — the run and the date-chip boundary. */
+export function isSameDay(a?: string | null, b?: string | null): boolean {
+  const x = parse(a);
+  const y = parse(b);
+  return (
+    !!x &&
+    !!y &&
+    x.getFullYear() === y.getFullYear() &&
+    x.getMonth() === y.getMonth() &&
+    x.getDate() === y.getDate()
+  );
+}
+
+/**
+ * A RUN (MESSAGES_SPEC.md §2): consecutive messages from the same sender, on the
+ * same day, each within 5 minutes of the previous. Runs share tight spacing and
+ * only the last one gets the tail.
+ */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 export function isGroupedWith(previous: PendingMessage, current: PendingMessage): boolean {
@@ -160,5 +197,5 @@ export function isGroupedWith(previous: PendingMessage, current: PendingMessage)
   const curTime = new Date(current.created_at).getTime();
   if (Number.isNaN(prevTime) || Number.isNaN(curTime)) return false;
   if (curTime - prevTime > GROUP_WINDOW_MS) return false;
-  return formatDayLabel(previous.created_at) === formatDayLabel(current.created_at);
+  return isSameDay(previous.created_at, current.created_at);
 }
