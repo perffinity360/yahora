@@ -67,6 +67,14 @@ const BOTTOM_STICK_THRESHOLD = 80;
    JUMP_SHOW_AFTER; the two were tuned together on a phone. */
 const JUMP_SHOW_AFTER = 80;
 
+/* 📖 Read on sight (Phase 6A V-E, same values as mobile). Once the thread has
+   been still this long — no scroll, no new message — whatever is on screen
+   has been seen. */
+const READ_DEBOUNCE_MS = 300;
+/* How much of a message has to be inside the thread's viewport to count as
+   seen. Mobile's `itemVisiblePercentThreshold: 50`. */
+const READ_VISIBLE_RATIO = 0.5;
+
 /* 📄 Block N-C. Where one message is sitting inside the scroll container right
    now, as `{ id, top }` with top measured from the container's own top edge.
 
@@ -429,6 +437,12 @@ export default function Messages() {
      `pendingInitialScrollRef` instead — same placement, different trigger. */
   const pendingReturnAnchorRef = useRef(false);
 
+  /* 📖 Read on sight — see flushVisibleRead(). The pending debounce, and the
+     newest message this thread has already been marked read up to, so the
+     same position is not sent twice while its receipts are still arriving. */
+  const readTimerRef = useRef(null);
+  const lastReadIdRef = useRef(null);
+
   /* ?user=&product= as they were on the FIRST render. Captured in a ref so the
      inbox effect below can stay out of `searchParams` — see the note there. */
   const deepLinkRef = useRef({
@@ -465,7 +479,120 @@ export default function Messages() {
       const list = messagesRef.current;
       setJumpAnchorId(up && list.length ? list[list.length - 1].id : null);
     }
+
+    scheduleRead();
   };
+
+  /* ── 📖 READ ON SIGHT (Phase 6A V-E — the same rule as mobile) ──────────
+     A message is read once at least half of it has been inside the thread's
+     viewport — not when the thread opens, and not when it arrives. Rahul opens
+     eight messages from Priya, reads the first three under the line and is
+     called away: Priya sees three read, not eight, and Rahul comes back to a
+     "5 unread messages" line.
+
+     Every scroll, new message, receipt and return to the tab restarts one
+     READ_DEBOUNCE_MS timer. When the thread has been still that long, the
+     newest unread message from the contact that is on screen is sent as a
+     read POSITION — PUT /messages/read with `upToId` — and everything at or
+     before it turns read. Measured at that moment, not tracked as it scrolls
+     past, so it always describes the viewport the reader stopped on: after an
+     open or a return lands on the unread line, never the instant before.
+
+     Reads refs only, so the long-lived realtime and watcher callbacks that
+     reach it through their first-render closures are never stale. */
+  const scheduleRead = () => {
+    clearTimeout(readTimerRef.current);
+    readTimerRef.current = setTimeout(() => {
+      readTimerRef.current = null;
+      flushVisibleRead();
+    }, READ_DEBOUNCE_MS);
+  };
+
+  const flushVisibleRead = () => {
+    const container = messagesContainerRef.current;
+    const chat = activeChatRef.current;
+    const myId = currentUserIdRef.current;
+    // Nobody looking (backgrounded tab — see the watcher), or the pane has no
+    // layout (phone, inbox list up): nothing on it has been seen.
+    if (!container || !container.clientHeight || !chat || !myId) return;
+    if (!isWatchingRef.current) return;
+
+    const list = messagesRef.current;
+    // Self-chat messages were never "unread" — same filter as the line.
+    const isUnreadFromContact = (m) =>
+      m.receiver_id === myId && m.sender_id !== myId && !m.is_read;
+
+    // Already sent up to here; only something newer can move the position.
+    const sentAt = lastReadIdRef.current
+      ? list.findIndex((m) => m.id === lastReadIdRef.current)
+      : -1;
+
+    const box = container.getBoundingClientRect();
+    let bound = -1;
+    for (let i = list.length - 1; i > sentAt; i--) {
+      if (!isUnreadFromContact(list[i])) continue;
+      const el = container.querySelector(
+        `[data-msg-id="${CSS.escape(String(list[i].id))}"]`,
+      );
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const shown = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top);
+      if (r.height > 0 && shown / r.height >= READ_VISIBLE_RATIO) {
+        bound = i;
+        break;
+      }
+    }
+    if (bound === -1) return;
+
+    // The contact's unread messages after the position stay unread, and that is
+    // what the badge should say.
+    let remaining = 0;
+    for (let i = bound + 1; i < list.length; i++) {
+      if (isUnreadFromContact(list[i])) remaining++;
+    }
+
+    const upToId = list[bound].id;
+    lastReadIdRef.current = upToId;
+
+    fetch(`${API_BASE_URL}/messages/read`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
+      },
+      body: JSON.stringify({
+        userId: myId,
+        contactId: chat.contact_id,
+        productId: chat.product_id,
+        upToId,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`read ${res.status}`);
+      })
+      .catch((error) => {
+        // Not recorded: let the next still moment send it again.
+        if (lastReadIdRef.current === upToId) lastReadIdRef.current = null;
+        console.error("Failed to mark messages read:", error);
+      });
+
+    setInbox((prev) =>
+      prev.map((c) =>
+        c.contact_id === chat.contact_id && c.product_id === chat.product_id
+          ? { ...c, unread_count: remaining }
+          : c,
+      ),
+    );
+  };
+
+  // A new message, a receipt, a page, or the pane coming into view on a phone
+  // can change what is unread on screen without anyone scrolling.
+  useEffect(() => {
+    scheduleRead();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, showInboxOnMobile]);
+
+  useEffect(() => () => clearTimeout(readTimerRef.current), []);
 
   /* Park the viewport a lead-in short of the unread divider, so the tail of the
      already-read history sits above the line and the line reads as a seam in
@@ -661,7 +788,9 @@ export default function Messages() {
   }, [unreadMarker]);
 
   /* Promote the run of messages that landed while this student was away into
-     the visible unread line, and only now tell the server they were read. */
+     the visible unread line. Reading them is READ ON SIGHT's job: the watcher
+     schedules it right after this, and by the time it runs the viewport has
+     been anchored on the line. */
   const flushAwayUnread = () => {
     const pending = awayUnreadRef.current;
     if (!pending) return;
@@ -677,44 +806,16 @@ export default function Messages() {
 
     // Replaces any earlier divider on purpose: that one marked messages this
     // student has since read, and two lines in one thread would be a puzzle.
+    // The receipts READ ON SIGHT sends do not erase the line: `unreadMarker` is
+    // pinned state, not something derived from `is_read` — see that state.
     setUnreadMarker(pending);
     pendingReturnAnchorRef.current = true;
-
-    const chat = activeChatRef.current;
-    const myId = currentUserIdRef.current;
-    if (!chat || !myId) return;
-
-    // The receipt is honest now that the messages are back on screen. It does
-    // not erase the line: `unreadMarker` is pinned state, not something derived
-    // from `is_read` — see the note on that state.
-    fetch(`${API_BASE_URL}/messages/read`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
-      },
-      body: JSON.stringify({
-        userId: myId,
-        contactId: chat.contact_id,
-        productId: chat.product_id,
-      }),
-    }).catch((error) =>
-      console.error("Failed to mark messages read on return:", error),
-    );
-
-    setInbox((prev) =>
-      prev.map((c) =>
-        c.contact_id === chat.contact_id && c.product_id === chat.product_id
-          ? { ...c, unread_count: 0 }
-          : c,
-      ),
-    );
   };
 
   /* ── Are they actually looking at this? ──
      A message that arrives while the tab is hidden or the window is behind
      something else has not been seen, so marking it read the moment it lands —
-     which is what the realtime handler does — is a lie, and it costs this
+     which the realtime handler used to do — is a lie, and it costs this
      student the "N unread messages" line on the one visit that needed it: they
      step away mid-thread, twenty messages pile up, and they come back to a
      wall of chat with no idea where they stopped.
@@ -728,7 +829,10 @@ export default function Messages() {
     const setWatching = (watching) => {
       if (watching === isWatchingRef.current) return;
       isWatchingRef.current = watching;
-      if (watching) flushAwayUnread();
+      if (!watching) return;
+      flushAwayUnread();
+      // Whatever is on screen now is being looked at again.
+      scheduleRead();
     };
 
     const evaluate = () =>
@@ -1060,6 +1164,10 @@ export default function Messages() {
     setUnreadMarker(null);
     // Belongs to the thread being left, not to this one.
     awayUnreadRef.current = null;
+    // So does a pending read, and the position already sent.
+    clearTimeout(readTimerRef.current);
+    readTimerRef.current = null;
+    lastReadIdRef.current = null;
 
     /* 📄 RESET THE PAGER. A new thread is a different history: the cursor, the
        end-of-list flag and any page still in the air all belong to the
@@ -1158,28 +1266,10 @@ export default function Messages() {
         unread.length ? { id: unread[0].id, count: unread.length } : null,
       );
 
-      if (chat.unread_count > 0) {
-        await fetch(`${API_BASE_URL}/messages/read`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
-          },
-          body: JSON.stringify({
-            userId: currentUserId,
-            contactId: chat.contact_id,
-            productId: chat.product_id,
-          }),
-        });
-
-        setInbox((prev) =>
-          prev.map((c) =>
-            c.contact_id === chat.contact_id && c.product_id === chat.product_id
-              ? { ...c, unread_count: 0 }
-              : c,
-          ),
-        );
-      }
+      // Opening is no longer reading (Phase 6A V-E). The layout effect anchors
+      // the viewport on the line, and READ ON SIGHT marks read only what that
+      // leaves on screen, once it has been there READ_DEBOUNCE_MS. The badge
+      // keeps counting the rest.
     } catch (error) {
       // Clear on failure. Leaving the previous chat's messages on screen under
       // the newly selected contact's header would render one student's
@@ -1250,22 +1340,11 @@ export default function Messages() {
               });
               
               if (newMsg.receiver_id === myId) {
-                if (isWatchingRef.current) {
-                  // They are on the thread with their eyes on it — this one is
-                  // genuinely read the moment it lands, and gets no divider.
-                  fetch(`${API_BASE_URL}/messages/read`, {
-                    method: "PUT",
-                    headers: {
-                      "Content-Type": "application/json",
-                      ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
-                    },
-                    body: JSON.stringify({
-                      userId: myId,
-                      contactId: newMsg.sender_id,
-                      productId: newMsg.product_id,
-                    }),
-                  });
-                } else {
+                // They are on the thread with their eyes on it: no divider, and
+                // READ ON SIGHT marks it read once it is on screen — at once
+                // at the live end, only when they get there if scrolled up.
+                // (The `messages` change above schedules that check.)
+                if (!isWatchingRef.current) {
                   // The page is open but nobody is at it. Hold the run: the
                   // first of these is where the line goes when they return.
                   awayUnreadRef.current = awayUnreadRef.current
@@ -1293,15 +1372,20 @@ export default function Messages() {
                 updatedChat.last_message = newMsg.content;
                 updatedChat.last_message_time = newMsg.created_at;
                 
-                // Open AND being watched. A thread sitting open in a
-                // backgrounded tab has not been read, so it keeps its badge —
-                // otherwise the sidebar and the divider would disagree about
-                // the same messages.
+                // Open, being watched, on screen AND at the live end — the only
+                // case where it is about to be read on sight. A thread sitting
+                // open in a backgrounded tab has not been read, so it keeps its
+                // badge — otherwise the sidebar and the divider would disagree
+                // about the same messages. Nor has one scrolled up into the
+                // backlog, or hidden behind the inbox list on a phone: READ ON
+                // SIGHT sets the badge to what is left once they get there.
                 const isChatActive =
                   chat &&
                   chat.product_id === newMsg.product_id &&
                   chat.contact_id === newMsg.sender_id &&
-                  isWatchingRef.current;
+                  isWatchingRef.current &&
+                  isAtBottomRef.current &&
+                  !!messagesContainerRef.current?.clientHeight;
 
                 if (newMsg.receiver_id === myId && !isChatActive) {
                   updatedChat.unread_count = Number(updatedChat.unread_count || 0) + 1;
