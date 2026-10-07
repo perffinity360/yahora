@@ -199,8 +199,13 @@ export function useSendMessage(contactId?: string, productId?: string) {
 }
 
 /**
- * Mark a thread read and zero its inbox badge immediately, so the badge never
+ * Mark a thread read and set its inbox badge immediately, so the badge never
  * lags behind what the user is plainly looking at.
+ *
+ * `upToId` (optional) is a read position: only messages up to and including it
+ * are marked (PUT /api/messages/read, Phase 6A V-E). `remaining` is how many of
+ * the contact's unread messages come after it — the badge drops to that, not 0.
+ * Without `upToId` the whole thread is marked and the badge goes to 0.
  */
 export function useMarkRead() {
   const queryClient = useQueryClient();
@@ -208,20 +213,27 @@ export function useMarkRead() {
   const myId = profile?.id;
 
   return useMutation({
-    mutationFn: (vars: { contactId: string; productId: string }) => {
+    mutationFn: (vars: {
+      contactId: string;
+      productId: string;
+      upToId?: string;
+      remaining?: number;
+    }) => {
       if (!myId) return Promise.reject(new Error('Not signed in.'));
       return api.put('/api/messages/read', {
         userId: myId,
         contactId: vars.contactId,
         productId: vars.productId,
+        ...(vars.upToId ? { upToId: vars.upToId } : {}),
       });
     },
     onMutate: (vars) => {
+      const left = vars.upToId ? Math.max(0, vars.remaining ?? 0) : 0;
       queryClient.setQueryData<InboxItem[]>(['inbox', myId], (prev) =>
         prev
           ? prev.map((row) =>
               row.contact_id === vars.contactId && row.product_id === vars.productId
-                ? { ...row, unread_count: 0 }
+                ? { ...row, unread_count: left }
                 : row,
             )
           : prev,

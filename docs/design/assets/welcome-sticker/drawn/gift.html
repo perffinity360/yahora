@@ -1,0 +1,379 @@
+<!doctype html>
+<!--
+  STICKER — "Bagsy's Gift" (drawn in-house, Phase 6A).
+
+  Bagsy, the Yahora shopping bag, hugs a wrapped present. The box wiggles, the
+  lid pops, brand-coloured sparkles and confetti burst out and Bagsy grins; then
+  the lid settles back and the loop starts again.
+
+  Original artwork, made for Yahora: the only thing it shares with any other
+  sticker is the general idea of "a character opening a present", which nobody
+  owns. Open in Chrome to watch it loop; `../build_stickers.py gift` renders the
+  same `draw()` frame by frame into `../out/gift.webp`. Never edit the .webp —
+  change draw() and rebuild.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bagsy's Gift</title>
+<style>
+  body { margin: 0; display: grid; place-items: center; min-height: 100vh; background: #EDE6F5; font: 13px sans-serif; }
+  .card { background: rgba(255,255,255,.9); border-radius: 20px; padding: 24px; text-align: center; }
+  canvas { width: 180px; height: 180px; display: block; }
+</style>
+</head>
+<body>
+<div class="card"><canvas id="c" width="360" height="360"></canvas><p>Bagsy's Gift · live preview</p></div>
+<pre id="frames" hidden></pre>
+<script>
+const SIZE = 360;
+const FPS = 20;
+const FRAMES = 60; // 3 s loop
+const QUALITY = 0.8;
+
+// Brand tokens (frontend/src/styles/global.css, mobile/src/theme).
+const PURPLE = '#800080', PURPLE_DARK = '#4F014F', PINK_DARK = '#EB487F', PINK = '#FF78A6';
+const ARM = '#C02B7F', INK = '#1A1A1A', GOLD = '#F6B93B', BLUE = '#2BB7FF';
+// The present: a light box so it reads against Bagsy's purple, gold ribbon.
+const BOX = '#FFF4F7', BOX_SHADE = '#F7D9E6', RIBBON = GOLD, RIBBON_DARK = '#D9961F';
+
+const TAU = Math.PI * 2;
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+const smooth = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
+const easeOut = (x) => 1 - (1 - clamp01(x)) ** 3;
+// Overshoots then settles: the lid flies a little past its height.
+const easeOutBack = (x) => { x = clamp01(x); const c = 1.9; return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2; };
+const between = (t, a, b) => clamp01((t - a) / (b - a));
+
+/* ── Timeline (t in [0, 1)) ─────────────────────────────────────────────
+   0.10–0.32  the box wiggles, harder and harder
+   0.30–0.34  Bagsy crouches (anticipation)
+   0.34–0.44  POP: lid flies up, Bagsy hops, eyes turn to happy arcs
+   0.35–0.80  sparkles and confetti burst out and fade
+   0.78–0.92  lid floats back down and lands with a small bump
+   Everything is at rest at t = 0 and t = 1, so the loop is seamless. */
+
+function sparkle(ctx, x, y, r, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU - Math.PI / 2;
+    const rr = i % 2 === 0 ? r : r * 0.32;
+    ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Bagsy's body: a shopping bag, slightly wider at the bottom.
+function bagShape(ctx) {
+  const r = 22;
+  ctx.beginPath();
+  ctx.moveTo(-75 + r, -148);
+  ctx.lineTo(75 - r, -148);
+  ctx.quadraticCurveTo(75, -148, 78, -148 + r);
+  ctx.lineTo(87, -r);
+  ctx.quadraticCurveTo(88, 0, 88 - r, 0);
+  ctx.lineTo(-88 + r, 0);
+  ctx.quadraticCurveTo(-88, 0, -87, -r);
+  ctx.lineTo(-78, -148 + r);
+  ctx.quadraticCurveTo(-75, -148, -75 + r, -148);
+  ctx.closePath();
+}
+
+// Burst pieces, fixed so every render is identical. [angle°, reach, size, kind, colour, spin, delay]
+const BURST = [
+  [-150, 118, 13, 'star', GOLD, 0, 0.00],
+  [-128, 138, 9, 'bit', PINK_DARK, 3, 0.03],
+  [-110, 150, 15, 'star', PINK, 0, 0.01],
+  [-96, 128, 8, 'bit', BLUE, -4, 0.05],
+  [-82, 156, 12, 'star', GOLD, 0, 0.02],
+  [-68, 132, 9, 'bit', PURPLE, 5, 0.00],
+  [-52, 146, 14, 'star', PINK_DARK, 0, 0.04],
+  [-34, 120, 8, 'bit', GOLD, -3, 0.02],
+  [-140, 84, 7, 'bit', BLUE, 4, 0.06],
+  [-44, 88, 9, 'star', BLUE, 0, 0.05],
+  [-118, 96, 7, 'bit', GOLD, -5, 0.04],
+  [-74, 92, 8, 'bit', PINK, 3, 0.07],
+];
+
+function drawBurst(ctx, t, ox, oy) {
+  for (const [deg, reach, size, kind, color, spin, delay] of BURST) {
+    const p = between(t, 0.35 + delay, 0.80);
+    if (p <= 0 || p >= 1) continue;
+    const a = (deg * Math.PI) / 180;
+    const d = reach * easeOut(p);
+    // A touch of gravity so the pieces arc over rather than fly in straight lines.
+    const x = ox + Math.cos(a) * d;
+    const y = oy + Math.sin(a) * d + 46 * p * p;
+    const alpha = 1 - p ** 2.2;
+    if (kind === 'star') {
+      sparkle(ctx, x, y, size * (0.6 + 0.4 * Math.sin(Math.PI * p)), color, alpha);
+    } else {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(x, y);
+      ctx.rotate(spin * p * 2);
+      ctx.fillStyle = color;
+      roundRect(ctx, -size * 0.5, -size * 0.28, size, size * 0.56, 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+function drawFace(ctx, happy, open) {
+  // Eyes: round with a highlight at rest, "^ ^" arcs when happy.
+  for (const ex of [-30, 30]) {
+    if (happy > 0.5) {
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(ex, -104, 13, Math.PI * 1.12, Math.PI * 1.88);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.ellipse(ex, -108, 15, 17 * open + 0.5, 0, 0, TAU);
+      ctx.fill();
+      if (open > 0.3) {
+        ctx.fillStyle = INK;
+        ctx.beginPath();
+        ctx.ellipse(ex + 2, -105, 8.5, 10.5 * open, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(ex + 5, -110, 3.4, 0, TAU);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Cheeks, brighter when happy.
+  ctx.fillStyle = `rgba(255,170,200,${0.7 + 0.25 * happy})`;
+  for (const cx of [-52, 52]) {
+    ctx.beginPath();
+    ctx.ellipse(cx, -82, 12, 7.5, 0, 0, TAU);
+    ctx.fill();
+  }
+
+  // Mouth: a small smile at rest, a wide open grin when happy.
+  const depth = 9 + 15 * happy;
+  const half = 12 + 6 * happy;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-half, -88);
+  ctx.quadraticCurveTo(0, -84, half, -88);
+  ctx.quadraticCurveTo(0, -88 + depth * 2, -half, -88);
+  ctx.closePath();
+  ctx.fillStyle = PURPLE_DARK;
+  ctx.fill();
+  ctx.clip();
+  ctx.fillStyle = PINK;
+  ctx.beginPath();
+  ctx.ellipse(0, -88 + depth * 1.45, half * 0.6, depth * 0.55, 0, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLid(ctx, cx, top, w) {
+  // Lid: wider than the box, shaded underside, ribbon band and a bow.
+  ctx.fillStyle = BOX_SHADE;
+  roundRect(ctx, cx - w / 2, top + 12, w, 8, 3);
+  ctx.fill();
+  ctx.fillStyle = BOX;
+  roundRect(ctx, cx - w / 2, top, w, 18, 5);
+  ctx.fill();
+  ctx.fillStyle = RIBBON;
+  ctx.fillRect(cx - 9, top, 18, 18);
+
+  // Bow: two loops and a knot.
+  for (const s of [-1, 1]) {
+    ctx.save();
+    ctx.translate(cx, top);
+    ctx.scale(s, 1);
+    ctx.fillStyle = RIBBON;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(10, -26, 38, -24, 30, -6);
+    ctx.bezierCurveTo(26, 2, 10, 2, 0, 0);
+    ctx.fill();
+    ctx.fillStyle = RIBBON_DARK;
+    ctx.beginPath();
+    ctx.ellipse(16, -9, 5, 3.5, -0.5, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle = RIBBON_DARK;
+  ctx.beginPath();
+  ctx.ellipse(cx, -1 + top, 7, 6, 0, 0, TAU);
+  ctx.fill();
+}
+
+function draw(ctx, t) {
+  ctx.clearRect(0, 0, SIZE, SIZE);
+
+  // ── Motion values ──
+  const wiggleAmp = 0.075 * smooth(between(t, 0.10, 0.30)) * (1 - between(t, 0.31, 0.34));
+  const wiggle = Math.sin(TAU * 7 * t) * wiggleAmp;
+  const crouch = Math.sin(Math.PI * between(t, 0.29, 0.36)); // 0 → 1 → 0
+  const hopP = between(t, 0.34, 0.56);
+  const hop = 20 * Math.sin(Math.PI * hopP);
+  const sx = 1 + 0.05 * crouch, sy = 1 - 0.07 * crouch;
+
+  // Lid: up with an overshoot, floats, then drops back with a small bump.
+  const up = easeOutBack(between(t, 0.34, 0.46));
+  const down = smooth(between(t, 0.78, 0.90));
+  const bump = Math.sin(Math.PI * between(t, 0.90, 0.95)) * 3;
+  const float = Math.sin(TAU * 2 * between(t, 0.46, 0.78)) * 4;
+  const lidUp = up * (1 - down);
+  const lidY = -lidUp * 62 + lidUp * float - bump;
+  const lidTilt = -0.32 * lidUp + 0.06 * Math.sin(TAU * between(t, 0.46, 0.78)) * lidUp;
+
+  const happy = between(t, 0.35, 0.37) * (1 - between(t, 0.84, 0.86));
+  const blink = Math.max(0, 1 - Math.abs(t - 0.05) / 0.03);
+  const open = 1 - 0.92 * blink;
+
+  // ── Ground shadow ──
+  ctx.fillStyle = 'rgba(79,1,79,0.13)';
+  ctx.beginPath();
+  ctx.ellipse(180, 338, 104 * (1 - hop / 70), 10 * (1 - hop / 80), 0, 0, TAU);
+  ctx.fill();
+
+  // ── Ambient twinkles (seamless sine) ──
+  [[54, 112, 11, GOLD, 0], [312, 132, 9, PINK, 0.5]].forEach(([x, y, r, c, ph]) => {
+    const k = 0.5 + 0.5 * Math.sin(TAU * (t + ph));
+    sparkle(ctx, x, y, r * (0.55 + 0.45 * k), c, 0.3 + 0.5 * k);
+  });
+
+  const rise = hop; // Bagsy and the box hop together
+  const boxCx = 180, boxTop = 270 - rise + 6 * crouch, boxW = 124, boxH = 60;
+
+  // ── Glow from the open box ──
+  const glow = Math.sin(Math.PI * between(t, 0.34, 0.74));
+  // Sized to stay inside the canvas: a gradient cut by the frame edge shows as
+  // a faint straight line at the bottom of the sticker.
+  if (glow > 0) {
+    const gy = boxTop - 8, gr = 82;
+    const g = ctx.createRadialGradient(boxCx, gy, 4, boxCx, gy, gr);
+    g.addColorStop(0, `rgba(255,214,120,${0.6 * glow})`);
+    g.addColorStop(1, 'rgba(255,214,120,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(boxCx, gy, gr, 0, TAU);
+    ctx.fill();
+  }
+
+  // ── Bagsy (behind the box) ──
+  ctx.save();
+  ctx.translate(180, 292 - rise + 4 * crouch);
+  ctx.scale(0.8 * sx, 0.8 * sy);
+
+  ctx.strokeStyle = PURPLE_DARK;
+  ctx.lineWidth = 13;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-42, -140);
+  ctx.bezierCurveTo(-44, -212, 44, -212, 42, -140);
+  ctx.stroke();
+
+  const bg = ctx.createLinearGradient(-88, -148, 88, 0);
+  bg.addColorStop(0, PURPLE);
+  bg.addColorStop(1, PINK_DARK);
+  bagShape(ctx);
+  ctx.fillStyle = bg;
+  ctx.fill();
+
+  ctx.save();
+  bagShape(ctx);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(-100, -150, 200, 22);
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.beginPath();
+  ctx.ellipse(-46, -118, 18, 40, -0.25, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+
+  drawFace(ctx, happy, open);
+  ctx.restore();
+
+  // ── The burst comes out of the box, behind the lid and in front of Bagsy ──
+  drawBurst(ctx, t, boxCx, boxTop);
+
+  // ── Box (wiggles about its base) ──
+  ctx.save();
+  ctx.translate(boxCx, boxTop + boxH);
+  ctx.rotate(wiggle);
+  ctx.translate(-boxCx, -(boxTop + boxH));
+
+  ctx.fillStyle = BOX;
+  roundRect(ctx, boxCx - boxW / 2, boxTop, boxW, boxH, 8);
+  ctx.fill();
+  ctx.fillStyle = BOX_SHADE;
+  roundRect(ctx, boxCx + boxW / 2 - 26, boxTop, 26, boxH, 8);
+  ctx.fill();
+  ctx.fillRect(boxCx + boxW / 2 - 26, boxTop, 10, boxH);
+  ctx.fillStyle = RIBBON;
+  ctx.fillRect(boxCx - 9, boxTop, 18, boxH);
+
+  // Lid, hinged on its centre, lifted and tilted.
+  ctx.save();
+  ctx.translate(boxCx, boxTop - 16 + lidY);
+  ctx.rotate(lidTilt + wiggle * 0.6);
+  drawLid(ctx, 0, 0, boxW + 12);
+  ctx.restore();
+  ctx.restore();
+
+  // ── Arms hugging the box (in front of it) ──
+  for (const s of [-1, 1]) {
+    const shoulderX = 180 + s * 62, shoulderY = 246 - rise + 4 * crouch;
+    const handX = boxCx + s * (boxW / 2 - 6);
+    const handY = boxTop + 30;
+    ctx.strokeStyle = ARM;
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(shoulderX, shoulderY);
+    ctx.quadraticCurveTo(shoulderX + s * 22, (shoulderY + handY) / 2 + 6, handX, handY);
+    ctx.stroke();
+    ctx.fillStyle = PURPLE_DARK;
+    ctx.beginPath();
+    ctx.arc(handX, handY, 8.5, 0, TAU);
+    ctx.fill();
+  }
+}
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+if (new URLSearchParams(location.search).has('export')) {
+  const out = [];
+  for (let i = 0; i < FRAMES; i++) {
+    draw(ctx, i / FRAMES);
+    out.push(canvas.toDataURL('image/webp', QUALITY));
+  }
+  document.getElementById('frames').textContent =
+    JSON.stringify({ size: SIZE, fps: FPS, frames: out });
+} else {
+  let i = 0;
+  setInterval(() => draw(ctx, (i++ % FRAMES) / FRAMES), 1000 / FPS);
+}
+</script>
+</body>
+</html>

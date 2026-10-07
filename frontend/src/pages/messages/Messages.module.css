@@ -919,7 +919,10 @@
 .readReceipt { display: flex; align-items: center; }
 .tickSent      { color: rgba(255,255,255,0.5); }
 .tickDelivered { color: rgba(255,255,255,0.75); }
-.tickRead      { color: #fde68a; filter: drop-shadow(0 0 3px rgba(253,230,138,0.6)); }
+/* WhatsApp's read blue — must match mobile's colors.chatReadTick (see the note
+   there). Replaced the pale amber #fde68a, which read as white beside the
+   delivered ticks. */
+.tickRead      { color: #53bdeb; }
 
 /* ── Chat Input Area ── */
 .chatInputArea {

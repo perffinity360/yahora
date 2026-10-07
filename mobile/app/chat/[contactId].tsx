@@ -15,6 +15,7 @@ import {
   Pressable,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ViewToken,
   ScrollView,
   StyleSheet,
   Text,
@@ -82,6 +83,26 @@ const STICKER_SIZE = 120;
 /** Scrolled up further than this (dp) and the jump-to-latest button shows —
  *  about one message, so it appears as soon as the newest one leaves view. */
 const JUMP_SHOW_AFTER = 80;
+/** Where the unread band lands when the thread is scrolled to it: a third of
+ *  the thread above it, so it reads as a seam between old and new rather than
+ *  the top of the chat — the web's UNREAD_ANCHOR_LEAD_RATIO (0.35). Inverted
+ *  list, so viewPosition 1 is the TOP of the screen. */
+const UNREAD_VIEW_POSITION = 1 - 0.35;
+/** A row has been seen once half of it is on screen. Module-level: FlatList
+ *  throws if its viewability config changes identity. */
+const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 };
+/** Newly seen unread rows are gathered until the list settles this long, then
+ *  marked read in one call. */
+const READ_DEBOUNCE_MS = 300;
+/** After scrolling to the unread line, reading waits this long: past the
+ *  scrollToIndex retries, a glide, and viewability's own 250 ms minimum view
+ *  time, so what counts as "on screen" is where the line put the reader. */
+const ANCHOR_SETTLE_MS = 600;
+/** scrollToIndex retries for a row that has not been measured yet. */
+const SCROLL_RETRY_MAX = 4;
+/** New content at the newest end holds the reader in place, unless they were
+ *  within this of the newest message (the web's BOTTOM_STICK_THRESHOLD). */
+const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: JUMP_SHOW_AFTER };
 /** Thread side padding (mockup `.wall`); the unread band bleeds past it. */
 const THREAD_PAD = 12;
 /** Bubble max width: 78% of the thread, never above 520 (spec §2). */
@@ -272,6 +293,8 @@ export default function ChatScreen() {
     setDraft('');
     setShowEmoji(false);
     clearUnreadLine();
+    // Your own message is always followed, wherever you were (web parity).
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
     sendMessage.mutate({ content, clientTag: newClientTag() });
 
     // Demo campus: the bot is about to reply, so show its typing bubble now.
@@ -300,31 +323,69 @@ export default function ChatScreen() {
 
   /* ── "N unread messages" divider (web parity: Messages.jsx unreadMarker) ──
      Pinned at open time, NOT derived from is_read on every render. Opening the
-     thread fires PUT /messages/read within a second or two, which flips every
-     is_read to true — a derived marker would appear and then vanish while you
+     thread soon leads to PUT /messages/read (READ ON SIGHT), which flips those
+     rows' is_read to true — a derived marker would appear and then vanish while you
      were still looking for where you left off, which is the one moment it is
      for. Pinned, it stays put until you leave the thread or reply.
 
      `undefined` = not pinned yet. Until then it is derived, so the first render
      that has messages already has the line — pinning it in an effect alone
-     would paint the messages one frame without it. */
+     would paint the messages one frame without it.
+
+     Pinned only once the history has SETTLED — no fetch in flight. Every cache
+     is persisted, so the first render can be yesterday's copy of this thread;
+     a line pinned on that would miss whatever arrived since. Nothing is marked
+     read before the pin (see READ ON SIGHT), so the server's is_read flags are
+     still the ones the line is built from.
+
+     More unread than one page: the line goes above the oldest unread message
+     that IS loaded, counting only the loaded ones — exactly the web. No extra
+     page is fetched to find the real first one. */
   type UnreadMarker = { firstId: string; count: number };
   const [unreadMarker, setUnreadMarker] = useState<UnreadMarker | null | undefined>(undefined);
 
-  // A different conversation is a different marker.
-  useEffect(() => {
-    setUnreadMarker(undefined);
-  }, [contactId, productId]);
-
   const openMarker = useMemo(() => {
     if (unreadMarker !== undefined) return unreadMarker;
-    const unread = thread.filter((m) => m.sender_id !== myId && m.is_read === false);
+    const fromContact = thread.filter((m) => m.sender_id !== myId);
+    let unread = fromContact.filter((m) => m.is_read === false);
+    // Web parity (Messages.jsx handleSelectChat): the inbox count is the
+    // server's answer for this thread, and wins when it says there are more —
+    // the rows' is_read can already have been flipped by a receipt in flight.
+    const reported = Number(inboxRow?.unread_count || 0);
+    if (reported > unread.length) unread = fromContact.slice(-reported);
     return unread.length ? { firstId: unread[0].id, count: unread.length } : null;
-  }, [unreadMarker, thread, myId]);
+  }, [unreadMarker, thread, myId, inboxRow?.unread_count]);
+
+  const historySettled = !isFetching && (history !== undefined || isError);
+
+  /** A line to bring into view once it is among the rendered rows: the open
+   *  line instantly, the away line with a glide. State, not a ref: nothing is
+   *  read while one is waiting — see READ ON SIGHT. */
+  const [lineToShow, setLineToShow] = useState<{ firstId: string; animated: boolean } | null>(null);
+
+  /* READ ON SIGHT bookkeeping (used further down): the message rows on screen
+     right now, the ones already sent to the server, and the pending batch. */
+  const visibleIdsRef = useRef<Set<string>>(new Set());
+  const reportedIdsRef = useRef<Set<string>>(new Set());
+  const pendingIdsRef = useRef<Set<string>>(new Set());
+  const readTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A different conversation is a different marker, and starts unread-blind.
+  // Declared before the pin below: on mount both set `lineToShow` in the same
+  // flush, and the pin's, coming second, is the one that stands.
+  useEffect(() => {
+    setUnreadMarker(undefined);
+    setLineToShow(null);
+    visibleIdsRef.current = new Set();
+    reportedIdsRef.current = new Set();
+    pendingIdsRef.current = new Set();
+  }, [contactId, productId]);
 
   useEffect(() => {
-    if (unreadMarker === undefined && thread.length > 0) setUnreadMarker(openMarker);
-  }, [unreadMarker, openMarker, thread.length]);
+    if (unreadMarker !== undefined || !historySettled) return;
+    setUnreadMarker(openMarker);
+    if (openMarker) setLineToShow({ firstId: openMarker.firstId, animated: false });
+  }, [unreadMarker, openMarker, historySettled]);
 
   /* ── AWAY FROM THE CHAT (web parity: Messages.jsx flushAwayUnread) ──────
      "Away" is any stretch where this chat is open but nothing reaches it live:
@@ -347,10 +408,11 @@ export default function ChatScreen() {
      On return, the thread is re-read from the server (the socket misses
      messages while away, so the cache alone is not enough). Once that re-read
      has rendered, the line is pinned — same message, same count, so nothing on
-     screen moves — and only then does PUT /messages/read go out and the
-     sender's ticks turn blue. The inbox badge counts them until then.
+     screen moves — and only then can READ ON SIGHT send PUT /messages/read and
+     turn the sender's ticks blue. The inbox badge counts them until then.
 
-     Registered on focus only: a chat under another screen is not on screen. */
+     A chat under another screen is not on screen: leaving it is not "away",
+     and nothing is read while it is unfocused. */
   const [away, setAway] = useState<{ lastSeenId: string | null } | null>(null);
   const awayRef = useRef(away);
   awayRef.current = away;
@@ -358,9 +420,6 @@ export default function ChatScreen() {
   const [resynced, setResynced] = useState(false);
   /** Bumped by every departure and return, so a stale re-read cannot flush. */
   const returnSeqRef = useRef(0);
-  /** The away line's first message id, until PUT /messages/read has gone out
-   *  for it — which waits for the line to be among the rendered rows. */
-  const readAfterLineRef = useRef<string | null>(null);
 
   // The contact's messages always carry server ids, so this survives a refetch;
   // one of mine could still be an optimistic `local-…` placeholder.
@@ -376,7 +435,8 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!contactId || !productId || isSelfChat) return;
     if (!focused) {
-      // Leaving the chat: coming back in is a fresh open, marked read on focus.
+      // Leaving the chat (e.g. to the product page). What is on screen when it
+      // comes back into focus is read on sight, like anything else.
       returnSeqRef.current += 1;
       setAway(null);
       setResynced(false);
@@ -385,22 +445,18 @@ export default function ChatScreen() {
     if (!reachable) {
       returnSeqRef.current += 1;
       setResynced(false);
-      setActiveChat(null);
       setAway((prev) => prev ?? { lastSeenId: lastContactMessageIdRef.current });
       return;
     }
-    if (!awayRef.current) {
-      // Opened (or refocused) while live: reading it now.
-      setActiveChat({ contactId, productId });
-      markReadRef.current.mutate({ contactId, productId });
-      return;
-    }
+    // Live and not coming back from away: nothing to do here — rows are marked
+    // read as they reach the screen.
+    if (!awayRef.current) return;
     // Back. Joins the resync's refetch if that one started first.
     const seq = ++returnSeqRef.current;
     refetch({ cancelRefetch: false }).then(() => {
       if (returnSeqRef.current === seq) setResynced(true);
     });
-  }, [focused, reachable, contactId, productId, isSelfChat, setActiveChat, refetch]);
+  }, [focused, reachable, contactId, productId, isSelfChat, refetch]);
 
   const awayMarker = useMemo(() => {
     if (!away) return null;
@@ -420,31 +476,150 @@ export default function ChatScreen() {
   useEffect(() => {
     // `isFetching` goes false in the same render that brings the re-read's
     // data, so `awayMarker` here already counts everything it brought.
-    if (!away || !resynced || isFetching || !contactId || !productId) return;
+    if (!away || !resynced || isFetching) return;
     setAway(null);
     setResynced(false);
-    setActiveChat({ contactId, productId });
-    if (!awayMarker) {
-      markReadRef.current.mutate({ contactId, productId });
-      return;
-    }
-    readAfterLineRef.current = awayMarker.firstId;
+    if (!awayMarker) return;
+    setLineToShow({ firstId: awayMarker.firstId, animated: true });
     setUnreadMarker(awayMarker);
-  }, [away, resynced, isFetching, awayMarker, contactId, productId, setActiveChat]);
+  }, [away, resynced, isFetching, awayMarker]);
 
-  /** Replying is reading (WhatsApp): the line goes, and stays gone. */
+  /** Replying is reading (WhatsApp): the line goes, and stays gone. The send
+   *  scrolls to the newest message, which marks it read on sight. */
   const clearUnreadLine = () => {
     setUnreadMarker(null);
+    setLineToShow(null);
     // Still away (a reply typed offline): what is on screen now has been
     // seen, but anything that arrives after it still gets a line.
     if (awayRef.current) setAway({ lastSeenId: lastContactMessageIdRef.current });
-    if (readAfterLineRef.current && contactId && productId) {
-      readAfterLineRef.current = null;
-      markReadRef.current.mutate({ contactId, productId });
-    }
   };
 
+  /* ── READ ON SIGHT (§1.10) ─────────────────────────────────────────────
+     A message is read once at least half of its row has been on screen
+     (onViewableItemsChanged + VIEWABILITY_CONFIG) — not when the chat opens.
+     Newly seen unread ids are gathered and, once the list has been still for
+     READ_DEBOUNCE_MS, sent as ONE PUT /messages/read through useMarkRead.
+
+     The call says "read UP TO the newest of them" (`upToId`, backend/API.md
+     PUT /api/messages/read — Telegram's read position). Everything at or before
+     it turns read on the sender's phone; anything after it stays unread, keeps
+     the inbox badge, and is the line next time. Read the band's first three
+     and leave, and the sender sees three read, not six.
+
+     Nothing is read while:
+       - the chat is under another screen, or the app is backgrounded or
+         offline (AWAY);
+       - the line is not pinned yet — a read sent before the pin would race
+         the history and erase the line;
+       - a line is waiting to be scrolled to, or has just been (ANCHOR_SETTLE_MS).
+         Until then the screen shows wherever the list happened to start — the
+         NEWEST messages — and a read position taken there would mark the whole
+         run read before the reader is ever shown the line. */
+  const [anchorHold, setAnchorHold] = useState(false);
+  const anchorHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (anchorHoldTimerRef.current) clearTimeout(anchorHoldTimerRef.current);
+    },
+    [],
+  );
+
+  const canRead =
+    focused && reachable && !away && unreadMarker !== undefined && !lineToShow && !anchorHold;
+
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
+
+  /** Send the pending batch as one read position: its newest message. */
+  const flushRead = (chatContactId: string, chatProductId: string) => {
+    const batch = pendingIdsRef.current;
+    pendingIdsRef.current = new Set();
+    if (!batch.size) return;
+    const list = threadRef.current;
+    let bound = -1;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (batch.has(list[i].id)) {
+        bound = i;
+        break;
+      }
+    }
+    // Gone from the thread (a different chat's rows by now): drop the batch
+    // rather than send a read position nobody saw.
+    if (bound === -1) {
+      batch.forEach((id) => reportedIdsRef.current.delete(id));
+      return;
+    }
+    let remaining = 0;
+    for (let i = bound + 1; i < list.length; i++) {
+      if (list[i].sender_id !== myId && list[i].is_read === false) remaining++;
+    }
+    markReadRef.current.mutate(
+      { contactId: chatContactId, productId: chatProductId, upToId: list[bound].id, remaining },
+      // Not sent: let these be seen again instead of stranded as "reported".
+      { onError: () => batch.forEach((id) => reportedIdsRef.current.delete(id)) },
+    );
+  };
+  const flushReadRef = useRef(flushRead);
+  flushReadRef.current = flushRead;
+
+  const markSeenRef = useRef<() => void>(() => {});
+  markSeenRef.current = () => {
+    if (!canRead || !contactId || !productId) return;
+    const visible = visibleIdsRef.current;
+    const reported = reportedIdsRef.current;
+    const fresh: string[] = [];
+    for (const m of thread) {
+      if (m.sender_id !== myId && m.is_read === false && visible.has(m.id) && !reported.has(m.id)) {
+        fresh.push(m.id);
+      }
+    }
+    if (!fresh.length) return;
+    fresh.forEach((id) => {
+      reported.add(id);
+      pendingIdsRef.current.add(id);
+    });
+    if (readTimerRef.current) clearTimeout(readTimerRef.current);
+    readTimerRef.current = setTimeout(() => {
+      readTimerRef.current = null;
+      flushReadRef.current(contactId, productId);
+    }, READ_DEBOUNCE_MS);
+  };
+
+  // FlatList throws if this changes identity, so it is created once and reads
+  // everything live through refs.
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken<ChatRow>[] }) => {
+      const ids = new Set<string>();
+      for (const token of viewableItems) {
+        if (token.isViewable && token.item?.kind === 'msg') ids.add(token.item.message.id);
+      }
+      visibleIdsRef.current = ids;
+      markSeenRef.current();
+    },
+  ).current;
+
+  // Rows already on screen when reading becomes allowed (line pinned, back
+  // from away, refocused), or that turn unread under the reader (a new
+  // message at the bottom), report no viewability CHANGE — check them here.
+  useEffect(() => {
+    markSeenRef.current();
+  }, [canRead, thread]);
+
+  // Leaving with a batch still pending sends it: those rows were seen.
+  useEffect(
+    () => () => {
+      if (!readTimerRef.current) return;
+      clearTimeout(readTimerRef.current);
+      readTimerRef.current = null;
+      if (contactId && productId) flushReadRef.current(contactId, productId);
+    },
+    [contactId, productId],
+  );
+
   const listRef = useRef<FlatList<ChatRow>>(null);
+  /** The list has measured itself; scrollToIndex before this lands wrong. */
+  const [listLaidOut, setListLaidOut] = useState(false);
+  const scrollRetryRef = useRef(0);
 
   /* ── JUMP TO LATEST (WhatsApp's ⌄ button) ──────────────────────────────
      Shows once the student has scrolled up past JUMP_SHOW_AFTER. The list is
@@ -514,22 +689,47 @@ export default function ChatScreen() {
     return out.reverse();
   }, [thread, myId, marker]);
 
-  /* The away line is committed: bring it into view — a long run would leave it
-     above the top of the screen — and now it is true that they have read it. */
+  /* A line was pinned — on open, or on return from away: bring it into view,
+     a third of the way down (UNREAD_VIEW_POSITION). A long run would otherwise
+     leave it above the top of the screen. Once, per pin: receipts and older
+     pages never move the viewport after this. Opening with nothing unread
+     asks for nothing, and an inverted list starts at the newest message. */
   useEffect(() => {
-    const firstId = readAfterLineRef.current;
-    if (!firstId || !contactId || !productId) return;
+    // Before the list has measured itself, scrollToIndex computes against a
+    // zero-height viewport.
+    if (!lineToShow || !listLaidOut) return;
     // This effect can run in the same commit that scheduled the line, before
     // the line is in `rows`. Only once it is here has it reached the screen.
-    const index = rows.findIndex((row) => row.kind === 'unread' && row.key === `unread-${firstId}`);
+    const index = rows.findIndex(
+      (row) => row.kind === 'unread' && row.key === `unread-${lineToShow.firstId}`,
+    );
     if (index === -1) return;
-    readAfterLineRef.current = null;
-    // Inverted list: viewPosition 1 is the TOP of the screen. From near the
-    // bottom the offset clamps and nothing moves, which is right — the line is
-    // already in view.
-    listRef.current?.scrollToIndex({ index, viewPosition: 1, animated: true });
-    markReadRef.current.mutate({ contactId, productId });
-  }, [unreadMarker, rows, contactId, productId]);
+    setLineToShow(null);
+    scrollRetryRef.current = 0;
+    // From near the bottom the offset clamps and nothing moves, which is right
+    // — the line is already in view.
+    listRef.current?.scrollToIndex({
+      index,
+      viewPosition: UNREAD_VIEW_POSITION,
+      animated: lineToShow.animated,
+    });
+    // Reading waits until the viewport has settled on the line (READ ON SIGHT).
+    setAnchorHold(true);
+    if (anchorHoldTimerRef.current) clearTimeout(anchorHoldTimerRef.current);
+    anchorHoldTimerRef.current = setTimeout(() => {
+      anchorHoldTimerRef.current = null;
+      setAnchorHold(false);
+    }, ANCHOR_SETTLE_MS);
+  }, [lineToShow, rows, listLaidOut]);
+
+  /* The realtime "active chat" (RealtimeContext) is the one whose arrivals do
+     not raise the inbox badge. Only while it is being read live AND sitting at
+     the newest message — anything arriving while scrolled up has not been
+     seen, so it is counted until READ ON SIGHT reaches it. */
+  useEffect(() => {
+    if (!contactId || !productId || isSelfChat) return;
+    setActiveChat(focused && reachable && !away && !scrolledUp ? { contactId, productId } : null);
+  }, [focused, reachable, away, scrolledUp, contactId, productId, isSelfChat, setActiveChat]);
 
   const canSend = !!draft.trim() && !!contactId && !!productId;
 
@@ -698,17 +898,33 @@ export default function ChatScreen() {
                 ref={listRef}
                 data={rows}
                 inverted
-                // Only the away line scrolls by index. A row not laid out yet is
-                // reached by estimate, then exactly on the next frame.
+                onLayout={() => setListLaidOut(true)}
+                // Only the unread line scrolls by index. Rows differ in height and
+                // a row past the first render is not measured yet: go there by
+                // estimate, which renders it, then exactly on the next frame.
+                // Bounded, so a row that never measures cannot loop forever.
                 onScrollToIndexFailed={(info) => {
+                  if (scrollRetryRef.current >= SCROLL_RETRY_MAX) return;
+                  scrollRetryRef.current += 1;
                   listRef.current?.scrollToOffset({
                     offset: info.averageItemLength * info.index,
                     animated: false,
                   });
                   requestAnimationFrame(() =>
-                    listRef.current?.scrollToIndex({ index: info.index, viewPosition: 1, animated: true }),
+                    listRef.current?.scrollToIndex({
+                      index: info.index,
+                      viewPosition: UNREAD_VIEW_POSITION,
+                      animated: false,
+                    }),
                   );
                 }}
+                // READ ON SIGHT — both must keep their identity for the list's life.
+                viewabilityConfig={VIEWABILITY_CONFIG}
+                onViewableItemsChanged={onViewableItemsChanged}
+                // A message arriving while scrolled up joins index 0 — the newest
+                // end — and would push the reader's rows along by its height.
+                // Hold them still, unless they were at the newest message.
+                maintainVisibleContentPosition={KEEP_POSITION}
                 keyExtractor={(row) => row.key}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"

@@ -1218,7 +1218,7 @@ File with: node scripts/changelog.mjs new vishwajeet "Real seed images + live de
 ```
 Phase 6A, Block V-E. Port the web's unread behaviour to the mobile
 conversation. This is a PORT: the web is the reference and it is
-correct. Do not design a new behaviour.
+correct. Do not design a new behaviour. Some the things may been already fixed, if they are don't re-fix them. First check and then fix the un-fixed things.
 
 STEP 1 — READ THE WEB AND SUMMARISE IT BEFORE WRITING ANYTHING
 frontend/src/pages/messages/Messages.jsx implements a WhatsApp-style
@@ -1240,8 +1240,7 @@ The list is an inverted FlatList: index 0 renders at the BOTTOM.
 
 1. The band's position is decided ONCE, when the chat opens, and does
    not move afterwards — not when receipts arrive, not when pages load.
-2. The chat opens scrolled so the band sits near the top of the screen,
-   with the first unread message just below it. Use scrollToIndex, and
+2. Use scrollToIndex, and
    handle onScrollToIndexFailed (rows have different heights). For the
    "first unread not loaded" case, do exactly what the web does.
 3. Mark messages read only once they are on screen: onViewableItemsChanged
