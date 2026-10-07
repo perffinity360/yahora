@@ -60,7 +60,12 @@ export const colors = {
   // ── MESSAGES_SPEC.md §3 — the redesign's new tokens (Phase 6A V-C) ──
   bubbleMineEnd: '#C02B7F', // sent-bubble gradient end (§2)
   bubbleMineSolid: '#9B1280', // fallback if the gradient fails N-F; see SENT_BUBBLE_STYLE
-  chatReadTick: '#FDE68A', // replaces blueLight for the read state
+  // Read state: WhatsApp's read blue, chosen by the owner after testing on the
+  // phone (replaced the spec's pale amber #FDE68A, which read as white beside
+  // the delivered ticks). 2.53:1 on bubbleMineEnd — under the 3.0 icon minimum,
+  // accepted knowingly; 4.42:1 on purple, 3.53:1 on bubbleMineSolid. Web
+  // `.tickRead` must stay the same value.
+  chatReadTick: '#53BDEB',
   bubbleTheirsBorder: 'rgba(128,0,128,0.08)',
 
   // ── MESSAGES_SPEC.md §1/§2 values that §3 does not name ──

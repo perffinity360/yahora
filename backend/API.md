@@ -1885,8 +1885,9 @@ that reply as a message **from the receiver to the sender**. Consequences worth 
   `upToId` is not a message from `contactId` to the caller on `productId`
 **500:** `{ "error": "Failed to update read status." }`
 **📖 Read up to (Phase 6A V-E).** Telegram's model: the reader's position is a message, and
-everything at or before it is read. Mobile sends the newest message it has shown on screen
-(read-on-sight); the web sends no `upToId` and still marks the whole thread when it opens.
+everything at or before it is read. Both clients send the newest unread message they have shown on
+screen (read-on-sight, Phase 6A V-E); neither sends a whole-thread read any more. The
+no-`upToId` form remains for older clients.
 Older messages above the reader's view are marked too — "up to" is a position, not a list of
 rows seen. Ties on `created_at` are inclusive.
 **🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `userId` is the receiver, and

@@ -39,7 +39,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'reconnecting';
 interface RealtimeValue {
   /** User ids currently present on the `online-users` presence channel. */
   onlineUsers: Set<string>;
-  /** Chat screens register/clear themselves here so unread counts stay right. */
+  /** The chat being read live at its newest message registers here, so its arrivals do not raise the inbox badge. */
   setActiveChat: (chat: ActiveChat) => void;
   connection: ConnectionState;
   /** Device has no network (NetInfo). Drives the "Connecting…" strip. */
@@ -119,9 +119,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       // "Reading it" needs the app in the FOREGROUND as well as the chat open.
       // The chat screen stays mounted (and registered) when the phone goes to
       // the home screen, and the socket can keep delivering for a while after —
-      // without this, a message arriving then was marked read on the spot and
-      // the sender saw blue ticks for a message nobody had looked at. (The chat
-      // screen also stands down as the active chat while the app is away; this
+      // without this, a message arriving then was not counted in the inbox
+      // badge although nobody had looked at it. (The chat screen also stands
+      // down as the active chat while the app is away or scrolled up; this
       // covers the moment before its own AppState listener runs.)
       const isActiveChat =
         !!active &&
@@ -168,20 +168,15 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 3. Reading it right now → tell the server, so the sender sees blue ticks.
-      //    Otherwise it has still reached this phone → delivered (two grey
-      //    ticks), as the web does for every incoming message (navbar.jsx).
-      //    Before this, a message that arrived anywhere but the open chat
-      //    stayed on one tick until the app was next reopened.
-      if (msg.receiver_id === myId && isActiveChat) {
-        api
-          .put('/api/messages/read', {
-            userId: myId,
-            contactId,
-            productId: msg.product_id,
-          })
-          .catch(() => {});
-      } else if (msg.receiver_id === myId && !msg.is_delivered) {
+      // 3. It has reached this phone → delivered (two grey ticks), as the web
+      //    does for every incoming message (navbar.jsx). Before this, a message
+      //    that arrived anywhere but the open chat stayed on one tick until the
+      //    app was next reopened.
+      //
+      //    Never READ from here, even for the active chat (Phase 6A V-E): a
+      //    message is read once its row is on screen, and only the chat screen
+      //    can see that — see "READ ON SIGHT" in app/chat/[contactId].tsx.
+      if (msg.receiver_id === myId && !msg.is_delivered) {
         api.put('/api/messages/deliver', { userId: myId }).catch(() => {});
       }
     },

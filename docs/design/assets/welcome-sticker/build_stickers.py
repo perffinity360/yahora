@@ -35,7 +35,11 @@ CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 OUT = HERE / "out"
 
 # Display names and credits for the preview and the manifest.
-DRAWN_NAMES = {"bagsy": "Bagsy (drawn in-house)", "mishti": "Mishti (drawn in-house)"}
+DRAWN_NAMES = {
+    "bagsy": "Bagsy (drawn in-house)",
+    "gift": "Bagsy's Gift (drawn in-house)",
+    "mishti": "Mishti (drawn in-house)",
+}
 
 
 def chunks(riff: bytes):
