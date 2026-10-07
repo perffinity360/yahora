@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "../dashboard/Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import { API_BASE_URL } from '../../config/urls';
+import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 
 
 function DisplayAvatar({ src, name, size, onClick }) {
@@ -53,7 +54,9 @@ export default function PublicProfile() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isDashboard, setIsDashboard] = useState(false);
+  // Per history entry, so Back from a listing returns to the listings view
+  // rather than the intro (see useHistoryEntryState).
+  const [isDashboard, setIsDashboard] = useHistoryEntryState("isDashboard", false);
 
   // Mobile shows one continuous scrollable page (no UI1↔UI2 animated
   // switch). Desktop behavior is left completely unchanged.

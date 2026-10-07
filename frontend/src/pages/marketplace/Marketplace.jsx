@@ -44,51 +44,26 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
+import { declineScrollRestore } from "../../hooks/useScrollRestoration";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
 
 /* ────────── KEEPING YOUR PLACE IN THE FEED ──────────
  *
- * Opening a product unmounts this page; pressing Back mounts a brand new one
- * that starts at the top, so a student who tapped the twentieth card had to
- * scroll past everything they had already looked at to get back to it.
+ * Leaving this page unmounts it, and pressing Back mounts a brand new one. The
+ * scroll offset itself is saved and restored app-wide by
+ * hooks/useScrollRestoration.js (it holds the page at the top until it is tall
+ * enough, then jumps). This page only adds two things on top of that.
  *
- * The browser's own scroll restoration cannot help here. On a POP it waits for
- * the document to reach its old height before restoring, and this page mounts
- * EMPTY and then fetches — by the time the grid exists the browser has long
- * since given up. (App.jsx already skips its scroll-to-top on POP for the same
- * reason; that is necessary but on its own it is not enough.)
- *
- * So the position is saved by hand, and the rules are deliberately narrow:
- *
- *   WRITTEN  only by `openProduct()`, as a card is opened. Arriving any other
- *            way — the navbar, a fresh load, Back out of /sell — leaves no memo
- *            and lands at the top, which is what those entries should do.
- *   READ     once per mount, and only on a POP (a real Back). Clicking
- *            "Marketplace" in the navbar after viewing a product is a forward
- *            navigation and still means "start at the top".
- *   MATCHED  against the ids the offset was measured on. A scroll offset is
- *            positional, and the filters/search/sort in this page are component
- *            state that resets on the way back, so a student who was browsing a
- *            filtered feed returns to the full one. Restoring into a different
- *            list would drop them somewhere arbitrary, which is worse than the
- *            top — the signature makes that case a no-op instead of a guess.
- *
- * sessionStorage rather than a module variable so it also survives a reload of
- * the product page, and dies with the tab.
+ *   SNAPSHOT  The feed it was showing is kept on the way out (below), so the
+ *             grid is already in the DOM when Back mounts the page and the
+ *             restore lands before the first paint.
+ *   MATCHED   The snapshot carries the ids the offset was measured on. Filters,
+ *             search and sort are component state that resets on the way back,
+ *             so a student who was browsing a filtered feed returns to the
+ *             full one. Restoring into a different list would drop them
+ *             somewhere arbitrary, which is worse than the top, so this page
+ *             declines the restore in that case.
  */
-const FEED_POSITION_KEY = "yahora_marketplace_scroll";
-
-function rememberFeedPosition(signature) {
-  try {
-    sessionStorage.setItem(
-      FEED_POSITION_KEY,
-      JSON.stringify({ signature, y: window.scrollY }),
-    );
-  } catch {
-    // Private mode / storage disabled. Losing the scroll position is not worth
-    // throwing over.
-  }
-}
 
 /* ────────── ...AND COMING BACK WITHOUT A FLASH OF THE TOP ──────────
  *
@@ -97,21 +72,23 @@ function rememberFeedPosition(signature) {
  * the feed, and only THEN could it scroll — so every return trip showed the
  * top of the marketplace for two round trips before jumping.
  *
- * So `openProduct()` also keeps the feed it was looking at — every page loaded
- * so far, plus `nextCursor` / `hasMore` (the feed is cursor-paginated and
- * appended since Phase 5 Block N-B). On a POP the page starts from that
- * snapshot: the grid is in the DOM on the very first render, the
- * useLayoutEffect below scrolls before the browser paints, and the student
- * never sees the top. Infinite scroll carries on from the saved cursor.
+ * So leaving the page keeps the feed it was looking at (every page loaded so
+ * far, plus `nextCursor` / `hasMore`; the feed is cursor-paginated and appended
+ * since Phase 5 Block N-B). That covers opening a product, "List New Item",
+ * the navbar, anything. On a POP the page starts from that snapshot: the grid
+ * is in the DOM on the very first render, the app-wide restore scrolls before
+ * the browser paints, and the student never sees the top. Infinite scroll
+ * carries on from the saved cursor.
  *
  * The campus list is refetched quietly; the FEED IS NOT. A page-one refetch
  * would replace every page below the first and collapse the grid under the
  * restored scroll. The cost: listings are as fresh as when the product was
- * opened — switching campus or reloading fetches anew.
+ * left — switching campus or reloading fetches anew.
  *
  * Module scope, not sessionStorage: it is the whole feed, and it only has to
- * survive an in-app round trip. A full reload of the product page falls back to
- * the old behaviour — fetch, then restore — which is correct, just not instant.
+ * survive an in-app round trip. After a full reload there is no snapshot: the
+ * page fetches, and the app-wide restore waits for the grid. Correct, just not
+ * instant.
  */
 let feedSnapshot = null;
 
@@ -133,17 +110,6 @@ let feedSnapshot = null;
  * stops it from being a queue the student has to wait in. */
 const CARD_STAGGER_STEP_MS = 40;
 const CARD_STAGGER_MAX_STEPS = 8;
-
-/** Reads AND clears — one saved position is good for exactly one return trip. */
-function takeFeedPosition() {
-  try {
-    const raw = sessionStorage.getItem(FEED_POSITION_KEY);
-    sessionStorage.removeItem(FEED_POSITION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 const CATEGORIES = [
   {
@@ -1229,63 +1195,55 @@ export default function Marketplace() {
   );
 
   const openProduct = useCallback(
-    (id) => {
-      rememberFeedPosition(feedSignature);
-      feedSnapshot = {
-        universities,
-        university,
-        homeUniversityId,
-        products,
-        nextCursor,
-        hasMore,
-      };
-      navigate(`/product/${id}`);
-    },
-    [
-      feedSignature,
-      navigate,
-      universities,
-      university,
-      homeUniversityId,
-      products,
-      nextCursor,
-      hasMore,
-    ],
+    (id) => navigate(`/product/${id}`),
+    [navigate],
   );
 
-  /** One attempt per mount, whether or not there was anything to restore. */
-  const feedRestoredRef = useRef(false);
+  // Whatever the page is showing right now, read by the unmount below. A ref
+  // so the cleanup sees the latest feed, not the one from the first render.
+  const latestFeedRef = useRef(null);
+  latestFeedRef.current = {
+    universities,
+    university,
+    homeUniversityId,
+    products,
+    nextCursor,
+    hasMore,
+    signature: feedSignature,
+  };
 
-  // useLayoutEffect, not useEffect: this runs after the grid is in the DOM but
-  // BEFORE the browser paints it, so the student never sees the top of the feed
-  // flash past on the way to where they were.
+  // Keep the feed on the way out, however the student leaves. Only data is
+  // read here, never scrollY: by unmount time the next page may already be in
+  // the DOM. The offset is saved separately, as the student scrolls.
+  useEffect(
+    () => () => {
+      const feed = latestFeedRef.current;
+      if (feed?.university && feed.products.length) feedSnapshot = feed;
+    },
+    [],
+  );
+
+  /** One check per mount, whether or not there was anything to restore. */
+  const feedCheckedRef = useRef(false);
+
+  // useLayoutEffect, not useEffect: on a snapshot start this runs in the same
+  // commit as the first grid render, BEFORE App's layout effect starts the
+  // restore, so declining here means the restore never happens at all.
   useLayoutEffect(() => {
-    if (feedRestoredRef.current) return;
-    // Nothing to scroll within until the grid has actually rendered.
+    if (feedCheckedRef.current) return;
+    // Nothing to compare until the grid has actually rendered.
     if (loading || viewMode !== "grid" || !displayProducts.length) return;
-    feedRestoredRef.current = true;
+    feedCheckedRef.current = true;
 
-    // Consumed even when it is not used, so a stale position can never fire on
-    // some later, unrelated visit.
-    const saved = takeFeedPosition();
-    if (!saved || !saved.y) return;
-    if (navigationType !== "POP") return;
-    if (saved.signature !== feedSignature) return;
-
-    // `behavior: "instant"`, spelled out, and never the `scrollTo(x, y)` form:
-    // the two-argument form means behaviour "auto", which defers to the CSS
-    // `scroll-behavior` — and a third-party stylesheet setting that to `smooth`
-    // turns this line into a visible animated scroll down from the top, which
-    // is exactly what restoring a position is meant to avoid. global.css takes
-    // Bootstrap's rule back out; this is the belt to that braces, so the
-    // landing stays instant whatever any future stylesheet does.
-    window.scrollTo({ top: saved.y, left: 0, behavior: "instant" });
+    if (navigationType !== "POP" || !returnSnapshot) return;
+    if (returnSnapshot.signature !== feedSignature) declineScrollRestore();
   }, [
     loading,
     viewMode,
     displayProducts.length,
     feedSignature,
     navigationType,
+    returnSnapshot,
   ]);
 
   if (!university) {
