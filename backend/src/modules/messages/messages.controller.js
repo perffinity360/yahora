@@ -437,14 +437,48 @@ export const markAsRead = async (req, res) => {
         // they name WHICH thread to mark, not who is marking it, and the update
         // is anchored to `receiver_id = req.user.id` either way.
         const userId = req.user.id;
-        const { contactId, productId } = req.body;
-        const { error } = await supabase
+        const { contactId, productId, upToId } = req.body;
+        let query = supabase
             .from('messages')
             .update({ is_read: true, is_delivered: true }) // <-- added is_delivered: true
             .eq('receiver_id', userId)
             .eq('sender_id', contactId)
             .eq('product_id', productId)
             .eq('is_read', false);
+
+        // 📖 READ UP TO (Phase 6A V-E). Optional. Without it the whole thread is
+        // marked read, which is what the web sends. With it, only messages up to
+        // and including that one are — Telegram's "read inbox max id": the
+        // reader has scrolled to here, so everything before it has passed under
+        // their eyes and everything after it has not. Mobile sends the newest
+        // message it has actually shown on screen.
+        //
+        // The bound is looked up INSIDE this thread and addressed to the caller,
+        // so it can only narrow the update above, never point it elsewhere.
+        if (upToId !== undefined && upToId !== null) {
+            if (!isUuid(upToId)) {
+                return sendError(res, 400, 'INVALID_FORMAT', {
+                    message: 'upToId must be a valid UUID.',
+                });
+            }
+            const { data: bound, error: boundError } = await supabase
+                .from('messages')
+                .select('created_at')
+                .eq('id', upToId)
+                .eq('receiver_id', userId)
+                .eq('sender_id', contactId)
+                .eq('product_id', productId)
+                .maybeSingle();
+            if (boundError) throw boundError;
+            if (!bound) {
+                return sendError(res, 404, 'NOT_FOUND', {
+                    message: 'That message is not in this conversation.',
+                });
+            }
+            query = query.lte('created_at', bound.created_at);
+        }
+
+        const { error } = await query;
 
         if (error) throw error;
         res.status(200).json({ success: true });

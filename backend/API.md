@@ -1874,9 +1874,21 @@ that reply as a message **from the receiver to the sender**. Consequences worth 
   - contactId: uuid, required — the sender whose messages are being marked. **Still a body
     field, correctly:** it names *which thread*, not who is reading
   - productId: uuid, required — the thread
+  - upToId: uuid, **optional** (Phase 6A V-E, 2026-10-07) — "read up to here". When present,
+    only messages with `created_at <=` that message's are marked. It must be a message in this
+    thread, from `contactId` to the caller. Absent or `null` → the whole thread, exactly as before
 **200:** `{ "success": true }`
+**400:** `{ "error": "INVALID_FORMAT", "message": "upToId must be a valid UUID." }` — only when
+  `upToId` is present
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**404:** `{ "error": "NOT_FOUND", "message": "That message is not in this conversation." }` —
+  `upToId` is not a message from `contactId` to the caller on `productId`
 **500:** `{ "error": "Failed to update read status." }`
+**📖 Read up to (Phase 6A V-E).** Telegram's model: the reader's position is a message, and
+everything at or before it is read. Mobile sends the newest message it has shown on screen
+(read-on-sight); the web sends no `upToId` and still marks the whole thread when it opens.
+Older messages above the reader's view are marked too — "up to" is a position, not a list of
+rows seen. Ties on `created_at` are inclusive.
 **🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `userId` is the receiver, and
 it came from the body, so any caller could clear the unread badge on any student's threads —
 making a message that was never seen look read, to both parties.
