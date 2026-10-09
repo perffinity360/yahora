@@ -19,6 +19,7 @@
  * Run: node backend/scripts/seedLocal.js
  */
 
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -175,10 +176,10 @@ const PRODUCTS = [
   },
   {
     sellerIndex: 2,
-    title: 'Engineering Thermodynamics — P.K. Nag, 6th edition',
+    title: 'Desk Globe — 30 cm',
     description:
-      'Standard text for the third-semester course. Highlighting in the first four chapters, the rest is untouched. Spine is intact.',
-    price: 400.0,
+      'Political globe on a stand, spins freely. A few scuffs on the oceans and a scratch on the base, nothing that hides a country.',
+    price: 350.0,
     category: 'Books & Study Materials',
     condition: 'Fair',
     location: 'Central Library, Reading Room 2',
@@ -187,10 +188,10 @@ const PRODUCTS = [
   },
   {
     sellerIndex: 3,
-    title: 'Decathlon rain jacket — navy, size M',
+    title: 'Denim Jacket — size M',
     description:
-      'Bought before monsoon and used maybe four times. Fully waterproof, packs into its own pocket. No tears, zip runs clean.',
-    price: 1100.0,
+      'Classic blue denim jacket, worn maybe four times. No tears, every button is there, washed before listing.',
+    price: 700.0,
     category: 'Clothing & Accessories',
     condition: 'Like New',
     location: 'Girls Hostel, Block D',
@@ -199,10 +200,10 @@ const PRODUCTS = [
   },
   {
     sellerIndex: 4,
-    title: 'Hero Sprint 26T geared cycle with lock',
+    title: 'Kick Scooter — foldable',
     description:
-      'Rode it to the department and back for two years. Gears shift fine, brakes were replaced in March, tyres have plenty left. D-lock and two keys included.',
-    price: 5400.0,
+      'Aluminium kick scooter with big wheels, rode it to the department and back for two years. Folds flat to fit under a hostel bed, kickstand works, wheels have some wear.',
+    price: 1500.0,
     category: 'Vehicles & Bikes',
     condition: 'Good',
     location: 'Cycle Stand, Academic Block',
@@ -247,6 +248,38 @@ const PRODUCTS = [
     hoursAgo: 20,
   },
 ];
+
+// ─── PHOTOS ──────────────────────────────────────────────────────────────────
+//
+// image_urls come from scripts/seed-images/catalogue.json, looked up by EXACT
+// title — the same file seed.sql and seedDemo.js copy their photos from, and
+// the one scripts/seed-images/check.mjs probes for dead links.
+//
+// A title with no catalogue entry is an error, not a placeholder. Every listing
+// used to get the same grey placeholder image, which hid the fact that no photo
+// had ever been chosen for it. Rename a listing here and you must add its photos to
+// the catalogue too; the script refuses to run until you do.
+//
+// Resolved at load time, before the script touches the database, so a missing
+// entry stops the run with nothing half-written.
+const CATALOGUE_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../scripts/seed-images/catalogue.json'
+);
+const CATALOGUE = JSON.parse(readFileSync(CATALOGUE_PATH, 'utf8'));
+
+const PRODUCT_IMAGES = new Map(
+  PRODUCTS.map((p) => {
+    const urls = CATALOGUE[p.title];
+    if (!Array.isArray(urls) || urls.length === 0) {
+      throw new Error(
+        `seedLocal.js: "${p.title}" has no entry in scripts/seed-images/catalogue.json. ` +
+          'Add its photos there; there is no placeholder fallback.'
+      );
+    }
+    return [p.title, urls];
+  })
+);
 
 // ─── LIKES AND SAVES ─────────────────────────────────────────────────────────
 //
@@ -696,7 +729,7 @@ async function seedLocal() {
       description: p.description,
       price: p.price,
       category: p.category,
-      image_urls: ['https://placehold.co/600x400'],
+      image_urls: PRODUCT_IMAGES.get(p.title),
       status: 'available',
       location: p.location,
       condition: p.condition,
