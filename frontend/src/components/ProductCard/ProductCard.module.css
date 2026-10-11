@@ -317,6 +317,17 @@
   transform: scale(1.1);
 }
 
+/* Footer heart — red on hover, back to its normal colour on leave. */
+.statBtnHeart:hover {
+  color: #ef4444;
+}
+
+/* Fill the outline heart on hover. CSS beats the SVG's fill="none" attribute,
+   so it fills while hovered and returns to an outline on leave. */
+.statBtnHeart:hover svg {
+  fill: currentColor;
+}
+
 /* Liked state — footer heart */
 .statBtnLiked {
   color: var(--pink-dark, #eb487f);

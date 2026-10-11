@@ -35,7 +35,9 @@
   min-height: calc(100vh - 4.5rem);
   background: var(--bg);
   padding: 2rem 4vw 5rem;
-  overflow: hidden;
+  /* clip, not hidden: hidden makes .page a scroll container, which stops the
+     sticky live preview from following the window scroll. */
+  overflow: clip;
 }
 
 /* Ambient orbs */
@@ -75,7 +77,11 @@
 /* ══════════════════════════════════════════
    LEFT ASIDE — Branding panel
 ══════════════════════════════════════════ */
+/* Sticky on the aside itself: with align-items: start the aside is only as tall
+   as its content, so a sticky child inside it had nowhere to travel. */
 .aside {
+  position: sticky;
+  top: 6rem;
   animation: asideIn 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -469,9 +475,14 @@
 /* ══════════════════════════════════════════
    SUBMIT BUTTON
 ══════════════════════════════════════════ */
+/* Sized to its text and never wrapped: a fixed 35% was too narrow at some
+   tablet and large-phone widths and broke the label onto two lines. 35% stays
+   as a minimum so the button keeps its size on wide screens. */
 .submitBtn {
-  width: 35%;
-  padding: 0.75rem;
+  width: fit-content;
+  min-width: 35%;
+  white-space: nowrap;
+  padding: 0.75rem 1.75rem;
   border-radius: 14px;
   border: none;
   cursor: pointer;

@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import { resolveMediaUrl } from "../../config/urls";
+
 /**
  * A drop-in <img> replacement that survives the short window right after a
  * fresh upload where a Supabase Storage URL isn't yet servable from the CDN.
@@ -17,7 +19,9 @@ import React, { useEffect, useRef, useState } from "react";
 const MAX_RETRIES = 6;
 const RETRY_BASE_MS = 500;
 
-const SmartImage = ({ src, alt = "", retryOnError = true, onError, ...rest }) => {
+const SmartImage = ({ src: rawSrc, alt = "", retryOnError = true, onError, ...rest }) => {
+  // A loopback storage URL only loads on the dev laptop; route it via the proxy.
+  const src = resolveMediaUrl(rawSrc);
   const [attempt, setAttempt] = useState(0);
   const timerRef = useRef(null);
 

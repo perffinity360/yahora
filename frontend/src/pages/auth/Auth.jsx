@@ -16,6 +16,8 @@ import { Turnstile } from "@marsidev/react-turnstile";
 import { API_BASE_URL, getTurnstileSiteKey } from '../../config/urls';
 import { getDeviceId } from '../../config/deviceId';
 
+const DESKTOP_QUERY = "(min-width: 969px)";
+
 // Persisted across in-tab reloads so that opening the mail app on mobile to
 // fetch the OTP — which can drop the page from memory and reload it on return —
 // doesn't reset the user back to the email screen mid-verification. sessionStorage
@@ -237,6 +239,18 @@ const Auth = () => {
       : 1,
   ); // 1: Email, 2: OTP
   const [otp, setOtp] = useState("");
+
+  // Desktop gets shorter copy on the tabs and placeholders. 968px matches the
+  // layout breakpoint in Auth.module.css, where the page stacks for mobile.
+  const [isDesktop, setIsDesktop] = useState(
+    () => window.matchMedia(DESKTOP_QUERY).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_QUERY);
+    const onChange = (e) => setIsDesktop(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -618,7 +632,7 @@ const Auth = () => {
                   }`}
                   onClick={() => switchTab(TAB_OTP)}
                 >
-                  College Email &amp; OTP
+                  {isDesktop ? "College Email" : "College Email & OTP"}
                 </button>
                 <button
                   type="button"
@@ -629,7 +643,7 @@ const Auth = () => {
                   }`}
                   onClick={() => switchTab(TAB_PASSWORD)}
                 >
-                  Username &amp; Password
+                  {isDesktop ? "Username" : "Username & Password"}
                 </button>
               </div>
 
@@ -650,7 +664,7 @@ const Auth = () => {
                         id="identifier"
                         type="text"
                         name="identifier"
-                        placeholder="rahul.sharma"
+                        placeholder={isDesktop ? "user.name" : "rahul.sharma"}
                         value={identifier}
                         onChange={(e) => {
                           setIdentifier(e.target.value);
@@ -757,7 +771,9 @@ const Auth = () => {
                   <div className={styles.modernInputGroup}>
                     <input
                       type="email"
-                      placeholder="yourUniID@university.domain"
+                      placeholder={
+                        isDesktop ? "you@uni.edu" : "yourUniID@university.domain"
+                      }
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
