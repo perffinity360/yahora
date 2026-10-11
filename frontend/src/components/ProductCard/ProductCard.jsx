@@ -403,7 +403,7 @@ const ProductCard = memo(function ProductCard({
         <div className={styles.footerRow}>
           <div className={styles.stats}>
             <button
-              className={`${styles.statBtn} ${product.is_liked ? styles.statBtnLiked : ""}`}
+              className={`${styles.statBtn} ${styles.statBtnHeart} ${product.is_liked ? styles.statBtnLiked : ""}`}
               onClick={handleLike}
             >
               <HeartIcon filled={product.is_liked} size={16} />

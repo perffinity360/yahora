@@ -74,6 +74,36 @@ export const SUPABASE_URL =
   resolveDevHost(import.meta.env.VITE_SUPABASE_URL) ||
   `${window.location.origin}/supabase`;
 
+/* Local Supabase listens on 54321; the Vite /supabase proxy forwards to it. */
+const LOCAL_SUPABASE_PORT = '54321';
+
+/**
+ * Make a stored Supabase Storage URL loadable from any device on the LAN.
+ *
+ * The backend builds public URLs from its own SUPABASE_URL
+ * (http://127.0.0.1:54321), and that absolute URL is what lands in the
+ * database. On the dev laptop it loads; on a phone, 127.0.0.1 is the phone
+ * itself, so every avatar renders as a broken image. In development, and only
+ * there, such a URL is routed through the /supabase proxy on whatever origin
+ * served this page. Everything else is returned untouched.
+ */
+export function resolveMediaUrl(src) {
+  if (!src || !import.meta.env.DEV || typeof window === 'undefined') return src;
+
+  let url;
+  try {
+    url = new URL(src);
+  } catch {
+    return src; // Relative, blob:, data: or malformed — not ours to rewrite.
+  }
+
+  if (url.port !== LOCAL_SUPABASE_PORT || !isDevMachineHost(url.hostname)) {
+    return src;
+  }
+
+  return `${window.location.origin}/supabase${url.pathname}${url.search}`;
+}
+
 /* ── Cloudflare Turnstile ──────────────────────────────────────────────────
    Not a URL, but it lives here for the reason the URLs do: import.meta.env is
    read in exactly one file, so no component ever touches it directly.
