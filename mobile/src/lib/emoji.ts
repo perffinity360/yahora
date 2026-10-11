@@ -7,8 +7,8 @@
  *   2. A message that is ONLY emoji, one to three of them, is drawn big:
  *      the fewer, the bigger (EMOJI_SIZES.jumbo).
  *
- * The web implements the same two rules with the same numbers; see the 6A
- * changelog entry "Chat: emoji sizing, jump-to-latest, welcome sticker".
+ * The web implements the same two rules with the same numbers
+ * (frontend/src/utils/emoji.js); see MESSAGES_SPEC.md §2 "Emoji in messages".
  */
 
 /**

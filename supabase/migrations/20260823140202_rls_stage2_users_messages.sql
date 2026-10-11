@@ -19,7 +19,7 @@
 --    query fired before it resolves would still go out as `anon` and read
 --    nothing. That race is already closed on every one of them.
 --
--- File number is 004 per docs/PHASE_1_RUNBOOK.md §0.3, even though 005/006/007
+-- File number is 004 per docs/runbooks/PHASE_1_RUNBOOK.md §0.3, even though 005/006/007
 -- carry earlier timestamps. Numbers are labels for conversation; timestamps
 -- decide apply order. Do not rename anything to force a sequence.
 --

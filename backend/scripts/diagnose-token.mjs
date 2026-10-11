@@ -25,8 +25,8 @@
 //   difference between them is a property of our backend, not of the token.
 //
 // Reference reading, in the order it mattered:
-//   docs/PHASE_1_RUNBOOK.md §0.6          the settled auth design
-//   docs/PHASE_1_RUNBOOK.md CC-5          the prompt that built these endpoints
+//   docs/runbooks/PHASE_1_RUNBOOK.md §0.6          the settled auth design
+//   docs/runbooks/PHASE_1_RUNBOOK.md CC-5          the prompt that built these endpoints
 //   docs/CHANGELOG.md 2026-08-12          the shared-client demotion outage
 //   docs/CHANGELOG.md 2026-08-20 (CC-4)   "the token dies when onboarding succeeds"
 //   backend/src/config/supabase.js        createSessionClient() and why it exists

@@ -4,7 +4,7 @@
 **Verified against `main` at commit `538cfea`.**
 **v1.1: the five scope decisions are settled (§0.8); the decision section is gone.**
 
-Save as `docs/PHASE_4_RUNBOOK.md` and commit it.
+Save as `docs/runbooks/PHASE_4_RUNBOOK.md` and commit it.
 
 ---
 
