@@ -1,6 +1,11 @@
 // frontend/src/pages/product/ProductDetail.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import {
+  useParams,
+  useNavigate,
+  useLocation,
+  useNavigationType,
+} from "react-router-dom";
 import styles from "./ProductDetail.module.css";
 import ImageLightbox from "../../components/ImageLightbox/ImageLightbox";
 import ShareSheet from "../../components/ShareSheet/ShareSheet";
@@ -105,6 +110,9 @@ export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { hash } = useLocation();
+  // POP = Back/Forward. App-wide scroll restoration (hooks/useScrollRestoration)
+  // puts the student back where they were, so this page must not scroll on POP.
+  const isPop = useNavigationType() === "POP";
   const { sessionReady } = useAuth();
   const currentUserId = localStorage.getItem("yahora_user_id");
   const [actualHomeUniId, setActualHomeUniId] = useState(
@@ -208,16 +216,17 @@ export default function ProductDetail() {
     fetchData();
   }, [id, currentUserId, sessionReady]);
 
-  /* NEW: Scroll to top on page load, unless navigating directly to comments */
+  /* Scroll to top on page load, unless navigating directly to comments or
+     coming Back (see isPop) */
   useEffect(() => {
-    if (hash !== "#comments") {
+    if (!isPop && hash !== "#comments") {
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
-  }, [hash, id]);
+  }, [hash, id, isPop]);
 
   /* Scroll to comments if the URL has #comments (Your existing code) */
   useEffect(() => {
-    if (!loading && product && hash === "#comments") {
+    if (!isPop && !loading && product && hash === "#comments") {
       setTimeout(() => {
         const element = document.getElementById("comments");
         if (element) {
@@ -225,11 +234,11 @@ export default function ProductDetail() {
         }
       }, 100);
     }
-  }, [loading, product, hash]);
+  }, [loading, product, hash, isPop]);
 
   /* Scroll to comments if the URL has #comments */
   useEffect(() => {
-    if (!loading && product && hash === "#comments") {
+    if (!isPop && !loading && product && hash === "#comments") {
       setTimeout(() => {
         const element = document.getElementById("comments");
         if (element) {
@@ -237,7 +246,7 @@ export default function ProductDetail() {
         }
       }, 100);
     }
-  }, [loading, product, hash]);
+  }, [loading, product, hash, isPop]);
 
   /* Focus inline reply input when replyingTo changes */
   useEffect(() => {

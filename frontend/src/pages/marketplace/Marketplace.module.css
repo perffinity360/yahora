@@ -559,29 +559,41 @@
   }
 }
 
-.backToTop:hover {
+/* Hover only where a real pointer can hover. On touch screens the browser
+   leaves :hover stuck on the last-tapped element, so after one tap the button
+   came back filled purple every time it reappeared. Touch gets the filled
+   look from :active below instead — only while the finger is down. */
+@media (hover: hover) and (pointer: fine) {
+  .backToTop:hover {
+    background:
+      linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #eb487f))
+        padding-box,
+      linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #eb487f))
+        border-box;
+    color: #fff;
+    translate: 0 -3px;
+    box-shadow:
+      0 14px 30px rgba(128, 0, 128, 0.3),
+      0 4px 10px rgba(235, 72, 127, 0.2);
+    /* Hold still under the cursor. A hit target that keeps drifting is a
+       genuinely irritating thing to click. */
+    animation-play-state: paused;
+  }
+  .backToTop:hover svg [data-part="head"] {
+    transform: translateY(-2.5px);
+  }
+  .backToTop:hover svg [data-part="tail"] {
+    transform: translateY(-1px);
+  }
+}
+
+.backToTop:active {
   background:
     linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #eb487f))
       padding-box,
     linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #eb487f))
       border-box;
   color: #fff;
-  translate: 0 -3px;
-  box-shadow:
-    0 14px 30px rgba(128, 0, 128, 0.3),
-    0 4px 10px rgba(235, 72, 127, 0.2);
-  /* Hold still under the cursor. A hit target that keeps drifting is a
-     genuinely irritating thing to click. */
-  animation-play-state: paused;
-}
-.backToTop:hover svg [data-part="head"] {
-  transform: translateY(-2.5px);
-}
-.backToTop:hover svg [data-part="tail"] {
-  transform: translateY(-1px);
-}
-
-.backToTop:active {
   scale: 0.93;
   translate: 0 -1px;
 }

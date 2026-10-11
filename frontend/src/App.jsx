@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigationType } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Navbar from './components/navbar/navbar';
 import Footer from './components/footer/footer';
@@ -13,6 +13,7 @@ import ProductDetail from "./pages/product/ProductDetail";
 import PublicProfile from "./pages/publicProfile/PublicProfile";
 import Messages from "./pages/messages/Messages";
 import OnboardingRequired from "./components/OnboardingRequired/OnboardingRequired";
+import useScrollRestoration from "./hooks/useScrollRestoration";
 
 // Keep logged-in users off the auth page: reaching /auth (via the back button,
 // a stale link, or a typed URL) sends them on instead of showing the login
@@ -125,7 +126,6 @@ function RequireOnboarded({ children, allowGuest = false }) {
 
 function App() {
   const location = useLocation(); // Get current route
-  const navigationType = useNavigationType();
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
   const chromeRef = useRef(null);
 
@@ -150,17 +150,19 @@ function App() {
     return () => ro.disconnect();
   }, [isDemoUser]);
 
-  // Start each forward navigation at the top of the page. Skipping POP (browser
-  // back/forward) leaves the restored scroll position intact, so returning to a
-  // feed keeps your place. Runs before paint to avoid a scroll-position flash.
-  useLayoutEffect(() => {
-    if (navigationType !== "POP")
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [location.pathname, navigationType]);
+  // Forward navigation starts at the top; Back/Forward returns to where the
+  // student was, even on pages that re-fetch first. See the hook for why the
+  // browser's own restoration landed people on the footer.
+  useScrollRestoration();
 
   return (
 
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    // Messages is sized to the visible viewport (100dvh). 100vh on Android
+    // Chrome is the height WITHOUT the URL bar, so it left the page ~56px
+    // taller than the screen: opening the keyboard scrolled into that extra
+    // space and the page stayed there after it closed, leaving a gap under the
+    // composer. dvh there means the page has nothing to scroll.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: location.pathname === '/messages' ? '100dvh' : '100vh' }}>
       
       {/* Demo banner + navbar are measured together as the app chrome */}
       <div ref={chromeRef}>
@@ -220,8 +222,8 @@ function App() {
         </Routes>
       </main>
 
-      {/* Conditionally hide the footer ONLY on the dashboard */}
-      {location.pathname !== '/dashboard' && <Footer />}
+      {/* No footer on the messages page */}
+      {location.pathname !== '/messages' && <Footer />}
     </div>
   );
 }

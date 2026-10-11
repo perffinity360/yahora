@@ -237,6 +237,13 @@ Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in t
 - **Demo users** get a persistent orange banner (`App.jsx`) and are auto-cleaned nightly by the backend cron — don't treat demo data as real.
 - **`/feed` and `/hot` routes are placeholder stubs** (community feed + "Hot at campus" not built yet). The `posts` table exists in the DB but there is no backend `posts` module yet — flag before building against it.
 - **Realtime chat** relies on the Supabase client, not the Express backend — keep both in sync when touching messaging.
+- **Scroll position is restored app-wide by `src/hooks/useScrollRestoration.js`** (called once
+  in `App.jsx`). Forward navigation starts at the top. Back/Forward waits until the page is back
+  to its saved height, then jumps to the saved offset. Browser restoration is off (`manual`)
+  because it clamped to the loading screen and left people on the footer. In pages: **don't
+  `scrollTo(0)` on mount** (App already does it for forward navigation, and doing it on POP breaks
+  Back). Keep any view/tab state that changes what is on screen in **`useHistoryEntryState`**, not
+  `useState`, so Back comes back to the same view (Dashboard and PublicProfile do this).
 - **`login()` and `navigate()` do NOT arrive as one render.** `login()` flips `isAuthenticated`
   with an urgent update; react-router commits `navigate()` inside `React.startTransition`
   (`<BrowserRouter>`, v7). React renders the urgent half first, so there is a real render where

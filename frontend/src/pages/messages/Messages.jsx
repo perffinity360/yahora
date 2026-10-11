@@ -15,7 +15,8 @@ import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/Infi
 import { supabase } from "../../config/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import {
-  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Send,
   MessageSquare,
   Check,
@@ -23,13 +24,18 @@ import {
   Search,
   X,
   Smile,
-  Sparkles,
   Users,
   ChevronsDown,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
 import { welcomeStickerFor } from "../../utils/stickers";
+import {
+  formatClockTime,
+  formatDayLabel,
+  formatInboxTime,
+  isGroupedWith,
+} from "../../utils/messageFormat";
 
 /**
  * 🔒 Every /api/messages/* route went behind `requireAuth` in Phase 4 Block V-A
@@ -267,32 +273,6 @@ function AvatarImg({ src, name, size = 40, className }) {
   );
 }
 
-/* ── Time formatter ── */
-const formatTime = (isoString) => {
-  if (!isoString) return "";
-  return new Date(isoString).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
-const formatDate = (isoString) => {
-  if (!isoString) return "";
-  const d = new Date(isoString);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-
-  return d.toLocaleDateString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-};
-
 export default function Messages() {
   const { sessionReady } = useAuth();
   const currentUserId = localStorage.getItem("yahora_user_id");
@@ -354,6 +334,16 @@ export default function Messages() {
 
   const messagesContainerRef = useRef(null);
   const chatInputRef = useRef(null);
+
+  /* The composer grows with its text up to 5 lines (spec §2), then scrolls.
+     Measured after every change, including the reset to "" on send. */
+  useLayoutEffect(() => {
+    const el = chatInputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    // scrollHeight excludes the border; add it back (border-box sizing).
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [newMessage]);
   const emojiPickerRef = useRef(null);
   const activeChatRef = useRef(activeChat);
   const currentUserIdRef = useRef(currentUserId);
@@ -772,7 +762,11 @@ export default function Messages() {
     // divider needs when they come back. Their own message can't arrive while
     // they are away, so `isMine` needs no such guard.
     const isMine = messages[count - 1]?.sender_id === currentUserId;
-    if (isMine || (isWatchingRef.current && isAtBottomRef.current)) {
+    if (isMine) {
+      // Your own message: land on it instantly, as WhatsApp does. A smooth
+      // scroll here made the whole thread visibly slide down on every send.
+      scrollToBottom("auto");
+    } else if (isWatchingRef.current && isAtBottomRef.current) {
       scrollToBottom();
     }
   }, [messages, currentUserId]);
@@ -1368,7 +1362,11 @@ export default function Messages() {
               let updatedChat = null;
 
               if (chatIndex > -1) {
-                updatedChat = updatedInbox.splice(chatIndex, 1)[0];
+                // A copy, never the row in `prev`. This updater must be pure:
+                // React runs it twice in StrictMode, and editing the shared
+                // row in place added the unread +1 twice — the sidebar badge
+                // counted every incoming message double.
+                updatedChat = { ...updatedInbox.splice(chatIndex, 1)[0] };
                 updatedChat.last_message = newMsg.content;
                 updatedChat.last_message_time = newMsg.created_at;
                 
@@ -1473,20 +1471,52 @@ export default function Messages() {
       chat.last_message?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  /* Inbox subtitle (spec §1 "Header"). Counts the conversations loaded so
+     far, the same as mobile. */
+  const unreadConversations = inbox.filter(
+    (chat) => Number(chat.unread_count || 0) > 0,
+  ).length;
+
   /* ── Group messages by date ── */
   const groupedMessages = messages.reduce((groups, msg) => {
-    const date = formatDate(msg.created_at);
+    const date = formatDayLabel(msg.created_at);
     if (!groups[date]) groups[date] = [];
     groups[date].push(msg);
     return groups;
   }, {});
 
-  /* ── Loading state ── */
+  /* ── Loading state ──
+     Spec §1 "Loading": skeleton rows (avatar circle + two bars), never a
+     spinner. A static copy of the layout with no refs attached, so nothing the
+     live page measures or observes exists until the inbox has arrived. */
   if (loading) {
     return (
-      <div className={styles.loadingScreen}>
-        <div className={styles.loadingSpinner} />
-        <p>Loading your conversations…</p>
+      <div className={styles.root}>
+        <div className={styles.container}>
+          <div className={styles.inboxSidebar} aria-busy="true">
+            <div className={styles.inboxHeader}>
+              <h2 className={styles.inboxTitle}>Messages</h2>
+            </div>
+            <div className={styles.searchBar} aria-hidden="true">
+              <Search size={15} className={styles.searchIcon} />
+              <span className={styles.searchPlaceholder}>
+                Search conversations
+              </span>
+            </div>
+            <div className={styles.inboxList}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className={styles.skeletonRow}>
+                  <span className={styles.skeletonAvatar} />
+                  <span className={styles.skeletonBody}>
+                    <span className={styles.skeletonBarName} />
+                    <span className={styles.skeletonBarPreview} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className={`${styles.chatArea} ${styles.hideOnMobile}`} />
+        </div>
       </div>
     );
   }
@@ -1498,34 +1528,36 @@ export default function Messages() {
         <div
           className={`${styles.inboxSidebar} ${!showInboxOnMobile ? styles.hideOnMobile : ""}`}
         >
-          {/* Sidebar Header */}
+          {/* Sidebar Header — spec §1 "Header" */}
           <div className={styles.inboxHeader}>
-            <div className={styles.inboxHeaderTop}>
-              <div className={styles.inboxTitleRow}>
-                <h2 className={styles.inboxTitle}>Messages</h2>
-              </div>
-              <Sparkles size={16} className={styles.headerSparkle} />
-            </div>
+            <h2 className={styles.inboxTitle}>Messages</h2>
+            {unreadConversations > 0 && (
+              <p className={styles.inboxSubtitle}>
+                {unreadConversations} unread conversation
+                {unreadConversations === 1 ? "" : "s"}
+              </p>
+            )}
+          </div>
 
-            {/* Search Bar */}
-            <div className={styles.searchBar}>
-              <Search size={14} className={styles.searchIcon} />
-              <input
-                type="text"
-                placeholder="Search conversations…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={styles.searchInput}
-              />
-              {searchQuery && (
-                <button
-                  className={styles.clearSearchBtn}
-                  onClick={() => setSearchQuery("")}
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
+          {/* Filter field — a client-side filter over the loaded inbox
+              (filteredInbox), never a server search. */}
+          <div className={styles.searchBar}>
+            <Search size={15} className={styles.searchIcon} />
+            <input
+              type="text"
+              placeholder="Search conversations"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={styles.searchInput}
+            />
+            {searchQuery && (
+              <button
+                className={styles.clearSearchBtn}
+                onClick={() => setSearchQuery("")}
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           {/* Inbox List */}
@@ -1564,10 +1596,14 @@ export default function Messages() {
                   (onlineUsers.has(chat.contact_id) &&
                     chat.contact_id !== currentUserId);
 
+                const unread = Number(chat?.unread_count || 0);
+
                 return (
                   <div
                     key={`${chat.contact_id}-${chat.product_id}`}
-                    className={`${styles.inboxItem} ${isActive ? styles.inboxItemActive : ""}`}
+                    className={`${styles.inboxItem} ${isActive ? styles.inboxItemActive : ""} ${
+                      unread > 0 ? styles.inboxItemUnread : ""
+                    }`}
                     onClick={() => handleSelectChat(chat)}
                     style={{ animationDelay: `${idx * 40}ms` }}
                   >
@@ -1575,7 +1611,7 @@ export default function Messages() {
                       <AvatarImg
                         src={chat?.contact_avatar}
                         name={chat?.contact_name}
-                        size={46}
+                        size={48}
                         className={styles.inboxAvatar}
                       />
                     </div>
@@ -1592,34 +1628,25 @@ export default function Messages() {
                           )}
                         </div>
                         <span className={styles.inboxTime}>
-                          {formatTime(chat?.last_message_time)}
+                          {formatInboxTime(chat?.last_message_time)}
                         </span>
-                      </div>
-
-                      <div className={styles.inboxProductChip}>
-                        <img
-                          src={
-                            chat?.product_image ||
-                            "https://via.placeholder.com/20"
-                          }
-                          alt={chat?.product_title || "Item"}
-                          className={styles.inboxChipImg}
-                        />
-                        <span>{chat?.product_title || "Item"}</span>
                       </div>
 
                       <div className={styles.inboxItemBottom}>
-                        <span
-                          className={`${styles.inboxPreview} ${chat?.unread_count > 0 ? styles.inboxPreviewBold : ""}`}
-                        >
+                        <span className={styles.inboxPreview}>
                           {chat?.last_message || "Start the conversation ✨"}
                         </span>
-                        {chat?.unread_count > 0 && (
+                        {unread > 0 && (
                           <span className={styles.unreadBadge}>
-                            {chat.unread_count}
+                            {unread > 99 ? "99+" : unread}
                           </span>
                         )}
                       </div>
+
+                      {/* The listing this conversation is about. */}
+                      <span className={styles.inboxProductChip}>
+                        {chat?.product_title || "Item"}
+                      </span>
                     </div>
                   </div>
                 );
@@ -1658,14 +1685,14 @@ export default function Messages() {
                     navigate("/messages", { replace: true });
                   }}
                 >
-                  <ArrowLeft size={19} />
+                  <ChevronLeft size={22} />
                 </button>
 
                 <div className={styles.chatHeaderAvatarWrap}>
                   <AvatarImg
                     src={activeChat?.contact_avatar}
                     name={activeChat?.contact_name}
-                    size={42}
+                    size={36}
                     className={styles.chatHeaderAvatar}
                   />
                   {(isDemoUser ||
@@ -1676,39 +1703,42 @@ export default function Messages() {
                 </div>
 
                 <div className={styles.chatHeaderInfo}>
-                  <div className={styles.chatHeaderNameRow}>
-                    <h3 className={styles.chatHeaderName}>
-                      {activeChat?.contact_name || "Unknown"}
-                      {activeChat?.contact_id === currentUserId ? " (You)" : ""}
-                    </h3>
+                  <h3 className={styles.chatHeaderName}>
+                    {activeChat?.contact_name || "Unknown"}
+                    {activeChat?.contact_id === currentUserId ? " (You)" : ""}
+                  </h3>
 
-                    {(isDemoUser ||
-                      (onlineUsers.has(activeChat.contact_id) &&
-                        activeChat.contact_id !== currentUserId)) && (
-                      <span className={styles.onlineLabel}>
-                        <span className={styles.onlineDot} /> Online
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    className={styles.chatProductSnippet}
-                    onClick={() => navigate(`/product/${activeChat.product_id}`)}
-                  >
-                    <img
-                      src={
-                        activeChat?.product_image ||
-                        "https://via.placeholder.com/20"
-                      }
-                      alt="Product"
-                      className={styles.chatProductImg}
-                    />
-                    <span className={styles.chatProductTitle}>
-                      {activeChat?.product_title || "Item"}
-                    </span>
-                    <span className={styles.chatProductArrow}>→</span>
-                  </button>
+                  {/* Spec §2: "<University> · online". The web has no
+                      university name on hand (the inbox RPC doesn't return
+                      one), so only the online half shows. */}
+                  {(isDemoUser ||
+                    (onlineUsers.has(activeChat.contact_id) &&
+                      activeChat.contact_id !== currentUserId)) && (
+                    <p className={styles.chatHeaderStatus}>online</p>
+                  )}
                 </div>
+              </div>
+
+              {/* Product snippet — spec §2: its own row below the header, on
+                  the same white surface. */}
+              <div className={styles.chatSnippetBar}>
+                <button
+                  className={styles.chatProductSnippet}
+                  onClick={() => navigate(`/product/${activeChat.product_id}`)}
+                >
+                  <img
+                    src={
+                      activeChat?.product_image ||
+                      "https://via.placeholder.com/30"
+                    }
+                    alt=""
+                    className={styles.chatProductImg}
+                  />
+                  <span className={styles.chatProductTitle}>
+                    {activeChat?.product_title || "Item"}
+                  </span>
+                  <ChevronRight size={13} className={styles.chatProductArrow} />
+                </button>
               </div>
 
               {/* Messages Container. Wrapped so the jump button can sit over
@@ -1809,34 +1839,42 @@ export default function Messages() {
                 ) : (
                   Object.entries(groupedMessages).map(([date, msgs]) => (
                     <React.Fragment key={date}>
+                      {/* Date chip — spec §2: a centred pill, no lines. */}
                       <div className={styles.dateSeparator}>
-                        <span className={styles.dateSeparatorLine} />
                         <span className={styles.dateSeparatorText}>
                           {date}
                         </span>
-                        <span className={styles.dateSeparatorLine} />
                       </div>
 
                       {msgs.map((msg, index) => {
                         const isMine = msg.sender_id === currentUserId;
 
-                        // Consecutive messages from one person read as a single
-                        // block: only the last bubble in a run keeps the tail
-                        // and the avatar. The unread line also ends a run, so a
-                        // block never appears to straddle the seam.
+                        // A run (spec §2): same sender, same day, each within
+                        // 5 minutes of the previous — isGroupedWith, shared
+                        // with mobile. Only the last bubble in a run keeps the
+                        // tail and the avatar. The unread band also breaks a
+                        // run, so a block never appears to straddle the seam.
+                        const prevMsg = msgs[index - 1];
                         const nextMsg = msgs[index + 1];
+                        const isRunStart =
+                          !prevMsg ||
+                          !isGroupedWith(prevMsg, msg) ||
+                          msg.id === unreadMarker?.id;
                         const isRunEnd =
                           !nextMsg ||
-                          nextMsg.sender_id !== msg.sender_id ||
+                          !isGroupedWith(msg, nextMsg) ||
                           nextMsg.id === unreadMarker?.id;
 
+                        // Spec §2 "Ticks": sent ✓ 14, delivered ✓✓ 15, read
+                        // ✓✓ 15 in --chat-read-tick. The web sends without an
+                        // optimistic copy, so it has no pending or failed state.
                         let tickIcon = (
-                          <Check size={13} className={styles.tickSent} />
+                          <Check size={14} className={styles.tickSent} />
                         );
 
                         if (msg.is_read) {
                           tickIcon = (
-                            <CheckCheck size={13} className={styles.tickRead} />
+                            <CheckCheck size={15} className={styles.tickRead} />
                           );
                         } else if (
                           msg.is_delivered ||
@@ -1844,7 +1882,7 @@ export default function Messages() {
                         ) {
                           tickIcon = (
                             <CheckCheck
-                              size={13}
+                              size={15}
                               className={styles.tickDelivered}
                             />
                           );
@@ -1860,12 +1898,8 @@ export default function Messages() {
                                 className={styles.unreadDivider}
                                 ref={unreadDividerRef}
                               >
-                                <span className={styles.unreadDividerLine} />
-                                <span className={styles.unreadDividerText}>
-                                  {unreadMarker.count} unread message
-                                  {unreadMarker.count > 1 ? "s" : ""}
-                                </span>
-                                <span className={styles.unreadDividerLine} />
+                                {unreadMarker.count} unread message
+                                {unreadMarker.count > 1 ? "s" : ""}
                               </div>
                             )}
                             <div
@@ -1874,8 +1908,8 @@ export default function Messages() {
                                  prepended — see `measureAnchor`. */
                               data-msg-id={msg.id}
                               className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs} ${
-                                isRunEnd ? styles.runEnd : ""
-                              } ${
+                                isRunStart ? styles.runStart : ""
+                              } ${isRunEnd ? styles.runEnd : ""} ${
                                 openingIdsRef.current.has(msg.id)
                                   ? ""
                                   : styles.messageEnter
@@ -1900,7 +1934,7 @@ export default function Messages() {
                                 <MessageText content={msg.content} />
                                 <div className={styles.messageMeta}>
                                   <span className={styles.messageTime}>
-                                    {formatTime(msg.created_at)}
+                                    {formatClockTime(msg.created_at)}
                                   </span>
                                   {isMine && (
                                     <span className={styles.readReceipt}>
@@ -2020,12 +2054,31 @@ export default function Messages() {
                 </div>
 
                 <form className={styles.chatForm} onSubmit={handleSendMessage}>
-                  <input
+                  {/* A textarea, not an <input>: Chrome on Android shows its
+                      autofill bar (passwords, cards, addresses) above the
+                      keyboard for text inputs even with autocomplete off. It
+                      also lets the box grow to 5 lines (spec §2 Composer). */}
+                  <textarea
                     ref={chatInputRef}
-                    type="text"
-                    placeholder="Type a message…"
+                    rows={1}
+                    autoComplete="off"
+                    placeholder="Message"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Desktop: Enter sends, Shift+Enter is a new line. Touch
+                      // keyboards: Enter is a new line and the button sends,
+                      // as in WhatsApp. Never mid-IME composition.
+                      if (
+                        e.key === "Enter" &&
+                        !e.shiftKey &&
+                        !e.nativeEvent.isComposing &&
+                        !window.matchMedia("(pointer: coarse)").matches
+                      ) {
+                        e.preventDefault();
+                        e.currentTarget.form?.requestSubmit();
+                      }
+                    }}
                     className={styles.chatInput}
                     onFocus={() => setShowEmojiPicker(false)}
                   />
@@ -2033,6 +2086,11 @@ export default function Messages() {
                     type="submit"
                     disabled={!newMessage.trim()}
                     className={`${styles.sendBtn} ${newMessage.trim() ? styles.sendBtnActive : ""}`}
+                    // Don't take focus from the message box. On a phone that
+                    // blur closed the keyboard after every send, dropping the
+                    // composer to the bottom of the screen. WhatsApp keeps the
+                    // keyboard up so you can keep typing; so does this.
+                    onMouseDown={(e) => e.preventDefault()}
                   >
                     <Send size={17} />
                   </button>

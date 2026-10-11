@@ -6,6 +6,7 @@ import ProductCard from "../../components/ProductCard/ProductCard";
 import SmartImage from "../../components/SmartImage/SmartImage";
 import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar";
 import { API_BASE_URL } from '../../config/urls';
+import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 
 /* ─────────────────────────────────────────────
  CONSTANTS
@@ -391,7 +392,9 @@ export default function Dashboard() {
  const [data, setData] = useState(null);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState(null);
- const [tab, setTab] = useState("listings");
+ // Per history entry, like isDashboard below: Back from a listing returns to
+ // the same tab and view (see useHistoryEntryState).
+ const [tab, setTab] = useHistoryEntryState("tab", "listings");
 
  const fileInputRef = React.useRef(null);
  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -407,7 +410,7 @@ export default function Dashboard() {
    loading: false,
  });
 
- const [isDashboard, setIsDashboard] = useState(false);
+ const [isDashboard, setIsDashboard] = useHistoryEntryState("isDashboard", false);
 
  // Mobile shows one continuous scrollable page (no UI1↔UI2 animated
  // switch). Desktop behavior is left completely unchanged.
