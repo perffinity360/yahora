@@ -2,7 +2,7 @@
 // backend can apply its "20 codes per machine per day" limit without counting
 // by IP address — campus Wi-Fi NATs a whole college behind one address, so an
 // IP limit would lock out every student after the first twenty each morning.
-// See docs/PHASE_2_RUNBOOK.md §2.2 and N-Block B.
+// See docs/runbooks/PHASE_2_RUNBOOK.md §2.2 and N-Block B.
 //
 // ⚠ Three things about this value:
 //   1. It is NOT a security feature. Anyone can clear localStorage and get a

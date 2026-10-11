@@ -67,7 +67,8 @@ already follows. Every pair is in §7.
 | §2 Composer | Placeholder colour, input padding, send icon and states not given | Placeholder `#BBB6C8`; input padding 10 / 14; send icon 17; disabled 0.4; pressed 0.94; bottom 12 or the home-indicator inset | Kept from mobile |
 | §2 Loading | "4–6 skeleton bubble shapes" | Exactly 5, values given | Mobile's values |
 | §3 Tokens | 6 tokens + switch; `chatReadTick` amber; "remove `inboxTop/Mid/Bottom`" | Every messages token with its value, incl. the 8 that only name rgba values; `CHAT_WALLPAPER_OPACITY`, `EMOJI_SIZES`, `SENT_BUBBLE_STYLE`; remove note dropped | `chatReadTick` is blue; the `inbox*` tokens are already gone |
-| §5 Allowed differences | Four | **Five**: adds the gradient direction | expo-linear-gradient runs corner-to-corner |
+| §5 Allowed differences | Four | Adds **#5**: the gradient direction | expo-linear-gradient runs corner-to-corner |
+| §5 Allowed differences | — | Adds **#6**: the jump-to-latest button's shadow (grey elevation on Android, purple on web). Heading now "these six and no others" | A single floating control, not a list row, so #1's frame-cost reason does not apply |
 | §6 Deliberately unchanged | V-E pending | V-E shipped; points to §2 Unread behaviour | — |
 | §7 Contrast | Amber read tick on `#C02B7F`, 4.33 ✅ | Blue: 2.53 on `#C02B7F` (accepted by the owner, knowingly), 4.42 on `#800080`, 3.53 on `#9B1280` | Follows the tick change |
 | §8 | — | **New**: deferred on both platforms (price, `You: `) | Moved out of §1/§2 as live requirements |
@@ -339,7 +340,7 @@ together.
 | Enters / leaves | scales in over **180 ms**, out over **140 ms** |
 | Button | **38** circle, `#FFFFFF`, border 1px `rgba(128,0,128,0.08)` |
 | Icon | chevrons-down, 20, purple `#800080` |
-| Shadow | `0 2px 6px rgba(128,0,128,0.16)` (on Android: `elevation: 3` — Android cannot colour a shadow) |
+| Shadow | `0 2px 6px rgba(128,0,128,0.16)` (on Android: `elevation: 3` — Android cannot colour a shadow; allowed, §5 #6) |
 | Pressed | scale 0.94, background pinkLight `#FFF4F7`. Hover (web): pinkLight `#FFF4F7` |
 | Position | bottom-right over the thread, 12 from the right, 12 above the bottom of the thread area. It never scrolls with the messages |
 | Badge | counts the contact's messages that arrived after you scrolled up. min 20×20 · radius 10 · padding 6 horizontal · 135° `#800080 → #EB487F` · Inter 700 11 white · `99+` above 99 · top −8, right −4 |
@@ -531,7 +532,7 @@ that one line before running it anywhere else.
 
 ---
 
-## 5. Allowed differences — these five and no others
+## 5. Allowed differences — these six and no others
 
 1. **Bubble shadows are web-only.** Android elevation shadows render grey and cost frames
    inside list rows (`mobile/DESIGN.md` §6).
@@ -545,6 +546,9 @@ that one line before running it anywhere else.
    bubble shape. The end colour lands in the bottom-right corner on both — where the time and
    ticks sit — so the measured contrast (§7) holds. Matching CSS exactly on mobile would mean
    measuring every bubble, which costs frames.
+6. **The jump-to-latest button's shadow.** Android draws its elevation shadow in grey; web
+   draws the purple shadow. Allowed because the button is a single floating control, not a
+   list row, so the frame-cost reason behind #1 does not apply.
 
 Anything else that differs between the two platforms is a bug.
 

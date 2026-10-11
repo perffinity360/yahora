@@ -259,7 +259,7 @@ non-sensitive column projection. `user.routes.js:48-50` says so. Do not "fix" it
 
 ## What Phase 3 shipped (was not in the 25 Aug file at all)
 
-Reconstructed from the repo on 15 Sep; the narrative is in `docs/PHASE_3_RUNBOOK.md` and the
+Reconstructed from the repo on 15 Sep; the narrative is in `docs/runbooks/PHASE_3_RUNBOOK.md` and the
 handoff entry is in `docs/CHANGELOG.md` (15 Sep, reconstructed).
 
 - **Migration 013 `universities_expansion`** — `is_active boolean not null default true`, a

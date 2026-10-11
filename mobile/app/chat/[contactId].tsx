@@ -1271,7 +1271,7 @@ function MessageText({ content, mine }: { content: string; mine: boolean }) {
   );
 }
 
-/** MESSAGES_SPEC.md §2 "Ticks": clock · ✓ · ✓✓ · ✓✓ in amber when read · alert. */
+/** MESSAGES_SPEC.md §2 "Ticks": clock · ✓ · ✓✓ · ✓✓ in blue when read · alert. */
 function Ticks({ message }: { message: PendingMessage }) {
   if (message.failed) {
     return <Feather name="alert-circle" size={12} color={colors.chatFailedTick} />;
