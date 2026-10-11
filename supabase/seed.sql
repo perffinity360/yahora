@@ -197,7 +197,8 @@ values
    'Casio FX-991ES Plus Scientific Calculator',
    'Used it for two semesters of Engineering Maths. Every function works, no scratches on the screen. Slide-on cover included.',
    700.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Casio_fx-991ES_Calculator_New.jpg/960px-Casio_fx-991ES_Calculator_New.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Casio_fx-991ES-0622.jpg/960px-Casio_fx-991ES-0622.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block B, Room 214', 'Like New', 143, now() - interval '3 hours'),
 
   ('e0000000-0000-4000-8000-000000000002',
@@ -205,7 +206,7 @@ values
    'HP Pavilion 15 — i5 11th Gen, 8GB RAM, 512GB SSD',
    'Bought in first year, upgrading to something with a dedicated GPU. Battery still holds about 4.5 hours. Charger and original box included, no dents.',
    28500.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400', 'https://placehold.co/600x400', 'https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/3/34/HP_Pavilion_15_cs3095nr.jpg/960px-HP_Pavilion_15_cs3095nr.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Boys Hostel, Block A', 'Good', 512, now() - interval '2 days'),
 
   ('e0000000-0000-4000-8000-000000000003',
@@ -213,7 +214,7 @@ values
    'SG Cricket Kit — bat, pads and gloves',
    'Full kit from last year inter-branch tournament. Small edge crack on the bat, taped and holding. Everything else is fine. Kit bag included.',
    3200.00, 'Sports & Fitness',
-   array['https://placehold.co/600x400', 'https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/A_modern_Cricket_bat_%28back_view%29.jpg/960px-A_modern_Cricket_bat_%28back_view%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Sports Complex, near Ground 2', 'Fair', 88, now() - interval '12 days'),
 
   -- Priya Nair — IIITDM Kurnool
@@ -222,32 +223,33 @@ values
    'Wacom Intuos S Drawing Tablet',
    'Bought for a design elective and barely touched it after the course ended. Pen, spare nibs and USB cable all included.',
    4200.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400', 'https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/8/81/Wacom_Intuos_S.jpg/960px-Wacom_Intuos_S.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Girls Hostel, Block C', 'Mint', 201, now() - interval '5 days'),
 
   ('e0000000-0000-4000-8000-000000000005',
    'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001',
-   'GATE CSE Made Easy Study Set (2024 edition)',
-   'Ten subject-wise books plus the previous-year papers volume. Pencil notes in the DBMS and OS books, the rest are clean.',
-   950.00, 'Books & Study Materials',
-   array['https://placehold.co/600x400'],
+   'Whiteboard — 2 x 3 ft, with markers',
+   'Wall-mount whiteboard I used for group study in my room. Wipes clean with no ghosting, three markers and an eraser included.',
+   400.00, 'Books & Study Materials',
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Whiteboard_with_markers.jpg/960px-Whiteboard_with_markers.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b0/A_classic_dry_erase_board.png/960px-A_classic_dry_erase_board.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Central Library, Reading Room 1', 'Good', 176, now() - interval '18 days'),
 
   ('e0000000-0000-4000-8000-000000000006',
    'b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001',
-   'Foldable Study Table with Bookshelf',
-   'Fits beside a hostel bed and folds flat when you go home for the break. Two shelves, no wobble. Buyer carries it down from the third floor.',
-   1800.00, 'Furniture & Decor',
-   array['https://placehold.co/600x400'],
+   'Wooden Bookshelf — 4 shelves',
+   'Light wood bookcase with four shelf levels, steady with no wobble even when fully loaded. Buyer carries it down from the third floor.',
+   1500.00, 'Furniture & Decor',
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/IKEA_Billy_bookshelf_%2880x106_cm_birch_veneer%29.jpg/960px-IKEA_Billy_bookshelf_%2880x106_cm_birch_veneer%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Girls Hostel Block C, Room 108', 'Good', 64, now() - interval '41 days'),
 
   -- Rahul Verma — IIITDM Kurnool
   ('e0000000-0000-4000-8000-000000000007',
    'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001',
-   'Hero Sprint 26T Gear Cycle',
-   'Serviced last month — new tyres and brake pads. All 21 gears shift cleanly. Selling because I graduate in May.',
+   '26T Geared Cycle',
+   'White 26T hardtail with disc brakes. Serviced last month — new tyres and brake pads, all gears shift cleanly. Selling because I graduate in May.',
    5500.00, 'Vehicles & Bikes',
-   array['https://placehold.co/600x400', 'https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/9/90/Mountain_Bike_in_Victoria_Park_-_geograph.org.uk_-_7722918.jpg/960px-Mountain_Bike_in_Victoria_Park_-_geograph.org.uk_-_7722918.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Main Gate Cycle Stand', 'Good', 340, now() - interval '6 days'),
 
   ('e0000000-0000-4000-8000-000000000008',
@@ -255,7 +257,8 @@ values
    'Bajaj 1.5L Electric Kettle',
    'Auto cut-off works, no leaks, built for 2am Maggi. Sold to a junior in Block A.',
    600.00, 'Appliances',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/Electric_kettle_-_%D0%AD%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9_%D1%87%D0%B0%D0%B9%D0%BD%D0%B8%D0%BA.JPG/960px-Electric_kettle_-_%D0%AD%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9_%D1%87%D0%B0%D0%B9%D0%BD%D0%B8%D0%BA.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4e/Electric_water_boiler_2014.JPG/960px-Electric_water_boiler_2014.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'sold', 'Hostel Block D, Pantry', 'Like New', 47, now() - interval '55 days'),
 
   -- Sneha Gupta — NIET Greater Noida
@@ -264,7 +267,8 @@ values
    'Canon EOS 1500D DSLR with 18-55mm Lens',
    'Shot two college fests with it, roughly 9000 shutter count. Kit lens, strap, charger and a 32GB card all included.',
    21000.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400', 'https://placehold.co/600x400', 'https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e1/The_Canon_EOS_Rebel_T7_%282000D%29_Rested_in_the_branch_of_a_tree.jpg/960px-The_Canon_EOS_Rebel_T7_%282000D%29_Rested_in_the_branch_of_a_tree.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Canon_EOS_1500D.jpg/960px-Canon_EOS_1500D.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Girls Hostel, NIET Campus', 'Good', 428, now() - interval '9 hours'),
 
   ('e0000000-0000-4000-8000-000000000010',
@@ -272,7 +276,8 @@ values
    'Winter Jacket and Hoodie Bundle (Size M)',
    'One padded jacket and two hoodies, all size M. Survived one Noida winter, no tears or stains. Selling as a set only.',
    1200.00, 'Clothing & Accessories',
-   array['https://placehold.co/600x400', 'https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/OutDoor_2018%2C_Friedrichshafen_%281X7A0285%29.jpg/960px-OutDoor_2018%2C_Friedrichshafen_%281X7A0285%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Hoodie_m7agar.jpg/960px-Hoodie_m7agar.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 2, Common Room', 'Like New', 93, now() - interval '4 days'),
 
   -- Karan Singh — NIET Greater Noida
@@ -281,7 +286,8 @@ values
    'Honda Activa 5G (2019) — single owner',
    'About 24,000 km on the clock, every service done at the Honda centre in Knowledge Park. Insurance valid till March, papers clean. RC transfer on the buyer.',
    48000.00, 'Vehicles & Bikes',
-   array['https://placehold.co/600x400', 'https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/Honda_Activa_Rental-_Goa_3.jpg/960px-Honda_Activa_Rental-_Goa_3.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/2/29/Honda_Activa_Rental-_Goa_1.jpg/960px-Honda_Activa_Rental-_Goa_1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'NIET Parking Lot B', 'Good', 690, now() - interval '21 days'),
 
   ('e0000000-0000-4000-8000-000000000012',
@@ -289,7 +295,8 @@ values
    'Engineering Drawing Kit with Mini Drafter',
    'First-year drawing kit — mini drafter, set squares, compass box and a roll of unused sheets. Drafter clamp is a little stiff but holds fine.',
    550.00, 'Miscellaneous',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/Drafting_machine.jpg/960px-Drafting_machine.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ce/Keuffel_and_Esser_drawing_kit_open.jpg/960px-Keuffel_and_Esser_drawing_kit_open.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Mechanical Department, Block C', 'Fair', 58, now() - interval '63 days')
 on conflict do nothing;
 
@@ -354,7 +361,7 @@ values
   ('f0000000-0000-4000-8000-000000000007',
    'b0000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000003',
    'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000007',
-   'Hey Rahul, saw the Hero Sprint listing. Any trouble with the gears?',
+   'Hey Rahul, saw the geared cycle listing. Any trouble with the gears?',
    true, true, now() - interval '1 day 8 hours'),
   ('f0000000-0000-4000-8000-000000000008',
    'b0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000002',
@@ -369,7 +376,7 @@ values
   ('f0000000-0000-4000-8000-000000000010',
    'b0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000002',
    'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000007',
-   'Sure, I am free after 5. It is the blue one near the main gate.',
+   'Sure, I am free after 5. It is the white one near the main gate.',
    true, true, now() - interval '1 day 5 hours'),
   ('f0000000-0000-4000-8000-000000000011',
    'b0000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000003',
@@ -430,7 +437,7 @@ values
   ('e1000000-0000-4000-8000-000000000003',
    'e0000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000003',
    'a0000000-0000-4000-8000-000000000001',
-   'Are the 2024 papers in the set or does it stop at 2023?',
+   'Does it come with the markers and the eraser, or just the board?',
    null, now() - interval '15 days'),
   ('e1000000-0000-4000-8000-000000000004',
    'e0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002',
@@ -561,7 +568,7 @@ where u.id = v.id;
 -- Two per person. Every row's university_id equals its seller's university — the campus
 -- isolation invariant described in Layer 3 applies here exactly the same way.
 --
--- Images are real Unsplash photos rather than placehold.co, and each title describes
+-- Images are real Unsplash photos rather than placeholders, and each title describes
 -- what is ACTUALLY in the picture — the photo behind "Apple iMac" really is an iMac, and
 -- the barbell listing really is a barbell. If you swap an image, re-check the title with
 -- it or the feed starts lying to you.
@@ -841,10 +848,10 @@ select pg_temp.seed_pending_user('b0000000-0000-4000-8000-000000000017', 'n-test
 --     "Posting date" filter chips all have something behind them.
 --   · All eight MARKETPLACE_CATEGORIES and all five MARKETPLACE_CONDITIONS
 --     appear, including 'Poor', which nothing else in the seed uses.
---   · placehold.co images rather than Unsplash ones. The note above Layer 4
---     warns that a swapped photo makes the feed lie about what is in the
---     picture; a placeholder cannot, and 29 listings is too many to match by
---     hand.
+--   · Images come from scripts/seed-images/catalogue.json, copied in by exact
+--     title. Every photo there was checked against the listing it belongs to,
+--     so the note above Layer 4 still holds: change a title and its catalogue
+--     entry has to change with it, or the feed lies about the picture.
 
 insert into public.products
   (id, seller_id, university_id, title, description, price, category,
@@ -855,15 +862,16 @@ values
    'Logitech MX Master 3 Wireless Mouse',
    'Bought for a design elective, used it for one semester. Scroll wheel and side buttons all work, USB receiver and cable in the box.',
    3200.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Logitech_MX_Master_3S_HS03.jpg/960px-Logitech_MX_Master_3S_HS03.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Logitech_MX_Master_3S_HS10.jpg/960px-Logitech_MX_Master_3S_HS10.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block B, Room 214', 'Like New', 132, now() - interval '2 hours'),
 
   ('e0000000-0000-4000-8000-000000000026',
    'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001',
-   'Cotton Formal Shirts — set of 3, size M',
-   'Wore these for placement season. White, sky blue and light grey, all washed and pressed. No stains or missing buttons.',
-   900.00, 'Clothing & Accessories',
-   array['https://placehold.co/600x400'],
+   'White Formal Shirt — size M',
+   'Off-white formal shirt with French cuffs, worn for placement interviews. Washed and pressed, no stains or missing buttons.',
+   300.00, 'Clothing & Accessories',
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a5/Camisade_pu%C3%B1o_doble.jpg/960px-Camisade_pu%C3%B1o_doble.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block B, Room 214', 'Good', 74, now() - interval '9 days'),
 
   ('e0000000-0000-4000-8000-000000000027',
@@ -871,7 +879,8 @@ values
    'Bajaj 1.5L Electric Kettle',
    'Boils fast and the auto cut-off still works. Used it for tea and instant noodles through third year. Leaving it behind after graduation.',
    650.00, 'Appliances',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/Electric_kettle_-_%D0%AD%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9_%D1%87%D0%B0%D0%B9%D0%BD%D0%B8%D0%BA.JPG/960px-Electric_kettle_-_%D0%AD%D0%BB%D0%B5%D0%BA%D1%82%D1%80%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9_%D1%87%D0%B0%D0%B9%D0%BD%D0%B8%D0%BA.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4e/Electric_water_boiler_2014.JPG/960px-Electric_water_boiler_2014.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Girls Hostel, Block C', 'Good', 96, now() - interval '1 day'),
 
   ('e0000000-0000-4000-8000-000000000028',
@@ -879,15 +888,17 @@ values
    'Anti-slip Yoga Mat with 3 resistance bands',
    'Bought in a fitness phase that lasted about six weeks. Mat has no tears and the bands have never been stretched to their limit.',
    750.00, 'Sports & Fitness',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6d/Yoga_mat.jpg/960px-Yoga_mat.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/50/Yoga_mat_and_water_bottle_in_a_living_room.jpg/960px-Yoga_mat_and_water_bottle_in_a_living_room.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Girls Hostel, Block C', 'Mint', 58, now() - interval '26 days'),
 
   ('e0000000-0000-4000-8000-000000000029',
    'b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000001',
-   'Steel Almirah — 4 shelves, lockable',
-   'Standard hostel almirah. One dent on the side panel, lock and key both work. Buyer arranges to move it, it is heavy.',
-   2400.00, 'Furniture & Decor',
-   array['https://placehold.co/600x400'],
+   'Wooden Stool',
+   'Solid wooden stool, works as a seat or a bedside table in a hostel room. Top has scratches and a few worn patches, but it does not wobble.',
+   350.00, 'Furniture & Decor',
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d5/German_kitchen_stool.jpeg/960px-German_kitchen_stool.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Wooden_stool_made_in_1930_in_France.jpeg/960px-Wooden_stool_made_in_1930_in_France.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block A, Room 106', 'Fair', 121, now() - interval '40 days'),
 
   ('e0000000-0000-4000-8000-000000000030',
@@ -895,7 +906,8 @@ values
    'Engineering Drawing Kit — full set',
    'Drafter, compass box, set squares and the drawing board. Used for one semester of the first-year drawing course. Board has a few pin marks.',
    400.00, 'Books & Study Materials',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1b/Drafting_board_with_T_square_and_drawingtools.jpg/960px-Drafting_board_with_T_square_and_drawingtools.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c1/Anker_compass_set_in_case.jpg/960px-Anker_compass_set_in_case.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block A, Room 106', 'Good', 63, now() - interval '4 days'),
 
   ('e0000000-0000-4000-8000-000000000031',
@@ -903,7 +915,7 @@ values
    'Redmi 20000mAh Power Bank',
    'Charges a phone about four times on a full cycle. Both USB ports work, cable included. No swelling.',
    1150.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/Portable_power_bank.jpg/960px-Portable_power_bank.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block B, Room 118', 'Like New', 187, now() - interval '7 hours'),
 
   ('e0000000-0000-4000-8000-000000000032',
@@ -911,15 +923,17 @@ values
    'Acoustic Guitar with padded bag',
    'Learned three chords and gave up. Strings were changed last month, tuner in the front pocket of the bag.',
    4500.00, 'Miscellaneous',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6a/Acoustic_Guitar_Oval_Peace_Symbol_Logo.jpg/960px-Acoustic_Guitar_Oval_Peace_Symbol_Logo.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e3/00_Walden_Acoustic_Guitar_D310e_body.jpg/960px-00_Walden_Acoustic_Guitar_D310e_body.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block B, Room 118', 'Good', 154, now() - interval '14 days'),
 
   ('e0000000-0000-4000-8000-000000000033',
    'b0000000-0000-4000-8000-000000000008', 'a0000000-0000-4000-8000-000000000001',
-   'Clamp-on LED Study Lamp',
-   'Clamps to a hostel desk or a bed frame. Three brightness levels, gooseneck holds its position. Barely used.',
-   550.00, 'Furniture & Decor',
-   array['https://placehold.co/600x400'],
+   'Bean Bag — XL',
+   'Big pear-shaped XL bean bag, barely sat in since I bought it. Fully filled, cover is clean with no tears.',
+   800.00, 'Furniture & Decor',
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/Zanotta_Sacco_chair_with_houndstooth_upholstery.jpg/960px-Zanotta_Sacco_chair_with_houndstooth_upholstery.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d9/%22_12_-_ITALY_-_Pouf_Tuffet_Sacco_di_Zanotta_red_armchair_Triennale_Design_Museum.jpg/960px-%22_12_-_ITALY_-_Pouf_Tuffet_Sacco_di_Zanotta_red_armchair_Triennale_Design_Museum.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block D, Room 402', 'Mint', 41, now() - interval '3 days'),
 
   ('e0000000-0000-4000-8000-000000000034',
@@ -927,7 +941,9 @@ values
    'Badminton Racket Pair with shuttles',
    'Two rackets, both restrung this semester, plus a tube of six shuttles. Grips are fresh.',
    1400.00, 'Sports & Fitness',
-   array['https://placehold.co/600x400'],
+   array['https://upload.wikimedia.org/wikipedia/commons/0/0c/Heads_of_badminton_raquets.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ad/Rachet%C4%83_de_badminton_%C5%9Fi_flutura%C5%9F.jpg/960px-Rachet%C4%83_de_badminton_%C5%9Fi_flutura%C5%9F.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0f/Badminton_Racket.jpg/960px-Badminton_Racket.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Sports Complex, near Court 3', 'Good', 108, now() - interval '21 days'),
 
   ('e0000000-0000-4000-8000-000000000035',
@@ -935,15 +951,16 @@ values
    'Padded Winter Jacket — size L',
    'Warm enough for a Kurnool December, which is not saying much, but it also survived a trip north. Zip runs smoothly, hood detaches.',
    1200.00, 'Clothing & Accessories',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/4/42/Adidas_Helionic_Down_Jacket.jpg/960px-Adidas_Helionic_Down_Jacket.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block D, Room 219', 'Like New', 67, now() - interval '11 days'),
 
   ('e0000000-0000-4000-8000-000000000036',
    'b0000000-0000-4000-8000-000000000012', 'a0000000-0000-4000-8000-000000000001',
-   'Godrej 45L Mini Fridge',
-   'Hostel-sized fridge, cools well. Door seal is worn at one corner so it needs a firm push to shut. Priced for it.',
-   3900.00, 'Appliances',
-   array['https://placehold.co/600x400'],
+   'Pressure Cooker — 3 L',
+   '3 litre cooker, enough for dal and rice for two. Whistle and gasket both work, the body is scuffed from a year on the hostel stove.',
+   600.00, 'Appliances',
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/Pressure_cooker_-_Hawkins%2C_Contura_Model_-_3_litres_-_1.jpg/960px-Pressure_cooker_-_Hawkins%2C_Contura_Model_-_3_litres_-_1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/37/Pressure_cooker_oval_lid.jpg/960px-Pressure_cooker_oval_lid.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block D, Room 219', 'Fair', 203, now() - interval '63 days'),
 
   ('e0000000-0000-4000-8000-000000000037',
@@ -951,7 +968,7 @@ values
    'DSA textbook set — Cormen, Karumanchi, Sedgewick',
    'Three books that got me through DSA and the placement season. Highlighting in the Karumanchi, the other two are clean.',
    850.00, 'Books & Study Materials',
-   array['https://placehold.co/600x400'],
+   array['https://live.staticflickr.com/3409/3275687122_a106bf5993_b.jpg'],
    'available', 'Central Library, Reading Room 2', 'Good', 145, now() - interval '6 days'),
 
   ('e0000000-0000-4000-8000-000000000038',
@@ -959,7 +976,8 @@ values
    'Dell 24-inch IPS Monitor',
    'Second screen for my laptop through third year. No dead pixels, HDMI and VGA both tested. Stand and power brick included.',
    7200.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400'],
+   array['https://live.staticflickr.com/8115/8661414578_4c2e3edeaa_b.jpg',
+         'https://live.staticflickr.com/220/472793703_6e3483638b_b.jpg'],
    'available', 'Girls Hostel, NIET Campus', 'Good', 264, now() - interval '5 hours'),
 
   ('e0000000-0000-4000-8000-000000000039',
@@ -967,7 +985,8 @@ values
    'Ergonomic Office Chair with lumbar support',
    'Height adjustable, the recline lock works and all five castors roll. Fabric is clean. Too big to take home on the train.',
    3100.00, 'Furniture & Decor',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/Sihoo_M57_mesh_office_chair_03.jpg/960px-Sihoo_M57_mesh_office_chair_03.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://upload.wikimedia.org/wikipedia/commons/9/9c/ErgoFlip_Active_Ergonomic_Chair_eye_view.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled'],
    'available', 'Girls Hostel, NIET Campus', 'Like New', 178, now() - interval '2 days'),
 
   ('e0000000-0000-4000-8000-000000000040',
@@ -975,7 +994,8 @@ values
    'Kurti set — 3 pieces, size M',
    'Worn a handful of times for fest days. All three washed, no fading, no loose stitching.',
    1100.00, 'Clothing & Accessories',
-   array['https://placehold.co/600x400'],
+   array['https://upload.wikimedia.org/wikipedia/commons/a/a4/Pink_women%27s_kurta_%28top%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled',
+         'https://upload.wikimedia.org/wikipedia/commons/e/e4/Black_women%27s_kurta_%28top%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled'],
    'available', 'Girls Hostel, NIET Campus', 'Good', 82, now() - interval '17 days'),
 
   ('e0000000-0000-4000-8000-000000000041',
@@ -983,7 +1003,7 @@ values
    'Studds Full-Face Helmet — ISI marked, size M',
    'Bought it with my scooter and never dropped it. Visor is clear with no scratches. Inner padding is removable and was washed last week.',
    900.00, 'Vehicles & Bikes',
-   array['https://placehold.co/600x400'],
+   array['https://live.staticflickr.com/65535/52528639964_9336a91b05.jpg'],
    'available', 'NIET Parking Lot B', 'Like New', 139, now() - interval '1 day'),
 
   ('e0000000-0000-4000-8000-000000000042',
@@ -991,7 +1011,8 @@ values
    'Skateboard — maple deck',
    'Learned on it in second year. Deck has the usual scuffs, bearings spin fine, grip tape still grips.',
    2200.00, 'Sports & Fitness',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/7/73/Skateboard_upside.jpg/960px-Skateboard_upside.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/1990s_skateboard_in_Tornio_20190608_001.jpg/960px-1990s_skateboard_in_Tornio_20190608_001.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'NIET Parking Lot B', 'Fair', 91, now() - interval '35 days'),
 
   ('e0000000-0000-4000-8000-000000000043',
@@ -999,7 +1020,8 @@ values
    'Casio Digital Watch',
    'Alarm, stopwatch and backlight all work. Battery changed two months ago. Strap has no cracks.',
    1300.00, 'Miscellaneous',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/9/96/Casio_F-91W_5051.jpg/960px-Casio_F-91W_5051.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/9/93/Casio_F-91W_watch_%282023%29_%28front_closeup_-_time%29_%28minor_retouch%29.jpg/960px-Casio_F-91W_watch_%282023%29_%28front_closeup_-_time%29_%28minor_retouch%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 2, Common Room', 'Good', 57, now() - interval '8 days'),
 
   ('e0000000-0000-4000-8000-000000000044',
@@ -1007,7 +1029,7 @@ values
    'Apple iPad 9th Gen — 64GB, Wi-Fi',
    'Used it for lecture notes and PDFs. Screen has a protector on from day one and no dents on the back. Charger included, no pencil.',
    19500.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ed/IPad_9th_Generation_2024.jpg/960px-IPad_9th_Generation_2024.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 1, Room 305', 'Good', 412, now() - interval '3 hours'),
 
   ('e0000000-0000-4000-8000-000000000045',
@@ -1015,7 +1037,8 @@ values
    'Induction Cooktop — 1800W',
    'Hostel cooking, one pan at a time. Touch panel responds properly, no burn marks on the glass top.',
    1600.00, 'Appliances',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a7/Induktionskochplatte.jpg/960px-Induktionskochplatte.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Eupa_TSI-IH1880.jpg/960px-Eupa_TSI-IH1880.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 1, Room 305', 'Good', 118, now() - interval '12 days'),
 
   ('e0000000-0000-4000-8000-000000000046',
@@ -1023,15 +1046,17 @@ values
    'Mechanical Keyboard — blue switches',
    'Loud, which is why my roommate is glad I am selling it. All keys register, keycaps have no shine yet. Detachable cable.',
    2700.00, 'Electronics & Tech',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e4/Cherry_MX_Blue_Switches.jpg/960px-Cherry_MX_Blue_Switches.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/Cherry_MX_blue_closeup.jpg/960px-Cherry_MX_blue_closeup.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 2, Room 118', 'Like New', 231, now() - interval '4 days'),
 
   ('e0000000-0000-4000-8000-000000000047',
    'b0000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-000000000002',
-   'Aptitude and Reasoning prep set',
-   'R.S. Aggarwal plus two company-specific books. Worked through about half of the first one, pencil only.',
-   600.00, 'Books & Study Materials',
-   array['https://placehold.co/600x400'],
+   'Spiral Notebooks — pack of 6',
+   'Six spiral notebooks left over from a bulk buy. Four are untouched, two have a few pages torn out at the front.',
+   150.00, 'Books & Study Materials',
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/7/76/Spiral-bound_notebooks.JPG/960px-Spiral-bound_notebooks.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/05/Caderno_Sem_Linhas.jpg/960px-Caderno_Sem_Linhas.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 2, Room 118', 'Good', 88, now() - interval '23 days'),
 
   ('e0000000-0000-4000-8000-000000000048',
@@ -1039,7 +1064,8 @@ values
    'Trekking Backpack — 50L',
    'Two treks and a lot of weekend trips. One external strap is frayed but everything closes. Rain cover included.',
    1900.00, 'Miscellaneous',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/A_backpack_with_trekking_poles_and_shoes.jpg/960px-A_backpack_with_trekking_poles_and_shoes.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Plecak_Hiker_50_L_HiMountain.jpg/960px-Plecak_Hiker_50_L_HiMountain.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 2, Room 118', 'Good', 166, now() - interval '47 days'),
 
   ('e0000000-0000-4000-8000-000000000049',
@@ -1047,7 +1073,8 @@ values
    'Wooden Study Desk',
    'Solid desk with one drawer that runs smoothly. Surface has some pen marks near the edge. Buyer collects from the ground floor.',
    2600.00, 'Furniture & Decor',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6c/Writing_Desk_%288257336503%29.jpg/960px-Writing_Desk_%288257336503%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ea/Writing_desk%2C_Josiah_Henson_House%2C_Josiah_Henson_Museum_of_African-Canadian_History%2C_Dresden%2C_Ontario%2C_2025-09-13.jpg/960px-Writing_desk%2C_Josiah_Henson_House%2C_Josiah_Henson_Museum_of_African-Canadian_History%2C_Dresden%2C_Ontario%2C_2025-09-13.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 3, Room 007', 'Good', 149, now() - interval '6 days'),
 
   ('e0000000-0000-4000-8000-000000000050',
@@ -1055,7 +1082,8 @@ values
    'Running Shoes — UK size 9',
    'Ran in these for one season, then switched brands. Soles have even wear, no separation. Washed before listing.',
    1450.00, 'Clothing & Accessories',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/8/80/Campus_Men%27s_Radiant_Running_Shoes.jpg/960px-Campus_Men%27s_Radiant_Running_Shoes.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8b/Asics_Gel-Cumulus_22.jpg/960px-Asics_Gel-Cumulus_22.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 3, Room 007', 'Like New', 73, now() - interval '19 days'),
 
   ('e0000000-0000-4000-8000-000000000051',
@@ -1063,7 +1091,7 @@ values
    'Orient Table Fan — 400mm',
    'Three speeds, oscillation works. Grille has a small bend from a fall that does not touch the blades.',
    1200.00, 'Appliances',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Table_fan_FT-1201_II_30_cm_9186.jpg/960px-Table_fan_FT-1201_II_30_cm_9186.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'Hostel Block 3, Room 007', 'Fair', 102, now() - interval '30 days'),
 
   ('e0000000-0000-4000-8000-000000000052',
@@ -1071,7 +1099,8 @@ values
    'Bicycle Repair Toolkit',
    'Puncture kit, tyre levers, allen keys and a mini pump in a pouch. Everything is there, the pump needs a firm push.',
    750.00, 'Vehicles & Bikes',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/HEMA_Bike_tool_kit_10-in-1%2C_Oude_Pekela_%282019%29_10.jpg/960px-HEMA_Bike_tool_kit_10-in-1%2C_Oude_Pekela_%282019%29_10.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/49/BicycleRepairTools.JPG/960px-BicycleRepairTools.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'NIET Cycle Stand', 'Good', 61, now() - interval '9 days'),
 
   ('e0000000-0000-4000-8000-000000000053',
@@ -1079,6 +1108,7 @@ values
    'Cricket Bat — English willow',
    'Knocked in properly but it has seen four seasons. Toe is chipped and the grip needs replacing. Cheap for someone who wants a net bat.',
    3400.00, 'Sports & Fitness',
-   array['https://placehold.co/600x400'],
+   array['https://thumb.wikimedia.org/wikipedia/commons/thumb/3/38/Cricket_bat_at_Fenner%27s_Field_ground%2C_Cambridge_University_Cricket_Club%2C_England_01.jpg/960px-Cricket_bat_at_Fenner%27s_Field_ground%2C_Cambridge_University_Cricket_Club%2C_England_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+         'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/GandM_Flare_DXM_bat-Purist_156g_ball.jpg/960px-GandM_Flare_DXM_bat-Purist_156g_ball.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'NIET Sports Ground', 'Poor', 127, now() - interval '52 days')
 on conflict do nothing;
