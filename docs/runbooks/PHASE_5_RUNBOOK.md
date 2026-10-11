@@ -3,7 +3,7 @@
 **Version 1.0 — 18 September 2026**
 **Verified against `main` at commit `fbe3c04`.**
 
-Save as `docs/PHASE_5_RUNBOOK.md` and commit it.
+Save as `docs/runbooks/PHASE_5_RUNBOOK.md` and commit it.
 
 ---
 

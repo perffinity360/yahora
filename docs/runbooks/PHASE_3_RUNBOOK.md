@@ -758,7 +758,7 @@ Five prompts, one at a time, from the repo root.
 ## ▶ CC-1 — The universities migration
 
 ```
-Read docs/PHASE_3_RUNBOOK.md Part 3 in full before writing anything.
+Read docs/runbooks/PHASE_3_RUNBOOK.md Part 3 in full before writing anything.
 It explains why every new row must land inactive.
 
 Follow the conventions in supabase/migrations/ — lowercase SQL,
@@ -952,7 +952,7 @@ confirm the on-conflict clause is on every insert.
 ## ▶ CC-2 — The domain verification script
 
 ```
-Read docs/PHASE_3_RUNBOOK.md §3.4.
+Read docs/runbooks/PHASE_3_RUNBOOK.md §3.4.
 
 TASK: Create scripts/verify-domains.sh — a bash script that checks
 every university domain in the LOCAL database and reports which ones
@@ -1006,7 +1006,7 @@ HARD CONSTRAINTS:
 ## ▶ CC-3 — is_active enforcement and OTP length
 
 ```
-Read docs/PHASE_3_RUNBOOK.md §3.3 and Block C.
+Read docs/runbooks/PHASE_3_RUNBOOK.md §3.3 and Block C.
 
 TASK, two unrelated small changes in the auth area.
 
@@ -1070,7 +1070,7 @@ HARD CONSTRAINTS:
 ## ▶ CC-4 — Mobile Turnstile via WebView
 
 ```
-Read docs/PHASE_3_RUNBOOK.md Block D in full. It explains the approach
+Read docs/runbooks/PHASE_3_RUNBOOK.md Block D in full. It explains the approach
 and the four things that break it.
 
 CONTEXT: Turnstile is enabled on our production Supabase project. The
@@ -1181,7 +1181,7 @@ javaScriptEnabled is set.
 ## ▶ CC-5 — Pin the home campus (mobile)
 
 ```
-Read docs/PHASE_3_RUNBOOK.md Block E.
+Read docs/runbooks/PHASE_3_RUNBOOK.md Block E.
 
 TASK: In the campus switcher in mobile/app/(tabs)/index.tsx (and any
 component it uses), pin the student's own university at the top. This need to be done 
@@ -1502,7 +1502,7 @@ git push origin neeraj
 ## ▶ N-CC-1 — 🚨 Close the unauthenticated write holes
 
 ```
-Read docs/PHASE_3_RUNBOOK.md N-Block A, and docs/CURRENT_STATE.md
+Read docs/runbooks/PHASE_3_RUNBOOK.md N-Block A, and docs/CURRENT_STATE.md
 §2.2. This is a live security hole in production.
 
 TASK: Add authentication and field allowlisting across the backend.
@@ -1607,7 +1607,7 @@ HARD CONSTRAINTS:
 ## ▶ N-CC-2 — The CORS allowlist
 
 ```
-Read docs/PHASE_3_RUNBOOK.md N-Block B.
+Read docs/runbooks/PHASE_3_RUNBOOK.md N-Block B.
 
 CONTEXT: backend/src/app.js line 69 returns
 Access-Control-Allow-Origin: '*' in production. That tells every
@@ -1663,7 +1663,7 @@ HARD CONSTRAINTS:
 ## ▶ N-CC-3 — Pin the home campus (web)
 
 ```
-Read docs/PHASE_3_RUNBOOK.md Block E and N-Block C.
+Read docs/runbooks/PHASE_3_RUNBOOK.md Block E and N-Block C.
 
 TASK: In frontend/src/components/UniversityModal.jsx, pin the
 student's own university at the top of the campus switcher.

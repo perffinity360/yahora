@@ -4,7 +4,7 @@
 // OWNER: VISHWAJEET   —   Block F verification harness
 // ══════════════════════════════════════════════
 //
-// Re-runnable verification of docs/PHASE_1_RUNBOOK.md BLOCK F — the five
+// Re-runnable verification of docs/runbooks/PHASE_1_RUNBOOK.md BLOCK F — the five
 // security checks for CC-6, plus the two messages checks Block F's table
 // omits (CC-6 closes four holes, the checklist only covers three).
 //
@@ -817,7 +817,7 @@ function report(fx) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
-    log(bold('\nBLOCK F VERIFICATION') + dim('  —  docs/PHASE_1_RUNBOOK.md Block F / CC-6'));
+    log(bold('\nBLOCK F VERIFICATION') + dim('  —  docs/runbooks/PHASE_1_RUNBOOK.md Block F / CC-6'));
 
     assertLocalDatabase();
 

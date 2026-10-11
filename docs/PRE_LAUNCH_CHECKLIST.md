@@ -95,6 +95,15 @@ ceilings do not model each other. Supabase can happily accept sends that Brevo t
 
 ---
 
+## Seed photos
+
+**Phase 9:** mirror all seed photos into the Supabase products bucket and point the seeds at them.
+
+Why: seed images are hotlinked from Unsplash, Wikimedia and Flickr, and four Unsplash links
+already died in Phase 6A.
+
+---
+
 ## Do this NOW — do not defer (5 minutes)
 
 **Lower `OTP_HOURLY_CEILING` from 2000 to ~25**, below Supabase's current 30/hour.

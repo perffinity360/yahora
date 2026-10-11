@@ -858,7 +858,7 @@ hole in the plan.
 
 # APPENDIX A — The runbook format
 
-Every phase gets a runbook at `docs/PHASE_N_RUNBOOK.md` with this shape:
+Every phase gets a runbook at `docs/runbooks/PHASE_N_RUNBOOK.md` with this shape:
 
 ```
 PART 0    What I found in the repo — current state, verified

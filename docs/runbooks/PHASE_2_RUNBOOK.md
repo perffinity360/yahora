@@ -1146,7 +1146,7 @@ Six prompts. Run them **one at a time, in order**, from the repo root. Do not pa
 ## ▶ CC-1 — Migration: OTP tracking and cleanup
 
 ```
-Read docs/PHASE_2_RUNBOOK.md Part 2.2, 2.3 and 2.4 first. They explain
+Read docs/runbooks/PHASE_2_RUNBOOK.md Part 2.2, 2.3 and 2.4 first. They explain
 why this is designed the way it is, and you will write better SQL
 having read them.
 
@@ -1253,7 +1253,7 @@ every database object it creates.
 ## ▶ CC-2 — Migration: ban consecutive separators in usernames
 
 ```
-Read docs/PHASE_2_RUNBOOK.md Block C for the reasoning.
+Read docs/runbooks/PHASE_2_RUNBOOK.md Block C for the reasoning.
 
 CONTEXT: The username rule currently allows two separators in a row, so
 "rahul..sharma" is accepted. We are banning that. "rah.ul.sharma" must
@@ -1339,7 +1339,7 @@ format conditions side by side.
 ## ▶ CC-3 — Rate limits and the circuit breaker
 
 ```
-Read docs/PHASE_2_RUNBOOK.md Part 2.2 for the design and the numbers,
+Read docs/runbooks/PHASE_2_RUNBOOK.md Part 2.2 for the design and the numbers,
 Part 2.3 for the cleanup jobs, and Part 2.4 for the circuit breaker.
 
 TASK: Add rate limiting to requestOtp in
@@ -1453,7 +1453,7 @@ is checked.
 ## ▶ CC-4 — Pass the CAPTCHA token to Supabase
 
 ```
-Read docs/PHASE_2_RUNBOOK.md Part 2.4 and Block E.
+Read docs/runbooks/PHASE_2_RUNBOOK.md Part 2.4 and Block E.
 
 CONTEXT: We are adding Cloudflare Turnstile to the OTP request, so a
 script cannot flood us with signups for invented email addresses. The
@@ -1520,7 +1520,7 @@ HARD CONSTRAINTS:
 ## ▶ CC-5 — A local-only seed script
 
 ```
-Read docs/PHASE_2_RUNBOOK.md Block F.
+Read docs/runbooks/PHASE_2_RUNBOOK.md Block F.
 
 CONTEXT: backend/scripts/seedDemo.js fills the DEMO university, and it
 is allowed to run against production with an explicit opt-in. That is
@@ -1609,7 +1609,7 @@ HARD CONSTRAINTS:
 ## ▶ CC-6 — Make seedDemo safe for production
 
 ```
-Read docs/PHASE_2_RUNBOOK.md Block G in full before changing anything.
+Read docs/runbooks/PHASE_2_RUNBOOK.md Block G in full before changing anything.
 This script is going to be run against the PRODUCTION database, so read
 it twice.
 
@@ -2069,7 +2069,7 @@ Three prompts. Run them one at a time, from the repo root.
 ## ▶ N-CC-1 — Fix the username help text
 
 ```
-Read docs/PHASE_2_RUNBOOK.md N-Block A.
+Read docs/runbooks/PHASE_2_RUNBOOK.md N-Block A.
 
 CONTEXT: After the migration in Block C, the database enforces this
 username format:
@@ -2137,7 +2137,7 @@ wording you found.
 ## ▶ N-CC-2 — Device ID and the OTP cooldown
 
 ```
-Read docs/PHASE_2_RUNBOOK.md N-Block B and Part 2.2, then read
+Read docs/runbooks/PHASE_2_RUNBOOK.md N-Block B and Part 2.2, then read
 backend/API.md for POST /api/auth/request-otp.
 
 TASK, four parts.
@@ -2228,7 +2228,7 @@ countdown useEffect pattern in Auth.jsx.
 ## ▶ N-CC-3 — The Turnstile widget
 
 ```
-Read docs/PHASE_2_RUNBOOK.md N-Block C and Part 2.4.
+Read docs/runbooks/PHASE_2_RUNBOOK.md N-Block C and Part 2.4.
 
 CONTEXT: We are adding Cloudflare Turnstile to the OTP request so a
 script cannot flood us with signups for invented email addresses. The

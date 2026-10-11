@@ -457,7 +457,7 @@ Then send Neeraj the Handoff 0 message from plan §0.F, plus:
 > production. Run `supabase start` then `supabase db reset` to get a
 > local copy of the schema — never with `--linked`.
 >
-> Your Phase 0 job is in `docs/PHASE_0_RUNBOOK.md` Track 3. Do that,
+> Your Phase 0 job is in `docs/runbooks/PHASE_0_RUNBOOK.md` Track 3. Do that,
 > then let's do the contract review together.
 
 ---

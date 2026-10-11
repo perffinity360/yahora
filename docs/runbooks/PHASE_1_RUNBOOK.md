@@ -1117,7 +1117,7 @@ Seven prompts, in order, from the **repo root**. Don't combine them — if somet
 ```
 Read first:
 - docs/YAHORA_BUILD_PLAN.md §1.1 and §1.2
-- docs/PHASE_1_RUNBOOK.md Part 0.5 (the trigger decision) and Part 1
+- docs/runbooks/PHASE_1_RUNBOOK.md Part 0.5 (the trigger decision) and Part 1
   (the new-table RLS rule)
 - supabase/migrations/20260812121140_rls_stage1_backend_only_tables.sql
   — follow its conventions: lowercase SQL, section comments explaining
@@ -1276,7 +1276,7 @@ object it creates.
 ## ▶ CC-2 — Migration 006 (backfill)
 
 ```
-Read docs/YAHORA_BUILD_PLAN.md §1.3 and docs/PHASE_1_RUNBOOK.md Block B2.
+Read docs/YAHORA_BUILD_PLAN.md §1.3 and docs/runbooks/PHASE_1_RUNBOOK.md Block B2.
 
 TASK: Write the backfill into the newest file in supabase/migrations/
 ending in _username_backfill.sql.
@@ -1343,7 +1343,7 @@ HARD CONSTRAINTS:
 ## ▶ CC-4 — 🚨 Onboarding: security fix + username + password
 
 ```
-Read docs/PHASE_1_RUNBOOK.md §0.2 and Block D in full. §0.2 describes
+Read docs/runbooks/PHASE_1_RUNBOOK.md §0.2 and Block D in full. §0.2 describes
 a live security hole in the file you are about to edit.
 
 TASK: Rewrite completeOnboarding in
@@ -1436,7 +1436,7 @@ Part A audit list.
 ## ▶ CC-5 — Password endpoints
 
 ```
-Read docs/PHASE_1_RUNBOOK.md Block E, especially E1 (the six design
+Read docs/runbooks/PHASE_1_RUNBOOK.md Block E, especially E1 (the six design
 decisions). backend/API.md has the contracts.
 
 TASK: Add three endpoints to
@@ -1459,7 +1459,7 @@ Body: { identifier, password }
      onboarding after OTP verification), log the real reason to the
      SERVER CONSOLE and return the SAME generic 400 INVALID_CREDENTIALS
      as every other failure. Do NOT return a distinct code or message —
-     see docs/PHASE_1_RUNBOOK.md §0.6.
+     see docs/runbooks/PHASE_1_RUNBOOK.md §0.6.
   5. createSessionClient().auth.signInWithPassword({ email, password }).
      Use createSessionClient(), NOT the shared `supabase` client — the
      shared one is service-role and signing in on it demotes it
@@ -1557,7 +1557,7 @@ If it prints nothing, STOP and tell me — these policies would silently
 break the live site.
 
 Read docs/RLS_SURFACE.md §0.1, §1, §2 and §5, and
-docs/PHASE_1_RUNBOOK.md Block G. Follow the conventions in
+docs/runbooks/PHASE_1_RUNBOOK.md Block G. Follow the conventions in
 supabase/migrations/20260812121140_rls_stage1_backend_only_tables.sql.
 
 TASK: Create a new migration named rls_stage2_users_messages.
@@ -1932,7 +1932,7 @@ Backend PRs need Vishwajeet's review before merge.
 ## ▶ N-CC-1 — The setSession fix
 
 ```
-Read docs/PHASE_1_RUNBOOK.md §0.3 and N-Block A, and
+Read docs/runbooks/PHASE_1_RUNBOOK.md §0.3 and N-Block A, and
 docs/RLS_SURFACE.md §0.1.
 
 CONTEXT: frontend/src/contexts/AuthContext.jsx stores a session in
@@ -1987,7 +1987,7 @@ HARD CONSTRAINTS:
 ## ▶ N-CC-2 — Onboarding: token, username, password
 
 ```
-Read docs/PHASE_1_RUNBOOK.md N-Block B, and backend/API.md for
+Read docs/runbooks/PHASE_1_RUNBOOK.md N-Block B, and backend/API.md for
 POST /api/auth/onboarding and the two username endpoints.
 
 ⚠️ BREAKING: the backend now requires authentication on
@@ -2135,7 +2135,7 @@ codes it can return.
 ## ▶ N-CC-4 — Auth page tab switcher
 
 ```
-Read docs/PHASE_1_RUNBOOK.md §0.6 (the settled auth design, including
+Read docs/runbooks/PHASE_1_RUNBOOK.md §0.6 (the settled auth design, including
 the layout sketch and exact copy) and N-Block D, plus backend/API.md
 for POST /api/auth/login-password.
 
