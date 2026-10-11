@@ -1362,7 +1362,11 @@ export default function Messages() {
               let updatedChat = null;
 
               if (chatIndex > -1) {
-                updatedChat = updatedInbox.splice(chatIndex, 1)[0];
+                // A copy, never the row in `prev`. This updater must be pure:
+                // React runs it twice in StrictMode, and editing the shared
+                // row in place added the unread +1 twice — the sidebar badge
+                // counted every incoming message double.
+                updatedChat = { ...updatedInbox.splice(chatIndex, 1)[0] };
                 updatedChat.last_message = newMsg.content;
                 updatedChat.last_message_time = newMsg.created_at;
                 
