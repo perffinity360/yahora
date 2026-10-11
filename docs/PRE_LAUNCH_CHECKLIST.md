@@ -92,6 +92,7 @@ ceilings do not model each other. Supabase can happily accept sends that Brevo t
 4. **Update `backend/API.md`** §request-otp — the measured-values table there carries today's
    numbers and will be stale.
 5. **Re-run Block D** steps 4–6 after the change.
+6. **Phase 9:** mirror all seed photos into the Supabase products bucket and point the seeds at them.
 
 ---
 
