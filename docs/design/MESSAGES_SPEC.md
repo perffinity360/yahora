@@ -112,7 +112,7 @@ tokens above.
 | | Value |
 |---|---|
 | Ground | `#EDE6F5` — mobile `colors.chatCanvas`; web `.messagesContainer { background-color }` |
-| Wallpaper | the committed tile, **420 × 420 units, repeating, unscaled** |
+| Wallpaper | the committed tile, **420 × 420 units, repeating, unscaled**, drawn at **opacity 0.5** (mobile `CHAT_WALLPAPER_OPACITY`; web overlays the ground at 50%, which is the same result) |
 | Mobile file | `mobile/assets/chat-pattern.png` (+ `@2x`, `@3x`) |
 | Web file | `frontend/public/patterns/chat-pattern.svg` |
 | Behaviour | **fixed** — the messages scroll over it; it never moves |
@@ -122,6 +122,13 @@ Why `#EDE6F5` and not the wallpaper document's `#FDF8FF`: on a near-white ground
 received bubbles, the date chips and the unread band dissolve into the background. See
 `wallpaper_ground_options.png`. The deeper ground is what lets them lift off — which the
 web CSS already notes as deliberate.
+
+### Text on the wallpaper
+
+Anything that is not a bubble, a date chip or the unread band sits on a backing of
+`rgba(255,255,255,0.9)` (mobile `chatNoteSurface`), because the doodles run through bare
+text: the "beginning of your conversation" line, and the empty-chat welcome card
+(radius 20). Added after the first device test (V-B, 2026-10-04).
 
 ### Header
 
@@ -190,11 +197,13 @@ Right-aligned · Inter 500 11 · gap 4 · margin-top 2 · time as `4:41 PM`.
 | Pending | clock, 11 | white 90% |
 | Sent | single check, 14 | white 90% |
 | Delivered | double check, 15 | white 90% |
-| **Read** | double check, 15 | **amber `#FDE68A`** |
+| **Read** | double check, 15 | **blue `#53BDEB`** |
 | Failed | alert-circle, 12 | `#F87171` |
 
-Amber, not blue, on both platforms. The web chose amber deliberately; mobile currently uses
-`blueLight` and changes.
+WhatsApp's read blue, on both platforms. The spec first said amber `#FDE68A`; on the phone it
+could hardly be told apart from the white delivered ticks, and the owner chose `#53BDEB`
+after trying it (2026-10-07). It is 2.53:1 on the bubble's pink end, under the 3.0 icon
+minimum. **Accepted knowingly** — see §7.
 
 ### Shadows
 
@@ -223,7 +232,7 @@ while scrolling up: keep the Phase 5 indicator.
 ```ts
 bubbleMineEnd:      '#C02B7F',                // sent-bubble gradient end (§2)
 bubbleMineSolid:    '#9B1280',                // fallback if the gradient fails N-F
-chatReadTick:       '#FDE68A',                // replaces blueLight for the read state
+chatReadTick:       '#53BDEB',                // WhatsApp read blue (2026-10-07, see §2 Ticks)
 bubbleTheirsBorder: 'rgba(128,0,128,0.08)',
 chatDateChip:       'rgba(255,255,255,0.92)',
 chatUnreadBand:     'rgba(255,255,255,0.88)',
@@ -243,7 +252,7 @@ once nothing uses them.
 ```css
 --bubble-mine-end: #C02B7F;
 --bubble-mine-solid: #9B1280;
---chat-read-tick: #FDE68A;
+--chat-read-tick: #53BDEB;
 ```
 
 ---
@@ -298,7 +307,7 @@ WCAG AA: 4.5:1 for text under 18px, 3.0:1 for icons and other non-text UI.
 |---|---|---|
 | White text on bubble end `#C02B7F` | 5.39 | 4.5 ✅ |
 | Timestamp (white 90%) on `#C02B7F` | 4.64 | 4.5 ✅ |
-| Amber read tick on `#C02B7F` | 4.33 | 3.0 ✅ |
+| Blue read tick `#53BDEB` on `#C02B7F` | 2.53 | 3.0 ⚠️ accepted (owner's call, 2026-10-07) |
 | White text on solid fallback `#9B1280` | 7.52 | 4.5 ✅ |
 | Received text `#1A1A1A` on white | 17.40 | 4.5 ✅ |
 | Received timestamp mutedText on white | 5.41 | 4.5 ✅ |

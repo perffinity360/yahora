@@ -44,6 +44,13 @@
   --blue-dark: #0B93D8;
   --blue-light: #6FE1FF;
 
+  /* Chat — docs/design/MESSAGES_SPEC.md §3, twins of mobile's theme tokens.
+     --chat-read-tick is WhatsApp blue, not the spec's original amber: the owner
+     chose it on 2026-10-07 for both platforms (mobile colors.chatReadTick). */
+  --bubble-mine-end: #C02B7F;
+  --bubble-mine-solid: #9B1280;
+  --chat-read-tick: #53BDEB;
+
   /* Text & background */
   --black: #0B0B0B;
   --black-soft: #1A1A1A;

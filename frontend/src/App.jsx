@@ -157,7 +157,12 @@ function App() {
 
   return (
 
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    // Messages is sized to the visible viewport (100dvh). 100vh on Android
+    // Chrome is the height WITHOUT the URL bar, so it left the page ~56px
+    // taller than the screen: opening the keyboard scrolled into that extra
+    // space and the page stayed there after it closed, leaving a gap under the
+    // composer. dvh there means the page has nothing to scroll.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: location.pathname === '/messages' ? '100dvh' : '100vh' }}>
       
       {/* Demo banner + navbar are measured together as the app chrome */}
       <div ref={chromeRef}>
@@ -217,8 +222,8 @@ function App() {
         </Routes>
       </main>
 
-      {/* Conditionally hide the footer ONLY on the dashboard */}
-      {location.pathname !== '/dashboard' && <Footer />}
+      {/* No footer on the messages page */}
+      {location.pathname !== '/messages' && <Footer />}
     </div>
   );
 }

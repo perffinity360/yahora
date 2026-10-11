@@ -57,6 +57,19 @@
    PAGE ROOT
 ════════════════════════════════════════════ */
 .root {
+  /* 📄 Block N-E. Spec values the web has no global token for
+     (docs/design/MESSAGES_SPEC.md; names follow mobile's theme). Scoped here so
+     every rule below reads a name, not a hex. */
+  --msg-muted: #6B6879;        /* mutedText */
+  --msg-pink-light: #FFF4F7;   /* spec pinkLight — global --pink-light is a different #f4e0e4 */
+  --msg-input-bg: #F3F0EF;     /* inputBg */
+  --msg-app-top: #FFF0F7;      /* appBgTop */
+  --msg-app-mid: #FBE9F8;      /* appBgMid */
+  --msg-app-bottom: #F1E6FF;   /* appBgBottom */
+  --msg-line: rgba(128, 0, 128, 0.08);     /* messagesLine: filter border, row divider, received-bubble border */
+  --msg-bar-line: rgba(128, 0, 128, 0.07); /* messagesBarBorder: header, snippet, composer */
+  --msg-note: rgba(255, 255, 255, 0.9);    /* chatNoteSurface: text on the wallpaper */
+
   display: flex;
   justify-content: center;
   align-items: center;
@@ -89,115 +102,79 @@
 }
 
 /* ════════════════════════════════════════════
-   LEFT: INBOX SIDEBAR — Light elegant theme
+   LEFT: INBOX SIDEBAR — MESSAGES_SPEC.md §1
+   Values the spec leaves open come from the mockup, the same as mobile's
+   app/(tabs)/messages.tsx, and are marked "mockup".
 ════════════════════════════════════════════ */
 .inboxSidebar {
   width: 330px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(170deg, #fdf8ff 0%, #f8f0ff 45%, #fff4f9 100%);
-  border-right: 1px solid rgba(128, 0, 128, 0.09);
+  /* The app canvas. No glow layers — the old ::before/::after are gone. */
+  background: linear-gradient(170deg, var(--msg-app-top) 0%, var(--msg-app-mid) 50%, var(--msg-app-bottom) 100%);
+  border-right: 1px solid var(--msg-line);
   position: relative;
   overflow: hidden;
 }
 
-/* Subtle ambient glows — soft, not heavy */
-.inboxSidebar::before {
-  content: "";
-  position: absolute;
-  top: -80px;
-  right: -60px;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(215, 0, 215, 0.08) 0%, transparent 70%);
-  pointer-events: none;
-}
-.inboxSidebar::after {
-  content: "";
-  position: absolute;
-  bottom: -60px;
-  left: -40px;
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(235, 72, 127, 0.07) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-/* Sidebar Header */
+/* Header. Padding: mockup `.ihead`. */
 .inboxHeader {
-  padding: 18px 16px 14px;
-  background: rgba(255, 255, 255, 0.7);
-  border-bottom: 1px solid rgba(128, 0, 128, 0.08);
-  backdrop-filter: blur(8px);
-  position: relative;
-  z-index: 1;
-}
-.inboxHeaderTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.inboxTitleRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 8px 16px 12px;
 }
 .inboxTitle {
   margin: 0;
-  font-size: 1.15rem;
   font-family: "Bree Serif", Georgia, serif;
-  color: var(--black-soft, #1A1A1A);
   font-weight: 400;
-  letter-spacing: 0.01em;
+  font-size: 20px;
+  color: var(--black);
 }
-.inboxCount {
-  background: linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #EB487F));
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 99px;
-}
-.headerSparkle {
-  color: var(--pink-dark, #EB487F);
-  opacity: 0.5;
+.inboxSubtitle {
+  margin: 2px 0 0; /* mockup */
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--msg-muted);
 }
 
-/* Search bar */
+/* Filter field */
 .searchBar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1.5px solid rgba(128, 0, 128, 0.12);
-  border-radius: 12px;
-  padding: 8px 12px;
-  transition: all 0.2s;
+  gap: 8px;            /* mockup */
+  height: 38px;
+  margin: 10px 16px 6px;
+  padding: 0 14px;     /* mockup */
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--msg-line);
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .searchBar:focus-within {
-  background: #fff;
-  border-color: var(--purple, #800080);
-  box-shadow: 0 0 0 3px rgba(128, 0, 128, 0.08);
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px var(--msg-line);
 }
-.searchIcon { color: rgba(128, 0, 128, 0.4); flex-shrink: 0; }
+.searchIcon { color: var(--msg-muted); flex-shrink: 0; }
 .searchInput {
   flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   outline: none;
-  font-size: 0.83rem;
-  color: var(--black-soft, #1A1A1A);
   font-family: inherit;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--black-soft);
 }
-.searchInput::placeholder { color: #b8a8c8; }
+.searchInput::placeholder,
+.searchPlaceholder {
+  font-size: 13px;
+  color: var(--msg-muted);
+}
 .clearSearchBtn {
-  background: rgba(128, 0, 128, 0.08);
+  background: var(--msg-line);
   border: none;
-  color: #a080b8;
+  color: var(--msg-muted);
   cursor: pointer;
   border-radius: 50%;
   width: 18px;
@@ -209,7 +186,7 @@
   transition: all 0.15s;
   flex-shrink: 0;
 }
-.clearSearchBtn:hover { background: rgba(128, 0, 128, 0.15); color: var(--purple, #800080); }
+.clearSearchBtn:hover { background: rgba(128, 0, 128, 0.15); color: var(--purple); }
 
 /* Inbox List */
 .inboxList {
@@ -218,7 +195,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   position: relative;
-  z-index: 1;
   scrollbar-width: thin;
   scrollbar-color: rgba(128, 0, 128, 0.12) transparent;
 }
@@ -226,7 +202,7 @@
 .inboxList::-webkit-scrollbar-track { background: transparent; }
 .inboxList::-webkit-scrollbar-thumb { background: rgba(128, 0, 128, 0.12); border-radius: 2px; }
 
-/* Empty Inbox */
+/* Empty Inbox — the existing state, its text on the row tokens (spec §1). */
 .emptyInbox {
   display: flex;
   flex-direction: column;
@@ -234,21 +210,21 @@
   justify-content: center;
   height: 100%;
   min-height: 260px;
-  color: #c0a8d8;
+  color: var(--msg-muted);
   padding: 24px;
   text-align: center;
   gap: 8px;
 }
 .emptyInbox p {
   margin: 0;
-  color: #7a5090;
-  font-size: 0.9rem;
+  color: var(--black);
+  font-size: 14px;
   font-weight: 600;
 }
 .emptyInbox span {
-  font-size: 0.78rem;
-  color: #b8a0cc;
-  line-height: 1.5;
+  font-size: 13px;
+  color: var(--msg-muted);
+  line-height: 19px;
 }
 .emptyInboxIcon {
   width: 56px;
@@ -260,40 +236,42 @@
   align-items: center;
   justify-content: center;
   margin-bottom: 4px;
-  color: var(--purple, #800080);
+  color: var(--purple);
   opacity: 0.7;
 }
 
-/* Inbox Item */
+/* Row. No card: rows sit straight on the canvas. */
 .inboxItem {
   display: flex;
-  padding: 13px 16px;
-  gap: 11px;
+  align-items: center; /* mockup */
+  padding: 10px 16px;
+  gap: 12px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(128, 0, 128, 0.06);
   transition: background 0.18s;
   animation: inboxSlideIn 0.3s ease both;
   position: relative;
 }
-.inboxItem:hover { background: rgba(128, 0, 128, 0.04); }
-
-.inboxItemActive {
-  background: linear-gradient(90deg, rgba(235,72,127,0.08) 0%, rgba(128,0,128,0.05) 100%) !important;
-  border-left: 3px solid var(--pink-dark, #EB487F);
-}
-.inboxItemActive::before {
+/* Divider from the text column (16 + 48 + 12 = 76) to 16 from the right.
+   None above the first row. */
+.inboxItem + .inboxItem::before {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(235,72,127,0.05) 0%, transparent 60%);
+  top: 0;
+  left: 76px;
+  right: 16px;
+  height: 1px;
+  background: var(--msg-line);
   pointer-events: none;
 }
+.inboxItem:hover { background: rgba(128, 0, 128, 0.04); }
+.inboxItemActive,
+.inboxItemActive:hover { background: var(--msg-line); }
 
 /* Avatar */
 .avatarWrap { position: relative; flex-shrink: 0; }
 .inboxAvatar {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   border: 2px solid var(--purple-emphasis);
   object-fit: cover;
@@ -307,105 +285,139 @@
   height: 11px;
   border-radius: 50%;
   background: #34d399;
-  border: 2px solid #fdf8ff;
+  border: 2px solid var(--white);
   animation: pulseDot 2.5s infinite;
 }
 
-/* Inbox item text */
+/* Text column */
 .inboxItemContent {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 3px;
+  align-items: flex-start;
 }
 .inboxItemTop {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: baseline; /* mockup */
+  gap: 8px;
+  width: 100%;
 }
-
 .inboxNameRow {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 0; /* Ensures the name still truncates properly inside a flex container */
+  flex: 1;
+  min-width: 0; /* lets the name truncate inside the flex row */
 }
-
 .inboxName {
-  font-weight: 700;
-  font-size: 0.88rem;
-  color: var(--black-soft, #1A1A1A);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--black);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 1;
 }
-.inboxChipImg {
-  width: 14px;
-  height: 14px;
-  border-radius: 5px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
 .inboxTime {
-  font-size: 0.7rem;
-  color: #b0a0c0;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--msg-muted);
   flex-shrink: 0;
-  margin-left: 6px;
-}
-
-/* Product chip */
-.inboxProductChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(235, 72, 127, 0.08);
-  border: 1px solid rgba(235, 72, 127, 0.18);
-  padding: 3px 8px 3px 4px;
-  border-radius: 5px;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--pink-dark, #EB487F);
-  font-size: 0.69rem;
-  font-weight: 600;
-  width: fit-content;
-}
-.inboxProductChip span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
 }
 .inboxItemBottom {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;       /* mockup */
+  margin-top: 3px; /* mockup */
+  width: 100%;
 }
 .inboxPreview {
-  font-size: 0.78rem;
-  color: #a898b8;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--msg-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  min-width: 0;
 }
-.inboxPreviewBold { color: #5a3878; font-weight: 600; }
+
+/* Unread: weight and colour on all three lines, plus the badge. */
+.inboxItemUnread .inboxName { font-weight: 800; }
+.inboxItemUnread .inboxTime { font-weight: 700; color: var(--purple); }
+.inboxItemUnread .inboxPreview { font-weight: 500; color: var(--black-soft); }
+
 .unreadBadge {
-  background: linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #EB487F));
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 800;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 99px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--purple), var(--pink-dark));
+  color: var(--white);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 6px;
   flex-shrink: 0;
+}
+
+/* Product chip: the listing the conversation is about. */
+.inboxProductChip {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 5px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(235, 72, 127, 0.09);
+  color: var(--pink-dark);
+  font-weight: 600;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Skeleton rows — spec §1 "Loading": avatar circle + two bars, laid out like
+   a real row (mobile InboxSkeleton). */
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  position: relative;
+}
+.skeletonRow + .skeletonRow::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 76px;
+  right: 16px;
+  height: 1px;
+  background: var(--msg-line);
+}
+.skeletonAvatar,
+.skeletonBarName,
+.skeletonBarPreview {
+  display: block;
+  background: linear-gradient(90deg, rgba(128,0,128,0.06) 25%, rgba(128,0,128,0.12) 50%, rgba(128,0,128,0.06) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+.skeletonAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.skeletonBody { flex: 1; min-width: 0; display: block; }
+.skeletonBarName { width: 55%; height: 14px; border-radius: 7px; }
+.skeletonBarPreview { width: 80%; height: 12px; border-radius: 6px; margin-top: 8px; }
+@keyframes skeletonShimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: -100% 0; }
 }
 
 /* ════════════════════════════════════════════
@@ -422,15 +434,14 @@
   min-height: 0;
 }
 
-/* ── Chat Header ── */
+/* ── Chat Header — MESSAGES_SPEC.md §2 "Header"; padding and gap: mockup `.chead` ── */
 .chatHeader {
   display: flex;
   align-items: center;
-  padding: 12px 20px;
-  background: #fff;
-  border-bottom: 1px solid #f0eaf8;
-  gap: 12px;
-  box-shadow: 0 2px 12px rgba(128,0,128,0.04);
+  padding: 8px 12px;
+  background: var(--white);
+  border-bottom: 1px solid var(--msg-bar-line);
+  gap: 10px;
   flex-shrink: 0;
   z-index: 2;
 }
@@ -438,21 +449,21 @@
   display: none;
   background: none;
   border: none;
-  color: #888;
+  color: var(--purple);
   cursor: pointer;
-  padding: 6px;
+  padding: 2px;
   border-radius: 8px;
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
-.mobileBackBtn:hover { background: #f5f0fa; color: var(--purple, #800080); }
+.mobileBackBtn:hover { background: var(--msg-pink-light); }
 
 .chatHeaderAvatarWrap {
   position: relative;
   flex-shrink: 0;
 }
 .chatHeaderAvatar {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   object-fit: cover;
   display: block;
@@ -460,43 +471,35 @@
 }
 .chatOnlinePip {
   position: absolute;
-  bottom: 1px;
-  right: 1px;
-  width: 10px;
-  height: 10px;
+  bottom: 0;
+  right: 0;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: #34d399;
-  border: 2px solid #fff;
+  border: 2px solid var(--white);
   animation: pulseDot 2.5s infinite;
 }
 
 .chatHeaderInfo { flex: 1; min-width: 0; }
-.chatHeaderNameRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
 .chatHeaderName {
   margin: 0;
-  font-size: 0.95rem;
-  /* Bree Serif (inherited from the h1-h6 rule in global.css) ships one
-     weight — 400. Anything heavier here was browser-faked. */
-  font-weight: 400;
-  color: #1a0a2e;
+  /* Inter, not the Bree Serif the h3 would inherit from global.css. */
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--black);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.onlineLabel {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.72rem;
-  color: #34d399;
-  font-weight: 600;
-  flex-shrink: 0;
+.chatHeaderStatus {
+  margin: 0;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--msg-muted);
 }
+/* The online dot beside a name in the inbox row. */
 .onlineDot {
   width: 7px;
   height: 7px;
@@ -506,42 +509,47 @@
   flex-shrink: 0;
 }
 
+/* ── Product snippet — spec §2; bar padding: mockup `.snip` ── */
+.chatSnippetBar {
+  padding: 6px 12px 8px;
+  background: var(--white);
+  border-bottom: 1px solid var(--msg-bar-line);
+  flex-shrink: 0;
+}
 .chatProductSnippet {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  background: #f8f4ff;
-  border: 1px solid #ede5ff;
-  padding: 4px 10px 4px 6px;
-  border-radius: 8px;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 12px;
+  background: var(--msg-pink-light);
   cursor: pointer;
-  transition: all 0.2s;
-  max-width: 100%;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.2s;
 }
-.chatProductSnippet:hover {
-  border-color: var(--purple, #800080);
-  background: #f3ebff;
-  transform: translateX(2px);
-}
+.chatProductSnippet:hover { background: var(--pink-light); }
 .chatProductImg {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
 }
 .chatProductTitle {
-  font-size: 0.75rem;
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
-  color: #5a3080;
+  font-size: 12px;
+  color: var(--black);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
 }
 .chatProductArrow {
-  font-size: 0.72rem;
-  color: var(--purple, #800080);
+  color: var(--purple);
   flex-shrink: 0;
   transition: transform 0.2s;
 }
@@ -579,19 +587,28 @@
   /* No `scroll-behavior: smooth` here on purpose: Messages.jsx picks the
      behaviour per scroll — instant when a thread opens on its unread line,
      smooth when a new message arrives. */
+  /* Spacing between messages comes from .messageWrapper / .runStart (spec §2:
+     2 inside a run, 8 between runs), not a flex gap. */
   display: flex;
   flex-direction: column;
-  gap: 4px;
 
-  /* Canvas: a lavender ground with two soft brand glows for depth, plus a fine
-     grain. The grain is deliberately sparse (1.4px marks on a 28px grid) — the
-     old 2.5px/20px version read as a polka-dot pattern and competed with the
-     bubbles for attention instead of sitting behind them. */
+  /* 📄 Block N-D. Canvas: the lavender ground (mobile's chatCanvas) under the
+     shared doodle tile, 420px so it matches the mobile tile exactly. Spec:
+     docs/design/MESSAGES_SPEC.md §2. background-attachment is deliberately
+     left at its default (scroll): on a scroll container that pins the tile to
+     the box, so messages scroll over it. `local` would drag it along.
+
+     📄 Block N-E: the tile is drawn at 50% strength, matching mobile's
+     CHAT_WALLPAPER_OPACITY = 0.5. CSS has no per-layer opacity, so the top
+     layer is the ground colour at 50%: ground·½ + (tile over ground)·½ is
+     exactly the tile at opacity 0.5 over the ground. Like the tile, it is
+     pinned to the box and never scrolls. */
   background-color: #ede6f5;
   background-image:
-    radial-gradient(ellipse at 12% 10%, rgba(128,0,128,0.06) 0%, transparent 42%),
-    radial-gradient(ellipse at 88% 86%, rgba(43,183,255,0.045) 0%, transparent 42%),
-    url("data:image/svg+xml,%3Csvg width='28' height='28' viewBox='0 0 28 28' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23800080' fill-opacity='0.05'%3E%3Ccircle cx='3' cy='3' r='1.4'/%3E%3Ccircle cx='17' cy='17' r='1.4'/%3E%3C/g%3E%3C/svg%3E");
+    linear-gradient(rgba(237, 230, 245, 0.5), rgba(237, 230, 245, 0.5)),
+    url('/patterns/chat-pattern.svg');
+  background-repeat: no-repeat, repeat;
+  background-size: 100% 100%, 420px 420px;
 
   scrollbar-width: thin;
   scrollbar-color: rgba(128,0,128,0.15) transparent;
@@ -600,13 +617,13 @@
 .messagesContainer::-webkit-scrollbar-track { background: transparent; }
 .messagesContainer::-webkit-scrollbar-thumb { background: rgba(128,0,128,0.15); border-radius: 3px; }
 
-/* Welcome banner at top of chat */
+/* "This is the beginning of your conversation". Backed in --msg-note like
+   every other piece of text on the wallpaper (mobile threadStartPill). */
 .chatWelcomeBanner {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background: rgba(255,255,255,0.72);
-  backdrop-filter: blur(8px);
+  background: var(--msg-note);
   border: 1px solid rgba(128,0,128,0.1);
   border-radius: 14px;
   padding: 12px 14px;
@@ -624,86 +641,55 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--purple, #800080);
+  color: var(--purple);
   flex-shrink: 0;
 }
 .chatWelcomeBanner p { margin: 0; flex: 1; }
 .chatWelcomeBanner strong { color: #3a0060; }
 
-/* Date separator */
+/* Date chip — spec §2. A centred pill; no lines either side. */
 .dateSeparator {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  justify-content: center;
   margin: 10px 0 6px;
 }
-.dateSeparatorLine {
-  flex: 1;
-  height: 1px;
-  background: rgba(128,0,128,0.12);
-}
 .dateSeparatorText {
-  font-size: 0.68rem;
   font-weight: 700;
-  color: rgba(90,48,128,0.55);
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   white-space: nowrap;
-  background: rgba(255,255,255,0.7);
-  padding: 3px 10px;
+  color: var(--msg-muted);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 4px 11px;
   border-radius: 99px;
-  border: 1px solid rgba(128,0,128,0.1);
 }
 
-/* ── Unread divider ──
-   The seam between what this student has read and what they haven't. The thread
-   opens anchored on it (Messages.jsx), so it is the first thing seen — it gets
-   the one sharp accent on the canvas, and nothing else here competes.
-
-   A rule runs out to both edges rather than sitting behind an opaque pill: the
-   line is what says "everything below is new", the pill only counts it. */
+/* ── Unread band — spec §2 ──
+   Full-bleed across the thread: the negative side margins undo
+   .messagesContainer's 20px padding. The thread opens anchored on this element
+   (unreadDividerRef in Messages.jsx), so it keeps its class name. */
 .unreadDivider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 18px 2px 10px;
-}
-.unreadDividerLine {
-  flex: 1;
-  height: 1px;
-  /* Fading toward the gutters keeps the eye travelling inward to the count,
-     instead of stopping at two hard hairlines against the canvas edge. */
-  background: linear-gradient(to right, rgba(235,72,127,0), rgba(235,72,127,0.5));
-}
-.unreadDividerLine:last-child {
-  background: linear-gradient(to left, rgba(235,72,127,0), rgba(235,72,127,0.5));
-}
-.unreadDividerText {
-  font-size: 0.68rem;
+  margin: 8px -20px;
+  padding: 5px 0;
+  background: rgba(255, 255, 255, 0.88);
   font-weight: 700;
-  color: var(--pink-dark);
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  /* Tinted rather than stark white: the pill belongs to the pink seam it sits
-     on, and a white chip on a lavender canvas reads as a gap in the line. */
-  background: var(--pink-bg);
-  padding: 5px 15px;
-  border-radius: 99px;
-  border: 1px solid rgba(235,72,127,0.28);
-  box-shadow:
-    0 1px 2px rgba(235,72,127,0.08),
-    0 6px 18px rgba(235,72,127,0.14);
+  font-size: 11px;
+  text-align: center;
+  color: var(--purple);
 }
 
-/* Empty chat */
+/* Empty chat. The sticker, the hello and the suggestions sit on a --msg-note
+   card (mobile emptyCard: radius 20, padding 24/16). */
 .emptyChat {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
-  padding: 20px;
+  margin: auto 0;
+  padding: 24px 16px;
+  border-radius: 20px;
+  background: var(--msg-note);
   text-align: center;
   gap: 10px;
   animation: fadeUp 0.4s ease;
@@ -739,24 +725,23 @@
   font-family: inherit;
 }
 .suggestionChip:hover {
-  background: #fff;
-  border-color: var(--purple, #800080);
-  color: var(--purple, #800080);
+  background: var(--white);
+  border-color: var(--purple);
+  color: var(--purple);
   transform: translateY(-1px);
   box-shadow: 0 3px 10px rgba(128,0,128,0.15);
 }
 
-/* ── Message Bubbles ── */
+/* ── Message Bubbles — spec §2 "Bubbles" ── */
 .messageWrapper {
   display: flex;
   width: 100%;
   gap: 8px;
   align-items: flex-end;
-  /* Tight inside a run of messages from one person; .runEnd opens the gap
-     between speakers so the thread reads as blocks, not a ladder. */
-  margin-bottom: 0;
+  /* 2 inside a run; .runStart opens 8 between runs. */
+  margin-top: 2px;
 }
-.runEnd { margin-bottom: 9px; }
+.runStart { margin-top: 8px; }
 .avatarSpacer {
   width: 28px;
   flex-shrink: 0;
@@ -781,46 +766,44 @@
 }
 
 .messageBubble {
-  max-width: 68%;
-  padding: 9px 13px 7px;
+  /* 78% of the thread, never above 520. */
+  max-width: min(78%, 520px);
+  padding: 8px 12px 6px;
   border-radius: 18px;
-  /* Transparent by default so the hairline on .bubbleTheirs doesn't make one
-     side of the thread a pixel taller than the other. */
-  border: 1px solid transparent;
   position: relative;
   word-break: break-word;
 }
 
-/* Only the bubble that closes a run gets the tail — mid-run bubbles stay fully
-   rounded, which is what makes a stack read as one block. */
-.runEnd .bubbleMine   { border-bottom-right-radius: 6px; }
-.runEnd .bubbleTheirs { border-bottom-left-radius: 6px; }
+/* Only the bubble that closes a run gets the tail: radius 5 on the corner
+   nearest its sender. Mid-run bubbles stay fully rounded. */
+.runEnd .bubbleMine   { border-bottom-right-radius: 5px; }
+.runEnd .bubbleTheirs { border-bottom-left-radius: 5px; }
 
 .bubbleMine {
-  /* The brand gradient, straight from the tokens. This is the only saturated
-     surface in the thread — the canvas, the received bubbles and the chrome all
-     stay quiet so it reads as "you" without any label. */
-  background: linear-gradient(135deg, var(--purple) 0%, var(--pink-dark) 100%);
+  /* 135° purple → --bubble-mine-end (#C02B7F), not pinkDark: the furthest the
+     gradient can travel with white text and the 90% meta still above 4.5:1
+     (spec §2, §7). If Block N-F switches mobile to the solid fallback, this
+     becomes `background: var(--bubble-mine-solid)` in the same commit. */
+  background: linear-gradient(135deg, var(--purple) 0%, var(--bubble-mine-end) 100%);
   color: var(--white);
-  /* Two soft layers — a tight contact shadow plus a wide ambient one — so the
-     bubble sits ON the canvas. The single 12px drop it had was heavy enough to
-     look like it was hovering above the page. */
+  /* Web only (spec §5). */
   box-shadow:
     0 1px 2px rgba(128,0,128,0.16),
-    0 6px 18px rgba(128,0,128,0.16);
+    0 6px 18px rgba(128,0,128,0.14);
 }
 .bubbleTheirs {
   background: var(--white);
-  color: var(--purple-emphasis);
-  /* A hairline reads crisper than a shadow against the tinted canvas. */
-  border-color: rgba(128,0,128,0.07);
+  color: var(--black-soft);
+  border: 1px solid var(--msg-line);
+  /* Web only (spec §5). */
   box-shadow: 0 2px 10px rgba(42,8,42,0.05);
 }
 
 .messageText {
-  margin: 0 0 3px 0;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  margin: 0;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 /* An emoji inside text — EMOJI_SIZES.inline in src/utils/emoji.js, same as
@@ -904,34 +887,32 @@
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+  margin-top: 2px;
+  font-weight: 500;
+  font-size: 11px;
 }
-/* No blanket `opacity` here: it used to compound with the colours below and
-   dragged the received-side timestamp to about 2.3:1 on white. These values are
-   set to clear 4.5:1 on their own backgrounds. */
-.messageTime {
-  font-size: 0.67rem;
-  letter-spacing: 0.02em;
-}
-.bubbleMine .messageTime { color: rgba(255,255,255,0.82); }
-.bubbleTheirs .messageTime { color: rgba(42,8,42,0.62); }
+.bubbleMine .messageMeta { color: rgba(255, 255, 255, 0.9); }
+.bubbleTheirs .messageMeta { color: var(--msg-muted); }
+.messageTime { white-space: nowrap; }
 
-/* Tick icons — amber/gold for read (not blue) */
+/* Ticks — spec §2. Sent and delivered take the meta colour; read is
+   --chat-read-tick, WhatsApp blue on both platforms (owner's call,
+   2026-10-07; must match mobile colors.chatReadTick). */
 .readReceipt { display: flex; align-items: center; }
-.tickSent      { color: rgba(255,255,255,0.5); }
-.tickDelivered { color: rgba(255,255,255,0.75); }
-/* WhatsApp's read blue — must match mobile's colors.chatReadTick (see the note
-   there). Replaced the pale amber #fde68a, which read as white beside the
-   delivered ticks. */
-.tickRead      { color: #53bdeb; }
+.tickSent,
+.tickDelivered { color: inherit; }
+.tickRead      { color: var(--chat-read-tick); }
 
-/* ── Chat Input Area ── */
+/* ── Composer — spec §2; gap between controls: mockup `.comp` ── */
 .chatInputArea {
   display: flex;
-  align-items: center;
+  /* Bottom-aligned so the emoji and send buttons stay on the last line as the
+     message box grows. */
+  align-items: flex-end;
   gap: 8px;
-  padding: 12px 16px;
-  background: #fff;
-  border-top: 1px solid #ede5f5;
+  padding: 8px 10px 12px;
+  background: var(--white);
+  border-top: 1px solid var(--msg-bar-line);
   flex-shrink: 0;
   position: relative;
 }
@@ -1033,27 +1014,36 @@
 /* Chat form */
 .chatForm {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   flex: 1;
   gap: 8px;
 }
 .chatInput {
   flex: 1;
-  padding: 10px 16px;
-  border-radius: 99px;
-  border: 1.5px solid rgba(128, 0, 128, 0.22);
-  background: #f8f4ff;
-  font-size: 0.88rem;
-  outline: none;
-  transition: all 0.2s;
-  color: #1a0a2e;
+  min-width: 0;
+  min-height: 40px;
+  /* Five lines of 20 plus the 20 of vertical padding and the 2 of border;
+     beyond that it scrolls. Height itself is set from scrollHeight in JS. */
+  max-height: 122px;
+  display: block;
+  resize: none;
+  overflow-y: auto;
+  padding: 10px 14px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background: var(--msg-input-bg);
   font-family: inherit;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  color: var(--black-soft);
 }
-.chatInput::placeholder { color: #9878b8; }
+.chatInput::placeholder { color: var(--msg-muted); }
 .chatInput:focus {
-  border-color: var(--purple, #800080);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(128, 0, 128, 0.08);
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px var(--msg-line);
 }
 
 /* Send button — inactive state is now visibly styled, not invisible */
@@ -1189,26 +1179,6 @@
 .noChatTip:hover { background: rgba(128,0,128,0.07); transform: translateX(3px); }
 .noChatTip span { font-size: 1rem; }
 
-/* ── Loading Screen ── */
-.loadingScreen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: calc(100dvh - var(--app-chrome));
-  gap: 14px;
-  color: #9a80b0;
-  font-size: 0.88rem;
-}
-.loadingSpinner {
-  width: 34px;
-  height: 34px;
-  border: 3px solid rgba(128,0,128,0.1);
-  border-top-color: var(--purple, #800080);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
 /* ── Typing Indicator ── */
 .typingBubble {
   padding: 12px 16px;
@@ -1269,9 +1239,6 @@
   .mobileBackBtn {
     display: flex;
   }
-  .messageBubble {
-    max-width: 80%;
-  }
   .emojiPicker {
     left: -10px;
     width: 268px;
@@ -1279,39 +1246,18 @@
   .emojiGrid {
     grid-template-columns: repeat(7, 1fr);
   }
-  .chatProductTitle {
-    max-width: 120px;
-  }
   .noChatTips {
     max-width: 280px;
   }
 }
 
 @media (max-width: 420px) {
-  /* The unread pill is the widest fixed-width thing on this canvas. At 320px
-     the two hairlines either side of it collapse to nothing and the seam stops
-     reading as a line across the thread, so tighten the chip instead. */
-  .unreadDivider {
-    gap: 7px;
-    margin: 14px 0 8px;
-  }
-  .unreadDividerText {
-    font-size: 0.63rem;
-    letter-spacing: 0.05em;
-    padding: 4px 11px;
-  }
   .emojiPicker {
     width: 240px;
     left: -20px;
   }
   .emojiGrid {
     grid-template-columns: repeat(6, 1fr);
-  }
-  .messageBubble {
-    max-width: 88%;
-  }
-  .chatInputArea {
-    padding: 10px 12px;
   }
 }
 
@@ -1352,7 +1298,10 @@
   .noChatTip,
   .onlinePip,
   .chatOnlinePip,
-  .onlineDot {
+  .onlineDot,
+  .skeletonAvatar,
+  .skeletonBarName,
+  .skeletonBarPreview {
     animation: none;
   }
   .sendBtnActive:active {
