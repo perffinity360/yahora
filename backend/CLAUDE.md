@@ -106,8 +106,9 @@ hour. This already happened once, with `SUPABASE_URL` pinned to a dead lease.
   on every network change. In production `SUPABASE_URL` is the hosted
   `https://<project>.supabase.co` origin.
 - **The server binds `0.0.0.0`** (`HOST` overrides, `PORT` stays configurable) so phones and a
-  second laptop on the same Wi-Fi can reach port 5000. On boot it prints the current LAN
-  address as a convenience line — read it off the log, never write it down.
+  second laptop on the same Wi-Fi can reach port 5001 (never 5000 — macOS AirPlay Receiver
+  holds it and answers with a bodiless 403; see `backend/.env.example`). On boot it prints the
+  current LAN address as a convenience line — read it off the log, never write it down.
 - **Clients resolve the dev host themselves.** The Expo app derives it from the Expo dev server
   (`mobile/src/lib/config.ts`); the web app uses the Vite `/supabase` and `/api` proxies. Neither
   needs an IP pasted into a config file, so nobody edits a file when the network changes.
