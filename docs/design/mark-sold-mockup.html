@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mark as Sold — Phase 6B mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root { --purple:#800080; --end:#C02B7F; --muted:#6B6879; --ink:#1A1A1A; --black:#0B0B0B; --inputBg:#F3F0EF;
+          --line:rgba(128,0,128,0.08); --red:#B91C1C; --pinkLight:#FFF4F7; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Inter, sans-serif; background:#F6F3F8; padding:28px; color:var(--ink); }
+  h1 { font-family:'Bree Serif'; font-weight:400; font-size:26px; color:var(--black); }
+  .lede { font-size:13px; color:var(--muted); margin:6px 0 22px; max-width:1100px; line-height:19px; }
+  .row { display:flex; gap:28px; align-items:flex-start; }
+  .panel { width:360px; } .panel.wide { width:560px; }
+  .cap { font-size:13px; font-weight:700; color:var(--purple); margin-bottom:4px; }
+  .sub { font-size:12px; color:var(--muted); margin-bottom:10px; line-height:16px; min-height:32px; }
+  .phone { width:360px; height:720px; border-radius:28px; overflow:hidden; position:relative;
+           background:linear-gradient(170deg,#FFF0F7,#FBE9F8 50%,#F1E6FF); box-shadow:0 10px 40px rgba(42,8,42,0.16);
+           border:1px solid rgba(128,0,128,0.08); }
+  .wide .phone { width:560px; border-radius:14px; background:#F6F1F8; }
+  .scrim { position:absolute; inset:0; background:rgba(11,11,11,0.32); }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:20px 20px 0 0; padding:8px 16px 16px; }
+  .modal { position:absolute; left:60px; right:60px; top:60px; background:#fff; border-radius:20px; padding:20px; }
+  .handle { width:36px; height:4px; border-radius:2px; background:rgba(128,0,128,0.15); margin:0 auto 12px; }
+  .t { font-family:'Bree Serif'; font-size:20px; color:var(--black); }
+  .st { font-size:13px; font-weight:500; color:var(--muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .search { height:38px; border-radius:19px; background:var(--inputBg); display:flex; align-items:center; gap:8px; padding:0 14px; margin:14px 0 6px; font-size:13px; color:var(--muted); }
+  .search.typed { color:var(--ink); }
+  .lbl { font-size:11px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:var(--muted); margin:12px 0 4px; }
+  .person { display:flex; align-items:center; gap:12px; padding:10px 8px; border-radius:12px; }
+  .person.sel { background:rgba(128,0,128,0.08); }
+  .av { width:36px; height:36px; border-radius:18px; background:linear-gradient(135deg,#d8b4e2,#f7c6d9); display:flex; align-items:center; justify-content:center; color:#4F014F; font-weight:700; font-size:12px; flex:none; }
+  .av.off { background:var(--inputBg); color:var(--muted); }
+  .pn { font-size:14px; font-weight:600; color:var(--black); }
+  .pu { font-size:12px; color:var(--muted); }
+  .grow { flex:1; min-width:0; }
+  .divider { height:1px; background:var(--line); margin:8px 0; }
+  .btn { height:48px; border-radius:24px; background:linear-gradient(135deg,var(--purple),var(--end)); color:#fff; font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:12px; }
+  .btn.off { opacity:0.4; }
+  .empty { font-size:13px; color:var(--muted); text-align:center; padding:16px; }
+  .bg-list { padding:16px; }
+  .card { background:#fff; border-radius:16px; padding:10px; display:flex; gap:12px; margin-bottom:12px; box-shadow:0 2px 10px rgba(42,8,42,0.05); }
+  .img { width:84px; height:84px; border-radius:12px; background:linear-gradient(135deg,#3a3a46,#8a8a96); position:relative; flex:none; }
+  .soldtag { position:absolute; left:6px; top:6px; font-family:'Bree Serif'; font-size:12px; color:#fff; background:#0B0B0B; padding:2px 8px; border-radius:6px; }
+  .ct { font-size:14px; font-weight:600; color:var(--black); }
+  .price { font-family:'Bree Serif'; font-size:16px; color:var(--purple); margin-top:2px; }
+  .line { font-size:12px; font-weight:500; color:var(--muted); margin-top:6px; }
+  .links { display:flex; gap:14px; margin-top:8px; font-size:12px; font-weight:600; }
+  .links .a { color:var(--purple); } .links .m { color:var(--muted); text-decoration:underline; }
+  .pp-img { height:300px; background:linear-gradient(135deg,#3a3a46,#8a8a96); position:relative; }
+  .stamp { position:absolute; right:16px; top:16px; font-family:'Bree Serif'; font-size:22px; color:#fff; border:2px solid #fff; padding:2px 12px; border-radius:8px; transform:rotate(-8deg); }
+  .pp { padding:16px; background:#fff; height:420px; }
+  .pp .ct { font-size:18px; }
+  .banner { background:var(--inputBg); border-radius:12px; padding:10px 12px; display:flex; gap:8px; align-items:flex-start; margin-top:14px; }
+  .banner b { font-size:13px; font-weight:600; color:var(--ink); display:block; }
+  .banner span { font-size:12px; color:var(--muted); }
+  .dialog { position:absolute; left:28px; right:28px; top:250px; background:#fff; border-radius:24px; padding:22px 22px 10px; }
+  .dt { font-size:18px; font-weight:600; color:var(--black); margin-bottom:8px; }
+  .dd { font-size:14px; line-height:20px; color:var(--muted); margin-bottom:14px; }
+  .db { display:flex; justify-content:flex-end; gap:22px; } .db span { font-size:14px; font-weight:600; color:var(--purple); padding:10px 0; } .db .red { color:var(--red); }
+  .tabs { display:flex; gap:18px; padding:0 16px; font-size:14px; font-weight:600; color:var(--muted); border-bottom:1px solid var(--line); height:42px; align-items:center; background:rgba(255,255,255,0.7); }
+  .tabs .on { color:var(--purple); border-bottom:2px solid var(--purple); padding-bottom:10px; margin-top:12px; }
+  .hd { padding:18px 16px 10px; font-family:'Bree Serif'; font-size:20px; color:var(--black); }
+  .note { font-size:11px; color:var(--muted); margin-top:8px; line-height:15px; }
+  .check { color:var(--purple); flex:none; }
+</style>
+</head>
+<body>
+<h1>Mark as Sold — reworked</h1>
+<p class="lede">Phase 6B mockup for <b>MARK_SOLD_SPEC.md</b>. The spec holds the exact values and wins wherever this drawing differs. The buyer is found by search or from the people who messaged about the listing; "someone not on Yahora" is a normal answer; a tagged buyer can remove themselves.</p>
+<div class="row">
+
+<!-- F. picker: candidates -->
+<div class="panel">
+  <div class="cap">F · Who bought it? (mobile sheet)</div>
+  <div class="sub">Opens from "Mark as sold" on your own listing. People who messaged you about it come first.</div>
+  <div class="phone">
+    <div class="hd">My listings</div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="t">Who bought it?</div>
+      <div class="st">Wacom Intuos S Drawing Tablet</div>
+      <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search by name or @username</div>
+      <div class="lbl">Messaged you about this</div>
+      <div class="person sel"><div class="av">AM</div><div class="grow"><div class="pn">Arjun Mehta</div><div class="pu">@arjun.mehta</div></div>
+        <svg class="check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      <div class="person"><div class="av">RV</div><div class="grow"><div class="pn">Rahul Verma</div><div class="pu">@rahul.verma</div></div></div>
+      <div class="divider"></div>
+      <div class="person"><div class="av off"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg></div>
+        <div class="grow"><div class="pn">Someone not on Yahora</div><div class="pu">No one will be tagged</div></div></div>
+      <div class="btn">Mark as sold</div>
+    </div>
+  </div>
+</div>
+
+<!-- G. picker: searching -->
+<div class="panel">
+  <div class="cap">G · Searching your campus</div>
+  <div class="sub">From 2 letters, 300 ms after typing stops. Only students on the listing's campus; never yourself.</div>
+  <div class="phone">
+    <div class="hd">My listings</div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="t">Who bought it?</div>
+      <div class="st">Wacom Intuos S Drawing Tablet</div>
+      <div class="search typed"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6B6879" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>sne</div>
+      <div class="lbl">On your campus</div>
+      <div class="person"><div class="av">SG</div><div class="grow"><div class="pn">Sneha Gupta</div><div class="pu">@sneha.g</div></div></div>
+      <div class="person"><div class="av">SR</div><div class="grow"><div class="pn">Sneha Rao</div><div class="pu">@sneharao</div></div></div>
+      <div class="divider"></div>
+      <div class="person"><div class="av off"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg></div>
+        <div class="grow"><div class="pn">Someone not on Yahora</div><div class="pu">No one will be tagged</div></div></div>
+      <div class="btn off">Mark as sold</div>
+    </div>
+  </div>
+  <div class="note">No match: "No students on your campus match “sne”." The off-platform row and the button stay below it.</div>
+</div>
+
+<!-- H. product page, sold -->
+<div class="panel">
+  <div class="cap">H · A sold listing, seen by anyone</div>
+  <div class="sub">The stamp stays. A banner replaces Message seller, like, save and the question box.</div>
+  <div class="phone">
+    <div class="pp-img"><div class="stamp">SOLD</div></div>
+    <div class="pp">
+      <div class="ct">Wacom Intuos S Drawing Tablet</div>
+      <div class="price">₹4,000</div>
+      <div class="banner"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B6879" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <div><b>This item has been sold.</b></div></div>
+      <div class="banner" style="margin-top:22px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B6879" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <div><b>You marked this as sold on 3 Oct.</b><span>Buyer: Arjun Mehta</span></div></div>
+      <div class="note">Second banner: what the SELLER sees on their own sold listing.</div>
+    </div>
+  </div>
+</div>
+
+<!-- I. seller's card + buyer's card + dialog -->
+<div class="panel">
+  <div class="cap">I · Seller's card · buyer's card</div>
+  <div class="sub">The seller can change the buyer or relist. The buyer can say "That wasn't me".</div>
+  <div class="phone">
+    <div class="tabs"><span class="on">Listings</span><span>Purchases</span><span>Watchlist</span></div>
+    <div class="bg-list">
+      <div class="card"><div class="img"><span class="soldtag">SOLD</span></div><div class="grow">
+        <div class="ct">Wacom Intuos S Drawing Tablet</div><div class="price">₹4,000</div>
+        <div class="line">Sold to Arjun Mehta · 3 Oct</div>
+        <div class="links"><span class="a">Change buyer</span><span class="a">Relist</span></div></div></div>
+      <div class="card"><div class="img"><span class="soldtag">SOLD</span></div><div class="grow">
+        <div class="ct">Casio FX-991ES Plus</div><div class="price">₹650</div>
+        <div class="line">Sold · buyer not on Yahora · 1 Oct</div>
+        <div class="links"><span class="a">Change buyer</span><span class="a">Relist</span></div></div></div>
+    </div>
+    <div class="tabs" style="margin-top:6px"><span>Listings</span><span class="on">Purchases</span><span>Watchlist</span></div>
+    <div class="bg-list">
+      <div class="card"><div class="img"></div><div class="grow">
+        <div class="ct">26T Geared Cycle</div><div class="price">₹3,200</div>
+        <div class="line">From Rahul Verma · 2 Oct</div>
+        <div class="links"><span class="m">That wasn't me</span></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- J. web modal -->
+<div class="panel wide">
+  <div class="cap">J · Website — the same picker as a modal</div>
+  <div class="sub">440 wide, centred. Everything inside is identical to the phone sheet.</div>
+  <div class="phone">
+    <div class="hd" style="font-size:24px">Dashboard</div>
+    <div class="scrim"></div>
+    <div class="modal">
+      <div class="t">Who bought it?</div>
+      <div class="st">Wacom Intuos S Drawing Tablet</div>
+      <div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search by name or @username</div>
+      <div class="lbl">Messaged you about this</div>
+      <div class="person"><div class="av">AM</div><div class="grow"><div class="pn">Arjun Mehta</div><div class="pu">@arjun.mehta</div></div></div>
+      <div class="person"><div class="av">RV</div><div class="grow"><div class="pn">Rahul Verma</div><div class="pu">@rahul.verma</div></div></div>
+      <div class="divider"></div>
+      <div class="person sel"><div class="av off"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg></div>
+        <div class="grow"><div class="pn">Someone not on Yahora</div><div class="pu">No one will be tagged</div></div>
+        <svg class="check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      <div class="btn">Mark as sold</div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
