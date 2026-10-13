@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Message actions — Phase 6B mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bree+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --purple:#800080; --end:#C02B7F; --pinkDark:#EB487F; --muted:#6B6879; --ink:#1A1A1A; --black:#0B0B0B;
+    --ground:#EDE6F5; --line:rgba(128,0,128,0.08); --bar:rgba(128,0,128,0.07); --inputBg:#F3F0EF;
+    --placeholder:#BBB6C8; --pinkLight:#FFF4F7; --read:#53BDEB; --red:#B91C1C;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Inter, sans-serif; background:#F6F3F8; padding:28px; color:var(--ink); }
+  h1 { font-family:'Bree Serif'; font-weight:400; font-size:26px; color:var(--black); }
+  .lede { font-size:13px; color:var(--muted); margin:6px 0 22px; max-width:1100px; line-height:19px; }
+  .row { display:flex; gap:28px; align-items:flex-start; }
+  .panel { width:360px; }
+  .panel.wide { width:540px; }
+  .cap { font-size:13px; font-weight:700; color:var(--purple); margin-bottom:4px; }
+  .sub { font-size:12px; color:var(--muted); margin-bottom:10px; line-height:16px; min-height:32px; }
+  .phone { width:360px; height:720px; border-radius:28px; overflow:hidden; position:relative; background:#fff;
+           box-shadow:0 10px 40px rgba(42,8,42,0.16); display:flex; flex-direction:column; border:1px solid rgba(128,0,128,0.08); }
+  .wide .phone { width:540px; border-radius:14px; }
+  /* header + snippet */
+  .hdr { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--bar); background:#fff; }
+  .hdr svg { color:var(--purple); }
+  .av { border-radius:50%; background:linear-gradient(135deg,#d8b4e2,#f7c6d9); display:flex; align-items:center; justify-content:center; color:#4F014F; font-weight:700; flex:none; }
+  .hname { font-size:16px; font-weight:600; color:var(--black); }
+  .hstat { font-size:11px; font-weight:500; color:var(--muted); }
+  .snip { padding:6px 12px 8px; border-bottom:1px solid var(--bar); background:#fff; }
+  .pill { background:var(--pinkLight); border-radius:12px; padding:6px 8px; display:flex; gap:8px; align-items:center; }
+  .thumb { width:30px; height:30px; border-radius:8px; background:linear-gradient(135deg,#3a3a46,#777); flex:none; }
+  .ptitle { font-size:12px; font-weight:600; color:var(--black); flex:1; }
+  /* thread */
+  .thread { flex:1; position:relative; background:var(--ground); overflow:hidden; padding:10px 12px; display:flex; flex-direction:column; justify-content:flex-end; }
+  .thread::before { content:''; position:absolute; inset:0; background:url('assets/chat-pattern.svg'); background-size:420px 420px; opacity:0.5; }
+  .thread > * { position:relative; }
+  .chip { align-self:center; font-size:11px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:var(--muted);
+          background:rgba(255,255,255,0.92); border-radius:99px; padding:4px 11px; margin:10px 0 6px; }
+  .r { display:flex; align-items:flex-end; gap:6px; margin-top:2px; position:relative; }
+  .r.gap { margin-top:8px; }
+  .r.mine { justify-content:flex-end; }
+  .spacer { width:26px; flex:none; }
+  .b { max-width:262px; padding:8px 12px 6px; border-radius:18px; font-size:14px; line-height:20px; position:relative; }
+  .b.mine { background:linear-gradient(135deg,var(--purple),var(--end)); color:#fff; }
+  .b.theirs { background:#fff; border:1px solid var(--line); color:var(--ink); }
+  .b.mine.tail { border-bottom-right-radius:5px; }
+  .b.theirs.tail { border-bottom-left-radius:5px; }
+  .meta { display:flex; justify-content:flex-end; align-items:center; gap:4px; margin-top:2px; font-size:11px; font-weight:500; }
+  .mine .meta { color:rgba(255,255,255,0.9); }
+  .theirs .meta { color:var(--muted); }
+  .tick { color:var(--read); }
+  /* quote */
+  .q { border-radius:8px; padding:6px 8px 6px 11px; margin-bottom:6px; position:relative; min-width:156px; }
+  .q::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:8px 0 0 8px; }
+  .mine .q { background:rgba(0,0,0,0.12); }
+  .mine .q::before { background:rgba(255,255,255,0.9); }
+  .theirs .q { background:rgba(128,0,128,0.06); }
+  .theirs .q::before { background:var(--purple); }
+  .qn { font-size:12px; font-weight:600; line-height:16px; }
+  .mine .qn { color:#fff; } .theirs .qn { color:var(--purple); }
+  .qt { font-size:12px; line-height:16px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .mine .qt { color:rgba(255,255,255,0.85); } .theirs .qt { color:var(--muted); }
+  .qt.gone { font-style:italic; }
+  /* tombstone */
+  .tomb { display:flex; align-items:center; gap:6px; font-style:italic; }
+  .mine .tomb { color:rgba(255,255,255,0.9); } .theirs .tomb { color:var(--muted); }
+  /* highlight band after a jump */
+  .hl { position:absolute; left:-12px; right:-12px; top:-3px; bottom:-3px; background:rgba(128,0,128,0.12); }
+  .sel { position:absolute; left:-12px; right:-12px; top:-3px; bottom:-3px; background:rgba(128,0,128,0.10); }
+  /* composer */
+  .comp { background:#fff; border-top:1px solid var(--bar); padding:8px 10px 12px; }
+  .crow { display:flex; align-items:flex-end; gap:8px; }
+  .emo { width:40px; height:40px; border-radius:20px; display:flex; align-items:center; justify-content:center; color:var(--muted); flex:none; }
+  .inp { flex:1; min-height:40px; border-radius:20px; background:var(--inputBg); padding:10px 14px; font-size:14px; line-height:20px; color:var(--placeholder); }
+  .inp.typed { color:var(--ink); }
+  .send { width:40px; height:40px; border-radius:20px; background:linear-gradient(135deg,var(--purple),var(--pinkDark)); display:flex; align-items:center; justify-content:center; color:#fff; flex:none; }
+  .send.off { opacity:0.4; }
+  .rbar { background:rgba(128,0,128,0.06); border-radius:12px; padding:6px 6px 6px 13px; margin-bottom:6px; display:flex; align-items:center; gap:8px; position:relative; }
+  .rbar::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--purple); border-radius:12px 0 0 12px; }
+  .rbar .rt { flex:1; min-width:0; }
+  .rbar .rn { font-size:12px; font-weight:600; color:var(--purple); line-height:16px; }
+  .rbar .rx { font-size:12px; color:var(--muted); line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rbar .close { width:28px; height:28px; display:flex; align-items:center; justify-content:center; color:var(--muted); flex:none; }
+  /* sheet + scrim + dialog */
+  .scrim { position:absolute; inset:0; background:rgba(11,11,11,0.32); }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:20px 20px 0 0; padding:8px 0 12px; }
+  .handle { width:36px; height:4px; border-radius:2px; background:rgba(128,0,128,0.15); margin:0 auto 8px; }
+  .item { height:52px; display:flex; align-items:center; gap:16px; padding:0 20px; font-size:15px; font-weight:500; color:var(--ink); }
+  .item svg { color:var(--muted); }
+  .item.danger, .item.danger svg { color:var(--red); }
+  .dialog { position:absolute; left:28px; right:28px; top:250px; background:#fff; border-radius:24px; padding:22px 22px 10px; }
+  .dt { font-size:18px; font-weight:600; color:var(--black); margin-bottom:8px; }
+  .dd { font-size:14px; line-height:20px; color:var(--muted); margin-bottom:14px; }
+  .db { display:flex; flex-direction:column; align-items:flex-end; }
+  .db span { font-size:14px; font-weight:600; color:var(--purple); padding:10px 4px; }
+  .db span.red { color:var(--red); }
+  /* swipe */
+  .swipeicon { position:absolute; left:4px; bottom:6px; width:30px; height:30px; border-radius:15px; background:#fff; display:flex; align-items:center; justify-content:center; color:var(--purple); box-shadow:0 1px 3px rgba(42,8,42,0.12); }
+  .shift { transform:translateX(52px); }
+  /* web bits */
+  .act { width:28px; height:28px; border-radius:14px; background:#fff; border:1px solid var(--line); color:var(--muted);
+         display:flex; align-items:center; justify-content:center; flex:none; align-self:flex-start; }
+  .act.hov { background:var(--pinkLight); }
+  .menu { position:absolute; background:#fff; border-radius:12px; box-shadow:0 8px 24px rgba(42,8,42,0.16); padding:6px 0; min-width:168px; z-index:5; }
+  .mi { height:40px; display:flex; align-items:center; gap:12px; padding:0 14px; font-size:14px; font-weight:500; color:var(--ink); }
+  .mi svg { color:var(--muted); }
+  .mi.danger, .mi.danger svg { color:var(--red); }
+  .mi.focus { background:rgba(128,0,128,0.06); }
+  .toast { position:absolute; left:50%; transform:translateX(-50%); bottom:16px; background:rgba(26,26,26,0.88); color:#fff; font-size:12px; font-weight:600; padding:6px 12px; border-radius:999px; }
+  .note { font-size:11px; color:var(--muted); margin-top:8px; line-height:15px; }
+  .shadowm { box-shadow:0 1px 2px rgba(128,0,128,0.16), 0 6px 18px rgba(128,0,128,0.14); }
+  .shadowt { box-shadow:0 2px 10px rgba(42,8,42,0.05); }
+</style>
+</head>
+<body>
+<h1>Message actions — Reply · Copy · Delete</h1>
+<p class="lede">Phase 6B mockup for <b>MESSAGES_SPEC v3 §10</b>. The spec file holds the exact values and wins wherever this drawing differs. Phone panels are 360 wide (the A03s floor); the last panel is the website. Wallpaper drawn at opacity 0.5 over <code>#EDE6F5</code>, as shipped.</p>
+
+<div class="row">
+
+<!-- ═════════ A. THREAD ═════════ -->
+<div class="panel">
+  <div class="cap">A · Replies and deleted messages</div>
+  <div class="sub">A quote sits at the top of a reply. Tap it to jump to the original, which flashes (the band on the last row).</div>
+  <div class="phone">
+    <div class="hdr">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <div class="av" style="width:36px;height:36px;font-size:13px">AM</div>
+      <div><div class="hname">Arjun Mehta</div><div class="hstat">IIITDM Kurnool · online</div></div>
+    </div>
+    <div class="snip"><div class="pill"><div class="thumb"></div><div class="ptitle">Wacom Intuos S Drawing Tablet</div>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#800080" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div></div>
+    <div class="thread">
+      <div class="chip">Today</div>
+      <div class="r"><div class="av" style="width:26px;height:26px;font-size:10px">AM</div>
+        <div class="b theirs tail"><div class="q"><div class="qn">You</div><div class="qt">Yes it is 😊 Barely used, pen included.</div></div>Would you take 3,800?<div class="meta">4:05 PM</div></div></div>
+      <div class="r mine gap"><div class="b mine tail"><div class="q"><div class="qn">Arjun</div><div class="qt">Would you take 3,800?</div></div>I can do 4,000 with the pen.<div class="meta">4:06 PM
+        <svg class="tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 7 17 17 7"/><polyline points="9 15 11 17 21 7"/></svg></div></div></div>
+      <div class="r gap"><div class="av" style="width:26px;height:26px;font-size:10px">AM</div>
+        <div class="b theirs tail"><div class="tomb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>This message was deleted</div><div class="meta">4:07 PM</div></div></div>
+      <div class="r mine gap"><div class="b mine tail"><div class="tomb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>You deleted this message</div><div class="meta">4:08 PM</div></div></div>
+      <div class="r gap"><div class="hl"></div><div class="av" style="width:26px;height:26px;font-size:10px">AM</div>
+        <div class="b theirs tail"><div class="q"><div class="qn">Arjun</div><div class="qt gone">Original message was deleted</div></div>Deal. Can I pick it up after 5?<div class="meta">4:09 PM</div></div></div>
+    </div>
+    <div class="comp"><div class="crow">
+      <div class="emo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+      <div class="inp">Message</div>
+      <div class="send off"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ═════════ B. LONG-PRESS SHEET ═════════ -->
+<div class="panel">
+  <div class="cap">B · Long-press (mobile)</div>
+  <div class="sub">350 ms. The row is marked, and a sheet slides up. On a deleted message the sheet has Delete only.</div>
+  <div class="phone">
+    <div class="hdr">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <div class="av" style="width:36px;height:36px;font-size:13px">AM</div>
+      <div><div class="hname">Arjun Mehta</div><div class="hstat">IIITDM Kurnool · online</div></div>
+    </div>
+    <div class="snip"><div class="pill"><div class="thumb"></div><div class="ptitle">Wacom Intuos S Drawing Tablet</div></div></div>
+    <div class="thread" style="justify-content:flex-start;padding-top:40px">
+      <div class="r"><div class="av" style="width:26px;height:26px;font-size:10px">AM</div>
+        <div class="b theirs tail">Hi! Is the tablet still available?<div class="meta">4:02 PM</div></div></div>
+      <div class="r mine gap"><div class="sel"></div><div class="b mine tail">Yes it is 😊 Barely used, pen included.<div class="meta">4:03 PM
+        <svg class="tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 7 17 17 7"/><polyline points="9 15 11 17 21 7"/></svg></div></div></div>
+    </div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>Reply</div>
+      <div class="item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</div>
+      <div class="item danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>Delete</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ C. SWIPE + REPLY BAR ═════════ -->
+<div class="panel">
+  <div class="cap">C · Swipe right to reply (mobile) · reply bar</div>
+  <div class="sub">Past 56 the reply starts. The bar sits in the composer above the input; × or sending clears it.</div>
+  <div class="phone">
+    <div class="hdr">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <div class="av" style="width:36px;height:36px;font-size:13px">AM</div>
+      <div><div class="hname">Arjun Mehta</div><div class="hstat">IIITDM Kurnool · online</div></div>
+    </div>
+    <div class="snip"><div class="pill"><div class="thumb"></div><div class="ptitle">Wacom Intuos S Drawing Tablet</div></div></div>
+    <div class="thread">
+      <div class="r"><div class="av" style="width:26px;height:26px;font-size:10px">AM</div>
+        <div class="b theirs tail">Hi! Is the tablet still available?<div class="meta">4:02 PM</div></div></div>
+      <div class="r gap"><div class="swipeicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div>
+        <div class="shift" style="display:flex;gap:6px;align-items:flex-end"><div class="av" style="width:26px;height:26px;font-size:10px">AM</div>
+        <div class="b theirs tail">Would you take 3,800? I can come to Block C after 5.<div class="meta">4:05 PM</div></div></div></div>
+    </div>
+    <div class="comp">
+      <div class="rbar"><div class="rt"><div class="rn">Replying to Arjun</div><div class="rx">Would you take 3,800? I can come to Block C after 5.</div></div>
+        <div class="close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>
+      <div class="crow">
+        <div class="emo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div>
+        <div class="inp typed">4,000 and it's yours</div>
+        <div class="send"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ D. DELETE DIALOG ═════════ -->
+<div class="panel">
+  <div class="cap">D · Delete</div>
+  <div class="sub">Your own message, under 60 minutes old: three choices. Anything else: "Delete for me" and Cancel.</div>
+  <div class="phone">
+    <div class="hdr">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <div class="av" style="width:36px;height:36px;font-size:13px">AM</div>
+      <div><div class="hname">Arjun Mehta</div><div class="hstat">IIITDM Kurnool · online</div></div>
+    </div>
+    <div class="snip"><div class="pill"><div class="thumb"></div><div class="ptitle">Wacom Intuos S Drawing Tablet</div></div></div>
+    <div class="thread">
+      <div class="r mine"><div class="sel"></div><div class="b mine tail">my number is 98765 43210<div class="meta">4:11 PM
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 7 17 17 7"/><polyline points="9 15 11 17 21 7"/></svg></div></div></div>
+    </div>
+    <div class="comp"><div class="crow"><div class="emo"></div><div class="inp">Message</div><div class="send off"></div></div></div>
+    <div class="scrim"></div>
+    <div class="dialog">
+      <div class="dt">Delete message?</div>
+      <div class="dd">Delete it for everyone in this chat, or only for you?</div>
+      <div class="db"><span class="red">Delete for everyone</span><span>Delete for me</span><span>Cancel</span></div>
+    </div>
+  </div>
+  <div class="note">On a phone this is Android's own dialog, so its exact look follows the phone. The three labels and their order are what the spec fixes.</div>
+</div>
+
+<!-- ═════════ E. WEB ═════════ -->
+<div class="panel wide">
+  <div class="cap">E · Website</div>
+  <div class="sub">Hover a bubble: an actions button appears beside it, outside the bubble. Click it (or right-click the bubble) for the menu. On a touch screen, tap the bubble to show the button.</div>
+  <div class="phone">
+    <div class="thread" style="justify-content:flex-start;padding-top:30px">
+      <div class="chip">Today</div>
+      <div class="r"><div class="av" style="width:26px;height:26px;font-size:10px">AM</div>
+        <div class="b theirs tail shadowt" style="max-width:380px">Hi! Is the tablet still available?
+          <div class="meta">4:02 PM</div></div><div class="act hov"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></div>
+      <div class="menu" style="left:300px;top:112px">
+        <div class="mi focus"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>Reply</div>
+        <div class="mi"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</div>
+        <div class="mi danger"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete</div>
+      </div>
+      <div style="height:120px"></div>
+      <div class="r mine gap"><div class="act"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div><div class="b mine tail shadowm" style="max-width:380px"><div class="q"><div class="qn">Arjun</div><div class="qt">Hi! Is the tablet still available?</div></div>Yes it is 😊 Barely used, pen included.
+        <div class="meta">4:03 PM <svg class="tick" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 7 17 17 7"/><polyline points="9 15 11 17 21 7"/></svg></div></div></div>
+      <div class="toast">Copied</div>
+    </div>
+    <div class="comp">
+      <div class="rbar"><div class="rt"><div class="rn">Replying to Arjun</div><div class="rx">Hi! Is the tablet still available?</div></div>
+        <div class="close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>
+      <div class="crow"><div class="emo"></div><div class="inp typed">Sure, after 5 works</div>
+        <div class="send"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div></div>
+    </div>
+  </div>
+  <div class="note">The "Copied" pill shows on the website and on Android 11–12. Android 13 and newer show the phone's own clipboard confirmation instead, so the app shows nothing there.</div>
+</div>
+
+</div>
+</body>
+</html>
