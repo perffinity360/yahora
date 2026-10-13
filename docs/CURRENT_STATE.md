@@ -1,4 +1,11 @@
-# Current state — rewritten 15 Sep 2026
+# Current state — rewritten 15 Sep 2026, corrected 13 Oct 2026
+
+> **13 Oct 2026 correction pass, at commit `46c8fb0` (Phase 6B, Day 2).** Only claims that the
+> repository now contradicts were changed: the migration list (14 → 18 files), open issue 1
+> (pagination shipped in Phase 4), file:line references that moved, `PRODUCTION_ORIGINS`,
+> `cache.md`, the stale-docs note, and the ownership loan. Everything else is still the 15 Sep
+> text. This file has **no** summary of what Phases 4, 5 and 6A shipped; read
+> `docs/changelog/` and the phase runbooks for that.
 
 Supersedes the **25 Aug 2026** version entirely. That one was written before Phase 2 and
 Phase 3 shipped and had drifted in **both** directions: it listed 8 migrations when there are
@@ -24,7 +31,7 @@ PROD_DB_URL_FILE=/path/outside/the/repo node backend/scripts/schema-drift.mjs
 
 ---
 
-## Migrations — 14 files in `supabase/migrations/`
+## Migrations — 18 files in `supabase/migrations/`
 
 Applied state is `[not re-verified]` for every row: the filenames are verifiable from the
 repo, the ledger is not.
@@ -45,6 +52,28 @@ repo, the ledger is not.
 | 011 | `20260903121302_counter_triggers_security_definer` | Phase 2 |
 | 012 | `20260903123107_pin_search_path_remaining_functions` | Phase 2 |
 | 013 | `20260910171153_universities_expansion` | Phase 3 |
+| 015 | `20260915070505_inbox_pagination` | Phase 4 |
+| 016 | `20260916072324_suggest_usernames_bounded_topup` | Phase 4 |
+| 017 | `20260919093440_search_users_full_name_cast` | Phase 4 bug, committed 19 Sep |
+| 018 | `20261001122844_search_demo_isolation` | Phase 6A (V-A) |
+
+**There is no 014.** No migration header carries that number; the labels jump from 013 to 015.
+That is a numbering gap, not a missing file.
+
+The four added since 15 Sep, from their headers. None of them creates a table, enables RLS or
+adds a policy:
+
+- **015 `inbox_pagination`** — `get_user_inbox()` gains `p_limit` and `p_cursor`. It drops the
+  one-argument function rather than `CREATE OR REPLACE`, because two overloads make the
+  one-argument call ambiguous.
+- **016 `suggest_usernames_bounded_topup`** — bounds the top-up loop in
+  `suggest_usernames()`, which spun until the statement timeout for the first student with a
+  given name.
+- **017 `search_users_full_name_cast`** — casts `full_name` to `text` in `search_users()`.
+  Every search that matched a row used to return 500 (`42804`).
+- **018 `search_demo_isolation`** — `universities.is_demo` (a generated column) and a
+  `search_users()` that keeps demo accounts and real students apart. If the viewer can't be
+  identified, it returns zero rows.
 
 The 25 Aug file listed only the first eight. The six new ones are numbered 008–013 in their
 own headers; **013 is the fourteenth file**, because `performance_and_grants` never took a
@@ -67,7 +96,7 @@ What the six new ones do, from their headers:
 - **013 `universities_expansion`** — the `is_active` column and the core institution set,
   loaded inactive. See Phase 3 below.
 
-Numbers 001–013 are conversational labels and do **not** sort the same as the timestamps. 004
+Numbers 001–018 are conversational labels and do **not** sort the same as the timestamps. 004
 has a later timestamp than 005/006/007 and applies after them. Timestamps decide order; do not
 rename anything to force a sequence.
 
@@ -82,7 +111,8 @@ image. Do not regenerate it.
 
 ### Row Level Security — what the migrations declare
 
-Counted from `alter table ... enable row level security` across all 14 files: **17 public
+Counted from `alter table ... enable row level security` across all 18 files (015–018 add
+none): **17 public
 tables**, one more than the 16 the 25 Aug file reported, because `public.otp_requests` arrived
 with 008.
 
@@ -124,8 +154,8 @@ and both deliberate. **`[not re-verified]`** that this is still the live grant s
 ### Realtime
 
 `public.messages` is the only table in the `supabase_realtime` publication `[not re-verified]`.
-Both clients subscribe **unfiltered** — `frontend/src/pages/messages/Messages.jsx:760`
-(`.channel("realtime:messages")`) and `mobile/src/contexts/RealtimeContext.tsx:181` — and
+Both clients subscribe **unfiltered** — `frontend/src/pages/messages/Messages.jsx:1306`
+(`.channel("realtime:messages")`) and `mobile/src/contexts/RealtimeContext.tsx:215` — and
 `messages_select_own` is what makes that safe, because Realtime re-checks the SELECT policy per
 row. If `public.products` is ever added to the publication it needs a SELECT policy in the same
 migration.
@@ -137,28 +167,30 @@ migration.
 The 25 Aug list had nine numbered issues. Three of them are closed — items 1, 2 and 6 — see
 "Recently resolved". The remaining six are renumbered below.
 
-### 1. No pagination anywhere — `.range()` still has **0 call sites**
+### 1. ✅ Resolved in Phase 4 — cursor pagination on the list endpoints
 
-Re-ran the check on 15 Sep across `backend/src`, `frontend/src`, `mobile/src` and `mobile/app`:
+*Kept under its old number so references to issues 2–6 still point at the right ones.*
 
-```
-$ grep -rn "\.range(" backend/src frontend/src mobile/src mobile/app | wc -l
-0
-```
+On 15 Sep this said every list returned the whole table. That is no longer true. As of 13 Oct,
+`GET /api/products`, the product comments list, `GET /api/messages/inbox/:userId` (with
+migration 015) and `GET /api/messages/history` all take `limit` and `cursor`. Each
+controller's `parsePageLimit()` caps `limit` at 50: `products.controller.js:294` and
+`messages.controller.js:42`. They return `{ items, next_cursor }`.
 
-**Zero, unchanged from 25 Aug.** Every list endpoint still returns the whole table.
-`backend/CLAUDE.md` requires `limit` capped at 50 on new endpoints; nothing existing honours
-it. This is Phase 4 work and is the block Neeraj is picking up (see `docs/CHANGELOG.md`,
-15 Sep, ownership loan).
+The 15 Sep check, `grep "\.range("`, still prints 0. That is expected: the code uses keyset
+cursors (`.limit()` plus a comparison on the cursor column), not `.range()`, and `OFFSET` is
+banned by `backend/API.md`. Don't use the grep as a test for pagination.
 
 ### 2. `products.views` is incremented by two independent paths
 
-`frontend/src/components/ProductCard/ProductCard.jsx:506` (direct RPC from the browser) and
-`backend/src/modules/products/products.controller.js:388` (on `GET /products/:id`). Different
-rules, no coordination, so the count is not meaningful. Pick one. The controller line was
-`:352` on 25 Aug; the Phase 4 V-A auth work moved it. Scheduled for Phase 5.
+`frontend/src/components/ProductCard/ProductCard.jsx:233` (direct RPC from the browser) and
+`backend/src/modules/products/products.controller.js:656` (on `GET /products/:id`). Different
+rules, no coordination, so the count is not meaningful. Pick one. Still open on 13 Oct. It was
+scheduled for Phase 5 and slipped. **Phase 6B fixes it** (`docs/runbooks/PHASE_6B_RUNBOOK.md`
+§0.4 workstream C, §1.11): a `product_views` table counts one view per student, and the RPC is
+closed to the public key. The runbook's finding 7 covers that public-key grant.
 
-`mobile/src/hooks/useComments.ts:12` documents a third hazard in the same area — a posted
+`mobile/src/hooks/useComments.ts:15` documents a third hazard in the same area — a posted
 comment or vote inflating the view count.
 
 ### 3. `avatars` bucket has no SELECT or DELETE policy
@@ -178,9 +210,9 @@ breaks the calling action, so this fails silently today. Phase 7 per the Phase 3
 
 ### 5. `backend/API.md` is wrong about `increment_page_view()`
 
-`backend/API.md:2807` still says *"the RPC and table exist; nothing calls it."*
+`backend/API.md:3055` still says *"the RPC and table exist; nothing calls it."* (13 Oct)
 `frontend/src/components/footer/footer.jsx:56` calls it on every page load. One-line doc fix.
-The 25 Aug file cited line 2448; the Phase 3 and Phase 4 API.md rewrites moved it. Phase 8
+The 25 Aug file cited line 2448, and the 15 Sep file line 2807; API.md keeps growing. Phase 8
 housekeeping.
 
 ### 6. 👁️ Block G5 browser verification is still outstanding `[not re-verified]`
@@ -276,11 +308,11 @@ handoff entry is in `docs/CHANGELOG.md` (15 Sep, reconstructed).
   ~100 empty colleges.
 - **CORS** — production answered every origin with `Access-Control-Allow-Origin: *`. Replaced
   with an exact-string allowlist in `backend/src/app.js` (`PRODUCTION_ORIGINS` + `WEB_ORIGINS`
-  env, plus local origins in dev only). ⚠ **`PRODUCTION_ORIGINS` is still empty** — see
-  "Credential hygiene and open actions".
+  env, plus local origins in dev only). `PRODUCTION_ORIGINS` holds `https://yahora.netlify.app`.
+  See "Credential hygiene and open actions".
 - **OTP 8 → 6 digits.** `supabase/config.toml` `otp_length = 6` in both blocks;
-  `frontend/src/pages/auth/Auth.jsx:909` `maxLength={6}`.
-  ⚠ **`frontend/CLAUDE.md` §13 still says "OTP is 8 digits"** and so does §6 step 2. Stale.
+  `frontend/src/pages/auth/Auth.jsx:925` `maxLength={6}`. `frontend/CLAUDE.md` §2, §6 and §13
+  said 8 until 13 Oct and now say 6.
 - **Mobile Turnstile** via `mobile/src/components/TurnstileWebView.tsx` (new, 286 lines) —
   Turnstile has no native RN component, so it runs in a WebView and posts the token out through
   `window.ReactNativeWebView.postMessage`.
@@ -307,10 +339,12 @@ handoff entry is in `docs/CHANGELOG.md` (15 Sep, reconstructed).
   from `req.user.id`, never from the request body or path. Phase 3 and Phase 4 V-A were both
   applications of exactly this rule.
 - **Zero schema drift between local and production.** `[not re-verified]` — was true on 25 Aug
-  via `schema-drift.mjs`; six migrations have landed since and this session cannot check.
-- Production carries **112 users / 141 messages**; local seed carries 11 users.
-  `[not re-verified]` — both are 25 Aug figures. Note `backend/scripts/seedLocal.js` was
-  rewritten on 15 Sep (commit `660c012`), so the local number is likely stale.
+  via `schema-drift.mjs`; ten migrations (008–018) have landed since and this session cannot
+  check.
+- Production carries **112 users / 141 messages** `[not re-verified]`, a 25 Aug figure. The
+  25 Aug "local seed carries 11 users" is stale. The 6A V-D entry (`docs/changelog/`, 9 Oct)
+  records `node backend/scripts/seedLocal.js` → 696 students and 928 products across 116
+  universities, and `seedDemo.js` → 15 users, 40 products.
 - `toggleLikeProduct` does not double-count — the trigger owns the counter. `[not re-verified]`
 - The fixed `c0000000-…-0001` (B.Tech) and `d0000000-…-0002` (Mechanical Engineering) seed ids
   still do not exist after a reset; legacy no-id inserts claimed those names first. Do not
@@ -333,28 +367,31 @@ handoff entry is in `docs/CHANGELOG.md` (15 Sep, reconstructed).
 Authoritative file-by-file map: `backend/CLAUDE.md`. Every file under `backend/src/modules/`
 carries an `OWNER:` banner.
 
-**Phase 4 only — one temporary loan.** Neeraj writes the cursor pagination in the READ handlers
-of `backend/src/modules/products/` and `backend/src/modules/messages/`, which the map lists as
-Vishwajeet's. Vishwajeet reviews the PRs; his Block V-A lands first. The map is unchanged from
-Phase 5 onward. Written up in `docs/CHANGELOG.md`, 15 Sep.
+**Phase 4 loan — ended.** Neeraj wrote the cursor pagination in the READ handlers of
+`products` and `messages`. The loan ended with Phase 4. Written up in `docs/CHANGELOG.md`, 15 Sep.
+
+**Phase 6B loan — current.** `backend/src/modules/products/` and `backend/src/modules/share/`
+are lent to Neeraj from Day 2 (13 Oct) until 6B sign-off. Vishwajeet does not edit them in
+that time, and the `OWNER:` banners stay unchanged. See `docs/runbooks/PHASE_6B_RUNBOOK.md`
+§2.2. Vishwajeet files the loan entry in Block V-A; as of 13 Oct it isn't in `docs/changelog/`
+yet.
 
 ---
 
 ## Credential hygiene and open actions
 
-- ⚠ **`PRODUCTION_ORIGINS` in `backend/src/app.js:53` is still empty.** The CORS allowlist that
-  replaced the production wildcard has nothing in it, and the deployed frontend's domain is not
-  recorded anywhere in this repo. Until that array is filled or `WEB_ORIGINS` is set on the
-  Render deploy, **every browser request from the hosted site is refused**. The Expo app is not
-  affected — `if (!origin) return callback(null, true)` is the first check and is unchanged in
-  both environments, because CORS is a browser mechanism. Do not remove that line. This was
-  flagged as ACTION REQUIRED on 10 Sep and is still outstanding `[not re-verified]` against the
-  live deploy.
-- **`cache.md` is a tracked file** that has held the production connection string, password
-  included, in the working tree. The password is **not** in committed history, but anything
-  written into it later is one `commit -a` from being published. Suggested: `git rm --cached
-  cache.md` plus a `.gitignore` entry, and rotate the database password on the assumption a
-  plaintext copy sat in a repo with a remote. `[not re-verified]` whether this was actioned.
+- ✅ **`PRODUCTION_ORIGINS` in `backend/src/app.js:54` is filled:** `https://yahora.netlify.app`,
+  added 10 Sep in commit `3757be0`. The 15 Sep version of this file said the array was empty,
+  which was already wrong then. A hosted frontend on any other domain still needs `WEB_ORIGINS`
+  set on Render. The Expo app isn't affected by CORS:
+  `if (!origin) return callback(null, true)` is the first check, in both environments, because
+  CORS is a browser mechanism. Do not remove that line. That the live deploy accepts the Netlify
+  origin is `[not re-verified]`.
+- **`cache.md` is still a tracked file** and still not in `.gitignore`. On 13 Oct it holds only
+  phase start dates. No commit in its history contains a connection string or password. It has
+  held the production connection string in the working tree before, so the advice stands: never
+  put a credential in it. If you want it out of git, use `git rm --cached cache.md` plus a
+  `.gitignore` entry. Whether the database password was rotated is `[not re-verified]`.
 - The production dumps (`prod-backup-data.sql`, `prod-backup-schema.sql` — 112 real emails and
   112 bcrypt hashes) were moved to `~/yahora-backups/`, outside the repo. ✅ Resolved 25 Aug.
   There are no automated backups on this project (free tier), so keep taking them — just not

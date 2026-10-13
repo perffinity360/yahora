@@ -16,7 +16,7 @@ This is the **web** app. There is a separate `mobile/` (React Native) app and a 
 
 ## 2. Golden Rules (read first, every time)
 
-1. **Read the real source before assuming anything.** Before wiring an endpoint, open the matching backend controller in `../backend/src/modules/<module>/`. Before touching data shapes, check `../database/schema.md`. Do not guess column names, response shapes, or field formats. (Example of why: the OTP is **8 digits**, delivered via Supabase — not 6. Assumptions like this have caused bugs.)
+1. **Read the real source before assuming anything.** Before wiring an endpoint, open the matching backend controller in `../backend/src/modules/<module>/`. Before touching data shapes, check `../database/schema.md`. Do not guess column names, response shapes, or field formats. (Example of why: the OTP is **6 digits**, delivered via Supabase — it was 8 until Phase 3, and docs that still say 8 are stale. Assumptions like this have caused bugs.)
 2. **Respect campus isolation.** Any request that reads or writes campus-scoped data must carry the correct `university_id`. Interaction endpoints must never operate across campuses.
 3. **Match existing patterns.** This codebase has established conventions (raw `fetch`, CSS Modules, `AuthContext`, lucide icons). Follow them — do not introduce axios, styled-components, Redux, TanStack Query, or new state libraries on the web without being asked.
 4. **Verification is the user's job.** Do not claim something works in the browser. Commit after each logical unit of work and let Vishwajeet verify in the browser.
@@ -96,7 +96,7 @@ frontend/
 
 **Auth / onboarding flow:**
 1. User enters university email → `POST /api/auth/request-otp`. Backend extracts the domain, checks it against the `universities` table, rejects unknown domains, then asks Supabase to send the OTP.
-2. User enters the **8-digit** OTP → `POST /api/auth/verify-otp`. Backend verifies with Supabase, creates the base `users` row on first login with `is_profile_complete: false`, and returns `{ session, userAuth, userProfile }`.
+2. User enters the **6-digit** OTP → `POST /api/auth/verify-otp`. Backend verifies with Supabase, creates the base `users` row on first login with `is_profile_complete: false`, and returns `{ session, userAuth, userProfile }`.
 3. If `userProfile.is_profile_complete === false` → route to `/onboarding`; else route to `/dashboard` (or home).
 4. Onboarding submits via `POST /api/auth/onboarding`.
 5. There is also a **demo/guest** path: `POST /api/auth/demo-login` (sets the demo banner; demo users are cleaned up nightly by a backend cron).
@@ -166,7 +166,7 @@ Global resets already applied: `box-sizing: border-box` on everything; base font
 Defined in `frontend/.env` (Vite requires the `VITE_` prefix). **Never commit real values.**
 
 ```
-VITE_API_BASE_URL   # Express backend origin, e.g. http://localhost:5000 (NO trailing /api, NO trailing space)
+VITE_API_BASE_URL   # Express backend origin, e.g. http://localhost:5001 (NO trailing /api, NO trailing space)
 VITE_SUPABASE_URL   # Supabase project URL
 VITE_SUPABASE_ANON_KEY
 ```
@@ -230,7 +230,7 @@ Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in t
 
 ## 13. Known Gotchas
 
-- **OTP is 8 digits** (Supabase-delivered) — size inputs/validation accordingly.
+- **OTP is 6 digits** (Supabase-delivered; `otp_length = 6` in `supabase/config.toml`, `maxLength={6}` in `Auth.jsx`) — size inputs/validation accordingly.
 - **`.env` trailing spaces / trailing `/api`** on `VITE_API_BASE_URL` cause broken requests. The code appends `/api` itself.
 - **`VITE_API_BASE_URL` is empty by default** (dev), so `API_BASE_URL` resolves to a **relative** `/api` that the Vite dev proxy (`vite.config.js`) forwards to the backend. `urls.js` preserves that empty value deliberately. Because it's relative, **never build request URLs with `new URL(...)`** — that constructor requires an absolute URL and throws `Failed to construct 'URL': Invalid URL`. Use plain string concatenation with `fetch` (and `URLSearchParams` for query strings), like the rest of the codebase. This exact bug hid the Marketplace feed once.
 - **Marketplace mobile filter drawer reuses the desktop `SidebarContent`** (`Marketplace.jsx`), so the campus switcher and all filter sections render in both. Toggle drawer-only visibility via `.mobileDrawer .<class>` overrides in `Marketplace.module.css` — don't duplicate the markup.

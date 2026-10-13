@@ -104,6 +104,107 @@ already died in Phase 6A.
 
 ---
 
+## Activity and recommendations (not in Phase 6B)
+
+Added 2026-10-13. **The launch-day part is in "When" below:** the activity log has to be
+recording from launch day, because history that was never recorded can't be recovered.
+
+**The rule behind all of this:** the public view count and "interest" are two different
+numbers with two different jobs.
+
+| | Public view count (6B) | Private activity log (later) |
+|---|---|---|
+| What it answers | How many different students looked at this? | What is each person interested in? |
+| Who sees it | Everyone | Only the backend |
+| Priya opens the cycle 3 times and the cooler 7 times | +1 each | 3 rows and 7 rows, with times |
+| Anonymous opens from WhatsApp | Not counted | Counted separately, as "link opens" |
+| Must it be hard to fake? | Yes, because people trust it | Less, because nobody sees it |
+
+**Rule of thumb:** keep noisy numbers private, and keep public numbers hard to fake.
+People fake numbers they can show off.
+
+### Recommendations: later, and simple first
+
+- **Not needed now.** Each campus has a few hundred to a few thousand live listings, and
+  students can only buy on their own campus. Newest first, plus filters and search, is enough.
+- **When a campus has more listings than people can browse**, start with rules and SQL:
+  - **Similar items:** same category, similar price, same campus.
+  - **Popular on your campus this week:** the most saves and messages in the last 7 days.
+  - **"Students who saved this also saved…":** count which items get saved together.
+    Example: 4 students saved the cycle. 2 of them also saved a helmet, 1 a lock and
+    1 a kettle, so the cycle's page shows the helmet first.
+- **Machine learning comes last.** pgvector (already planned for semantic search) can
+  power "similar items".
+
+### Measuring interest: weigh actions more than opens
+
+- Views are the weakest signal (called "implicit feedback"). Many opens can mean real
+  interest, comparing, or just the app reloading.
+- **Example scoring:**
+  - A view is worth 1 point, and each repeat view of the same item is worth less
+    (1, then ½, then ⅓, and so on).
+  - A save is worth 5 points. Messaging the seller is worth 10.
+  - Points halve every two weeks.
+  - The cycle's 3 views: 1 + ½ + ⅓ ≈ **1.8**. The cooler's 7 views ≈ 2.6, plus 5 for the
+    save and 10 for the message = **17.6**. The actions decide it, not the opens.
+- **Second-hand items are one of a kind and disappear when sold.** So learn what someone
+  wants by category and price range ("a cooler, ₹2–3k"), not by single items.
+- **The best feature this leads to is saved-search alerts:** "A cooler was just listed on
+  your campus." These need notifications (Phase 8).
+
+### Shares and anonymous opens: separate, private numbers
+
+- Anonymous opens never go into the public count. There's no way to count each person
+  only once, so anyone could inflate it by refreshing, using incognito windows or
+  running a script.
+- **Measure popularity with three separate numbers:**
+  1. **Shares.** When a logged-in student taps Share, record it, and count how many
+     *different students* shared. This is the best popularity signal, because faking it
+     needs verified accounts.
+  2. **Link opens.** Count them on the backend's `/share/product/<id>` page, which every
+     link from the Share button passes through. Three filters:
+     - **Skip previews.** When a link is pasted, WhatsApp, Facebook or Telegram fetches the
+       page to draw the preview card, and its user agent says so. That's a preview, not
+       a person.
+     - **Count each device once per listing per day.** Use a random ID stored in a cookie,
+       like the Phase 2 OTP device ID.
+     - **Cap each IP address only loosely.** A whole hostel can share one IP address.
+  3. **Results.** How many of those visitors then logged in and opened the listing.
+- **Show these to the seller only**, for example: "Shared by 6 students · 31 link opens
+  this week". The filters cut noise but won't stop a determined faker. That's acceptable
+  because these numbers are private.
+
+### Privacy for the activity log
+
+- **Backend-only**, like `product_views`: RLS on, and no grants to anon or authenticated.
+- **Deleted with the account** (`on delete cascade`).
+- **Kept for about six months.** Old interest says little.
+- **Mentioned in the privacy policy**, as the DPDP Act requires.
+
+### When
+
+- **6B: no change.** The public count stays "different logged-in students".
+- **Before launch (Phase 9, alongside rate limiting):** build the activity log (views,
+  saves, likes, messages to sellers, shares, link opens) and link-open counting on the
+  share page. Start recording on launch day. Production data from before launch is wiped
+  anyway, and history that was never recorded can't be recovered.
+- **After launch, once a campus has too many listings to browse:** add similar items,
+  "popular on your campus", and saved-search alerts (after Phase 8). Rules and SQL first.
+
+### How established companies do it
+
+- **Amazon:** no public view count. The public number it does show is "1K+ bought in past
+  month", based on purchases, the hardest action to fake. Your private browsing history
+  drives "customers who viewed this also viewed".
+- **YouTube:** your full watch history drives recommendations. Around 2012 it switched from
+  ranking by views and clicks to ranking by watch time, because clickbait made views too
+  easy to get. It does count anonymous views, but it filters them heavily and removes spam
+  views later, so counts can even go down. That takes a large anti-fraud team.
+- **eBay and Etsy:** sellers get detailed private stats. Buyers see only a few public
+  signals, such as eBay's "X watching". eBay also offers saved searches with alerts.
+
+---
+
 ## Do this NOW — do not defer (5 minutes)
 
 **Lower `OTP_HOURLY_CEILING` from 2000 to ~25**, below Supabase's current 30/hour.
