@@ -1,7 +1,10 @@
-# Messages Design Spec — v2
+# Messages Design Spec — v3
 
-**Phase 6A · v2 · 11 October 2026 · the single source of truth for the inbox and the
+**Phase 6B · v3 · 11 October 2026 · the single source of truth for the inbox and the
 conversation screens on BOTH platforms.**
+
+**v3 adds §10, message actions — Reply, Copy and Delete — and the inbox-preview changes that
+come with them (Phase 6B). §0.2 lists every change from v2. Everything else is v2, unchanged.**
 
 v2 records what the mobile app actually ships at the end of Phase 6A. Every value below was
 read out of `mobile/src/theme/index.ts`, `mobile/src/lib/{emoji,stickers,messages}.ts`,
@@ -74,6 +77,19 @@ already follows. Every pair is in §7.
 | §8 | — | **New**: deferred on both platforms (price, `You: `) | Moved out of §1/§2 as live requirements |
 | §9 | — | **New**: not specified yet (typing bubble, error states, emoji button and tray) | Each platform keeps its current look |
 
+## 0.2 What changed from v2
+
+| Section | v2 | v3 | Why |
+|---|---|---|---|
+| Header | v2 · Phase 6A | v3 · Phase 6B | Message actions |
+| §1 Row | `You: ` prefix deferred (§8) | **Live**: your own last message starts with `You: `; deleted and hidden messages change the preview (§10.9) | The inbox now returns `last_sender_id` and `last_message_deleted` (migration `message_actions`) |
+| §2 Bubbles | — | Pointer to §10 | Replies show a quote; deleted messages show a tombstone |
+| §3 Tokens | — | 10 new mobile tokens, 10 new web variables | §10's colours, named so no screen holds a literal |
+| §5 Allowed differences | Six | **Ten**: adds swipe (mobile only), how the actions open, the delete dialog's look, Android 13's own copy confirmation | Each is a platform convention, not a design choice |
+| §7 Contrast | — | 10 new rows, including two **rejected** options | The first quote and tombstone colours failed on the pink end; the shipped ones pass |
+| §8 Deferred | Price, `You: ` | Price only | `You: ` shipped in §10.9 |
+| §10 | — | **New**: message actions | Phase 6B |
+
 ---
 
 ## 1. Inbox — the conversation list
@@ -136,7 +152,8 @@ icon 15, mutedText. Margin 10 top, 16 sides, 6 bottom.
 Name and time share a **baseline**, gap 8. The preview line sits **3** below the name row,
 with gap 8 to the badge.
 
-The `You: ` prefix on your own last message is **deferred** — see §8.
+Your own last message starts with `You: `, and a deleted or hidden last message changes the
+preview — both in **§10.9**.
 
 **Fallbacks:** no name → `Yahora student`; a conversation with yourself → the name followed
 by ` (You)`; no last message → `Start the conversation ✨`; no product title → `Item`.
@@ -284,6 +301,9 @@ disagree on this. Mobile ships `SENT_BUBBLE_STYLE = 'gradient'` until N-F decide
 3 below: background `#FEF0F0`, text "Failed — tap to retry" in Inter 600 11 `#B91C1C`, a
 rotate icon 11 in the same colour, gap 4, padding 3 vertical / 8 horizontal, radius 999.
 Tapping it resends the same message. Pressed (mobile): opacity 0.7.
+
+**Replies, copy and delete** — the quote at the top of a reply, the deleted-message tombstone,
+and how a message's actions open — are in **§10**.
 
 ### Meta row inside the bubble
 
@@ -480,6 +500,24 @@ bubbleMineMeta:     'rgba(255,255,255,0.90)',  // time + ticks on a sent bubble
 chatFailedTick:     '#F87171',
 ```
 
+Message actions (§10), added in v3:
+
+```ts
+chatRowSelected:   'rgba(128,0,128,0.10)',     // the row while its sheet/menu is open
+chatRowHighlight:  'rgba(128,0,128,0.12)',     // jump-to-original flash
+chatQuoteMineBg:   'rgba(0,0,0,0.12)',         // quote inside a sent bubble
+chatQuoteMineBar:  'rgba(255,255,255,0.90)',
+chatQuoteMineText: 'rgba(255,255,255,0.85)',
+chatQuoteTheirsBg: 'rgba(128,0,128,0.06)',     // quote inside a received bubble; also the reply bar
+chatTombstoneMine: 'rgba(255,255,255,0.90)',   // "You deleted this message"
+sheetHandle:       'rgba(128,0,128,0.15)',
+scrim:             'rgba(11,11,11,0.32)',      // behind the sheet and dialogs
+toastBg:           'rgba(26,26,26,0.88)',      // "Copied" and other toasts
+```
+
+The red for Delete is the existing `errorText #B91C1C`. The constants of §10.10 live in
+`mobile/src/lib/messageActions.ts`.
+
 Plus three constants, so each decision lives in one place:
 
 ```ts
@@ -503,7 +541,25 @@ The messages screens also use these existing app tokens: `appBgTop/Mid/Bottom`
 --chat-read-tick: #53BDEB;
 ```
 
-Every other value in §1 and §2 is given in full where it is used; whatever name the web
+Message actions (§10), added in v3 — reuse an existing variable only where its value is
+identical:
+
+```css
+--chat-row-selected: rgba(128,0,128,0.10);
+--chat-row-highlight: rgba(128,0,128,0.12);
+--chat-quote-mine-bg: rgba(0,0,0,0.12);
+--chat-quote-mine-bar: rgba(255,255,255,0.90);
+--chat-quote-mine-text: rgba(255,255,255,0.85);
+--chat-quote-theirs-bg: rgba(128,0,128,0.06);
+--chat-tombstone-mine: rgba(255,255,255,0.90);
+--scrim: rgba(11,11,11,0.32);
+--toast-bg: rgba(26,26,26,0.88);
+--danger-text: #B91C1C;
+```
+
+The constants of §10.10 live in `frontend/src/utils/messageActions.js`.
+
+Every other value in §1, §2 and §10 is given in full where it is used; whatever name the web
 gives it, the value must match. ⚠ The web's existing `--pink-light` is `#f4e0e4`, **not**
 this spec's pinkLight `#FFF4F7` — where this file says pinkLight, use `#FFF4F7`.
 
@@ -532,7 +588,7 @@ that one line before running it anywhere else.
 
 ---
 
-## 5. Allowed differences — these six and no others
+## 5. Allowed differences — these ten and no others
 
 1. **Bubble shadows are web-only.** Android elevation shadows render grey and cost frames
    inside list rows (`mobile/DESIGN.md` §6).
@@ -549,6 +605,16 @@ that one line before running it anywhere else.
 6. **The jump-to-latest button's shadow.** Android draws its elevation shadow in grey; web
    draws the purple shadow. Allowed because the button is a single floating control, not a
    list row, so the frame-cost reason behind #1 does not apply.
+
+7. **Swipe to reply is mobile-only** (§10.3). A swipe means nothing with a mouse; the website
+   reaches Reply through its menu.
+8. **How the actions open** (§10.2): long-press and a bottom sheet on mobile; a hover/tap
+   button beside the bubble, right-click, and a popover menu on web. The three actions, their
+   order, labels and icons are the same.
+9. **The delete confirmation's look** (§10.8): the phone's own `Alert` on mobile, the site's
+   modal on web. The title, body, choices and their order are the same.
+10. **Android 13 and newer show their own copy confirmation** (§10.7), so the app shows no
+   toast there. Android 11–12 and the website show the app's `Copied` toast.
 
 Anything else that differs between the two platforms is a bug.
 
@@ -584,6 +650,16 @@ WCAG AA: 4.5:1 for text under 18px, 3.0:1 for icons and other non-text UI.
 | Send icon white on `#EB487F` | 3.64 | 3.0 ✅ |
 | *Old web:* white text on `#EB487F` | *3.64* | *4.5 ❌* |
 | *Old web:* amber tick on `#EB487F` | *2.92* | *3.0 ❌* |
+| Quote name, white, on black-12% over the pink end `#C02B7F` (§10.5) | 6.57 | 4.5 ✅ |
+| Quote text, white 85%, on black-12% over `#C02B7F` | 5.13 | 4.5 ✅ |
+| Quote text, white 85%, on black-12% over the solid fallback `#9B1280` | 6.75 | 4.5 ✅ |
+| *Rejected:* quote text, white 85%, on **white**-18% over `#C02B7F` | *3.38* | *4.5 ❌* |
+| Quote name, purple, on purple-6% over white (theirs; also the reply bar) | 8.42 | 4.5 ✅ |
+| Quote text, mutedText, on purple-6% over white (theirs; also the reply bar) | 4.83 | 4.5 ✅ |
+| Tombstone label, white 90%, on `#C02B7F` (§10.8) | 4.64 | 4.5 ✅ |
+| *Rejected:* tombstone label, white **85%**, on `#C02B7F` | *4.29* | *4.5 ❌* |
+| Delete label `#B91C1C` on white | 6.47 | 4.5 ✅ |
+| `Copied` toast, white on `#1A1A1A` 88% over the chat ground | 12.75 | 4.5 ✅ |
 
 The read tick fails on the pink end because the owner preferred WhatsApp's familiar blue to
 a paler cyan. If it ever has to pass, the brand's `blueLight` `#6FE1FF` reaches **3.57:1**
@@ -593,14 +669,16 @@ on `#C02B7F`.
 
 ## 8. Deferred on both platforms
 
-Neither platform shows these today. Both need a field that `GET /api/messages/inbox/:userId`
-does not return, which is a backend change in a block of its own. Until then they are **not
-requirements**, and neither platform may show them on its own — the two must not differ.
+Neither platform shows this today. It needs a field that `GET /api/messages/inbox/:userId`
+does not return, which is a backend change in a block of its own. Until then it is **not a
+requirement**, and neither platform may show it on its own — the two must not differ.
 
 | Item | Where it would go | Needs |
 |---|---|---|
 | Product price in the snippet (Bree Serif 400 12, purple, as all prices) | §2 Product snippet | `product_price` on each inbox row |
-| `You: ` prefix on your own last message | §1 Row, preview line | `last_sender_id` on each inbox row |
+
+`You: ` was here in v2. It shipped in v3 (§10.9), once the inbox began returning
+`last_sender_id`.
 
 ---
 
@@ -613,3 +691,165 @@ what it has until a later version specifies them:
 - error states: the inbox failing to load, a thread failing to load, the conversation-with-
   yourself screen;
 - the emoji button in the composer, and the emoji tray or picker it opens.
+
+---
+
+## 10. Message actions — Reply, Copy, Delete (new in v3)
+
+Phase 6B. Picture: `docs/design/message_actions.png` (source `message-actions-mockup.html`).
+Where the picture and this section disagree, this section wins.
+
+### 10.1 Which actions a message has
+
+| The message | Actions, in this order |
+|---|---|
+| A normal message (mine or theirs) | **Reply · Copy · Delete** |
+| A deleted-for-everyone message (tombstone, §10.8) | **Delete** only (it removes the tombstone from your own view) |
+| Mobile: a message still sending, or failed | **none** — the failed pill (§2) already handles it |
+| The empty-chat card, the beginning note, the typing bubble, date chips, the unread band | none — they are not messages |
+
+### 10.2 Opening the actions
+
+| | Mobile | Web |
+|---|---|---|
+| How | **Long-press** the bubble, **350 ms** (`LONG_PRESS_MS`) | **Hover** the bubble → an actions button appears beside it; click it. **Right-click** on the bubble opens the same menu. On a touch screen (no hover) **tap** the bubble to show the button |
+| The row while open | `rgba(128,0,128,0.10)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
+| Container | **Bottom sheet** over a scrim `rgba(11,11,11,0.32)` | **Popover menu** anchored under the actions button, kept inside the thread's edges |
+
+**Mobile sheet:** white · radius 20 on the top corners · padding 8 top, 12 bottom (on mobile, the larger of 12 and the home-indicator inset) · handle 36×4, radius 2, `rgba(128,0,128,0.15)`, centred, 8 above the first item · each item 52 tall, padding 0/20, icon 20 then gap 16 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** item: icon and label `#B91C1C` (errorText). Tapping outside the sheet, or the Android back button, closes it.
+
+**Web actions button:** a 28 circle **beside** the bubble, on its outer side — left of mine, right of theirs — aligned with the bubble's top, gap 6 · white · border 1px `rgba(128,0,128,0.08)` · `chevron-down` 16, mutedText · fades in over 120 ms · hover on the button itself: background pinkLight `#FFF4F7`. It sits outside the bubble so it never covers the message text, and the bubble's size never changes.
+
+**Web menu:** white · radius 12 · shadow `0 8px 24px rgba(42,8,42,0.16)` · padding 6 vertical · min-width 168 · each item 40 tall, padding 0/14, icon 16 then gap 12 then label Inter 500 14 `#1A1A1A` · icons mutedText · Delete in `#B91C1C` · hover and keyboard focus `rgba(128,0,128,0.06)`. Arrow keys move between items, Enter chooses, **Esc** closes and puts focus back on the actions button.
+
+Icons: Reply `corner-up-left` · Copy `copy` · Delete `trash-2` (Feather on mobile, lucide on web — same shapes).
+
+### 10.3 Swipe to reply (mobile only)
+
+Swipe any bubble (mine or theirs) to the **right**:
+
+| | Value |
+|---|---|
+| Starts | after **12** of horizontal movement; **10** of vertical movement first cancels it, so the list still scrolls |
+| Follows the finger | up to **72** (`SWIPE_REPLY_MAX`), never left of its start |
+| Reply icon | `corner-up-left` 18 purple in a 30 white circle, shadow `0 1px 3px rgba(42,8,42,0.12)` (Android: `elevation: 1`), at the row's left edge, bottom-aligned with the bubble, opacity rising 0 → 1 as the bubble travels 0 → 56 |
+| Triggers | released past **56** (`SWIPE_REPLY_TRIGGER`) → reply mode for that message |
+| Returns | spring back to 0 (Reanimated `withSpring`, damping 20, stiffness 220) |
+
+Not on tombstones, pending or failed messages. All of it runs on the UI thread (Reanimated); no JS state changes while the finger moves.
+
+### 10.4 Reply mode — the reply bar in the composer
+
+Starting a reply (from the menu, the sheet or a swipe) shows a **reply bar** inside the composer bar, above the input row, and focuses the input.
+
+| | Value |
+|---|---|
+| Bar | background `rgba(128,0,128,0.06)` · radius 12 · left accent 3 wide, purple `#800080`, filling the bar's height on its left edge · padding 6 top, 6 bottom, 13 left (10 after the accent), 6 right · gap 8 · margin 6 below |
+| Line 1 | `Replying to You` or `Replying to <first name>` — Inter 600 12/16, purple |
+| Line 2 | the quoted message, 1 line, ellipsis — Inter 400 12/16, mutedText. An emoji-only message shows its emoji at this size (no jumbo) |
+| Close | `x` 16, mutedText, in a 28×28 touch target at the right. Web: **Esc** in the input also closes it |
+| Clears when | you send · you press close · you open another conversation |
+
+*First name* = the first word of the contact's name as the header shows it; with no name, `Yahora student`.
+
+### 10.5 The quote inside a reply
+
+A reply shows the message it answers at the **top of its own bubble**, above its text, inside the bubble's padding.
+
+| | Mine (on the gradient) | Theirs (on white) |
+|---|---|---|
+| Background | `rgba(0,0,0,0.12)` | `rgba(128,0,128,0.06)` |
+| Accent (left, 3 wide, full height) | `rgba(255,255,255,0.9)` | `#800080` |
+| Name — Inter 600 12/16 | `#FFFFFF` | `#800080` |
+| Text — Inter 400 12/16, max **2** lines, ellipsis | `rgba(255,255,255,0.85)` | mutedText `#6B6879` |
+| Radius · padding · gap to the text below | 8 · 6 vertical, 8 horizontal after the accent · 6 | same |
+
+- **Name:** `You` when the quoted message is yours, otherwise the contact's first name (§10.4).
+- **Text:** the stored `reply_preview`. If it is empty because the original was deleted for everyone: `Original message was deleted`, **italic**, same colour — and the quote is not tappable.
+- **Width:** the quote takes the bubble's full inner width; a reply bubble is never narrower than **180** (`REPLY_MIN_BUBBLE_WIDTH`), so `ok` answering a long message still shows a readable quote. The 78% / 520 maximum still applies.
+- **Why black 12% and not a white tint on mine:** white 18% over the pink end measured 3.38:1 for the quote text. Black 12% measures 5.13 (§7).
+
+### 10.6 Jump to the original
+
+Tapping a quote scrolls to the original message and flashes it.
+
+| | Value |
+|---|---|
+| Position | the original is placed **35%** down the thread — the same placement the unread band uses (§2 Unread behaviour), with the same function |
+| Flash | a band `rgba(128,0,128,0.12)` behind the whole row (full thread width), held **1200 ms**, then fading out over **400 ms** |
+| Not loaded yet | load older pages with the same call scrolling up uses, at most **5** extra pages (`JUMP_MAX_EXTRA_PAGES`), then jump |
+| Still not found | toast `Couldn't find the original message` (§10.7 toast) |
+
+Jumping changes nothing about read state or the unread band.
+
+### 10.7 Copy
+
+Copies the message's text **exactly** (`content`), then confirms with a toast:
+
+| | Value |
+|---|---|
+| Toast | `Copied` · Inter 600 12 white · background `rgba(26,26,26,0.88)` · radius 999 · padding 6/12 · centred, 16 above the composer · shows **1500 ms** (`COPY_TOAST_MS`), fades in and out over 150 ms |
+| Android 13 and newer | **no app toast** — Android shows its own clipboard confirmation there, and two would double up (`Platform.Version >= 33`) |
+| Web | always the toast |
+
+Clipboard: mobile `expo-clipboard` (`setStringAsync`). Web: the existing `copyText()` in `frontend/src/utils/share.js`, which uses `navigator.clipboard.writeText` where it exists (**https** and **localhost**) and falls back to a hidden `<textarea>` + `document.execCommand('copy')` where it doesn't (the site opened from a phone over the LAN, `http://192.168.x.x`). If it reports failure, the toast says `Couldn't copy`.
+
+The toast is shared: §10.6 and §10.8 use it for their messages too.
+
+### 10.8 Delete
+
+Choosing **Delete** opens a confirmation:
+
+| The message | Title | Choices, top to bottom |
+|---|---|---|
+| Mine, not deleted, sent **under 60 minutes ago** | `Delete message?` | **Delete for everyone** (`#B91C1C`) · **Delete for me** · **Cancel** |
+| Mine and older, or theirs, or any tombstone | `Delete message?` | **Delete for me** · **Cancel** |
+
+Body text under the title: `Delete it for everyone in this chat, or only for you?` when both delete choices show; `It will be removed from this chat for you. <name> will still see it.` when only "for me" shows (`<name>` = the contact's first name).
+
+- **Mobile:** the phone's own `Alert` (Android draws it — its look follows the phone; the labels and their order are what this spec fixes).
+- **Web:** a modal using the site's existing modal styles: buttons stacked, full width, in the order above.
+
+**What happens**
+
+- **Delete for everyone** → the message becomes a **tombstone** for both people, live (Realtime UPDATE). Any reply quoting it shows `Original message was deleted` in its quote.
+- **Delete for me** → the message disappears from **your** view only. The other person is not told and sees no change.
+- The 60 minutes (`DELETE_FOR_EVERYONE_MINUTES`) is enforced by the database; the apps use the same number only to decide which choices to show. If the hour runs out while the dialog is open, the server answers `DELETE_WINDOW_EXPIRED` → toast `It's too late to delete this for everyone`.
+
+**The tombstone**
+
+| | Mine | Theirs |
+|---|---|---|
+| Bubble | same shape, side and background as a normal bubble of that side | same |
+| Content | icon `slash` (Feather) / `Ban` (lucide) 14, then gap 6, then the label | same |
+| Label — Inter 400 **italic** 14/20 | `You deleted this message` · `rgba(255,255,255,0.90)` | `This message was deleted` · mutedText |
+| Meta row | time only — **no ticks** | time only |
+
+No emoji sizing, no links, no quote, not swipeable. White 90% on the pink end measures 4.64 (§7); 85% would fail.
+
+### 10.9 The inbox preview
+
+| The last message you can see | Preview line |
+|---|---|
+| Yours | `You: ` + the text. (This un-defers §8 item 2: the inbox now returns `last_sender_id`) |
+| Theirs | the text, as before |
+| Deleted for everyone | `slash` 12 + gap 4 + italic `You deleted this message` / `This message was deleted` (who deleted it: `last_sender_id`). Unread rows keep their unread weights; the italic stays |
+| You hid it ("delete for me") | it is skipped — the preview shows the newest message you can still see. If you hid every message, the conversation leaves **your** inbox until a new message arrives |
+
+`You: ` is Inter of the preview's own weight and colour (§1 Row), followed by the text with no extra spacing.
+
+### 10.10 Constants — same names, same values, both platforms
+
+```ts
+LONG_PRESS_MS               = 350
+SWIPE_REPLY_TRIGGER         = 56     // mobile only
+SWIPE_REPLY_MAX             = 72     // mobile only
+REPLY_MIN_BUBBLE_WIDTH      = 180
+JUMP_HIGHLIGHT_HOLD_MS      = 1200
+JUMP_HIGHLIGHT_FADE_MS      = 400
+JUMP_MAX_EXTRA_PAGES        = 5
+COPY_TOAST_MS               = 1500
+DELETE_FOR_EVERYONE_MINUTES = 60     // the database enforces this; apps only decide what to show
+```
+
+Mobile keeps them in `mobile/src/lib/messageActions.ts`; web in `frontend/src/utils/messageActions.js`. Change both in the same commit, and the SQL function `delete_message_for_everyone` too if the 60 changes.
