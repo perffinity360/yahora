@@ -12,23 +12,38 @@ export function sendError(res, status, code, extra = {}) {
   return res.status(status).json({ error: code, ...extra });
 }
 
+/** Names our database functions and triggers RAISE, each with its HTTP status. */
+const RAISED_STATUS = {
+  USERNAME_RESERVED: 400,
+  BLOCKED: 403,
+  NESTED_REPLY_NOT_ALLOWED: 400,
+  RATE_LIMIT_POSTS: 429,
+  RATE_LIMIT_REPLIES: 429,
+  POSTING_RESTRICTED: 400,
+  ACCOUNT_SUSPENDED: 400,
+  // Phase 6B — message actions (migration message_actions)
+  MESSAGE_NOT_FOUND: 404,
+  NOT_MESSAGE_SENDER: 403,
+  DELETE_WINDOW_EXPIRED: 403,
+  REPLY_TARGET_INVALID: 400,
+  // Phase 6B — Mark as Sold (migration mark_sold)
+  PRODUCT_NOT_FOUND: 404,
+  NOT_PRODUCT_OWNER: 403,
+  BUYER_NOT_FOUND: 404,
+  BUYER_IS_SELLER: 400,
+  BUYER_NOT_ON_CAMPUS: 400,
+  PURCHASE_NOT_FOUND: 404,
+};
+
 /** Maps a Postgres/Supabase error to our standard response. */
 export function mapDbError(res, error) {
   if (error.code === '23505') return sendError(res, 400, 'DUPLICATE');
   if (error.code === '23503') return sendError(res, 400, 'INVALID_REFERENCE');
 
-  // Our triggers RAISE EXCEPTION with these names.
-  const raised = [
-    'USERNAME_RESERVED', 'BLOCKED', 'NESTED_REPLY_NOT_ALLOWED',
-    'RATE_LIMIT_POSTS', 'RATE_LIMIT_REPLIES',
-    'POSTING_RESTRICTED', 'ACCOUNT_SUSPENDED',
-  ].find(name => error.message?.includes(name));
-
-  if (raised) {
-    const status = raised.startsWith('RATE_LIMIT') ? 429
-                 : raised === 'BLOCKED' ? 403 : 400;
-    return sendError(res, status, raised);
-  }
+  // Matched by name inside the message. No name here is part of another
+  // name — keep it that way, or the wrong one can match first.
+  const raised = Object.keys(RAISED_STATUS).find((name) => error.message?.includes(name));
+  if (raised) return sendError(res, RAISED_STATUS[raised], raised);
 
   console.error('[db]', error);
   return sendError(res, 500, 'INTERNAL_ERROR');

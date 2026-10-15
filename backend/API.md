@@ -111,11 +111,28 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `POSTING_RESTRICTED` | **403 or 400 — see below** | Trigger `trg_post_rate_limit` | `until` |
 | `RATE_LIMIT_POSTS` | 429 | Trigger `trg_post_rate_limit` — 10 top-level posts/hour | `message` |
 | `RATE_LIMIT_REPLIES` | 429 | Trigger `trg_post_rate_limit` — 30 replies/hour | — |
+| `LOGIN_REQUIRED` | 401 | **Phase 6B, Block N-C — not live yet.** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` when the caller is anonymous. See [the identity rule](#the-identity-rule-phase-6b) | — |
+| `MESSAGE_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `delete_message_for_everyone()`, `hide_message_for_me()` (migration `message_actions`) | — |
+| `NOT_MESSAGE_SENDER` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the caller didn't send the message | — |
+| `DELETE_WINDOW_EXPIRED` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the message is more than 60 minutes old | — |
+| `REPLY_TARGET_INVALID` | 400 | **Phase 6B — not live yet.** Trigger function `fill_message_reply()` — the quoted message isn't in this conversation | — |
+| `PRODUCT_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `mark_product_sold()`, `mark_product_available()`, `get_product_buyer_candidates()` (migration `mark_sold`) | — |
+| `NOT_PRODUCT_OWNER` | 403 | **Phase 6B — not live yet.** The same three functions — the caller isn't the listing's seller | — |
+| `BUYER_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `mark_product_sold()` — no such buyer | — |
+| `BUYER_IS_SELLER` | 400 | **Phase 6B — not live yet.** `mark_product_sold()` — the seller named themself as the buyer | — |
+| `BUYER_NOT_ON_CAMPUS` | 400 | **Phase 6B — not live yet.** `mark_product_sold()` — the buyer is on a different campus from the listing | — |
+| `PURCHASE_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `remove_my_purchase()` ("That wasn't me") — no purchase of this listing by the caller | — |
+
+**How a raised name becomes a status.** Every name the database RAISEs is listed, with its
+HTTP status, in the `RAISED_STATUS` map in `backend/src/utils/respond.js`. `mapDbError()`
+returns the first name it finds inside the Postgres error message. A raised name that isn't
+in the map falls through to `500 INTERNAL_ERROR`, so a new RAISE needs a new map entry in the
+same change. No name in the map may be part of another name in it.
 
 > **TODO — ambiguous in plan: two codes have two different HTTP statuses.** §6.6's error list
-> says `403 ACCOUNT_SUSPENDED` and `403 POSTING_RESTRICTED`. But `mapDbError()` in §0.5.2
-> reaches neither branch for these — they don't start with `RATE_LIMIT` and aren't `BLOCKED`
-> — so it falls through to **400**. If `POST /api/posts` routes trigger exceptions through
+> says `403 ACCOUNT_SUSPENDED` and `403 POSTING_RESTRICTED`. But `mapDbError()` maps both to
+> **400** (`RAISED_STATUS` in `respond.js` since Phase 6B V-A; before that, by falling
+> through its `RATE_LIMIT` / `BLOCKED` checks). If `POST /api/posts` routes trigger exceptions through
 > `mapDbError()` as §6.6 step 9 implies, the client gets 400 where the plan promised 403.
 > **Which is correct: patch `mapDbError` to return 403 for these two, or change §6.6 to 400?**
 > Note also that `POSTING_RESTRICTED` carries an `until` field that `mapDbError` cannot
@@ -239,9 +256,61 @@ histories, and comment lists return every matching row.
 
 ---
 
+## The identity rule (Phase 6B)
+
+> ⚠ **Contract, not live yet.** The helper exists (`backend/src/utils/viewer.js`, Block V-A),
+> but nothing calls it. Neeraj applies it to the six endpoints below in **Block N-C**. Until
+> N-C merges, every Part 1 entry below still describes the old behaviour. Both clients build
+> against this table now.
+
+A real student's identity — name, photo, @username, bio and academic details — is shown only
+to signed-in students from real campuses. Everyone else (logged-out visitors and demo
+accounts) still sees the listings, but not the person behind them.
+
+**Why demo accounts count as "everyone else":** `POST /api/auth/demo-login` hands a real
+session to anyone, in one click, with no college email. A rule that trusted any signed-in
+caller would therefore protect nothing.
+
+**The demo campus's own people** are fictional personas and throwaway guests, so they are
+shown to everyone. That is what lets the demo work.
+
+Every place that returns a person goes through `canSeeIdentity()`. Returning a person
+without asking it is the bug this rule exists to stop.
+
+**Who is asking** (`resolveViewer(req)`, which needs `optionalAuth` or `requireAuth` in front
+of the route):
+
+| `kind` | Meaning |
+|---|---|
+| `anonymous` | No valid token. **Also** a signed-in account with no `users` row or no campus: "I could not establish who you are" fails closed |
+| `demo` | Signed in, account on the demo campus (`universities.is_demo`) |
+| `student` | Signed in, account on a real campus |
+
+A person is shown when the viewer is a `student`, **or** the person belongs to the demo
+campus. Otherwise they are hidden as below.
+
+| Endpoint | Non-student viewer, real-campus person |
+|---|---|
+| `GET /api/products` | each item: `seller` null, `seller_id` removed, `seller_hidden` true |
+| `GET /api/products/:id` | the same for the seller; every comment: `user` null, `user_hidden` true; adds `university_name` |
+| `GET /api/products/:id/meta` | `seller_name` removed for everyone |
+| `GET /share/product/:id` | "listed by a student at <campus>" for everyone |
+| `GET /api/user/:userId/public` | anonymous → `401 LOGIN_REQUIRED`; demo → `404 USER_NOT_FOUND` |
+| `GET /api/users/by-username/:username` | same as `/public` |
+
+**Why `seller_id` goes too:** it is the key to `GET /api/user/:id/public`, so leaving it in
+would undo the point. Comment text stays; only the author goes (`user_id` is removed with
+it).
+
+**Client rule:** `seller_hidden: true` / `user_hidden: true` mean "draw **Yahora student**",
+with no avatar and no profile link. A `null` seller or user with the flag set is a normal
+response, not an error.
+
+---
+
 ## Table of contents
 
-[Conventions](#conventions) · [Error code table](#error-codes-used-anywhere-in-this-api) · [Contract review checklist](#contract-review-checklist) · [Gaps](#gaps-between-part-1-and-part-2)
+[Conventions](#conventions) · [Error code table](#error-codes-used-anywhere-in-this-api) · [The identity rule](#the-identity-rule-phase-6b) · [Contract review checklist](#contract-review-checklist) · [Gaps](#gaps-between-part-1-and-part-2)
 
 ### Part 1 — implemented today
 
