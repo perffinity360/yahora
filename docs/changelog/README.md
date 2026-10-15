@@ -28,7 +28,7 @@ The date comes first, so `ls docs/changelog/` lists entries in time order across
 `HHMMSS` part means two entries by one person on one day still get different names. Do not
 create these by hand — use the script, which fills in the name and the template.
 
-## The three commands
+## The commands
 
 Run from anywhere in the repo (the script finds this folder from its own location).
 
@@ -61,6 +61,43 @@ node scripts/changelog.mjs recent 20
 node scripts/changelog.mjs for neeraj
 node scripts/changelog.mjs for vishwajeet
 ```
+
+## Releasing a phase
+
+**Why.** Small files during the work, one file per release: this is what tools like
+changesets and towncrier do. Git copes fine with hundreds of small files. People reading this
+folder don't. After a few phases, `ls docs/changelog/` would be a wall of names, most of them
+about work that finished long ago.
+
+**When.** Only at a phase's **SIGN-OFF**, after both of us have merged everything for that
+phase. Releasing earlier would leave a late entry for that phase with nowhere to go.
+
+**How.** Look first, then do it, then commit:
+
+```
+node scripts/changelog.mjs release 6B --dry-run   # lists what it would write and delete; changes nothing
+node scripts/changelog.mjs release 6B
+git add -A docs/changelog
+git commit -m "docs(changelog): release phase 6B"
+```
+
+**What happens.** Every entry tagged with that phase is joined into one file,
+`docs/changelog/releases/phase-<P>.md`:
+
+- a table of all the entries on top;
+- then every entry in full, oldest first;
+- each entry keeps its original file name inside the release file, so an old reference such as
+  `2026-10-04-184315` still finds it. Search the release file for it.
+
+The small files are deleted. Git history still has every one of them. Entries with a different
+phase, or with no phase, are not touched.
+
+**A phase is released once.** If `releases/phase-<P>.md` already exists, `release <P>` refuses
+to run. So an entry that comes in after its phase was released can't join it: tag it with the
+next phase instead.
+
+`recent` names the release files on its last line, so a new session still knows where the
+older entries went.
 
 ## The template — every entry is the same
 

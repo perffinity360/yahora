@@ -8,6 +8,7 @@
 //   node scripts/changelog.mjs new <author> "<title>" [--phase P] [--block B] [--for who]
 //   node scripts/changelog.mjs recent [N]
 //   node scripts/changelog.mjs for <name>
+//   node scripts/changelog.mjs release <phase> [--dry-run]
 //
 // No dependencies: node:fs, node:path, node:url only. Do not add an index file here —
 // every entry must stay in a file of its own.
@@ -18,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = path.join(ROOT, 'docs', 'changelog');
+const RELEASES_DIR = path.join(DIR, 'releases');
 
 const SECTIONS = [
   'Migrations applied',
@@ -31,7 +33,10 @@ const SECTIONS = [
 const USAGE = `Usage:
   node scripts/changelog.mjs new <author> "<title>" [--phase P] [--block B] [--for who]
   node scripts/changelog.mjs recent [N]          newest N entries (default 8)
-  node scripts/changelog.mjs for <name>          every entry addressed to <name>`;
+  node scripts/changelog.mjs for <name>          every entry addressed to <name>
+  node scripts/changelog.mjs release <phase> [--dry-run]
+                                                 at phase sign-off: join that phase's entries
+                                                 into releases/phase-<phase>.md, delete them`;
 
 function fail(message) {
   console.error(`changelog: ${message}\n\n${USAGE}`);
@@ -178,11 +183,18 @@ function cmdRecent(args) {
   const n = args.length ? Number(args[0]) : 8;
   if (!Number.isInteger(n) || n < 1) fail(`N must be a positive whole number: ${args[0]}`);
   const entries = readEntries().slice(0, n);
-  if (!entries.length) {
-    console.log('No entries yet in docs/changelog/.');
-    return;
-  }
+  if (!entries.length) console.log('No unreleased entries in docs/changelog/.');
   for (const e of entries) console.log(formatLine(e));
+  printReleasesHint();
+}
+
+// After a release the small files are gone, so `recent` says where they went.
+function printReleasesHint() {
+  if (!fs.existsSync(RELEASES_DIR)) return;
+  const files = fs.readdirSync(RELEASES_DIR).filter((f) => f.endsWith('.md')).sort();
+  if (files.length) {
+    console.log(`Released phases (older entries): ${files.map((f) => `docs/changelog/releases/${f}`).join(', ')}`);
+  }
 }
 
 function cmdFor(args) {
@@ -196,6 +208,107 @@ function cmdFor(args) {
   for (const e of entries) console.log(formatLine(e));
 }
 
+
+// ── release ────────────────────────────────────────────────────────────────
+// At a phase's sign-off, every entry tagged with that phase is joined into ONE
+// file, docs/changelog/releases/phase-<phase>.md, oldest first, and the small
+// files are deleted. This is what changesets and towncrier do at release time.
+// Nothing is lost: each entry keeps its original file name inside the release
+// file, and git history keeps every original file.
+
+/** Push every Markdown heading down one level, except inside ``` fences. */
+function demoteHeadings(markdown) {
+  let inFence = false;
+  return markdown
+    .split('\n')
+    .map((line) => {
+      if (/^\s*```/.test(line)) inFence = !inFence;
+      if (!inFence && /^#{1,5} /.test(line)) return `#${line}`;
+      return line;
+    })
+    .join('\n');
+}
+
+/** The entry's text without its frontmatter and without its own "# Title" line. */
+function entryBody(file) {
+  const text = fs.readFileSync(path.join(DIR, file), 'utf8').replace(/\r\n/g, '\n');
+  const withoutFrontmatter = text.replace(/^---\n[\s\S]*?\n---\n/, '');
+  const withoutTitle = withoutFrontmatter.replace(/^\s*# .*\n/, '');
+  return demoteHeadings(withoutTitle.trim());
+}
+
+const cell = (value) => String(value ?? '').replace(/\|/g, '\\|');
+
+function cmdRelease(args) {
+  const dryRun = args.includes('--dry-run');
+  const positional = args.filter((a) => a !== '--dry-run');
+  if (positional.length !== 1) fail('"release" takes exactly one argument: <phase>');
+  const phase = positional[0].trim();
+  if (!/^[A-Za-z0-9.-]+$/.test(phase)) fail(`phase must be letters, digits, "." or "-": ${phase}`);
+
+  const all = readEntries();
+  const entries = all
+    .filter((e) => (e.phase ?? '').toLowerCase() === phase.toLowerCase())
+    .reverse(); // readEntries() is newest first; a release reads oldest first
+  if (!entries.length) fail(`no entries in docs/changelog/ have phase "${phase}"`);
+
+  const untagged = all.filter((e) => !e.phase);
+  const outName = `phase-${phase}.md`;
+  const outPath = path.join(RELEASES_DIR, outName);
+  if (fs.existsSync(outPath)) {
+    fail(`docs/changelog/releases/${outName} already exists. Phase ${phase} was released already. ` +
+      'For a late entry, give it the next phase instead.');
+  }
+
+  const today = isoLocal(new Date()).slice(0, 10);
+  const stamp = (e) => (e.date ?? '').replace('T', ' ').slice(0, 16);
+  const lines = [
+    `# Phase ${phase} — changelog`,
+    '',
+    `Released ${today} with \`node scripts/changelog.mjs release ${phase}\`. ` +
+      `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}, oldest first.`,
+    '',
+    'Until this release each entry below was its own file in `docs/changelog/`. Every entry keeps',
+    'its original file name here, so an old reference such as `2026-10-04-184315` still finds it:',
+    'search this file for it. The original files are also in git history.',
+    '',
+    '| # | Date | Author | Block | For | Title |',
+    '|---|---|---|---|---|---|',
+    ...entries.map((e, i) =>
+      `| ${i + 1} | ${cell(stamp(e))} | ${cell(e.author)} | ${cell(e.block)} | ${cell(e.for)} | ` +
+      `[${cell(e.title)}](#${e.file.replace(/\.md$/, '')}) |`),
+    '',
+  ];
+  entries.forEach((e, i) => {
+    const anchor = e.file.replace(/\.md$/, '');
+    const meta = [
+      `\`${e.file}\``,
+      stamp(e),
+      e.author,
+      e.block && `block ${e.block}`,
+      e.for && `for ${e.for}`,
+    ].filter(Boolean).join(' · ');
+    lines.push('---', '', `<a id="${anchor}"></a>`, '', `## ${i + 1} · ${e.title ?? '(no title)'}`, '',
+      meta, '', entryBody(e.file), '');
+  });
+  const output = `${lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
+
+  console.log(`${dryRun ? '[dry run] would write' : 'Wrote'} docs/changelog/releases/${outName} ` +
+    `(${entries.length} entries, ${Math.round(output.length / 1024)} KB)`);
+  for (const e of entries) console.log(`  ${dryRun ? 'would delete' : 'deleted'}  docs/changelog/${e.file}`);
+  if (untagged.length) {
+    console.log(`\nNot touched — ${untagged.length} entr${untagged.length === 1 ? 'y has' : 'ies have'} no phase:`);
+    for (const e of untagged) console.log(`  docs/changelog/${e.file}`);
+  }
+  if (dryRun) return;
+
+  fs.mkdirSync(RELEASES_DIR, { recursive: true });
+  fs.writeFileSync(outPath, output, { flag: 'wx' });
+  for (const e of entries) fs.unlinkSync(path.join(DIR, e.file));
+  console.log('\nNext: git add -A docs/changelog && git commit -m "docs(changelog): release phase ' +
+    `${phase}"`);
+}
+
 const [command, ...rest] = process.argv.slice(2);
 switch (command) {
   case 'new':
@@ -206,6 +319,9 @@ switch (command) {
     break;
   case 'for':
     cmdFor(rest);
+    break;
+  case 'release':
+    cmdRelease(rest);
     break;
   case undefined:
   case '-h':
