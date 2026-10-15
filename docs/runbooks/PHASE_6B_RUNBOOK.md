@@ -1221,8 +1221,8 @@ in files I own. Nothing calls the new code yet; Neeraj's Block N-C will.
 
 // backend/src/utils/viewer.js
 // ══════════════════════════════════════════════
-// OWNER: VISHWAJEET   —   added in Phase 6B (Block V-A)
-// Neeraj: import from this file; do not edit it.
+// Written by VISHWAJEET   —   added in Phase 6B (Block V-A)
+// Request to Neeraj - please import from this file; do not edit it.
 // ══════════════════════════════════════════════
 //
 // THE IDENTITY RULE (Phase 6B):
