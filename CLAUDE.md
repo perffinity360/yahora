@@ -26,9 +26,11 @@ repo are the ONLY shared memory between them.
 At the start of every session, run `node scripts/changelog.mjs recent 8`
 and open the entries it lists to find out what the other developer
 changed; `node scripts/changelog.mjs for <your name>` lists every entry
-addressed to you. Do not read the whole of the frozen docs/CHANGELOG.md
-at startup — open it only to follow a link into its history. How the
-system works: docs/changelog/README.md.
+addressed to you. Older phases are released into docs/changelog/releases/
+— `recent` names them; open one only to follow a reference. Do not read
+the whole of the frozen docs/CHANGELOG.md at startup — open it only to
+follow a link into its history. How the system works:
+docs/changelog/README.md.
 
 > **`backend/` is now split between both of them.** The line above predates the shared-backend
 > split in plan §0.5. Neeraj owns four backend modules (`user`, `social`, `notifications`,
