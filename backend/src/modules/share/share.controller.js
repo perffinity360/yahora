@@ -166,12 +166,15 @@ function renderPage({ title, description, image, canonicalUrl, redirectUrl, head
 /**
  * GET /share/product/:id
  *
- * Anonymous by design — a crawler has no token, and a listing's title, price
- * and first photo are already public on the cross-campus browse feed.
+ * Anonymous by design — a crawler has no token, and a listing's title, price,
+ * first photo and campus are already public on the cross-campus browse feed.
+ * The seller is NOT public: under the identity rule (Phase 6B,
+ * utils/viewer.js) only signed-in students see who listed something, and this
+ * page is served to everyone. So it says "a student at <campus>" and never
+ * names the person.
  *
  * Reads the row directly rather than calling `getProductById`: that handler
- * increments the view counter and joins every comment, so routing previews
- * through it would inflate views on every crawler hit.
+ * records views and joins every comment, which a preview card needs neither of.
  */
 export const shareProduct = async (req, res) => {
     const { id } = req.params;
@@ -187,7 +190,6 @@ export const shareProduct = async (req, res) => {
             .from('products')
             .select(`
                 id, title, description, price, condition, image_urls, status,
-                seller:users!seller_id(full_name),
                 university:universities!university_id(name)
             `)
             .eq('id', id)
@@ -229,7 +231,9 @@ export const shareProduct = async (req, res) => {
             canonicalUrl: `${WEB_APP_URL}/product/${product.id}`,
             redirectUrl: fallbackUrl,
             heading: product.title,
-            body: `${formatPrice(product.price)} · listed by ${product.seller?.full_name ?? 'a student'} on Yahora. Taking you there…`,
+            body: product.university?.name
+                ? `${formatPrice(product.price)} · listed by a student at ${product.university.name} on Yahora. Taking you there…`
+                : `${formatPrice(product.price)} on Yahora. Taking you there…`,
         }),
     );
 };
