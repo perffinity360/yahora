@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { supabase } from "../../config/supabaseClient";
+import { User } from "lucide-react";
 import styles from "./ProductCard.module.css";
 import SmartImage from "../SmartImage/SmartImage";
 import ShareSheet from "../ShareSheet/ShareSheet";
@@ -221,22 +222,8 @@ const ProductCard = memo(function ProductCard({
     return () => supabase.removeChannel(channel);
   }, [product.id]);
 
-  // FIX: Sent p_id instead of product_id to resolve the 400 Bad Request error
-  useEffect(() => {
-    if (!supabase || !product.id) return;
-    if (currentUserId && currentUserId === product.seller?.id) return;
-    const key = `viewed_${product.id}`;
-    if (sessionStorage.getItem(key)) return;
-
-    sessionStorage.setItem(key, "1");
-    const incrementView = async () => {
-      const { error } = await supabase.rpc("increment_product_views", {
-        product_id: product.id,
-      });
-      if (error) console.error("Failed to increment views", error);
-    };
-    incrementView();
-  }, [product.id, currentUserId, product.seller?.id]);
+  // Views are counted by the API when a listing's page is opened (Phase 6B,
+  // runbook §1.11), not here. A card being shown in the feed is not a view.
 
   const prevImage = useCallback(
     (e) => {
@@ -304,7 +291,12 @@ const ProductCard = memo(function ProductCard({
     if (onCardClick) onCardClick(product.id);
   }, [onCardClick, product.id, preview]);
 
-  const sellerName = product.seller?.full_name || "Unknown Seller";
+  // A null seller is the API hiding a real student from a logged-out or demo
+  // viewer (Phase 6B identity rule): draw "Yahora student" with a person icon.
+  const sellerHidden = !product.seller;
+  const sellerName = sellerHidden
+    ? "Yahora student"
+    : product.seller.full_name || "Unknown Seller";
   const sellerAvatar = product.seller?.avatar_url || null;
   const sellerInitial =
     typeof sellerName === "string" ? sellerName.charAt(0).toUpperCase() : "U";
@@ -557,7 +549,7 @@ const ProductCard = memo(function ProductCard({
                 />
               ) : (
                 <div className={styles.sellerAvatarFallback}>
-                  {sellerInitial}
+                  {sellerHidden ? <User size={12} aria-hidden="true" /> : sellerInitial}
                 </div>
               )}
               <span className={styles.sellerName}>by {sellerName}</span>
