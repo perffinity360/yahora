@@ -10,12 +10,12 @@ title: "6B migrations: message actions, product views, mark sold"
 # 6B migrations: message actions, product views, mark sold
 
 The three Phase 6B migrations, copied byte for byte from the tested SQL in
-`docs/runbooks/phase6b/` (`cmp` shows each pair identical). They're applied **locally only**.
-Production isn't pushed yet.
+`docs/runbooks/phase6b/` (`cmp` shows each pair identical). They're applied locally **and on
+production** (pushed 16 Oct; see Notes).
 
 ## Migrations applied
 
-Local only, in this order:
+Locally and on production, in this order:
 
 | File | Source | What it does |
 |---|---|---|
@@ -101,8 +101,46 @@ Both scripts run in a transaction and roll back.
 
 ## What NOT to do yet
 
-- Run `supabase db reset` after pulling. N-C and N-E need these locally. Production push is
-  Day 3, by hand.
+- Run `supabase db reset` after pulling. N-C and N-E need these locally. Production is
+  already pushed (16 Oct, by hand; see Notes).
 - Don't call `increment_product_views()` in new code. Use `record_product_view()` (N-C).
 - Don't write `purchases` or `products.status` directly for Mark as Sold. Call the functions
   (N-E).
+
+## Notes
+
+**Production pre-push check (runbook V-B, step 1).** Vishwajeet ran this read-only query in
+the Supabase dashboard SQL Editor to see how many purchase rows the Mark-as-Sold migration
+will remove:
+
+```sql
+-- How many purchase rows will the Mark-as-Sold migration remove?
+select
+  (select count(*) from public.purchases
+    where buyer_id is null or product_id is null)                         as broken_rows,
+  (select coalesce(sum(n - 1), 0)
+     from (select count(*) as n from public.purchases
+            group by product_id having count(*) > 1) d)                   as duplicate_rows;
+```
+
+| broken_rows | duplicate_rows |
+| ----------- | -------------- |
+| 0           | 0              |
+
+So on production, `mark_sold` deletes **no** purchase rows: none point at nothing, and no
+listing has more than one buyer.
+
+**The 6B migrations are pushed to production.** Vishwajeet ran `supabase db push` by hand on
+16 Oct (runbook V-B, step 3). The post-push check (step 4), run in the SQL Editor, matched
+every expected value:
+
+| message_columns | has_message_hides | has_product_views | new_functions | anon_can_add_views | sold_without_date | listings_with_two_buyers |
+| --------------- | ----------------- | ----------------- | ------------- | ------------------ | ----------------- | ------------------------ |
+| 4               | true              | true              | 7             | false              | 0                 | 0                        |
+
+- All four reply and delete columns are on `messages`.
+- Both new tables exist.
+- All seven functions exist.
+- The public key can no longer add views.
+- Every sold listing has a `sold_at`.
+- No listing has two buyers.
