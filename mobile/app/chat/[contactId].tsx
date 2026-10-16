@@ -1025,7 +1025,13 @@ export default function ChatScreen() {
                 {EMOJI_TABS[emojiTab].emojis.map((emoji) => (
                   <Pressable
                     key={emoji}
-                    onPress={() => setDraft((prev) => prev + emoji)}
+                    // maxLength only limits typing; text set from code skips
+                    // it. Refuse the whole emoji rather than split it.
+                    onPress={() =>
+                      setDraft((prev) =>
+                        prev.length + emoji.length > MAX_MESSAGE_LENGTH ? prev : prev + emoji,
+                      )
+                    }
                     accessibilityRole="button"
                     accessibilityLabel={`Insert ${emoji}`}
                     style={({ pressed }) => [styles.emojiBtn, pressed && styles.emojiBtnPressed]}
@@ -1205,11 +1211,13 @@ const MessageBubble = memo(function MessageBubble({
           onPress={() => onRetry(message)}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel="Retry sending this message"
+          accessibilityLabel="Message not sent. Tap to try again"
           style={({ pressed }) => [styles.retryRow, pressed && styles.retryRowPressed]}
         >
           <Feather name="rotate-cw" size={11} color={colors.errorText} />
-          <AppText style={styles.retryText}>Failed — tap to retry</AppText>
+          {/* Shown only after the automatic retries gave up (useSendMessage).
+              Tapping starts them again. */}
+          <AppText style={styles.retryText}>Failed to send</AppText>
         </Pressable>
       ) : null}
     </View>

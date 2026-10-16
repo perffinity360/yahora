@@ -7,7 +7,8 @@ import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
-import { QueryClient } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
+import { onlineManager, QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
@@ -17,9 +18,27 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { RealtimeProvider } from '../src/contexts/RealtimeContext';
+import { updateEveryPage, type ChatCache } from '../src/lib/messages';
 import { colors } from '../src/theme';
 
 const CACHE_MAX_AGE = 1000 * 60 * 60 * 24;
+
+/**
+ * TanStack's idea of "online" comes from NetInfo (it has no source of its own in
+ * React Native). Only the message send uses it (`networkMode: 'online'` in
+ * useSendMessage): offline, a send waits with its clock, without using up a
+ * retry, and goes the moment the phone is back. Everything else keeps
+ * `networkMode: 'always'` and no refetch-on-reconnect, exactly as before this
+ * was wired. A reconnect refetch would also re-run GET /products/:id and add a
+ * view. If NetInfo isn't linked, TanStack just stays "online", as before.
+ */
+try {
+  onlineManager.setEventListener((setOnline) =>
+    NetInfo.addEventListener((state) => setOnline(state.isConnected !== false)),
+  );
+} catch {
+  // NetInfo missing from this runtime: keep TanStack's default.
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,11 +46,33 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5,
       gcTime: CACHE_MAX_AGE,
       retry: 2,
+      networkMode: 'always',
+      refetchOnReconnect: false,
+    },
+    mutations: {
+      networkMode: 'always',
     },
   },
 });
 
 const persister = createAsyncStoragePersister({ storage: AsyncStorage });
+
+/**
+ * A send can't outlive the app. A message still sending when the cache was
+ * saved has no request behind it after a restart. Left as it was, it showed a
+ * clock forever, with no pill to tap. It comes back as failed instead, with
+ * "Failed to send" (MESSAGES_SPEC §2); tapping it sends it again.
+ */
+function markUnsentAsFailed() {
+  for (const [key, data] of queryClient.getQueriesData<ChatCache>({ queryKey: ['chat'] })) {
+    if (!data?.pages.some((page) => page.items.some((m) => m.pending))) continue;
+    queryClient.setQueryData<ChatCache>(key, (prev) =>
+      updateEveryPage(prev, (items) =>
+        items.map((m) => (m.pending ? { ...m, pending: false, failed: true } : m)),
+      ),
+    );
+  }
+}
 
 function AuthGate() {
   const { session, profile, loading, onboardingSkipped } = useAuth();
@@ -111,6 +152,7 @@ export default function RootLayout() {
           // chat caches into infinite queries (`{ pages, pageParams }`); a phone
           // restoring the old flat shapes would crash on `data.pages`.
           persistOptions={{ persister, maxAge: CACHE_MAX_AGE, buster: 'v5e-infinite' }}
+          onSuccess={markUnsentAsFailed}
         >
           <AuthProvider>
             {/* Owns the app's only realtime channel. It must sit above the

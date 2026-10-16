@@ -297,10 +297,25 @@ timestamps stay readable. The old web bubble ended at `#EB487F`, where white tex
 `#9B1280` (the gradient's colour at 25%; white text 7.52:1). The two platforms must never
 disagree on this. Mobile ships `SENT_BUBBLE_STYLE = 'gradient'` until N-F decides.
 
-**Failed message:** the bubble drops to opacity 0.72, and a pill sits under it, right-aligned,
-3 below: background `#FEF0F0`, text "Failed — tap to retry" in Inter 600 11 `#B91C1C`, a
-rotate icon 11 in the same colour, gap 4, padding 3 vertical / 8 horizontal, radius 999.
-Tapping it resends the same message. Pressed (mobile): opacity 0.7.
+**Sending and retrying (Phase 6B, owner's call 2026-10-16).** A sent message shows at once
+with the clock tick. If a try fails for a reason that can pass, the app retries **by itself**,
+keeping the clock:
+
+| | Value |
+|---|---|
+| Retry after | 2, 4, 8, 16, 30 s (`SEND_MAX_RETRIES = 5`, `sendRetryDelay`) |
+| Retried | no answer, or no answer in 15 s (`SEND_TIMEOUT_MS`) · 401 · 408 · 429 · 5xx |
+| Not retried | any other 4xx: the server refused this message, so it fails at once |
+| Offline | waits for the network (mobile NetInfo, web `online`) and uses up no tries |
+| Order | one send at a time per conversation, in the order typed |
+| Already delivered | if Realtime brings the message in while a retry waits, the retry is dropped (no double post) |
+
+**Failed message** (only after the retries give up, or at once for a refusal): the bubble
+drops to opacity 0.72, its tick becomes the alert icon, and a pill sits under it,
+right-aligned, 3 below: background `#FEF0F0`, text "Failed to send" in Inter 600 11
+`#B91C1C`, a rotate icon 11 in the same colour, gap 4, padding 3 vertical / 8 horizontal,
+radius 999. Tapping it sends the same message again, with the full retry cycle. Pressed
+(mobile): opacity 0.7. Web: hover opacity 0.85, active 0.7, focus-visible outline.
 
 **Replies, copy and delete** — the quote at the top of a reply, the deleted-message tombstone,
 and how a message's actions open — are in **§10**.
@@ -318,7 +333,7 @@ margin-top 2 · time as `4:41 PM`.
 | Sent | single check, 14 | white 90% |
 | Delivered | double check, 15 | white 90% |
 | **Read** | double check, 15 | **blue `#53BDEB`** |
-| Failed | alert-circle, 12 | `#F87171` |
+| Failed | alert-circle, 12 | `#FFFFFF` (white, like the other ticks; owner's call 2026-10-16, was `#F87171`) |
 
 Blue — WhatsApp's read blue — on both platforms. v1's pale amber `#FDE68A` could hardly be
 told apart from the white delivered ticks beside it on the phone; the owner chose blue after
@@ -497,7 +512,7 @@ inboxFilterBg:      'rgba(255,255,255,0.78)',
 inboxRowPressed:    'rgba(128,0,128,0.06)',
 inboxProductChipBg: 'rgba(235,72,127,0.09)',
 bubbleMineMeta:     'rgba(255,255,255,0.90)',  // time + ticks on a sent bubble
-chatFailedTick:     '#F87171',
+chatFailedTick:     '#FFFFFF',
 ```
 
 Message actions (§10), added in v3:

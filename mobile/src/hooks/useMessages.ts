@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../lib/api';
+import { api, type ApiError } from '../lib/api';
 import {
   mergeMessage,
   updateNewestPage,
@@ -115,6 +115,48 @@ export function newClientTag(): string {
 type SendVars = { content: string; clientTag: string };
 
 /**
+ * How long a send may take before it counts as failed. fetch has no timeout of
+ * its own, so on a connection that accepts the request and then goes quiet
+ * (weak signal, a server waking up) the bubble would sit on its clock forever,
+ * with no retry pill to tap. Same value on web (Messages.jsx).
+ */
+export const SEND_TIMEOUT_MS = 15_000;
+
+/**
+ * AUTOMATIC RETRY (MESSAGES_SPEC §2 "Failed message"). A send that fails for a
+ * reason that can pass is tried again by itself, after 2, 4, 8, 16 and 30
+ * seconds. The bubble keeps its clock the whole time. Only when all of those
+ * fail, or the server refuses the message outright, does it turn into
+ * "Failed to send". Offline (NetInfo) the clock simply waits, using up no
+ * tries, and the send goes when the phone is back. Same numbers on web.
+ */
+export const SEND_MAX_RETRIES = 5;
+
+export function sendRetryDelay(attempt: number): number {
+  return Math.min(2000 * 2 ** attempt, 30_000);
+}
+
+/**
+ * Worth trying again: no answer (network, timeout), 401 (the session was being
+ * refreshed; the next try reads the new token), 408, 429, and any 5xx. Every
+ * other 4xx is the server saying no to THIS message (too long, wrong campus,
+ * listing deleted…), and asking again gets the same answer.
+ */
+export function isRetryableSendError(err: unknown): boolean {
+  const e = err as ApiError;
+  if (!e?.status) return true;
+  return e.status === 401 || e.status === 408 || e.status === 429 || e.status >= 500;
+}
+
+/** One line for the Metro log, saying why a send failed. */
+function describeSendError(err: unknown): string {
+  const e = err as ApiError;
+  if (e?.name === 'AbortError') return `timed out after ${SEND_TIMEOUT_MS / 1000}s`;
+  if (e?.status) return `${e.status} ${String(e.body?.error ?? e.message)}`;
+  return `network: ${e?.message ?? String(err)}`;
+}
+
+/**
  * Send, optimistically and dedupe-safely.
  *
  * The bubble appears the instant you hit send and is reconciled exactly once:
@@ -129,16 +171,52 @@ export function useSendMessage(contactId?: string, productId?: string) {
   const chatKey = ['chat', contactId, productId];
 
   return useMutation({
-    mutationFn: (vars: SendVars) => {
-      if (!myId || !contactId || !productId) {
-        return Promise.reject(new Error('This chat is not ready yet.'));
+    // One send at a time per conversation, in the order typed. A message that
+    // is retrying holds the ones after it, so they can't overtake it.
+    scope: { id: `send:${contactId}:${productId}` },
+    // Offline: wait for the network instead of burning tries (see _layout.tsx).
+    networkMode: 'online',
+    retry: (failureCount, err) => {
+      const again = failureCount <= SEND_MAX_RETRIES && isRetryableSendError(err);
+      if (again) {
+        console.info(
+          `[send] try ${failureCount} failed (${describeSendError(err)}); ` +
+            `retrying in ${sendRetryDelay(failureCount - 1) / 1000}s`,
+        );
       }
-      return api.post<{ message: Message }>('/api/messages/send', {
-        sender_id: myId,
-        receiver_id: contactId,
-        product_id: productId,
-        content: vars.content,
-      });
+      return again;
+    },
+    retryDelay: (failureCount) => sendRetryDelay(failureCount - 1),
+
+    mutationFn: async (vars: SendVars): Promise<{ message: Message | null }> => {
+      if (!myId || !contactId || !productId) {
+        throw Object.assign(new Error('This chat is not ready yet.'), { status: 400 });
+      }
+      // Before a RETRY: if the bubble is no longer waiting, Realtime already
+      // brought the real row in. The previous try reached the server and only
+      // the answer got lost, so sending again would post the message twice.
+      const waiting = (queryClient.getQueryData<ChatCache>(chatKey)?.pages[0]?.items ?? []).some(
+        (m) => m.client_tag === vars.clientTag,
+      );
+      if (!waiting) return { message: null };
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+      try {
+        return await api.post<{ message: Message }>(
+          '/api/messages/send',
+          {
+            sender_id: myId,
+            receiver_id: contactId,
+            product_id: productId,
+            content: vars.content,
+          },
+          undefined,
+          controller.signal,
+        );
+      } finally {
+        clearTimeout(timer);
+      }
     },
 
     onMutate: (vars) => {
@@ -172,19 +250,26 @@ export function useSendMessage(contactId?: string, productId?: string) {
     },
 
     onSuccess: (data, vars) => {
-      queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
-        updateNewestPage(prev, (list) => {
-          const withoutPlaceholder = list.filter((m) => m.client_tag !== vars.clientTag);
-          // Realtime may already have inserted the real row while we waited —
-          // mergeMessage refreshes it rather than appending a duplicate.
-          return mergeMessage(withoutPlaceholder, data.message);
-        }),
-      );
+      // `message: null`: Realtime already swapped the real row in (see mutationFn).
+      const sent = data.message;
+      if (sent) {
+        queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+          updateNewestPage(prev, (list) => {
+            const withoutPlaceholder = list.filter((m) => m.client_tag !== vars.clientTag);
+            // Realtime may already have inserted the real row while we waited —
+            // mergeMessage refreshes it rather than appending a duplicate.
+            return mergeMessage(withoutPlaceholder, sent);
+          }),
+        );
+      }
       // A first message creates a conversation the inbox has never seen.
       queryClient.invalidateQueries({ queryKey: ['inbox', myId] });
     },
 
-    onError: (_err, vars) => {
+    onError: (err, vars) => {
+      // Reached only after the last automatic try, or at once for a refusal.
+      // Say why in the Metro log; without it a failure tells you nothing.
+      console.warn(`[send] gave up (${vars.clientTag}): ${describeSendError(err)}`);
       queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
         prev
           ? updateNewestPage(prev, (list) =>

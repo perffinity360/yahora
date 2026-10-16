@@ -10,7 +10,7 @@ trust an entry.
 | Status | Live. Deployed. | **Nothing here is implemented yet.** |
 | If code and doc disagree | The doc is wrong — fix the doc | The code is wrong — fix the code |
 
-**Part 1** documents the 34 routes that exist now, including their bugs. Where a controller
+**Part 1** documents the 36 routes that exist now, including their bugs. Where a controller
 behaves surprisingly, the surprise is documented rather than corrected. Nothing in Part 1 is
 aspirational.
 
@@ -81,7 +81,7 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 |---|---|---|---|
 | `UNAUTHORIZED` | 401 | `requireAuth` — missing or invalid Bearer token | — |
 | `FORBIDDEN` | 403 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/sold`,`/available` — caller is not the listing's `seller_id`; `GET /api/messages/history` — caller is not one of the two parties in the thread; `GET /api/messages/inbox/:userId` — `:userId` is not the caller; `POST /api/messages/send` — sender and receiver are not on the same campus (a `NULL` campus on either side counts as a mismatch); `GET /api/user/:userId/dashboard` — `:userId` is not the caller (that one carries no `message`) | `message` |
-| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save`,`/sold`,`/available` — no such listing; also `/like`,`/save` when the caller has no `public.users` row. `POST /api/messages/send` — no such `receiver_id`, or the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
+| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save`,`/sold`,`/available` — no such listing; also `/like`,`/save` when the caller has no `public.users` row. `POST /api/messages/send` — no such `receiver_id` or `product_id`, or the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
 | `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical | — |
 | `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like` and `/save` — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
 | `INVALID_PRICE` | 400 | **Live.** `PUT /api/products/:id` — `price` was supplied but does not parse to a finite number `>= 0`. Only raised when the key is present; an absent `price` is simply left alone | `message` |
@@ -90,8 +90,8 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
 | `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
-| `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken; also `GET /api/messages/history` when `userId`, `contactId` or `productId` is not a canonical uuid | `message` (optional) |
-| `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one; `PUT /api/products/:id` — the body carried none of the seven updatable keys | `message` |
+| `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken; also `GET /api/messages/history` when `userId`, `contactId` or `productId` is not a canonical uuid; also `POST /api/messages/send` when `receiver_id` / `product_id` is missing or not a uuid, `content` is over 2000 characters, or `reply_to_id` is not a uuid, and the two message-action routes when `:id` is not a uuid (Phase 6B V-C) | `message` (optional) |
+| `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one; `PUT /api/products/:id` — the body carried none of the seven updatable keys; `POST /api/messages/send` — `content` missing, not a string, or only whitespace (Phase 6B V-C) | `message` |
 | `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — under 8 characters, equal to the caller's username, or rejected by GoTrue's own policy | `message` |
 | `COMMON_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — matches the ~20-entry common-password blocklist in `auth.controller.js` | `message` |
 | `INVALID_CREDENTIALS` | 400 | `POST /api/auth/login-password` — **the only failure code this endpoint ever returns.** Wrong password, unknown username, unknown email and an account with no password are byte-identical, deliberately. Never branch a UI on the reason; there isn't one | `message` (always the same sentence) |
@@ -112,10 +112,10 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `RATE_LIMIT_POSTS` | 429 | Trigger `trg_post_rate_limit` — 10 top-level posts/hour | `message` |
 | `RATE_LIMIT_REPLIES` | 429 | Trigger `trg_post_rate_limit` — 30 replies/hour | — |
 | `LOGIN_REQUIRED` | 401 | **Phase 6B, Block N-C — not live yet.** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` when the caller is anonymous. See [the identity rule](#the-identity-rule-phase-6b) | — |
-| `MESSAGE_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `delete_message_for_everyone()`, `hide_message_for_me()` (migration `message_actions`) | — |
-| `NOT_MESSAGE_SENDER` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the caller didn't send the message | — |
-| `DELETE_WINDOW_EXPIRED` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the message is more than 60 minutes old | — |
-| `REPLY_TARGET_INVALID` | 400 | **Phase 6B — not live yet.** Trigger function `fill_message_reply()` — the quoted message isn't in this conversation | — |
+| `MESSAGE_NOT_FOUND` | 404 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` and `/delete-for-me`, from `delete_message_for_everyone()` / `hide_message_for_me()` (migration `message_actions`) — no such message, or the caller is not one of its two people | — |
+| `NOT_MESSAGE_SENDER` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the caller didn't send the message | — |
+| `DELETE_WINDOW_EXPIRED` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the message is more than 60 minutes old | — |
+| `REPLY_TARGET_INVALID` | 400 | **Live (Phase 6B V-C).** `POST /api/messages/send`, from trigger function `fill_message_reply()` — the quoted message isn't in this conversation, or was deleted for everyone | — |
 | `PRODUCT_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `mark_product_sold()`, `mark_product_available()`, `get_product_buyer_candidates()` (migration `mark_sold`) | — |
 | `NOT_PRODUCT_OWNER` | 403 | **Phase 6B — not live yet.** The same three functions — the caller isn't the listing's seller | — |
 | `BUYER_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `mark_product_sold()` — no such buyer | — |
@@ -252,7 +252,9 @@ histories, and comment lists return every matching row.
   `category`, `image_urls`, `status`, `created_at`, `location`, `condition`, `views`,
   `likes_count`, `comments_count`, `sold_to`
 - `<messages row>` — `id`, `sender_id`, `receiver_id`, `university_id`, `content`,
-  `created_at`, `is_read`, `product_id`, `is_delivered`
+  `created_at`, `is_read`, `product_id`, `is_delivered`, `reply_to_id`, `reply_to_sender_id`,
+  `reply_preview`, `deleted_at` (the last four since Phase 6B; see
+  [the message fields](#the-four-message-action-fields-phase-6b))
 
 ---
 
@@ -363,6 +365,8 @@ response, not an error.
 - [POST /api/messages/send](#post-apimessagessend)
 - [PUT /api/messages/read](#put-apimessagesread)
 - [PUT /api/messages/deliver](#put-apimessagesdeliver)
+- [POST /api/messages/:id/delete-for-everyone](#post-apimessagesiddelete-for-everyone)
+- [POST /api/messages/:id/delete-for-me](#post-apimessagesiddelete-for-me)
 
 ### Part 2 — the contract, not yet implemented
 
@@ -1744,6 +1748,33 @@ discussing two products have two separate threads. There is no `conversations` t
 The `messages` table is in the `supabase_realtime` publication, so clients receive inserts
 over Supabase Realtime directly; these endpoints are the write path and the backfill.
 
+#### The four message-action fields (Phase 6B)
+
+Every `<messages row>` carries four columns added by migration `message_actions`
+(`20261016061043`). Each line is the column's own comment from that migration:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `reply_to_id` | uuid or null | The message this one replies to. `null` = not a reply. Set by the backend; validated by `trg_fill_message_reply`. Becomes `null` if the quoted row is ever removed from the table (`on delete set null`) |
+| `reply_to_sender_id` | uuid or null | Who wrote the quoted message. Filled by `trg_fill_message_reply`. **A non-null value is how clients know a message is a reply**, and it stays set after the quoted message is deleted |
+| `reply_preview` | text or null | First 200 characters of the quoted message, copied at send time. Set to `null` when the quoted message is deleted for everyone; clients then show "Original message was deleted" inside the quote |
+| `deleted_at` | timestamptz or null | Set when the sender deletes the message for everyone. The row stays as a tombstone with `content = ''`. `null` = not deleted. A `CHECK` makes a tombstone with text impossible |
+
+The two quote fields are **never the caller's to write.** The trigger fills them from the quoted
+row and overwrites anything sent.
+
+**Realtime, for the two delete actions:**
+
+- **Delete for everyone** arrives as an **UPDATE** of that row, with `content: ""` and
+  `deleted_at` set. Every reply that quoted it arrives as its own UPDATE with
+  `reply_preview: null`, from the same transaction.
+- **Delete for me sends no Realtime event at all.** That is the point: the other person must not
+  learn of it. `message_hides` is not in the publication. The client removes the message from
+  its own view after the 200.
+
+Hidden messages are left out of `GET /history` and skipped by `GET /inbox`, for the person who
+hid them only.
+
 ### GET /api/messages/inbox/:userId
 **Module:** messages
 **Auth:** **`requireAuth` — own inbox only.** `:userId` must equal the caller's own id; any
@@ -1762,10 +1793,18 @@ other value is `403 FORBIDDEN`. (Was unauthenticated until 14 Sep 2026.)
   "items": [ { "contact_id": "uuid", "contact_name": "string", "contact_avatar": "string",
                "product_id": "uuid", "product_title": "string", "product_image": "string",
                "last_message": "string", "last_message_time": "timestamptz",
-               "unread_count": 0 } ],
+               "unread_count": 0,
+               "last_sender_id": "uuid", "last_message_deleted": false } ],
   "next_cursor": "2026-09-14T11:37:40.203488+00:00"
 }
 ```
+  - `last_sender_id` (Phase 6B) — who sent the last message the caller can see. Equal to the
+    caller's id → the preview reads "You: …", or "You deleted this message" for a tombstone
+  - `last_message_deleted` (Phase 6B) — the last visible message is a tombstone (deleted for
+    everyone). `last_message` is then `""`
+  - **Messages the caller hid ("delete for me") are skipped** for the preview, the ordering and
+    `unread_count`. If the caller hid every message in a conversation, that conversation leaves
+    **their** inbox until a new message arrives. The other person's inbox is unaffected
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **403:** `{ "error": "FORBIDDEN", "message": "You can only read your own inbox." }` — `:userId`
   is not the caller's own id
@@ -1786,7 +1825,9 @@ with an empty array, not an error.
 **📄 Cursor-paginated since 2026-09-15** (RPC in Block V-C, controller in Block N-C).
 
 - **⚠️ BREAKING: the envelope key changed from `inbox` to `items`.** The nine RPC columns are
-  unchanged in name, order and type.
+  unchanged in name, order and type. (Phase 6B added two more at the end, `last_sender_id` and
+  `last_message_deleted`, so the RPC now returns eleven. The controller didn't change:
+  `sendPage()` passes the RPC's rows through as they are.)
 - **The cursor is a bare `last_message_time` timestamp** — not the opaque compound cursor
   `GET /api/messages/history` uses. **The two are not interchangeable.** The RPC exposes no
   tiebreaker column to seek on, so a plain timestamp is the only cursor it can take.
@@ -1821,7 +1862,16 @@ Field names here (`contact_*`, `product_title`, `product_image`) are unique to t
   - cursor: **opaque string** (base64url), optional. From the previous response's
     `next_cursor`. **Not the same type as the inbox cursor**
 **200:** `{ "items": [ { "<messages row>": "..." } ], "next_cursor": "MjAyNi0wOS0..." }` —
-full rows, ordered `created_at` **ascending** (oldest first, for chat rendering).
+full rows, ordered `created_at` **ascending** (oldest first, for chat rendering). Each row
+includes the [four message-action fields](#the-four-message-action-fields-phase-6b). A tombstone
+(deleted for everyone) is still returned, with `content: ""` and `deleted_at` set.
+
+**🙈 Hidden messages are left out (Phase 6B V-C).** A message the **caller** deleted for
+themselves (`POST /:id/delete-for-me`) is removed from `items`. The other person still gets it
+from this endpoint. The filter runs **after** `next_cursor` is computed from the unfiltered
+page, so paging never skips a message. As a result, **a page can hold fewer than `limit`
+items, or none, while `next_cursor` is still set.** Keep paging until `next_cursor` is
+`null`; never stop on a short page.
 **400:** `{ "error": "INVALID_FORMAT", "message": "userId, contactId and productId must all be
   valid UUIDs." }` — any of the three missing or malformed. This used to be a **500**.
 **400:** `{ "error": "INVALID_FORMAT", "message": "cursor must be the next_cursor value from a
@@ -1870,8 +1920,10 @@ two other students. Either party is accepted — the thread is symmetric, so a c
 pair in the other order is still asking for its own conversation, and pinning `userId` to
 `req.user.id` would reject that legitimate call for no security gain.
 
-Returns the **entire** history for the pair+product — no limit, no cursor, no
-`before`/`after`. On a long thread this grows without bound.
+Returns **one page** of the history for the pair+product: at most `limit` rows (default 20,
+capped at 50), walked backwards with `cursor`, as described above. Until Phase 4 (2026-09-15)
+it returned the entire thread with no limit. Messages the caller hid are left out of the page
+(Phase 6B).
 
 Reading history does **not** mark anything read; that requires a separate
 [PUT /api/messages/read](#put-apimessagesread).
@@ -1887,8 +1939,26 @@ campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 202
     holder. Both clients still send it today
   - receiver_id: uuid, required — must exist and be on the caller's campus
   - product_id: uuid, required
-  - content: string, required — no length limit
-**201:** `{ "message": { "<messages row>": "..." } }`
+  - content: string, required — at least one non-whitespace character, at most **2000**
+    characters (Phase 6B V-C; before that, no limit). Stored **exactly as sent**: leading
+    and trailing whitespace is kept, and the trim is only used to test for emptiness
+  - reply_to_id: uuid or null, **optional** (Phase 6B V-C) — the message this one replies to.
+    It must be in this same conversation (same listing, same two people, either direction) and
+    not deleted for everyone. Absent or `null` → not a reply, exactly as before. **Send only the
+    id.** `reply_to_sender_id` and `reply_preview` are filled by the database trigger
+    `trg_fill_message_reply`, and anything sent for them is overwritten
+**201:** `{ "message": { "<messages row>": "..." } }` — the row includes the
+  [four message-action fields](#the-four-message-action-fields-phase-6b). On a reply,
+  `reply_to_sender_id` and `reply_preview` are already filled
+**400:** `{ "error": "MISSING_FIELDS", "message": "A message cannot be empty." }` — `content`
+  missing, not a string, or only whitespace. Checked before anything touches the database
+**400:** `{ "error": "INVALID_FORMAT", "message": "receiver_id and product_id must be valid
+  UUIDs." }` — either missing or malformed (Phase 6B V-C; both used to be 500s)
+**400:** `{ "error": "INVALID_FORMAT", "message": "A message can be at most 2000 characters." }`
+**400:** `{ "error": "INVALID_FORMAT", "message": "reply_to_id must be a valid UUID." }` — only
+  when `reply_to_id` is present and not `null`
+**400:** `{ "error": "REPLY_TARGET_INVALID" }` — `reply_to_id` names a message in another
+  conversation, a deleted-for-everyone message, or no message at all. Raised by the trigger
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **403:** `{ "error": "FORBIDDEN", "message": "You can only message students on your own
   campus." }` — sender and receiver are on different campuses. **A `NULL` `university_id` on
@@ -1899,10 +1969,16 @@ campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 202
   `public.users` row for `receiver_id`. This used to be a 500 from the foreign key
 **404:** `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }` — the
   *caller* has no `public.users` row
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }` — `product_id`
+  names no listing; in practice, the seller deleted it while the chat was open (Phase 6B V-C;
+  was a 500)
 **500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to send message." }` — the campus
-  lookup failed, including when `receiver_id` is absent or not a uuid
-**500:** `{ "error": "Failed to send message." }` — the older hand-rolled body, still returned
-  when the insert itself fails (e.g. missing `content`)
+  lookup failed, or an unexpected exception
+**500:** `{ "error": "INTERNAL_ERROR" }` — any other insert failure, through `mapDbError()`
+**Every 500 from this route carries `"error": "INTERNAL_ERROR"`** (Phase 6B V-C). The old
+hand-rolled `{ "error": "Failed to send message." }` body is gone. Branch on `error`; the
+`message` is for logs, not for UI logic. Every 4xx above is a **permanent** refusal: sending
+the same body again gets the same answer. Only a 5xx or a network failure is worth retrying.
 **🔒 Identity and campus are enforced (Phase 4 Block V-A, fixed 2026-09-14).** This was the worst
 of the nine: `sender_id` came from the body on an open route, so anyone could put a message in
 a real student's thread under a real student's name — a forgery that is persistent and, once in
@@ -1995,6 +2071,57 @@ as `is_delivered: true`, across every conversation and every product. Intended t
 once on app foreground.
 
 Does not touch `is_read`. Returns 200 whether or not any row changed.
+
+### POST /api/messages/:id/delete-for-everyone
+**Module:** messages · **Since:** Phase 6B V-C
+**Auth:** **`requireAuth`. The actor is always the caller** (`req.user.id`). There is no body.
+**Content-Type:** n/a (no body)
+**Path:**
+  - id: uuid, required — the message to delete
+**200:** `{ "message": { "<messages row>": "..." } }` — the **tombstone**: the same row with
+  `content: ""` and `deleted_at` set. Calling it again on an already-deleted message returns the
+  same tombstone with 200. A double tap is not an error, even after the 60 minutes
+**400:** `{ "error": "INVALID_FORMAT", "message": "id must be a valid UUID." }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "NOT_MESSAGE_SENDER" }` — the caller is the message's receiver. Only the
+  sender may delete for everyone
+**403:** `{ "error": "DELETE_WINDOW_EXPIRED" }` — the message was sent more than **60 minutes**
+  ago. Clients show the "for everyone" choice only inside the window
+  (`DELETE_FOR_EVERYONE_MINUTES`). This is the rule that actually enforces it
+**404:** `{ "error": "MESSAGE_NOT_FOUND" }` — no such message, **or the caller is not one of its
+  two people**. The two read identically on purpose: a stranger learns nothing about other
+  people's message ids
+**500:** `{ "error": "INTERNAL_ERROR" }` (database) or
+  `{ "error": "INTERNAL_ERROR", "message": "Failed to delete message." }` (anything else)
+**Notes:** Every rule lives in `delete_message_for_everyone(p_message_id, p_user_id)`. The
+controller checks only that `:id` is a uuid, and the function's answer goes through
+`mapDbError()`. The function locks the row, so two deletes of the same message at once wait
+for each other. In the same transaction it sets `reply_preview = null` on every reply that
+quoted the message, so the deleted words don't live on inside someone else's quote. Both
+people's apps get the change as Realtime UPDATEs. See
+[the four message-action fields](#the-four-message-action-fields-phase-6b).
+
+### POST /api/messages/:id/delete-for-me
+**Module:** messages · **Since:** Phase 6B V-C
+**Auth:** **`requireAuth`. The actor is always the caller** (`req.user.id`). There is no body.
+**Content-Type:** n/a (no body)
+**Path:**
+  - id: uuid, required — the message to hide from the caller's own view
+**200:** `{ "id": "uuid", "hidden": true }` — `id` echoes the path. Hiding a message twice is
+  not an error. Any message the caller sent or received can be hidden: mine or theirs, any age,
+  tombstones included
+**400:** `{ "error": "INVALID_FORMAT", "message": "id must be a valid UUID." }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**404:** `{ "error": "MESSAGE_NOT_FOUND" }` — no such message, or the caller is not one of its
+  two people
+**500:** `{ "error": "INTERNAL_ERROR" }` (database) or
+  `{ "error": "INTERNAL_ERROR", "message": "Failed to delete message." }` (anything else)
+**Notes:** `hide_message_for_me(p_message_id, p_user_id)` adds a row to `message_hides`. That
+table is backend-only: RLS is on with no policies, there are no grants to `anon` or
+`authenticated`, and it is not in the Realtime publication. So **the other person is never
+told, and no Realtime event is sent.** Remove the message from the local view after the 200.
+From then on, `GET /history` leaves it out and `GET /inbox` skips it, for this caller only.
+There is no "unhide".
 
 ---
 
