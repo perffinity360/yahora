@@ -207,8 +207,16 @@ function ProductCardBase({
   const location = product.location?.trim();
   const locationLabel = location ? sentenceCase(location) : '';
 
-  const seller = (sellerName ?? product.seller?.full_name ?? '').trim();
-  const sellerAvatar = resolveMediaUrl(sellerAvatarUrl ?? product.seller?.avatar_url);
+  // The API hid the seller from this viewer (Phase 6B identity rule; see
+  // `SellerHidden` in src/types). The row keeps its place and size, with a
+  // fixed label and a person icon instead of the name and initials.
+  const sellerHidden = product.seller_hidden === true;
+  const seller = sellerHidden
+    ? 'Yahora student'
+    : (sellerName ?? product.seller?.full_name ?? '').trim();
+  const sellerAvatar = sellerHidden
+    ? null
+    : resolveMediaUrl(sellerAvatarUrl ?? product.seller?.avatar_url);
   const sellerInitials = initialsOf(seller);
 
   // The location's reserved line. `fontScale` is the student's system font
@@ -340,7 +348,11 @@ function ProductCardBase({
                     />
                   ) : (
                     <View style={styles.sellerAvatarFallback}>
-                      <AppText style={styles.sellerInitials}>{sellerInitials}</AppText>
+                      {sellerHidden ? (
+                        <Feather name="user" size={SELLER_AVATAR / 2} color={colors.white} />
+                      ) : (
+                        <AppText style={styles.sellerInitials}>{sellerInitials}</AppText>
+                      )}
                     </View>
                   )}
                   <AppText style={styles.sellerName} numberOfLines={1} ellipsizeMode="tail">

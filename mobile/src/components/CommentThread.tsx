@@ -201,7 +201,9 @@ export function CommentSection({
                           hitSlop={8}
                           accessibilityRole="button"
                           accessibilityLabel={
-                            isReplying ? 'Cancel reply' : `Reply to ${comment.user.full_name ?? 'this question'}`
+                            isReplying
+                              ? 'Cancel reply'
+                              : `Reply to ${comment.user?.full_name ?? 'this question'}`
                           }
                           style={({ pressed }) => [styles.replyBtn, pressed && styles.replyBtnPressed]}
                         >
@@ -223,7 +225,8 @@ export function CommentSection({
 
                 {isReplying && canInteract ? (
                   <ReplyComposer
-                    parentName={comment.user.full_name}
+                    parentName={comment.user?.full_name}
+                    parentHidden={isHiddenAuthor(comment)}
                     value={replyDraft}
                     onChangeText={setReplyDraft}
                     onCancel={() => setReplyTarget(null)}
@@ -265,6 +268,16 @@ export function CommentSection({
 }
 
 /* ────────────────────────── Comment ────────────────────────── */
+/**
+ * The API hid this comment's author from the viewer (Phase 6B identity rule;
+ * see `SellerHidden` in src/types). A null `user` without the flag is treated
+ * the same way: with no person to show, "Yahora student" is the only honest
+ * label.
+ */
+function isHiddenAuthor(comment: ProductComment): boolean {
+  return comment.user_hidden === true || !comment.user;
+}
+
 function CommentCard({
   comment,
   compact = false,
@@ -280,19 +293,21 @@ function CommentCard({
 }) {
   const upActive = comment.user_vote === 1;
   const downActive = comment.user_vote === -1;
+  const hidden = isHiddenAuthor(comment);
 
   return (
     <View style={styles.commentRow}>
       <Avatar
-        name={comment.user.full_name}
-        uri={comment.user.avatar_url}
+        name={comment.user?.full_name}
+        uri={comment.user?.avatar_url}
         size={compact ? 28 : 34}
+        hidden={hidden}
       />
       <View style={styles.commentBody}>
         <View style={[styles.bubble, compact && styles.bubbleCompact]}>
           <View style={styles.metaRow}>
             <AppText style={styles.commenterName} numberOfLines={1}>
-              {comment.user.full_name || 'Yahora student'}
+              {(!hidden && comment.user?.full_name) || 'Yahora student'}
             </AppText>
             <AppText style={styles.commentTime}>{timeAgo(comment.created_at)}</AppText>
           </View>
@@ -371,8 +386,11 @@ function ReplyComposer({
   submitting,
   scrollRef,
   scrollOffsetRef,
+  parentHidden = false,
 }: {
   parentName?: string | null;
+  /** The author was hidden from this viewer: no name to address. */
+  parentHidden?: boolean;
   value: string;
   onChangeText: (text: string) => void;
   onCancel: () => void;
@@ -430,10 +448,10 @@ function ReplyComposer({
           autoFocus
           multiline
           maxLength={MAX_COMMENT_LENGTH}
-          placeholder={`Reply to ${firstName}…`}
+          placeholder={parentHidden ? 'Reply…' : `Reply to ${firstName}…`}
           placeholderTextColor={colors.mutedPlaceholder}
           style={styles.replyInput}
-          accessibilityLabel={`Reply to ${firstName}`}
+          accessibilityLabel={parentHidden ? 'Reply' : `Reply to ${firstName}`}
         />
         <View style={styles.replyActions}>
           <Pressable

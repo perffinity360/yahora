@@ -185,14 +185,17 @@ export default function ProductDetailScreen() {
               viewerAvatarUrl={profile?.avatar_url}
               onLike={() => productId && toggleLike.mutate({ productId })}
               onSave={() => productId && toggleSave.mutate({ productId })}
-              onOpenSeller={() =>
+              onOpenSeller={() => {
+                // Never reached for a hidden seller (that row is not
+                // pressable); the guard is for the type.
+                if (!product.seller) return;
                 router.push(
                   hrefWithFrom(
                     `/profile/${product.seller.id}`,
                     hrefWithFrom(`/product/${product.id}`, fromParam),
                   ),
-                )
-              }
+                );
+              }}
               onOpenChat={(href) =>
                 router.push(hrefWithFrom(href, hrefWithFrom(`/product/${product.id}`, fromParam)))
               }
@@ -281,27 +284,37 @@ function Content({
   const saved = product.is_saved ?? false;
   const postedOn = formatDate(product.created_at);
 
-  const isOwnListing = !!myUserId && product.seller.id === myUserId;
+  // The API hid the seller from this viewer (Phase 6B identity rule; see
+  // `SellerHidden` in src/types). On the phone that is a demo account that
+  // opened a real campus's listing from a link. A null seller without the flag
+  // is drawn the same way rather than crashing.
+  const seller = product.seller_hidden ? null : product.seller;
+  const sellerHidden = !seller;
+
+  // A hidden seller is never you: the API only hides people from viewers who
+  // are not real students, and a listing's seller always is one.
+  const isOwnListing = !!seller && !!myUserId && seller.id === myUserId;
   const isForeignCampus = !!myUniversityId && product.university_id !== myUniversityId;
 
-  const eduLine = [product.seller.qualification, product.seller.year_of_study]
-    .filter(Boolean)
-    .join(' · ');
+  const eduLine = seller
+    ? [seller.qualification, seller.year_of_study].filter(Boolean).join(' · ')
+    : '';
 
   // Seller name / product details ride along as params so the chat header is
   // populated on the very first frame, before the inbox row exists at all.
   const handleMessageSeller = () => {
+    if (!seller) return;
     const query = Object.entries({
       productId: product.id,
-      contactName: product.seller.full_name ?? '',
-      contactAvatar: product.seller.avatar_url ?? '',
+      contactName: seller.full_name ?? '',
+      contactAvatar: seller.avatar_url ?? '',
       productTitle: product.title ?? '',
       productImage: product.image_urls?.[0] ?? '',
     })
       .filter(([, value]) => !!value)
       .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
       .join('&');
-    onOpenChat(`/chat/${product.seller.id}?${query}`);
+    onOpenChat(`/chat/${seller.id}?${query}`);
   };
 
   /* ── Q&A composer ──
@@ -513,26 +526,44 @@ function Content({
           {/* ── Seller ── */}
           <View style={styles.card}>
             <AppText style={styles.sectionLabel}>SELLER</AppText>
-            <Pressable
-              onPress={onOpenSeller}
-              accessibilityRole="button"
-              accessibilityLabel={`View ${product.seller.full_name ?? 'seller'}'s profile`}
-              style={({ pressed }) => [styles.sellerRow, pressed && styles.sellerRowPressed]}
-            >
-              <Avatar name={product.seller.full_name} uri={product.seller.avatar_url} size={48} ringed />
-              <View style={styles.sellerInfo}>
-                <AppText style={styles.sellerName} numberOfLines={1}>
-                  {product.seller.full_name || 'Yahora student'}
-                </AppText>
-                {eduLine ? (
-                  <AppText style={styles.sellerEdu} numberOfLines={1}>
-                    {eduLine}
+            {sellerHidden ? (
+              // Not pressable: there is no profile to open, and no id to open
+              // it with (the API drops `seller_id` too).
+              <View style={styles.sellerRow}>
+                <Avatar size={48} hidden />
+                <View style={styles.sellerInfo}>
+                  <AppText style={styles.sellerName} numberOfLines={1}>
+                    {product.university_name
+                      ? `A student at ${product.university_name}`
+                      : 'A Yahora student'}
                   </AppText>
-                ) : null}
-                <AppText style={styles.sellerLink}>View profile →</AppText>
+                  <AppText style={styles.sellerHiddenNote}>
+                    Verified students can see who&apos;s selling.
+                  </AppText>
+                </View>
               </View>
-              <Feather name="chevron-right" size={20} color={colors.mutedLabel} />
-            </Pressable>
+            ) : (
+              <Pressable
+                onPress={onOpenSeller}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${seller.full_name ?? 'seller'}'s profile`}
+                style={({ pressed }) => [styles.sellerRow, pressed && styles.sellerRowPressed]}
+              >
+                <Avatar name={seller.full_name} uri={seller.avatar_url} size={48} ringed />
+                <View style={styles.sellerInfo}>
+                  <AppText style={styles.sellerName} numberOfLines={1}>
+                    {seller.full_name || 'Yahora student'}
+                  </AppText>
+                  {eduLine ? (
+                    <AppText style={styles.sellerEdu} numberOfLines={1}>
+                      {eduLine}
+                    </AppText>
+                  ) : null}
+                  <AppText style={styles.sellerLink}>View profile →</AppText>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.mutedLabel} />
+              </Pressable>
+            )}
           </View>
 
           {/* ── Questions & Answers ── */}
@@ -679,7 +710,7 @@ function Content({
               <Feather name="lock" size={16} color={colors.mutedLabel} />
               <AppText style={styles.msgDisabledText}>Home campus only</AppText>
             </View>
-          ) : (
+          ) : sellerHidden ? null : (
             <Pressable
               onPress={handleMessageSeller}
               accessibilityRole="button"
@@ -1003,6 +1034,13 @@ const styles = StyleSheet.create({
     color: colors.blackSoft,
   },
   sellerEdu: {
+    fontFamily: font.family.regular,
+    fontSize: font.sizes.caption,
+    color: colors.mutedText,
+    marginTop: 2,
+  },
+  // Under the hidden seller's "A student at …" line.
+  sellerHiddenNote: {
     fontFamily: font.family.regular,
     fontSize: font.sizes.caption,
     color: colors.mutedText,

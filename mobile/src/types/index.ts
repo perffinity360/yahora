@@ -21,7 +21,9 @@ export interface UserProfile {
 
 export interface Product {
   id: string;
-  seller_id: string;
+  /** Absent when the seller is hidden from this viewer (`seller_hidden`) — see
+   *  `SellerHidden` below. Nothing in the app reads it; use `seller?.id`. */
+  seller_id?: string;
   university_id: string;
   title: string;
   description: string | null;
@@ -38,12 +40,26 @@ export interface Product {
 }
 
 /**
+ * THE IDENTITY RULE (Phase 6B, backend/API.md "The identity rule"). A real
+ * student is shown only to signed-in students from real campuses. Anyone else —
+ * on the phone, a demo account that opened a real listing from a link — gets
+ * the listing with the person removed: `seller: null`, no `seller_id`, and
+ * `seller_hidden: true`. The flag means "hidden on purpose": draw "Yahora
+ * student", no photo, no profile link. A null seller is a normal response,
+ * not an error. Comments get the same treatment with `user` / `user_hidden`.
+ */
+export interface SellerHidden {
+  seller_hidden?: boolean;
+}
+
+/**
  * A marketplace feed row (GET /api/products): the full product plus the joined
  * seller and the viewer's interaction state. Structurally satisfies
  * `ProductCardItem`, so `ProductCard` renders it directly.
  */
-export interface MarketplaceProduct extends Product {
-  seller: { id: string; full_name: string | null; avatar_url: string | null };
+export interface MarketplaceProduct extends Product, SellerHidden {
+  /** `null` when hidden — see `SellerHidden`. */
+  seller: { id: string; full_name: string | null; avatar_url: string | null } | null;
   is_liked?: boolean;
   is_saved?: boolean;
 }
@@ -57,7 +73,10 @@ export interface ProductComment {
   upvotes: number;
   downvotes: number;
   parent_comment_id: string | null;
-  user: { id: string; full_name: string | null; avatar_url: string | null };
+  /** `null` when the author is hidden from this viewer; the text stays. See
+   *  `SellerHidden` for the rule. */
+  user: { id: string; full_name: string | null; avatar_url: string | null } | null;
+  user_hidden?: boolean;
   user_vote: -1 | 0 | 1;
 }
 
@@ -99,14 +118,18 @@ export interface Paged<T> {
   next_cursor: string | null;
 }
 
-export interface ProductDetailData extends Product {
+export interface ProductDetailData extends Product, SellerHidden {
+  /** `null` when hidden — see `SellerHidden`. */
   seller: {
     id: string;
     full_name: string | null;
     avatar_url: string | null;
     qualification: string | null;
     year_of_study: string | null;
-  };
+  } | null;
+  /** The listing's campus name, sent to every viewer. The hidden-seller line
+   *  reads "A student at <university_name>". */
+  university_name?: string | null;
   /**
    * Unwrapped by `useProductDetail` / `useProduct`. On the wire this is
    * `Paged<ProductComment>` — see `ProductDetailWire` below.
@@ -179,6 +202,9 @@ export interface ProductCardItem {
    * fallback for a screen that did not pass `sellerName` / `sellerAvatarUrl`.
    */
   seller?: { full_name: string | null; avatar_url: string | null } | null;
+  /** The API hid the seller from this viewer: the card draws "Yahora student"
+   *  and wins over any `sellerName` a screen passes. See `SellerHidden`. */
+  seller_hidden?: boolean;
 }
 
 /* ────────────────────────── Messaging ────────────────────────── */

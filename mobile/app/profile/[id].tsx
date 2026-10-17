@@ -23,7 +23,7 @@ import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
 import { useToggleLike } from '../../src/hooks/useProductActions';
-import { usePublicProfile } from '../../src/hooks/usePublicProfile';
+import { isProfileUnavailable, usePublicProfile } from '../../src/hooks/usePublicProfile';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
@@ -60,7 +60,7 @@ export default function PublicProfileScreen() {
   const { profile: viewer } = useAuth();
   const isOwnProfile = !!viewer?.id && viewer.id === profileUserId;
 
-  const { data, isLoading, isError, refetch } = usePublicProfile(profileUserId);
+  const { data, isLoading, isError, error, refetch } = usePublicProfile(profileUserId);
   const toggleLike = useToggleLike(['publicProfile', profileUserId]);
 
   const { width } = useWindowDimensions();
@@ -116,6 +116,8 @@ export default function PublicProfileScreen() {
               <HeaderSkeleton />
               <ListingsSkeleton cardWidth={cardWidth} />
             </>
+          ) : isError && !profile && isProfileUnavailable(error) ? (
+            <UnavailableState onBack={goBack} />
           ) : isError && !profile ? (
             <ErrorState onRetry={refetch} />
           ) : profile ? (
@@ -282,6 +284,42 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         >
           <Feather name="refresh-cw" size={16} color={colors.white} />
           <AppText style={styles.retryBtnText}>Retry</AppText>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The API won't show this person to this viewer (Phase 6B identity rule: a
+ * demo account that opened a real student's profile from a link), or there is
+ * no such person. The two are deliberately indistinguishable — saying which
+ * would tell a demo account that the student exists. No retry: the answer
+ * won't change.
+ */
+function UnavailableState({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={styles.errorWrap}>
+      <View style={styles.emptyIcon}>
+        <Feather name="user-x" size={26} color={colors.purple} />
+      </View>
+      <Text style={[styles.emptyTitle, styles.unavailableTitle]}>
+        This profile isn&apos;t available.
+      </Text>
+      <Pressable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnDim]}
+      >
+        <LinearGradient
+          colors={BRAND}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.retryBtnGradient}
+        >
+          <Feather name="arrow-left" size={16} color={colors.white} />
+          <AppText style={styles.retryBtnText}>Go back</AppText>
         </LinearGradient>
       </Pressable>
     </View>
@@ -566,6 +604,11 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.bodyLg,
     color: colors.blackSoft,
     textAlign: 'center',
+  },
+  // CC-V4 asks for Inter 600 15. 15 is not on the type scale (src/theme
+  // font.sizes), so this keeps emptyTitle's 14 and changes only the weight.
+  unavailableTitle: {
+    fontFamily: font.family.semibold,
   },
   emptySubtitle: {
     fontFamily: font.family.regular,
