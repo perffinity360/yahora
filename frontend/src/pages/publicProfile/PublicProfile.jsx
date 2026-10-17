@@ -54,6 +54,9 @@ export default function PublicProfile() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Set when the API refuses the profile under the identity rule (Phase 6B):
+  // "login" for 401 LOGIN_REQUIRED, "unavailable" for 404 USER_NOT_FOUND.
+  const [gate, setGate] = useState(null);
   // Per history entry, so Back from a listing returns to the listings view
   // rather than the intro (see useHistoryEntryState).
   const [isDashboard, setIsDashboard] = useHistoryEntryState("isDashboard", false);
@@ -71,11 +74,17 @@ export default function PublicProfile() {
 
   useEffect(() => {
     const fetchProfile = async () => {
+      setGate(null);
       try {
-        // We pass the currentUserId in the query so the backend knows if the visitor has liked/saved these items
-        const res = await fetch(
-          `${API_BASE_URL}/user/${id}/public${currentUserId ? `?user_id=${currentUserId}` : ""}`,
-        );
+        // The token tells the API who is looking (Phase 6B): it decides whether
+        // this profile may be shown, and whose liked/saved flags come back.
+        // `?user_id=` is no longer sent; the API ignores it (the IDOR fix).
+        const token = localStorage.getItem("yahora_session");
+        const res = await fetch(`${API_BASE_URL}/user/${id}/public`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.status === 401) return setGate("login");
+        if (res.status === 404) return setGate("unavailable");
         if (!res.ok) throw new Error("Failed to fetch profile");
         setData(await res.json());
       } catch (err) {
@@ -243,6 +252,35 @@ export default function PublicProfile() {
       <div className={styles.loading}>
         <div className={styles.spinner} />
         <span>Loading profile…</span>
+      </div>
+    );
+  if (gate === "login")
+    return (
+      <div className={styles.loading}>
+        <div
+          className={styles.bioCard}
+          style={{ maxWidth: 420, margin: "0 16px", textAlign: "center" }}
+        >
+          <h2 className={styles.sectionTitle} style={{ margin: "0 0 8px" }}>
+            Log in to see this profile
+          </h2>
+          <p style={{ margin: "0 0 20px", color: "#888", fontSize: "0.95rem", fontFamily: "inherit" }}>
+            Profiles on Yahora are visible only to verified students.
+          </p>
+          <button
+            className={styles.sellBtn}
+            style={{ margin: "0 auto" }}
+            onClick={() => navigate("/auth")}
+          >
+            Log in
+          </button>
+        </div>
+      </div>
+    );
+  if (gate === "unavailable")
+    return (
+      <div className={styles.loading}>
+        <div className={styles.emptyState}>This profile isn't available.</div>
       </div>
     );
   if (error)

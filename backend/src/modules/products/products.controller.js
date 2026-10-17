@@ -5,6 +5,7 @@
 // ══════════════════════════════════════════════
 import { supabase } from '../../config/supabase.js';
 import { sendError, mapDbError, sendPage } from '../../utils/respond.js';
+import { resolveViewer, isDemoCampus, canSeeIdentity, hideSeller, hideCommenters } from '../../utils/viewer.js';
 
 export const createProduct = async (req, res) => {
     try {
@@ -397,6 +398,11 @@ export const getProducts = async (req, res) => {
         // caller and `?.` is load-bearing rather than defensive. An anonymous
         // viewer gets the listings with no flags attached, which is correct —
         // see the `if (viewerId)` guard below.
+        //
+        // 🔒 IDENTITY RULE (Phase 6B Block N-C). `viewer` decides whether the
+        // sellers are shown (utils/viewer.js); `viewerId` still drives only the
+        // like/save flags, exactly as before.
+        const viewer = await resolveViewer(req);
         const viewerId = req.user?.id;
 
         if (!university_id) {
@@ -465,6 +471,14 @@ export const getProducts = async (req, res) => {
             });
         }
 
+        // 3. 🔒 IDENTITY RULE (Phase 6B Block N-C). Every listing on this page
+        // shares one campus, so one answer covers them all. A logged-out or
+        // demo viewer of a real campus gets each seller hidden: `seller` null,
+        // `seller_id` removed, `seller_hidden` true. Runs after the flags and
+        // before the response; sendPage reads only `created_at`, which stays.
+        const campusIsDemo = await isDemoCampus(university_id);
+        if (!canSeeIdentity(viewer, campusIsDemo)) products.forEach(hideSeller);
+
         // 📄 `{ items, next_cursor }` via the frozen sendPage() — API.md "The list
         // envelope". This replaces `{ products }`: the envelope key changed, the
         // shape of an individual listing did not. `next_cursor` is null on the
@@ -488,6 +502,11 @@ export const getProductById = async (req, res) => {
         // is ignored in silence, because both clients still send one.
         //
         // optionalAuth, so a signed-out caller reads the listing with no flags.
+        //
+        // 🔒 IDENTITY RULE (Phase 6B Block N-C). `viewer` decides whether the
+        // seller and the commenters are shown (utils/viewer.js), and is the one
+        // whose view is recorded; `viewerId` still drives only the flags.
+        const viewer = await resolveViewer(req);
         const viewerId = req.user?.id;
 
         // 📄 PAGINATION (Phase 4 Block N-B). `limit` and `cursor` are optional
@@ -565,7 +584,8 @@ export const getProductById = async (req, res) => {
                 .from('products')
                 .select(`
                     *,
-                    seller:users!seller_id(id, full_name, avatar_url, qualification, year_of_study)
+                    seller:users!seller_id(id, full_name, avatar_url, qualification, year_of_study),
+                    university:universities!university_id(name)
                 `)
                 .eq('id', id)
                 .single(),
@@ -575,6 +595,11 @@ export const getProductById = async (req, res) => {
         const { data: product, error } = productRes;
         if (error) throw error;
         if (topLevelRes.error) throw topLevelRes.error;
+
+        // The campus name, flattened (Phase 6B). Clients show it in place of a
+        // hidden seller ("a student at <campus>"), so it is sent to everyone.
+        product.university_name = product.university?.name ?? null;
+        delete product.university;
 
         const topLevel = topLevelRes.data ?? [];
 
@@ -647,13 +672,41 @@ export const getProductById = async (req, res) => {
             });
         }
 
+        // ⚠ Anything that needs to know whether the viewer IS the seller (Block
+        // N-E adds one) goes HERE, before the identity rule below — hideSeller()
+        // deletes `product.seller_id`, so after it nothing can compare against it.
+
+        // 3. 🔒 IDENTITY RULE (Phase 6B Block N-C). A logged-out or demo viewer
+        // of a real-campus listing sees neither the seller nor the commenters:
+        // `seller` / `user` null, `seller_id` removed, `seller_hidden` /
+        // `user_hidden` true. Comment text stays. Runs after the flags and
+        // before the response.
+        const campusIsDemo = await isDemoCampus(product.university_id);
+        if (!canSeeIdentity(viewer, campusIsDemo)) {
+            hideSeller(product);
+            hideCommenters(comments);
+        }
+
         // 📄 The comments list is the standard `{ items, next_cursor }` envelope
         // from API.md, nested under `product`. `product.comments` was a bare
         // array until 15 Sep 2026; the individual comment shape is unchanged.
         product.comments = { items: comments, next_cursor: commentsNextCursor };
 
-        // 3. Increment the view metric via the RPC
-        await supabase.rpc('increment_product_views', { product_id: id });
+        // 4. 👁 VIEWS (Phase 6B Block N-C). A view is a signed-in person opening
+        // the listing, counted once per person per listing, ever. Only the
+        // first page of comments counts: "load more comments" is the same
+        // visit, not a new one. The database decides what counts: repeat
+        // views, the seller's own views, and demo accounts on real listings
+        // (or the reverse) all add nothing. This replaced
+        // `increment_product_views`, which added 1 on every request, from any
+        // caller. A view that fails to record is logged, never a failed page.
+        if (viewer.id && cursor === null) {
+            const { error: viewError } = await supabase.rpc('record_product_view', {
+                p_product_id: id,
+                p_viewer_id: viewer.id,
+            });
+            if (viewError) console.error('[views] record_product_view failed:', viewError);
+        }
 
         res.status(200).json({ product });
     } catch (error) {
@@ -666,9 +719,11 @@ export const getProductById = async (req, res) => {
 /**
  * Minimal, read-only product data for link previews (Open Graph cards).
  *
- * Deliberately NOT getProductById: that endpoint increments the view counter
- * and joins every comment, so using it here would inflate view counts on every
- * crawler hit and over-fetch badly for a card that shows four fields.
+ * Deliberately NOT getProductById: that endpoint records views and joins every
+ * comment, so it over-fetches badly for a card that shows four fields.
+ *
+ * 🔒 No seller name (Phase 6B Block N-C). This is anonymous and cacheable, and
+ * it named the seller for anyone who held a product id. The campus name stays.
  */
 export const getProductMeta = async (req, res) => {
     try {
@@ -678,7 +733,6 @@ export const getProductMeta = async (req, res) => {
             .from('products')
             .select(`
                 id, title, description, price, condition, image_urls, status,
-                seller:users!seller_id(full_name),
                 university:universities!university_id(name)
             `)
             .eq('id', id)
@@ -699,7 +753,6 @@ export const getProductMeta = async (req, res) => {
                 condition: product.condition,
                 status: product.status,
                 image: product.image_urls?.[0] || null,
-                seller_name: product.seller?.full_name || null,
                 university_name: product.university?.name || null,
             },
         });
@@ -843,6 +896,32 @@ export const addComment = async (req, res) => {
         const user_id = req.user.id;
         const { content, parent_comment_id } = req.body;
 
+        // 🔒 CAMPUS (Phase 6B Block N-C). Like, save and message already refused
+        // another campus; commenting didn't, so a one-click demo account could
+        // post under listings on every real campus. Same guard as like/save.
+        if (await blockCrossCampusInteraction(req, res, product_id, 'Add Comment')) return;
+
+        // A reply must answer a comment on THIS listing. Without this check a
+        // parent from another listing (or another campus) was accepted, and
+        // neither client could ever render the reply. A malformed id is treated
+        // as missing, so it is a 400 rather than a uuid-cast 500.
+        if (parent_comment_id) {
+            const parent = UUID_RE.test(String(parent_comment_id))
+                ? await supabase
+                    .from('comments')
+                    .select('product_id')
+                    .eq('id', parent_comment_id)
+                    .maybeSingle()
+                : { data: null, error: null };
+
+            if (parent.error) throw parent.error;
+            if (!parent.data || parent.data.product_id !== product_id) {
+                return sendError(res, 400, 'INVALID_REFERENCE', {
+                    message: 'That comment is not on this listing.',
+                });
+            }
+        }
+
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('university_id')
@@ -891,6 +970,20 @@ export const toggleCommentVote = async (req, res) => {
         if (![1, -1].includes(vote_value)) {
             return res.status(400).json({ error: 'Invalid vote value. Must be 1 or -1.' });
         }
+
+        // 🔒 CAMPUS (Phase 6B Block N-C). Voting is an interaction too, so it
+        // gets the like/save guard, applied to the listing the comment is on.
+        // A malformed id is treated as missing (404), not a uuid-cast 500.
+        const commentRes = UUID_RE.test(String(commentId))
+            ? await supabase.from('comments').select('product_id').eq('id', commentId).maybeSingle()
+            : { data: null, error: null };
+
+        if (commentRes.error) throw commentRes.error;
+        if (!commentRes.data) {
+            return sendError(res, 404, 'NOT_FOUND', { message: 'That comment no longer exists.' });
+        }
+
+        if (await blockCrossCampusInteraction(req, res, commentRes.data.product_id, 'Comment Vote')) return;
 
         // Trigger the Smart RPC we built in Phase 1
         const { error } = await supabase.rpc('toggle_comment_vote', {

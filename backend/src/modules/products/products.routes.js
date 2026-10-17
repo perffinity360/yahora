@@ -26,6 +26,12 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Anonymous browsing of the marketplace is a deliberate feature — a 401 here
 // would empty the logged-out landing page — so the middleware sets req.user to
 // null rather than rejecting, and the handlers simply attach no flags.
+//
+// 🔒 Anonymous browsing stays, but browsing is not seeing who. Since Phase 6B
+// both handlers apply the identity rule (utils/viewer.js): a logged-out or
+// demo caller gets every real-campus seller and commenter hidden. optionalAuth
+// is what lets resolveViewer() tell a student from everyone else, so these two
+// must keep it.
 router.get('/', optionalAuth, getProducts);
 // Must precede '/:id' so 'meta' isn't swallowed as an id segment.
 //
