@@ -106,6 +106,33 @@ function AvatarImg({ src, name, size = 36, className }) {
   );
 }
 
+/* Stands in for the avatar of a person the API hid (Phase 6B identity rule:
+   `seller_hidden` / `user_hidden`). Same circle and size as AvatarImg's
+   initials fallback, with a person icon instead of initials. */
+function HiddenAvatar({ size = 36, className }) {
+  return (
+    <div
+      className={className}
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        flexShrink: 0,
+        background: "var(--pink-light)",
+        color: "var(--purple)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <User size={Math.round(size * 0.45)} />
+    </div>
+  );
+}
+
+const HIDDEN_NAME = "Yahora student";
+
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -810,16 +837,20 @@ export default function ProductDetail() {
                     >
                       {/* ── Top-level comment ── */}
                       <div className={styles.commentRow}>
-                        <AvatarImg
-                          src={comment.user.avatar_url}
-                          name={comment.user.full_name}
-                          size={34}
-                          className={styles.commentAvatar}
-                        />
+                        {comment.user ? (
+                          <AvatarImg
+                            src={comment.user.avatar_url}
+                            name={comment.user.full_name}
+                            size={34}
+                            className={styles.commentAvatar}
+                          />
+                        ) : (
+                          <HiddenAvatar size={34} className={styles.commentAvatar} />
+                        )}
                         <div className={styles.commentBubble}>
                           <div className={styles.commentMeta}>
                             <span className={styles.commenterName}>
-                              {comment.user.full_name}
+                              {comment.user?.full_name ?? HIDDEN_NAME}
                             </span>
                             <span className={styles.commentTime}>
                               {timeAgo(comment.created_at)}
@@ -886,12 +917,16 @@ export default function ProductDetail() {
                             <div className={styles.inlineReplyInputWrap}>
                               <span className={styles.replyingToLabel}>
                                 Replying to{" "}
-                                <strong>{comment.user.full_name}</strong>
+                                <strong>{comment.user?.full_name ?? HIDDEN_NAME}</strong>
                               </span>
                               <input
                                 ref={replyInputRef}
                                 type="text"
-                                placeholder={`Reply to ${comment.user.full_name}…`}
+                                placeholder={
+                                  comment.user
+                                    ? `Reply to ${comment.user.full_name}…`
+                                    : "Reply…"
+                                }
                                 value={replyText}
                                 onChange={(e) => setReplyText(e.target.value)}
                                 className={styles.inlineReplyInput}
@@ -943,16 +978,20 @@ export default function ProductDetail() {
                           <div className={styles.repliesList}>
                             {replies.map((reply) => (
                               <div key={reply.id} className={styles.replyRow}>
-                                <AvatarImg
-                                  src={reply.user.avatar_url}
-                                  name={reply.user.full_name}
-                                  size={28}
-                                  className={styles.replyAvatar}
-                                />
+                                {reply.user ? (
+                                  <AvatarImg
+                                    src={reply.user.avatar_url}
+                                    name={reply.user.full_name}
+                                    size={28}
+                                    className={styles.replyAvatar}
+                                  />
+                                ) : (
+                                  <HiddenAvatar size={28} className={styles.replyAvatar} />
+                                )}
                                 <div className={styles.replyBubble}>
                                   <div className={styles.commentMeta}>
                                     <span className={styles.commenterName}>
-                                      {reply.user.full_name}
+                                      {reply.user?.full_name ?? HIDDEN_NAME}
                                     </span>
                                     <span className={styles.commentTime}>
                                       {timeAgo(reply.created_at)}
@@ -1061,7 +1100,7 @@ export default function ProductDetail() {
                 <button className={styles.disabledBtn} disabled>
                   Campus-exclusive listing
                 </button>
-              ) : (
+              ) : !product.seller ? null : (
                 <button
                   className={styles.primaryBtn}
                   onClick={() =>
@@ -1092,6 +1131,38 @@ export default function ProductDetail() {
             {/* Seller Info */}
             <div className={styles.sellerSection}>
               <p className={styles.sellerLabel}>SELLER</p>
+              {!product.seller ? (
+                /* The API hid the seller from a logged-out or demo viewer
+                   (Phase 6B identity rule). Campus only: no name, no
+                   education line, no profile link. */
+                <div className={styles.sellerRow}>
+                  <HiddenAvatar size={44} className={styles.sellerAvatar} />
+                  <div className={styles.sellerInfo}>
+                    <p className={styles.sellerName}>
+                      {product.university_name
+                        ? `A student at ${product.university_name}`
+                        : "A Yahora student"}
+                    </p>
+                    {currentUserId ? (
+                      <p className={styles.sellerHiddenHint}>
+                        Verified students can see who's selling.
+                      </p>
+                    ) : (
+                      <>
+                        <p className={styles.sellerHiddenHint}>
+                          Log in with your college email to see who's selling.
+                        </p>
+                        <button
+                          className={styles.sellerLoginBtn}
+                          onClick={() => navigate("/auth")}
+                        >
+                          Log in
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
               <div className={styles.sellerRow}>
                 <AvatarImg
                   src={product.seller.avatar_url}
@@ -1118,6 +1189,7 @@ export default function ProductDetail() {
                   </button>
                 </div>
               </div>
+              )}
             </div>
 
             {/* Safety tip */}

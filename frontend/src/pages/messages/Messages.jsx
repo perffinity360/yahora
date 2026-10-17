@@ -934,8 +934,16 @@ export default function Messages() {
             // not, so let handleSelectChat put it back there.
             handleSelectChat(existingChat, isDeepLink);
           } else if (isDeepLink) {
+            // The token is what lets the API show this student the seller's
+            // name and photo (Phase 6B identity rule); without it the seller
+            // comes back hidden and the new chat would be titled "User".
             const prodRes = await fetch(
               `${API_BASE_URL}/products/${paramProductId}`,
+              {
+                headers: authHeaderToken()
+                  ? { Authorization: `Bearer ${authHeaderToken()}` }
+                  : {},
+              },
             );
             const prodData = await prodRes.json();
 

@@ -975,6 +975,37 @@
   letter-spacing: 0.02em;
 }
 
+/* Hidden seller (Phase 6B identity rule): why there's no name, and a way in. */
+.sellerHiddenHint {
+  margin: 0 0 6px 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #999;
+}
+.sellerLoginBtn {
+  padding: 4px 14px;
+  border: 1.5px solid var(--purple);
+  border-radius: 99px;
+  background: none;
+  color: var(--purple);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease-out, color 0.15s ease-out, transform 0.15s ease-out;
+}
+.sellerLoginBtn:hover {
+  background: var(--purple);
+  color: var(--white);
+}
+.sellerLoginBtn:active {
+  transform: scale(0.97);
+}
+.sellerLoginBtn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
 /* Safety Tip */
 .safetyTip {
   display: flex;

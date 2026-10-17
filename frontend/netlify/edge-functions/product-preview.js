@@ -96,7 +96,6 @@ export default async function productPreview(request, context) {
   const descriptionParts = [];
   if (product.condition) descriptionParts.push(`${product.condition} condition`);
   if (product.university_name) descriptionParts.push(product.university_name);
-  if (product.seller_name) descriptionParts.push(`Listed by ${product.seller_name}`);
 
   const description = truncate(
     product.description?.trim() ||
