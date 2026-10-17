@@ -9,6 +9,7 @@
 // change their behaviour or response shapes. Phase 1 adds underneath.
 import { supabase } from '../../config/supabase.js';
 import { sendError, mapDbError } from '../../utils/respond.js';
+import { resolveViewer, isDemoCampus, canSeeIdentity } from '../../utils/viewer.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The only columns PUT /:userId/profile may write.
@@ -250,20 +251,44 @@ export const updateAvatar = async (req, res) => {
 export const getPublicProfile = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { user_id: visitorId } = req.query; // Who is viewing the profile?
 
-        const { data: profile, error: profileError } = await supabase
+        // 🔒 VIEWER (Phase 6B Block N-C). The visitor for the like/save flags
+        // was `req.query.user_id`: the CALLER named whose likes and saves came
+        // back, so anyone could read any student's flags on any profile (an
+        // IDOR, runbook §1.4). The visitor is the token holder now. A
+        // `?user_id=` is ignored in silence, because both apps still send one.
+        const viewer = await resolveViewer(req);
+        const visitorId = viewer.id;
+
+        const { data: profileRow, error: profileError } = await supabase
             .from('users')
             .select(`
                 id, full_name, avatar_url, bio, qualification, year_of_study, created_at,
+                university_id,
                 course:courses(name),
                 specialization:specializations(name),
                 university:universities(name)
             `)
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (profileError) throw profileError;
+        if (!profileRow) return sendError(res, 404, 'USER_NOT_FOUND');
+
+        // 🔒 IDENTITY RULE (Phase 6B Block N-C), before anything else is read.
+        // A real student is shown only to students. A logged-out caller is
+        // asked to log in (401). A demo account gets 404, the same answer as
+        // "no such user", so it learns nothing. Demo personas are shown to all.
+        const subjectIsDemo = await isDemoCampus(profileRow.university_id);
+        if (!canSeeIdentity(viewer, subjectIsDemo)) {
+            return viewer.kind === 'anonymous'
+                ? sendError(res, 401, 'LOGIN_REQUIRED')
+                : sendError(res, 404, 'USER_NOT_FOUND');
+        }
+
+        // `university_id` was selected only for the rule above. It is taken
+        // back out so the response shape stays exactly what it was.
+        const { university_id: _subjectCampus, ...profile } = profileRow;
 
         const { data: listings, error: listingsError } = await supabase
             .from('products')
@@ -514,6 +539,16 @@ export const getProfileByUsername = async (req, res) => {
 
     if (!username) return sendError(res, 404, 'USER_NOT_FOUND');
 
+    // 🔒 IDENTITY RULE (Phase 6B Block N-C) — the same rule as
+    // getPublicProfile: 401 for a logged-out caller, 404 for a demo account,
+    // unless the person is on the demo campus.
+    const viewer = await resolveViewer(req);
+    const hiddenFrom = async (subjectUniversityId) =>
+      !canSeeIdentity(viewer, await isDemoCampus(subjectUniversityId));
+    const refuse = () => (viewer.kind === 'anonymous'
+      ? sendError(res, 401, 'LOGIN_REQUIRED')
+      : sendError(res, 404, 'USER_NOT_FOUND'));
+
     // Columns are listed explicitly, never `select('*')`. public.users has no
     // email column by design, but an explicit list is what keeps that true the
     // day someone adds one.
@@ -548,7 +583,7 @@ export const getProfileByUsername = async (req, res) => {
 
       const { data: owner, error: ownerError } = await supabase
         .from('users')
-        .select('username')
+        .select('username, university_id')
         .eq('id', history.user_id)
         .maybeSingle();
 
@@ -558,10 +593,16 @@ export const getProfileByUsername = async (req, res) => {
       // There is nowhere to redirect to, so this is an ordinary 404.
       if (!owner?.username) return sendError(res, 404, 'USER_NOT_FOUND');
 
+      // 🔒 The new handle is identity too: a non-student must not be able to
+      // follow a real student from an old handle to their current one.
+      if (await hiddenFrom(owner.university_id)) return refuse();
+
       // Clients navigate this with REPLACE, not push, or the back button loops
       // between the old handle and the new one (§2.2).
       return res.json({ redirect_to: owner.username });
     }
+
+    if (await hiddenFrom(user.university?.id)) return refuse();
 
     return res.json({
       user: {

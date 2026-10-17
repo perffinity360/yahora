@@ -45,9 +45,12 @@ router.put('/:userId/profile', requireAuth, updateProfile);
 // POST /api/user/:userId/avatar -> New route for handling image uploads
 router.post('/:userId/avatar', requireAuth, upload.single('avatar'), updateAvatar);
 
-// Public Profile — deliberately unauthenticated; it is a public page and the
-// projection is an explicit, non-sensitive column list. Do not add auth here.
-router.get('/:userId/public', getPublicProfile);
+// Public Profile — optionalAuth (Phase 6B identity rule, utils/viewer.js). It
+// was unauthenticated, which gave a real student's name, photo, bio and course
+// to anyone holding their id. The token is what lets resolveViewer() tell a
+// student from everyone else. The route still answers logged-out callers:
+// 401 LOGIN_REQUIRED for a real student, the profile for a demo persona.
+router.get('/:userId/public', optionalAuth, getPublicProfile);
 
 // ─────────────────────────────────────────────────────────────────────────
 // PHASE 1 — usernames and search (plan §1.5). Everything above this line

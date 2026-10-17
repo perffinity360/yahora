@@ -81,12 +81,12 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 |---|---|---|---|
 | `UNAUTHORIZED` | 401 | `requireAuth` — missing or invalid Bearer token | — |
 | `FORBIDDEN` | 403 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/sold`,`/available` — caller is not the listing's `seller_id`; `GET /api/messages/history` — caller is not one of the two parties in the thread; `GET /api/messages/inbox/:userId` — `:userId` is not the caller; `POST /api/messages/send` — sender and receiver are not on the same campus (a `NULL` campus on either side counts as a mismatch); `GET /api/user/:userId/dashboard` — `:userId` is not the caller (that one carries no `message`) | `message` |
-| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save`,`/sold`,`/available` — no such listing; also `/like`,`/save` when the caller has no `public.users` row. `POST /api/messages/send` — no such `receiver_id`, or the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
-| `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical | — |
-| `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like` and `/save` — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
+| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save`,`/comments`,`/sold`,`/available` — no such listing; also `/like`,`/save`,`/comments` and the comment vote when the caller has no `public.users` row. `POST /api/products/comments/:commentId/vote` — no such comment (Phase 6B). `POST /api/messages/send` — no such `receiver_id`, or the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
+| `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical. **Live.** `GET /api/user/:userId/public` — no such user (was a 500 until Phase 6B). Both routes also send it to a **demo** caller asking for a real student (identity rule, Phase 6B) | — |
+| `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like`, `/save` and `/comments`, and `POST /api/products/comments/:commentId/vote` (the last two since Phase 6B) — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
 | `INVALID_PRICE` | 400 | **Live.** `PUT /api/products/:id` — `price` was supplied but does not parse to a finite number `>= 0`. Only raised when the key is present; an absent `price` is simply left alone | `message` |
 | `DUPLICATE` | 400 | `mapDbError` — Postgres `23505` unique violation | — |
-| `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation. Also raised **deliberately** by `POST /api/auth/onboarding` when `course_id` / `specialization_id` names a missing row, so the failure lands before the password change | `message` (onboarding only) |
+| `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation. Also raised **deliberately** by `POST /api/auth/onboarding` when `course_id` / `specialization_id` names a missing row, so the failure lands before the password change; and by `POST /api/products/:id/comments` when `parent_comment_id` is not a comment on that listing (Phase 6B) | `message` (onboarding and comments only) |
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
 | `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
@@ -111,7 +111,7 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `POSTING_RESTRICTED` | **403 or 400 — see below** | Trigger `trg_post_rate_limit` | `until` |
 | `RATE_LIMIT_POSTS` | 429 | Trigger `trg_post_rate_limit` — 10 top-level posts/hour | `message` |
 | `RATE_LIMIT_REPLIES` | 429 | Trigger `trg_post_rate_limit` — 30 replies/hour | — |
-| `LOGIN_REQUIRED` | 401 | **Phase 6B, Block N-C — not live yet.** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` when the caller is anonymous. See [the identity rule](#the-identity-rule-phase-6b) | — |
+| `LOGIN_REQUIRED` | 401 | **Live when Block N-C merges (M1).** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` (including its `redirect_to` case) when the caller is anonymous and the person is a real student. Not `UNAUTHORIZED`: the route is open, but this answer needs a student's token. See [the identity rule](#the-identity-rule-phase-6b) | — |
 | `MESSAGE_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `delete_message_for_everyone()`, `hide_message_for_me()` (migration `message_actions`) | — |
 | `NOT_MESSAGE_SENDER` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the caller didn't send the message | — |
 | `DELETE_WINDOW_EXPIRED` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the message is more than 60 minutes old | — |
@@ -250,7 +250,8 @@ histories, and comment lists return every matching row.
   `specialization_id`
 - `<products row>` — `id`, `seller_id`, `university_id`, `title`, `description`, `price`,
   `category`, `image_urls`, `status`, `created_at`, `location`, `condition`, `views`,
-  `likes_count`, `comments_count`, `sold_to`
+  `likes_count`, `comments_count`, `sold_at` (Phase 6B V-B: `sold_to` was dropped, `sold_at`
+  added — stamped by a trigger when `status` becomes `'sold'`)
 - `<messages row>` — `id`, `sender_id`, `receiver_id`, `university_id`, `content`,
   `created_at`, `is_read`, `product_id`, `is_delivered`
 
@@ -258,10 +259,9 @@ histories, and comment lists return every matching row.
 
 ## The identity rule (Phase 6B)
 
-> ⚠ **Contract, not live yet.** The helper exists (`backend/src/utils/viewer.js`, Block V-A),
-> but nothing calls it. Neeraj applies it to the six endpoints below in **Block N-C**. Until
-> N-C merges, every Part 1 entry below still describes the old behaviour. Both clients build
-> against this table now.
+> ⚠ **Live when Block N-C merges (M1).** The helper is `backend/src/utils/viewer.js` (Block
+> V-A). Block N-C applies it to all six endpoints below, and their entries already describe
+> the new behaviour. Both clients build against this table.
 
 A real student's identity — name, photo, @username, bio and academic details — is shown only
 to signed-in students from real campuses. Everyone else (logged-out visitors and demo
@@ -1096,14 +1096,16 @@ every other user-mutating endpoint.
 
 ### GET /api/user/:userId/public
 **Module:** user
-**Auth:** none — **deliberately public**, and reviewed 09 Sep 2026: the projection is an
-explicit column list with no email and no other non-public field. Do not add auth here.
+**Auth:** **`optionalAuth` (Phase 6B Block N-C).** No token is still answered, but a real
+student's profile then gets `401 LOGIN_REQUIRED`. A valid token makes the caller the viewer:
+it decides who may see the profile, and whose `is_liked` / `is_saved` come back. It was fully
+unauthenticated until 6B.
 **Content-Type:** n/a (no body)
 **Path:**
   - userId: uuid, required — whose profile to read
 **Query:**
-  - user_id: uuid, optional — **the visitor**, i.e. who is looking. Note the collision: the
-    path param `:userId` is the profile owner, the query param `user_id` is the viewer.
+  - user_id: uuid — ⚠️ **no longer read (Phase 6B).** Ignored in silence; the visitor is the
+    token holder, or nobody. Both apps still send it.
 **200:**
 ```json
 {
@@ -1122,27 +1124,32 @@ explicit column list with no email and no other non-public field. Do not add aut
                   "is_liked": false, "is_saved": false } ]
 }
 ```
-**500:** `{ "error": "Failed to fetch public profile." }` — including for an unknown user.
-**Notes:** This is the safe projection: an explicit column list that omits `university_id`,
+**401:** `{ "error": "LOGIN_REQUIRED" }` — no token (or one with no campus), and the profile is a
+real student's. The client shows "log in to see this profile"
+**404:** `{ "error": "USER_NOT_FOUND" }` — no such user (**was a 500 until Phase 6B**); **or** a
+demo account asking for a real student. Same answer on purpose, so a demo account can't tell
+"hidden" from "missing"
+**500:** `{ "error": "Failed to fetch public profile." }` — a database error, including a
+non-uuid `:userId`.
+**Notes:** **🔒 Identity rule (Phase 6B Block N-C),** checked before the listings are read. A
+**student** viewer gets the 200 exactly as before. A demo-campus profile is shown to everyone.
+The response shape is unchanged: `university_id` is read for the rule and is not returned.
+
+This is the safe projection: an explicit column list that omits `university_id`,
 `course_id`, `specialization_id`, and `is_profile_complete`. The same `university` /
 `courseName` overwrite quirk as the dashboard applies (see above).
 
 `listings` is filtered to `status = 'available'`. `is_liked` and `is_saved` are attached
-**only** when `user_id` is supplied *and* the user has at least one listing — otherwise the
-keys are **absent entirely**, not `false`. Treat `undefined` as `false` on the client.
+**only** when the caller is **signed in** *and* the user has at least one listing — otherwise
+the keys are **absent entirely**, not `false`. Treat `undefined` as `false` on the client.
 
-There is no campus check: any user can read any other user's public profile across campuses.
+There is no campus check among students: a student can read any other student's public
+profile across campuses.
 
-⚠ **Open issue — `user_id` is an unauthenticated query param.** The visitor is named by the
-query string, not by a token, so any caller can pass *any* uuid and read back that person's
-`is_liked` / `is_saved` state for this seller's listings. It is a small leak (a third party's
-like/save flags, nothing else).
-
-**The decision has since been made, and the same bug was fixed this way on `GET /api/products`
-and `GET /api/products/:id` on 15 Sep 2026:** add `optionalAuth`, take the viewer from
-`req.user?.id`, and **ignore the `user_id` param in silence** rather than removing it, so the
-client call sites that still send it keep working. **This endpoint has not been changed yet** —
-`OWNER: Neeraj`, handed to him separately. Copy the pattern from `getProducts`.
+**🔒 The `?user_id=` IDOR is fixed (Phase 6B Block N-C).** The visitor was named by the query
+string, so any caller could pass any uuid and read back that person's `is_liked` / `is_saved`
+for this seller's listings. Same fix as `GET /api/products` (15 Sep 2026): `optionalAuth`,
+the visitor from the token, and the param **ignored in silence** rather than rejected.
 
 ---
 
@@ -1177,6 +1184,13 @@ browsing of the marketplace is deliberate. (`?user_id=` chose the viewer until 1
   "next_cursor": "2026-09-14T11:37:40.203488+00:00"
 }
 ```
+**200, seller hidden** (a logged-out or demo viewer of a real campus — see "The identity rule
+(Phase 6B)"): every item has `"seller": null` and `"seller_hidden": true`, and **no
+`seller_id` key**. Everything else in the item is unchanged:
+```json
+{ "items": [ { "<products row, minus seller_id>": "...", "seller": null, "seller_hidden": true } ],
+  "next_cursor": "..." }
+```
 **400:** `{ "error": "university_id query parameter is required." }`
 **400:** `{ "error": "INVALID_FORMAT", "message": "cursor must be the next_cursor value from a
 previous response." }` — a `cursor` that is not parseable as a timestamp. Without this guard it
@@ -1184,6 +1198,13 @@ would reach `.lt()` and Postgres would raise 22007, surfacing as a 500 on a bad 
 **500:** `{ "error": "Failed to fetch marketplace feed." }` — a `university_id` that is not a
 valid UUID lands here (Postgres cast error), not in the 400.
 **Notes:** Filtered to `status = 'available'`, ordered `created_at` descending.
+
+**🔒 Identity rule (Phase 6B Block N-C).** The viewer is resolved from the token
+(`resolveViewer`). A **student** (signed in, real campus) gets exactly the response above. A
+**logged-out or demo** caller browsing a **real** campus gets every seller hidden, as shown. The
+demo campus's sellers are shown to everyone. All listings on a page share one campus, so one
+answer covers the page. `seller_hidden` appears **only** when hidden: a student's response
+carries no `seller_hidden` key at all.
 
 **📄 Cursor-paginated since 2026-09-15 (Phase 4 Block N-B).** Previously the entire campus
 feed came back in one response, every `image_urls` array included.
@@ -1234,7 +1255,6 @@ that campus's listings with their own (empty) flags attached.
   "product": { "id": "uuid", "title": "string", "description": "string", "price": 0,
                "condition": "string", "status": "string",
                "image": "string|null",
-               "seller_name": "string|null",
                "university_name": "string|null" }
 }
 ```
@@ -1253,9 +1273,13 @@ Sets `Cache-Control: public, max-age=300, s-maxage=300`; the only route that set
 header. Deliberately does **not** increment `views` and does **not** join comments — that is
 the whole reason it is separate from `GET /api/products/:id`.
 
-Response is flattened and renamed: `image` is `image_urls[0]` (or `null`), `seller_name` and
-`university_name` are pulled out of the joins. These three key names exist nowhere else in
-the API. Route registration order matters — it is declared **before** `/:id` so that `meta`
+Response is flattened and renamed: `image` is `image_urls[0]` (or `null`), and
+`university_name` is pulled out of the join.
+
+**🔒 `seller_name` was removed (Phase 6B Block N-C), for everyone.** This route is anonymous and
+cached, so it named the seller of any listing for anyone who held its id. It is gone, not
+`null`: read it as absent. The website's Netlify edge function only uses it when present
+(Block N-D removes that line). Route registration order matters — it is declared **before** `/:id` so that `meta`
 is not swallowed as an id segment.
 
 ### GET /api/products/:id
@@ -1281,6 +1305,7 @@ returns 401.** (`?user_id=` chose the viewer until 15 Sep 2026.)
     "<products row>": "... every column ...",
     "seller": { "id": "uuid", "full_name": "string", "avatar_url": "string",
                 "qualification": "string", "year_of_study": "string" },
+    "university_name": "string|null",
     "comments": {
       "items": [ { "id": "uuid", "content": "string", "created_at": "timestamptz",
                    "upvotes": 0, "downvotes": 0, "parent_comment_id": "uuid|null",
@@ -1299,9 +1324,38 @@ valid. Truncated base64, a wrong-shaped payload, a non-uuid id and a cursor craf
 PostgREST filter syntax all land here. **Never a 500, and never interpolated into the query.**
 **500:** `{ "error": "Failed to fetch product details." }` — **a product that does not exist
 returns 500, not 404**, because of `.single()`. So does a non-UUID id.
-**Notes:** **Every call increments `views`** via the `increment_product_views` RPC — including
-the seller viewing their own listing, and including refreshes. The counter is a view count in
-name only. (Contrast `/meta`, which was split out precisely to avoid this.)
+
+**`university_name` (Phase 6B Block N-C)** is the listing's campus name, for **every** viewer
+(`null` only if the campus row is missing). It is the only addition to a student's response.
+
+**🔒 Identity rule (Phase 6B Block N-C).** A **student** viewer gets exactly the shape above. A
+**logged-out or demo** viewer of a **real-campus** listing gets the seller **and every
+commenter** hidden. On a demo-campus listing nothing is hidden, for anyone:
+```json
+{ "product": { "<products row, minus seller_id>": "...",
+               "seller": null, "seller_hidden": true,
+               "university_name": "IIITDM Kurnool",
+               "comments": { "items": [ { "id": "uuid", "content": "string", "...": "...",
+                                          "user": null, "user_hidden": true } ],
+                             "next_cursor": null } } }
+```
+- **`seller_id` is removed, not nulled.** It is the key to `GET /api/user/:id/public`.
+- **Comment text stays**; only the author goes. `user_hidden` and `seller_hidden` appear
+  **only** when hidden.
+- Hiding runs after the like/save/vote flags are attached and before the response. A signed-in
+  demo viewer still gets its own `is_liked` / `is_saved` / `user_vote`.
+
+**Notes — views (Phase 6B Block N-C).** `views` is **the number of different people who opened
+this listing**. The request calls `record_product_view(p_product_id, p_viewer_id)` when:
+- the caller is **signed in**, and
+- this is the **first page of comments** (no `cursor`). "Load more comments" is the same visit.
+
+The database decides what counts. It counts once per person per listing, ever, and **never** the
+seller, and never a demo account on a real listing (or the reverse). It needs no client change.
+A failed view is logged (`[views] record_product_view failed:`) and **never fails the page**.
+Logged-out requests count nothing. This replaced the `increment_product_views` RPC, which added
+1 on **every** call from **anyone**, including the seller and refreshes. Since V-B the public key
+can't call that RPC at all, and no route calls it.
 
 **📄 `comments` is cursor-paginated since 2026-09-15 (Phase 4 Block N-B).**
 
@@ -1538,7 +1592,8 @@ field, until 14 Sep 2026.)
   - user_id: uuid — ⚠️ **no longer read.** Ignored; the comment is always authored by the token
     holder. The web app still sends it today
   - content: string, required — **no length limit enforced** in code or schema (`text`)
-  - parent_comment_id: uuid, optional — stored as `null` when falsy
+  - parent_comment_id: uuid, optional — stored as `null` when falsy. When given, it must be a
+    comment **on this same listing** (Phase 6B)
 **201:**
 ```json
 {
@@ -1548,25 +1603,34 @@ field, until 14 Sep 2026.)
                "user": { "id": "uuid", "full_name": "string", "avatar_url": "string" } }
 }
 ```
+**400:** `{ "error": "INVALID_REFERENCE", "message": "That comment is not on this listing." }` —
+`parent_comment_id` names no comment, a comment on a **different** listing, or is not a uuid
+(Phase 6B)
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
-**500:** `{ "error": "Failed to post comment." }` — also the response when the caller has no
-`public.users` row (internally `'User not found.'`) and for a missing `content` (`NOT NULL`
-violation).
+**403:** `{ "error": "CROSS_CAMPUS_INTERACTION_BLOCKED", "message": "You can only interact with
+listings on your own campus." }` — the listing is on another campus than the caller's, or
+either campus is `NULL` (Phase 6B). This includes a demo account on any real listing
+**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }` — no such
+listing. `{ "error": "NOT_FOUND", "message": "No profile exists for this account." }` — the
+caller has no `public.users` row (Phase 6B; was a 500)
+**500:** `{ "error": "Failed to post comment." }` — also for a missing `content` (`NOT NULL`
+violation), and for a non-uuid `:id` (the campus lookup fails as `INTERNAL_ERROR`).
 **🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `user_id` was a body field on
 an open route, so any caller could put words under any student's name and avatar on a public
 listing.
 **Notes:** There is **no validation of `content` at all** — an empty string `""` satisfies
 `NOT NULL` and is accepted, as is a comment of unbounded length.
 
-`university_id` is copied from the **commenter's** record, not the product's, so a
-cross-campus comment is filed under the commenter's campus. ⚠ **There is still no campus check
-here.** `/like` and `/save` refuse a cross-campus interaction with
-`CROSS_CAMPUS_INTERACTION_BLOCKED`; commenting does not, so a student can still comment on
-another campus's listing — as themselves, now, but across the boundary. Out of scope for Block
-V-A, which fixed identity only. See `docs/CHANGELOG.md`.
+**🔒 Campus check (Phase 6B Block N-C).** The same guard as `/like` and `/save`, run before
+anything is written: a cross-campus comment is refused with `403
+CROSS_CAMPUS_INTERACTION_BLOCKED`. Until 6B, commenting skipped it, so a one-click demo
+account could post under listings on every real campus. `university_id` is still copied from
+the **commenter's** record. After this check it always equals the listing's. Comments
+written before 6B may still carry another campus.
 
-`parent_comment_id` is **not** checked against the same product, and nesting depth is
-unlimited — a reply can point at a comment on a different product entirely.
+**`parent_comment_id` must be on the same listing (Phase 6B).** It is looked up first, and a
+missing parent or a parent on another listing is `400 INVALID_REFERENCE`. Nesting **depth** is
+still unlimited: a reply to a reply is accepted.
 
 The returned `comment` shape matches the entries in `GET /api/products/:id`'s
 `product.comments.items` exactly, except that `user_vote` is absent. `comments_count` on the product is maintained by the
@@ -1587,6 +1651,11 @@ field, until 14 Sep 2026.)
 **200:** `{ "message": "Vote registered successfully" }`
 **400:** `{ "error": "Invalid vote value. Must be 1 or -1." }`
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**403:** `{ "error": "CROSS_CAMPUS_INTERACTION_BLOCKED", "message": "You can only interact with
+listings on your own campus." }` — the comment's listing is on another campus than the
+caller's (Phase 6B)
+**404:** `{ "error": "NOT_FOUND", "message": "That comment no longer exists." }` — no such
+comment, or a `commentId` that is not a uuid (Phase 6B; was a 500)
 **500:** `{ "error": "Failed to register vote." }`
 **🔒 Identity is enforced (Phase 4 Block V-A, fixed 2026-09-14).** `user_id` went straight to the
 RPC as `p_user_id`. A vote is stored per user, so a forged id let one caller cast, flip and
@@ -1594,6 +1663,10 @@ withdraw votes on behalf of every student on campus — and because the RPC is a
 toggle, repeating a call silently *removed* the victim's real vote.
 **Notes:** Path is `/api/products/comments/...` — a comment resource living under the products
 prefix, and the only route in the module whose first segment is not `:id`.
+
+**🔒 Campus check (Phase 6B Block N-C).** The comment is looked up first (its `product_id`),
+then the like/save guard runs against that listing. Order of the checks: `vote_value` (400),
+the comment exists (404), the campus (403/404), then the RPC.
 
 The check is `[1, -1].includes(vote_value)`, a strict comparison: the **string** `"1"` is
 rejected with 400. Send a JSON number.
@@ -1607,8 +1680,8 @@ new `upvotes` / `downvotes`. The counts are maintained by the `trg_update_commen
 trigger. A client must predict the new state locally or refetch the product.
 
 The caller's id no longer needs validating before the RPC — it comes from a verified token, so
-it is always a real `auth.users` id. A caller with no `public.users` row still surfaces as a
-500 from the RPC's own foreign key.
+it is always a real `auth.users` id. A caller with no `public.users` row is now stopped by the
+campus guard with `404 NOT_FOUND` ("No profile exists for this account.") before the RPC runs.
 
 ### POST /api/products/:id/sold
 **Module:** products
@@ -1685,7 +1758,8 @@ The only routes in this API that do not return JSON. Owner: Vishwajeet
 ### GET /share/product/:id
 **Module:** share
 **Auth:** none — a crawler carries no token, and everything rendered is already public on the
-cross-campus browse feed.
+cross-campus browse feed. **The seller is not rendered** (Phase 6B identity rule): the page
+never names who listed the item.
 **Content-Type:** `text/html; charset=utf-8` (**not** JSON — nothing else in this API does this)
 **Path:**
   - id: uuid, required
@@ -1693,7 +1767,11 @@ cross-campus browse feed.
   - `og:site_name`, `og:type` (`product`), `og:title`, `og:description`, `og:url`
   - `og:image` + `og:image:alt` — `image_urls[0]`, omitted entirely when the listing has no photo
   - `twitter:card` — `summary_large_image` with a photo, `summary` without
-  - a styled fallback card with an "Open in Yahora" link, and
+  - a styled fallback card with an "Open in Yahora" link. Its line under the title is
+    `<price> · listed by a student at <campus name> on Yahora. Taking you there…`, or
+    `<price> on Yahora. Taking you there…` when the campus name is missing. Until Phase 6B it
+    was "listed by <seller's full name>", and
+
     `<script>window.location.replace(<web url>)</script>`
 **404:** the same document shape, with "This listing is no longer on Yahora" copy and a
 redirect to the site root. **Not** the JSON error envelope — a crawler cannot read one.
@@ -2108,7 +2186,10 @@ candidates.
 
 ### GET /api/users/by-username/:username   `OWNER: Neeraj`  `PHASE 1`
 **Module:** user
-**Auth:** optional — logged-out visitors must be able to load a public profile
+**Auth:** `optionalAuth`. **Identity rule (Phase 6B Block N-C):** a real student is returned
+only to a **student** viewer. A logged-out caller gets `401 LOGIN_REQUIRED`, a demo account
+`404 USER_NOT_FOUND`, and a demo-campus person is shown to everyone. The same rule applies to
+the **`redirect_to`** answer, because a real student's new handle is identity too.
 **Content-Type:** n/a (no body)
 **Path:**
   - username: string, required — the handle, no `@`
@@ -2128,7 +2209,9 @@ candidates.
 }
 ```
 **200 (moved handle):** `{ "redirect_to": "rahul.sharma" }`
-**404:** `{ "error": "USER_NOT_FOUND" }`
+**401:** `{ "error": "LOGIN_REQUIRED" }` — anonymous caller, real student (profile **or** redirect)
+**404:** `{ "error": "USER_NOT_FOUND" }` — no such handle; **or** a demo caller asking for a real
+student (profile or redirect)
 **Enforced by:** `trg_record_username_change` on `users` — archives the old handle into
 `username_history` on every change, which is the only reason the `redirect_to` case can work.
 `can_view_social_content(p_viewer, p_target)` from Phase 3 gates the private-account fields.
