@@ -111,7 +111,7 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `POSTING_RESTRICTED` | **403 or 400 — see below** | Trigger `trg_post_rate_limit` | `until` |
 | `RATE_LIMIT_POSTS` | 429 | Trigger `trg_post_rate_limit` — 10 top-level posts/hour | `message` |
 | `RATE_LIMIT_REPLIES` | 429 | Trigger `trg_post_rate_limit` — 30 replies/hour | — |
-| `LOGIN_REQUIRED` | 401 | **Live when Block N-C merges (M1).** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` (including its `redirect_to` case) when the caller is anonymous and the person is a real student. Not `UNAUTHORIZED`: the route is open, but this answer needs a student's token. See [the identity rule](#the-identity-rule-phase-6b) | — |
+| `LOGIN_REQUIRED` | 401 | **Live (Phase 6B N-C).** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` (including its `redirect_to` case) when the caller is anonymous and the person is a real student. Not `UNAUTHORIZED`: the route is open, but this answer needs a student's token. See [the identity rule](#the-identity-rule-phase-6b) | — |
 | `MESSAGE_NOT_FOUND` | 404 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` and `/delete-for-me`, from `delete_message_for_everyone()` / `hide_message_for_me()` (migration `message_actions`) — no such message, or the caller is not one of its two people | — |
 | `NOT_MESSAGE_SENDER` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the caller didn't send the message | — |
 | `DELETE_WINDOW_EXPIRED` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the message is more than 60 minutes old | — |
