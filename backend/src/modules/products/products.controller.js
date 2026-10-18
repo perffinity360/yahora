@@ -672,9 +672,23 @@ export const getProductById = async (req, res) => {
             });
         }
 
-        // ⚠ Anything that needs to know whether the viewer IS the seller (Block
-        // N-E adds one) goes HERE, before the identity rule below — hideSeller()
-        // deletes `product.seller_id`, so after it nothing can compare against it.
+        // ⚠ Anything that needs to know whether the viewer IS the seller goes
+        // HERE, before the identity rule below — hideSeller() deletes
+        // `product.seller_id`, so after it nothing can compare against it.
+        //
+        // 🔒 THE BUYER (Phase 6B Block N-E). Who bought something is private
+        // (MARK_SOLD_SPEC §0): only the seller, on their own sold listing, gets
+        // a `buyer` key, which is the buyer or null ("someone not on Yahora").
+        // Nobody else's response carries the key at all.
+        if (viewer.id && viewer.id === product.seller_id && product.status === 'sold') {
+            const { data: purchase, error: purchaseError } = await supabase
+                .from('purchases')
+                .select('buyer:users!buyer_id(id, username, full_name, avatar_url)')
+                .eq('product_id', id)
+                .maybeSingle();
+            if (purchaseError) throw purchaseError;
+            product.buyer = purchase?.buyer ?? null;
+        }
 
         // 3. 🔒 IDENTITY RULE (Phase 6B Block N-C). A logged-out or demo viewer
         // of a real-campus listing sees neither the seller nor the commenters:
@@ -1001,127 +1015,173 @@ export const toggleCommentVote = async (req, res) => {
     }
 };
 
-/**
- * 🔒 Guard for the two status endpoints (Phase 4 Block V-A).
- *
- * The same ownership check `updateProduct` and `deleteProduct` already run,
- * factored out because /sold and /available need it identically. Status IS the
- * listing — marking someone else's item sold takes it out of the marketplace,
- * and marking it available again resurrects it and destroys its purchase
- * history — so these two need exactly the check the `PUT` has.
- *
- * Returns `true` when the response has already been sent and the caller must
- * return immediately; `false` when the caller owns the listing and may proceed.
- */
-async function blockNonOwner(req, res, productId, label, failureMessage) {
-    const { data: existing, error: lookupError } = await supabase
-        .from('products')
-        .select('seller_id')
-        .eq('id', productId)
-        .maybeSingle();
+// ── MARK AS SOLD (Phase 6B Block N-E) ──────────────────────────────────────
+//
+// Every rule lives in the database functions of the mark_sold migration:
+// ownership, one buyer per listing, the buyer on the listing's campus, never
+// the seller, `sold_at`. These handlers check only the SHAPE of the request,
+// call one function, and pass any error to mapDbError (the names are in
+// utils/respond.js). Don't re-check a rule here: two copies drift apart.
+//
+// The old `blockNonOwner()` guard is gone. mark_product_sold() and
+// mark_product_available() check ownership themselves, inside the same
+// transaction as the change.
 
-    // maybeSingle, not single: "no such listing" is a 404, not a 500.
-    if (lookupError) {
-        console.error(`${label} Error (ownership lookup):`, lookupError);
-        sendError(res, 500, 'INTERNAL_ERROR', { message: failureMessage });
-        return true;
-    }
-
-    if (!existing) {
-        sendError(res, 404, 'NOT_FOUND', {
-            message: 'That listing no longer exists.',
-        });
-        return true;
-    }
-
-    if (existing.seller_id !== req.user.id) {
-        sendError(res, 403, 'FORBIDDEN', {
-            message: 'You can only change the status of your own listings.',
-        });
-        return true;
-    }
-
-    return false;
+/** 400 INVALID_FORMAT unless `:id` is a uuid. Returns true when it has replied. */
+function rejectBadProductId(res, id) {
+    if (UUID_RE.test(String(id ?? ''))) return false;
+    sendError(res, 400, 'INVALID_FORMAT', { message: 'The listing id is not valid.' });
+    return true;
 }
 
 export const markProductAsSold = async (req, res) => {
    try {
        const { id } = req.params;
+       if (rejectBadProductId(res, id)) return;
 
-       // `buyer_id` STAYS a body field. It names the other party to the sale,
-       // not the actor, so it is a parameter rather than a claim of identity —
-       // the seller is the one telling us who bought it. Only the actor moved
-       // to the token.
-       const { buyer_id } = req.body;
-
-       // 🔒 OWNERSHIP (Phase 4 Block V-A). This route had no auth and no owner
-       // check: any caller who knew a uuid could mark any listing on any campus
-       // sold, which removes it from the marketplace and from every /public
-       // profile. A competitor could clear a campus in an afternoon.
-       if (await blockNonOwner(req, res, id, 'Mark Sold', 'Failed to mark product as sold.')) return;
-
-       // 1. Update the product status to 'sold'
-       const { data: product, error: updateError } = await supabase
-           .from('products')
-           .update({ status: 'sold' })
-           .eq('id', id)
-           .select()
-           .single();
-
-       if (updateError) throw updateError;
-
-       // 2. If a buyer was selected from the platform, record the purchase for social proof
-       if (buyer_id) {
-           const { error: purchaseError } = await supabase
-               .from('purchases')
-               .insert([{
-                   buyer_id: buyer_id,
-                   product_id: id
-               }]);
-
-           if (purchaseError) console.error("Failed to insert purchase record:", purchaseError);
+       // `buyer_id` names the other party to the sale, not the actor, so it is
+       // a parameter: the seller is telling us who bought it. Missing or null
+       // means "someone not on Yahora" (no one is tagged).
+       const raw = req.body?.buyer_id;
+       const buyerId = raw === undefined || raw === null ? null : raw;
+       if (buyerId !== null && !UUID_RE.test(String(buyerId))) {
+           return sendError(res, 400, 'INVALID_FORMAT', {
+               message: 'buyer_id must be a user id or null.',
+           });
        }
 
-       res.status(200).json({ message: 'Product marked as sold', product });
+       // Marking sold again just changes the buyer and keeps the first
+       // `sold_at` (runbook §1.10), so a double tap is not an error.
+       const { data, error } = await supabase.rpc('mark_product_sold', {
+           p_product_id: id,
+           p_seller_id: req.user.id,
+           p_buyer_id: buyerId,
+       });
+       if (error) return mapDbError(res, error);
+
+       res.status(200).json({ message: 'Product marked as sold', product: data });
    } catch (error) {
        console.error('Mark Sold Error:', error);
-       res.status(500).json({ error: 'Failed to mark product as sold.' });
+       return sendError(res, 500, 'INTERNAL_ERROR', { message: 'Failed to mark product as sold.' });
    }
 };
 
 export const markProductAsAvailable = async (req, res) => {
    try {
        const { id } = req.params;
+       if (rejectBadProductId(res, id)) return;
 
-       // 🔒 OWNERSHIP (Phase 4 Block V-A). Same check as /sold, and the damage
-       // here is not symmetric: step 2 below deletes EVERY `purchases` row for
-       // the product, so an unauthenticated call destroyed purchase history
-       // that nothing can reconstruct.
-       if (await blockNonOwner(req, res, id, 'Mark Available', 'Failed to mark product as available.')) return;
+       // Relist. The function also removes the buyer, if there was one.
+       const { data, error } = await supabase.rpc('mark_product_available', {
+           p_product_id: id,
+           p_seller_id: req.user.id,
+       });
+       if (error) return mapDbError(res, error);
 
-       // 1. Update the product status back to 'available'
-       const { data: product, error: updateError } = await supabase
-           .from('products')
-           .update({ status: 'available' })
-           .eq('id', id)
-           .select()
-           .single();
-
-       if (updateError) throw updateError;
-
-       // 2. Remove the purchase record to undo the social proof
-       const { error: purchaseError } = await supabase
-           .from('purchases')
-           .delete()
-           .eq('product_id', id);
-
-       if (purchaseError) console.error("Failed to delete purchase record:", purchaseError);
-
-       res.status(200).json({ message: 'Product marked as available', product });
+       res.status(200).json({ message: 'Product marked as available', product: data });
    } catch (error) {
        console.error('Mark Available Error:', error);
-       res.status(500).json({ error: 'Failed to mark product as available.' });
+       return sendError(res, 500, 'INTERNAL_ERROR', { message: 'Failed to mark product as available.' });
    }
 };
 
+const BUYER_SEARCH_MIN = 2;
+const BUYER_LIST_MAX = 20;
 
+const toCandidate = (u, messaged) => ({
+    id: u.id,
+    username: u.username,
+    full_name: u.full_name,
+    avatar_url: u.avatar_url,
+    messaged,
+});
+
+/**
+ * GET /api/products/:id/buyer-candidates?q= — the "Who bought it?" picker
+ * (MARK_SOLD_SPEC §1). The seller only.
+ *
+ *   q under 2 characters → the people who messaged the seller about this
+ *                          listing, newest first (get_product_buyer_candidates,
+ *                          which checks ownership and campus itself).
+ *   q of 2+ characters   → students on the seller's campus matching q
+ *                          (search_users), never the seller.
+ *
+ * A fixed top-20, not a paged list: `next_cursor` is always null, like
+ * /api/users/search.
+ */
+export const getBuyerCandidates = async (req, res) => {
+   try {
+       const { id } = req.params;
+       if (rejectBadProductId(res, id)) return;
+
+       const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+       if (q.length < BUYER_SEARCH_MIN) {
+           const { data, error } = await supabase.rpc('get_product_buyer_candidates', {
+               p_product_id: id,
+               p_seller_id: req.user.id,
+           });
+           if (error) return mapDbError(res, error);
+
+           return res.json({
+               items: (data ?? []).map((u) => toCandidate(u, true)),
+               next_cursor: null,
+           });
+       }
+
+       // search_users() knows nothing about listings, so the seller check
+       // that get_product_buyer_candidates() would do is done here.
+       const { data: product, error: lookupError } = await supabase
+           .from('products')
+           .select('seller_id')
+           .eq('id', id)
+           .maybeSingle();
+       if (lookupError) return mapDbError(res, lookupError);
+       if (!product) return sendError(res, 404, 'PRODUCT_NOT_FOUND');
+       if (product.seller_id !== req.user.id) return sendError(res, 403, 'NOT_PRODUCT_OWNER');
+
+       // search_users() keeps demo and real accounts apart and sorts the
+       // viewer's campus first. One cross-campus exact-handle match can sort
+       // above them, so ask for 21 and keep 20.
+       const { data, error } = await supabase.rpc('search_users', {
+           p_query: q,
+           p_viewer: req.user.id,
+           p_limit: BUYER_LIST_MAX + 1,
+       });
+       if (error) return mapDbError(res, error);
+
+       const items = (data ?? [])
+           .filter((u) => u.is_same_campus === true && u.id !== req.user.id)
+           .slice(0, BUYER_LIST_MAX)
+           .map((u) => toCandidate(u, false));
+
+       return res.json({ items, next_cursor: null });
+   } catch (error) {
+       console.error('Buyer Candidates Error:', error);
+       return sendError(res, 500, 'INTERNAL_ERROR');
+   }
+};
+
+/**
+ * DELETE /api/products/:id/purchase — "That wasn't me" (MARK_SOLD_SPEC). The
+ * caller removes THEMSELVES as the buyer. The listing stays sold, with no
+ * buyer on Yahora. Nobody can remove someone else's purchase: the buyer is
+ * the token holder.
+ */
+export const removeMyPurchase = async (req, res) => {
+   try {
+       const { id } = req.params;
+       if (rejectBadProductId(res, id)) return;
+
+       const { error } = await supabase.rpc('remove_my_purchase', {
+           p_product_id: id,
+           p_buyer_id: req.user.id,
+       });
+       if (error) return mapDbError(res, error);
+
+       return res.status(200).json({ removed: true });
+   } catch (error) {
+       console.error('Remove Purchase Error:', error);
+       return sendError(res, 500, 'INTERNAL_ERROR');
+   }
+};
