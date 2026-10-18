@@ -82,14 +82,32 @@ export const getDashboardData = async (req, res) => {
         if (profileError) throw profileError;
 
         // B. Fetch User's Listings
-        // B. Fetch User's Listings
+        //
+        // Phase 6B (Block N-E): `sold_at`, and the buyer of a sold listing. This
+        // is the seller's own dashboard, so the buyer is theirs to see
+        // (MARK_SOLD_SPEC §0). It is flattened to `listing.buyer` below.
         const { data: listings, error: listingsError } = await supabase
             .from('products')
-            .select('id, title, description, category, condition, location, price, status, image_urls, created_at, likes_count, views, comments_count')
+            .select(`
+                id, title, description, category, condition, location, price, status,
+                image_urls, created_at, likes_count, views, comments_count, sold_at,
+                purchase:purchases(buyer:users!buyer_id(id, username, full_name, avatar_url))
+            `)
             .eq('seller_id', userId)
             .order('created_at', { ascending: false });
 
         if (listingsError) throw listingsError;
+
+        // `purchases.product_id` is unique (migration mark_sold), so PostgREST
+        // should embed `purchase` as one object or null. Older PostgREST, or a
+        // schema cache that predates the constraint, embeds it as an array, so
+        // both are handled. `buyer` is the buyer or null (none, or "someone not
+        // on Yahora"), and `purchase` is removed.
+        for (const listing of listings ?? []) {
+            const purchase = Array.isArray(listing.purchase) ? listing.purchase[0] : listing.purchase;
+            listing.buyer = purchase?.buyer ?? null;
+            delete listing.purchase;
+        }
 
         // C. Fetch User's Purchases
         const { data: purchases, error: purchasesError } = await supabase
@@ -97,7 +115,10 @@ export const getDashboardData = async (req, res) => {
             .select(`
                 id,
                 created_at,
-                product:products(id, title, price, image_urls)
+                product:products(
+                    id, title, price, image_urls, status, sold_at,
+                    seller:users!seller_id(id, username, full_name, avatar_url)
+                )
             `)
             .eq('buyer_id', userId)
             .order('created_at', { ascending: false });
@@ -299,6 +320,20 @@ export const getPublicProfile = async (req, res) => {
 
         if (listingsError) throw listingsError;
 
+        // Sold listings (Phase 6B Block N-E, MARK_SOLD_SPEC): the newest 12,
+        // and how many there are in all. These are shown as SOLD, so there is
+        // no buyer here: who bought something is never public (spec §0).
+        const SOLD_LISTINGS_MAX = 12;
+        const { data: soldListings, count: soldCount, error: soldError } = await supabase
+            .from('products')
+            .select('id, title, price, image_urls, condition, sold_at', { count: 'exact' })
+            .eq('seller_id', userId)
+            .eq('status', 'sold')
+            .order('sold_at', { ascending: false, nullsFirst: false })
+            .limit(SOLD_LISTINGS_MAX);
+
+        if (soldError) throw soldError;
+
         // Attach Like/Save status if the visitor is logged in
         if (visitorId && listings.length > 0) {
             const productIds = listings.map(p => p.id);
@@ -323,7 +358,9 @@ export const getPublicProfile = async (req, res) => {
                 specializationName: profile.specialization?.name,
                 university: profile.university?.name
             },
-            listings: listings || []
+            listings: listings || [],
+            sold_listings: soldListings || [],
+            sold_count: soldCount ?? 0
         });
 
     } catch (error) {

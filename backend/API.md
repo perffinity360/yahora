@@ -80,8 +80,8 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | Code | HTTP | Raised by | Extra fields |
 |---|---|---|---|
 | `UNAUTHORIZED` | 401 | `requireAuth` — missing or invalid Bearer token | — |
-| `FORBIDDEN` | 403 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/sold`,`/available` — caller is not the listing's `seller_id`; `GET /api/messages/history` — caller is not one of the two parties in the thread; `GET /api/messages/inbox/:userId` — `:userId` is not the caller; `POST /api/messages/send` — sender and receiver are not on the same campus (a `NULL` campus on either side counts as a mismatch); `GET /api/user/:userId/dashboard` — `:userId` is not the caller (that one carries no `message`) | `message` |
-| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save`,`/comments`,`/sold`,`/available` — no such listing; also `/like`,`/save`,`/comments` and the comment vote when the caller has no `public.users` row. `POST /api/products/comments/:commentId/vote` — no such comment (Phase 6B). `POST /api/messages/send` — no such `receiver_id`, or the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
+| `FORBIDDEN` | 403 | **Live.** `PUT`/`DELETE /api/products/:id` — caller is not the listing's `seller_id` (`/sold` and `/available` used this until Phase 6B N-E; they now send `NOT_PRODUCT_OWNER`); `GET /api/messages/history` — caller is not one of the two parties in the thread; `GET /api/messages/inbox/:userId` — `:userId` is not the caller; `POST /api/messages/send` — sender and receiver are not on the same campus (a `NULL` campus on either side counts as a mismatch); `GET /api/user/:userId/dashboard` — `:userId` is not the caller (that one carries no `message`) | `message` |
+| `NOT_FOUND` | 404 | **Live.** `PUT`/`DELETE /api/products/:id` and `POST /api/products/:id/like`,`/save`,`/comments` — no such listing (`/sold` and `/available` now send `PRODUCT_NOT_FOUND`, Phase 6B N-E); also `/like`,`/save`,`/comments` and the comment vote when the caller has no `public.users` row. `POST /api/products/comments/:commentId/vote` — no such comment (Phase 6B). `POST /api/messages/send` — no such `receiver_id`, or the caller has no `public.users` row. Also `POST /api/auth/onboarding`, `login-password`, `set-password` | `message` |
 | `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical. **Live.** `GET /api/user/:userId/public` — no such user (was a 500 until Phase 6B). Both routes also send it to a **demo** caller asking for a real student (identity rule, Phase 6B) | — |
 | `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like`, `/save` and `/comments`, and `POST /api/products/comments/:commentId/vote` (the last two since Phase 6B) — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
 | `INVALID_PRICE` | 400 | **Live.** `PUT /api/products/:id` — `price` was supplied but does not parse to a finite number `>= 0`. Only raised when the key is present; an absent `price` is simply left alone | `message` |
@@ -90,7 +90,7 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
 | `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
-| `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken; also `GET /api/messages/history` when `userId`, `contactId` or `productId` is not a canonical uuid | `message` (optional) |
+| `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken; also `GET /api/messages/history` when `userId`, `contactId` or `productId` is not a canonical uuid; also the four Mark-as-Sold routes when `:id` is not a uuid, and `POST /api/products/:id/sold` when `buyer_id` is neither null nor a uuid (Phase 6B) | `message` (optional) |
 | `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one; `PUT /api/products/:id` — the body carried none of the seven updatable keys | `message` |
 | `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — under 8 characters, equal to the caller's username, or rejected by GoTrue's own policy | `message` |
 | `COMMON_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — matches the ~20-entry common-password blocklist in `auth.controller.js` | `message` |
@@ -116,12 +116,12 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `NOT_MESSAGE_SENDER` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the caller didn't send the message | — |
 | `DELETE_WINDOW_EXPIRED` | 403 | **Phase 6B — not live yet.** `delete_message_for_everyone()` — the message is more than 60 minutes old | — |
 | `REPLY_TARGET_INVALID` | 400 | **Phase 6B — not live yet.** Trigger function `fill_message_reply()` — the quoted message isn't in this conversation | — |
-| `PRODUCT_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `mark_product_sold()`, `mark_product_available()`, `get_product_buyer_candidates()` (migration `mark_sold`) | — |
-| `NOT_PRODUCT_OWNER` | 403 | **Phase 6B — not live yet.** The same three functions — the caller isn't the listing's seller | — |
-| `BUYER_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `mark_product_sold()` — no such buyer | — |
-| `BUYER_IS_SELLER` | 400 | **Phase 6B — not live yet.** `mark_product_sold()` — the seller named themself as the buyer | — |
-| `BUYER_NOT_ON_CAMPUS` | 400 | **Phase 6B — not live yet.** `mark_product_sold()` — the buyer is on a different campus from the listing | — |
-| `PURCHASE_NOT_FOUND` | 404 | **Phase 6B — not live yet.** `remove_my_purchase()` ("That wasn't me") — no purchase of this listing by the caller | — |
+| `PRODUCT_NOT_FOUND` | 404 | **Live when Block N-E merges.** `POST /api/products/:id/sold`, `/available`, `GET /api/products/:id/buyer-candidates` — no such listing. Raised by `mark_product_sold()`, `mark_product_available()`, `get_product_buyer_candidates()` (migration `mark_sold`); sent by the controller itself for a `?q=` search | — |
+| `NOT_PRODUCT_OWNER` | 403 | **Live when Block N-E merges.** The same three routes — the caller isn't the listing's seller. Raised by the same three functions; sent by the controller itself for a `?q=` search | — |
+| `BUYER_NOT_FOUND` | 404 | **Live when Block N-E merges.** `POST /api/products/:id/sold` (`mark_product_sold()`) — no such buyer | — |
+| `BUYER_IS_SELLER` | 400 | **Live when Block N-E merges.** `POST /api/products/:id/sold` (`mark_product_sold()`) — the seller named themself as the buyer | — |
+| `BUYER_NOT_ON_CAMPUS` | 400 | **Live when Block N-E merges.** `POST /api/products/:id/sold` (`mark_product_sold()`) — the buyer is on a different campus from the listing (a demo account, too) | — |
+| `PURCHASE_NOT_FOUND` | 404 | **Live when Block N-E merges.** `DELETE /api/products/:id/purchase` (`remove_my_purchase()`, "That wasn't me") — no purchase of this listing by the caller | — |
 
 **How a raised name becomes a status.** Every name the database RAISEs is listed, with its
 HTTP status, in the `RAISED_STATUS` map in `backend/src/utils/respond.js`. `mapDbError()`
@@ -1002,10 +1002,17 @@ any other value is `403 FORBIDDEN`. (Was unauthenticated until 09 Sep 2026.)
                   "category": "string", "condition": "string", "location": "string",
                   "price": 0, "status": "string", "image_urls": ["string"],
                   "created_at": "timestamptz", "likes_count": 0, "views": 0,
-                  "comments_count": 0 } ],
+                  "comments_count": 0,
+                  "sold_at": "timestamptz|null",
+                  "buyer": { "id": "uuid", "username": "string", "full_name": "string",
+                             "avatar_url": "string|null" } } ],
   "purchases": [ { "id": "uuid", "created_at": "timestamptz",
                    "product": { "id": "uuid", "title": "string", "price": 0,
-                                "image_urls": ["string"] } } ]
+                                "image_urls": ["string"], "status": "string",
+                                "sold_at": "timestamptz|null",
+                                "seller": { "id": "uuid", "username": "string",
+                                            "full_name": "string",
+                                            "avatar_url": "string|null" } } } ]
 }
 ```
 **401:** `{ "error": "UNAUTHORIZED" }` — missing, malformed, or rejected bearer token.
@@ -1025,6 +1032,17 @@ rather than appearing as `null`.
 [`/public`](#get-apiuseruseridpublic), which returns only `available`). `listings` and
 `purchases` fall back to `[]`, but `profile` has no such guard. `purchases[].product` is
 `null` if the product row was deleted. No `is_liked` / `is_saved` on these listings.
+
+**Mark as Sold fields (Phase 6B Block N-E).** This is the caller's own dashboard, so the buyer
+is theirs to see (MARK_SOLD_SPEC §0):
+- **`listings[].sold_at`**: `null` unless sold.
+- **`listings[].buyer`**: on **every** listing. It is the buyer of a sold listing, or `null`
+  (not sold, sold to someone not on Yahora, or the buyer said "That wasn't me"). It comes from
+  the one `purchases` row a listing can have. PostgREST may embed it as an object or as a
+  one-element array, and both are flattened to `buyer`. No `purchase` key is sent.
+- **`purchases[].product`** gains `status`, `sold_at` and **`seller`**, the person the caller
+  bought from, for the buyer's purchases list and its "That wasn't me" action
+  ([`DELETE /api/products/:id/purchase`](#delete-apiproductsidpurchase)).
 
 ### PUT /api/user/:userId/profile
 **Module:** user
@@ -1121,7 +1139,10 @@ unauthenticated until 6B.
   "listings": [ { "id": "uuid", "title": "string", "price": 0, "image_urls": ["string"],
                   "created_at": "timestamptz", "views": 0, "likes_count": 0,
                   "condition": "string", "status": "string",
-                  "is_liked": false, "is_saved": false } ]
+                  "is_liked": false, "is_saved": false } ],
+  "sold_listings": [ { "id": "uuid", "title": "string", "price": 0, "image_urls": ["string"],
+                       "condition": "string", "sold_at": "timestamptz|null" } ],
+  "sold_count": 0
 }
 ```
 **401:** `{ "error": "LOGIN_REQUIRED" }` — no token (or one with no campus), and the profile is a
@@ -1138,6 +1159,14 @@ The response shape is unchanged: `university_id` is read for the rule and is not
 This is the safe projection: an explicit column list that omits `university_id`,
 `course_id`, `specialization_id`, and `is_profile_complete`. The same `university` /
 `courseName` overwrite quirk as the dashboard applies (see above).
+
+**Sold listings (Phase 6B Block N-E, MARK_SOLD_SPEC):**
+- **`sold_listings`**: this seller's listings with `status = 'sold'`, newest `sold_at`
+  first (`null` last), **at most 12**. No like/save flags.
+- **`sold_count`**: how many sold listings there are in all, which can be more than 12. It is
+  the `count: 'exact'` of the same query.
+- **No buyer anywhere** in this response: who bought something is never public. Everyone sees
+  **SOLD**.
 
 `listings` is filtered to `status = 'available'`. `is_liked` and `is_saved` are attached
 **only** when the caller is **signed in** *and* the user has at least one listing — otherwise
@@ -1325,6 +1354,14 @@ PostgREST filter syntax all land here. **Never a 500, and never interpolated int
 **500:** `{ "error": "Failed to fetch product details." }` — **a product that does not exist
 returns 500, not 404**, because of `.single()`. So does a non-UUID id.
 
+**`buyer` (Phase 6B Block N-E) — the seller only.** When the caller **is the seller** and the
+listing is **sold**, the product carries
+`"buyer": { "id": "uuid", "username": "string", "full_name": "string", "avatar_url": "string|null" }`,
+or `"buyer": null` when it was sold to someone not on Yahora (or the buyer said "That wasn't
+me"). **For everyone else, the key is absent** — including the buyer themselves, students, and
+logged-out callers (MARK_SOLD_SPEC §0: the buyer is never shown publicly). It is read before the
+identity rule runs. `sold_at` (timestamptz, `null` unless sold) is part of `<products row>`.
+
 **`university_name` (Phase 6B Block N-C)** is the listing's campus name, for **every** viewer
 (`null` only if the campus row is missing). It is the only addition to a student's response.
 
@@ -1432,8 +1469,8 @@ on an open route, so anyone could publish a listing under any student's name —
 student's campus stamped on it, their face on the card, and their inbox receiving the buyers.
 **Notes:** `university_id` is **derived from the seller's record** — now the *authenticated*
 seller's, so it is finally the control it was described as: previously the row it read was the
-same id the caller had just made up. `status` is forced to `'available'`; `sold_to` is never
-written by any endpoint.
+same id the caller had just made up. `status` is forced to `'available'`. (`sold_to` was dropped
+in Phase 6B V-B; `sold_at` is set by a trigger when a listing is sold.)
 
 `requireAuth` runs **before** multer, so a caller with no token is refused on the headers alone
 and their upload is never buffered into process memory. The object name is still
@@ -1685,64 +1722,114 @@ campus guard with `404 NOT_FOUND` ("No profile exists for this account.") before
 
 ### POST /api/products/:id/sold
 **Module:** products
-**Auth:** **`requireAuth`** — and the caller must be the listing's `seller_id`. (Was
-unauthenticated with no ownership check until 14 Sep 2026.)
+**Auth:** **`requireAuth`** — the caller must be the listing's seller (checked by the database
+function, Phase 6B).
 **Content-Type:** application/json
 **Path:**
   - id: uuid, required
 **Body:**
-  - buyer_id: uuid, optional — when present, a `purchases` row is recorded. **Still a body
-    field, deliberately:** it names the other party to the sale, not the actor. The seller is
-    the one telling us who bought it
-**200:** `{ "message": "Product marked as sold", "product": { "<products row>": "..." } }`
+  - buyer_id: uuid **or null**, optional — who bought it. Missing or `null` means **"someone not
+    on Yahora"**: no one is tagged. A body field on purpose: it names the other party to the sale,
+    not the actor
+**200:** `{ "message": "Product marked as sold", "product": { "<products row>": "...", "status": "sold", "sold_at": "timestamptz" } }`
+— the same envelope as before 6B, so the old website keeps working
+**400:** `{ "error": "INVALID_FORMAT", "message": "The listing id is not valid." }` — `:id` is not
+a uuid
+**400:** `{ "error": "INVALID_FORMAT", "message": "buyer_id must be a user id or null." }`
+**400:** `{ "error": "BUYER_IS_SELLER" }` — `buyer_id` is the caller
+**400:** `{ "error": "BUYER_NOT_ON_CAMPUS" }` — the buyer's campus is not the listing's (a demo
+account on a real listing, too). A `NULL` campus counts as a mismatch
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
-**403:** `{ "error": "FORBIDDEN", "message": "You can only change the status of your own
-  listings." }` — the caller is not the `seller_id`
-**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }`
-**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to mark product as sold." }` — from the
-  ownership lookup. A failure in the status update itself still returns the older hand-rolled
-  `{ "error": "Failed to mark product as sold." }`
-**🔒 Ownership is enforced (Phase 4 Block V-A, fixed 2026-09-14).** The same check
-[`PUT /api/products/:id`](#put-apiproductsid) runs, factored into a shared helper. Status *is*
-the listing: any caller who knew a uuid could take any item on any campus out of the
-marketplace, and off every `/public` profile, in one unauthenticated request.
-**Notes:** **Marking an id that does not exist now returns 404, not 200.** The ownership lookup
-runs first and cannot find a row to authorise. Sets `status = 'sold'`. The product then disappears from `GET /api/products` and
-from `/public` listings, but still appears in the owner's `/dashboard`.
+**403:** `{ "error": "NOT_PRODUCT_OWNER" }` — the caller is not the seller
+**404:** `{ "error": "PRODUCT_NOT_FOUND" }` — no such listing
+**404:** `{ "error": "BUYER_NOT_FOUND" }` — no user with that `buyer_id`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to mark product as sold." }`
+**Enforced by:** `mark_product_sold(p_product_id, p_seller_id, p_buyer_id)` (migration
+`mark_sold`), in one transaction: ownership, the buyer rules, `status = 'sold'`, and **at most
+one** `purchases` row (unique on `product_id`). The trigger `stamp_product_sold_at` sets
+`sold_at`. The controller only checks the request's shape. It doesn't re-check a rule.
+**Notes:** **Phase 6B rework (Block N-E).** Until 6B, this updated the row and then inserted a
+purchase, fire-and-forget. A second call added a second buyer, the error codes were
+`FORBIDDEN` / `NOT_FOUND`, and any update failure was a hand-rolled 500.
 
-**The `purchases` insert is fire-and-forget**: its error is logged to the server console and
-the endpoint still returns 200. A "sold" response does not guarantee the purchase record
-exists.
-
-There is **no idempotency** — calling this twice with the same `buyer_id` inserts two
-`purchases` rows, and both show up in the buyer's dashboard.
-
-The `products.sold_to` column is never written by this or any other endpoint.
+- **Idempotent** (runbook §1.10): calling it again **replaces the buyer** (change buyer) and
+  **keeps the first `sold_at`**. A double tap is not an error.
+- The listing leaves `GET /api/products` and `/public` listings, and stays in the owner's
+  `/dashboard`.
+- The buyer is private. Only the seller sees it, as `product.buyer` on
+  [`GET /api/products/:id`](#get-apiproductsid).
 
 ### POST /api/products/:id/available
 **Module:** products
-**Auth:** **`requireAuth`** — and the caller must be the listing's `seller_id`. (Was
-unauthenticated with no ownership check until 14 Sep 2026.)
+**Auth:** **`requireAuth`** — the caller must be the listing's seller (checked by the database
+function, Phase 6B).
 **Content-Type:** n/a — the body is ignored
 **Path:**
   - id: uuid, required
-**200:** `{ "message": "Product marked as available", "product": { "<products row>": "..." } }`
-**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
-**403:** `{ "error": "FORBIDDEN", "message": "You can only change the status of your own
-  listings." }` — the caller is not the `seller_id`
-**404:** `{ "error": "NOT_FOUND", "message": "That listing no longer exists." }`
-**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to mark product as available." }` — from
-  the ownership lookup; a failure in the status update itself still returns the older
-  hand-rolled `{ "error": "Failed to mark product as available." }`
-**🔒 Ownership is enforced (Phase 4 Block V-A, fixed 2026-09-14).** Same check as `/sold`, and the
-damage was not symmetric: this endpoint **deletes every `purchases` row for the product**, so an
-unauthenticated call destroyed purchase history that nothing can reconstruct.
-**Notes:** **Marking an id that does not exist now returns 404, not 200.** The inverse of
-`/sold`: sets `status = 'available'` and **deletes every
-`purchases` row for that product** — not just the one from the most recent sale. If the item
-was sold and re-listed more than once, all purchase history for it is destroyed. Like the
-insert in `/sold`, the delete error is logged and ignored, so a 200 does not prove it
-happened.
+**200:** `{ "message": "Product marked as available", "product": { "<products row>": "...", "status": "available", "sold_at": null } }`
+**400:** `{ "error": "INVALID_FORMAT", "message": "The listing id is not valid." }`
+**401:** `{ "error": "UNAUTHORIZED" }`
+**403:** `{ "error": "NOT_PRODUCT_OWNER" }`
+**404:** `{ "error": "PRODUCT_NOT_FOUND" }`
+**500:** `{ "error": "INTERNAL_ERROR", "message": "Failed to mark product as available." }`
+**Enforced by:** `mark_product_available(p_product_id, p_seller_id)`. It checks ownership, sets
+`status = 'available'` (so the trigger clears `sold_at`), and deletes the listing's purchase,
+in one transaction.
+**Notes:** "Relist" in MARK_SOLD_SPEC. Since 6B there is at most one purchase per listing, so the
+delete removes **the** buyer, never a history of several. Errors are no longer logged and
+ignored: a 200 means the change happened.
+
+### GET /api/products/:id/buyer-candidates
+**Module:** products  **PHASE 6B (Block N-E)**
+**Auth:** **`requireAuth`** — the seller only.
+**Content-Type:** n/a (no body)
+**Path:**
+  - id: uuid, required
+**Query:**
+  - q: string, optional — trimmed. **Under 2 characters** (or missing): the people who **messaged
+    the seller about this listing**. **2 or more**: a campus search
+**200:**
+```json
+{ "items": [ { "id": "uuid", "username": "string", "full_name": "string",
+               "avatar_url": "string|null", "messaged": true } ],
+  "next_cursor": null }
+```
+**400:** `{ "error": "INVALID_FORMAT", "message": "The listing id is not valid." }`
+**401:** `{ "error": "UNAUTHORIZED" }`
+**403:** `{ "error": "NOT_PRODUCT_OWNER" }` — the caller is not the seller (both modes)
+**404:** `{ "error": "PRODUCT_NOT_FOUND" }` (both modes)
+**500:** `{ "error": "INTERNAL_ERROR" }`
+**Enforced by:**
+- **No `q`:** `get_product_buyer_candidates(p_product_id, p_seller_id)` checks ownership and
+  returns the people who messaged the seller about this listing, **on the listing's campus**,
+  never the seller, newest conversation first, at most 20. `messaged: true`.
+- **`q` of 2+:** the controller checks the seller, because `search_users()` knows nothing of
+  listings. Then `search_users(q, caller, 21)` runs: real and demo accounts never mix, and the
+  seller's campus sorts first. The controller keeps `is_same_campus` rows that aren't the
+  caller, and takes **at most 20**. Asking for 21 covers the one other-campus exact-handle match
+  that can sort above them. `messaged: false`.
+
+**Notes:** **Not cursor-paginated, deliberately:** a fixed top-20, so `next_cursor` is always
+`null` (the same exemption as [`GET /api/users/search`](#get-apiuserssearch-owner-neeraj-phase-1)).
+The picker (MARK_SOLD_SPEC §1) waits 300 ms after typing stops before searching. "Someone not
+on Yahora" isn't a row here; the client draws it and sends `buyer_id: null` to `/sold`.
+
+### DELETE /api/products/:id/purchase
+**Module:** products  **PHASE 6B (Block N-E)**
+**Auth:** **`requireAuth`** — the **buyer** only: the purchase removed is always the caller's own.
+**Content-Type:** n/a (no body)
+**Path:**
+  - id: uuid, required — the listing
+**200:** `{ "removed": true }`
+**400:** `{ "error": "INVALID_FORMAT", "message": "The listing id is not valid." }`
+**401:** `{ "error": "UNAUTHORIZED" }`
+**404:** `{ "error": "PURCHASE_NOT_FOUND" }` — the caller isn't this listing's buyer (or there is
+no such listing)
+**500:** `{ "error": "INTERNAL_ERROR" }`
+**Enforced by:** `remove_my_purchase(p_product_id, p_buyer_id)`, with `p_buyer_id = req.user.id`.
+**Notes:** "That wasn't me" (MARK_SOLD_SPEC). The listing **stays sold**. It just has no buyer on
+Yahora any more, so the seller's `product.buyer` becomes `null`. Not idempotent by design: a
+second call is `404 PURCHASE_NOT_FOUND`. A client that retries should treat that 404 as done.
 
 ---
 
@@ -3207,7 +3294,7 @@ exist until migration 006, so every call would be a logged no-op anyway.
 - **`visitor_metrics` / `increment_page_view()`** — the RPC and table exist; nothing calls it.
 - **Saved-products list** — `product_saves` is written by `/save` but no endpoint reads it
   back as a list.
-- **`products.sold_to`** — column exists, never written.
+- ~~**`products.sold_to`** — column exists, never written.~~ Dropped in Phase 6B V-B.
 - **`decrement_product_likes` / `increment_product_likes` RPCs** — superseded by the
   `trg_update_likes_count` trigger; no caller remains.
 
