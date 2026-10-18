@@ -999,6 +999,16 @@ export default function Messages() {
 
         let paramUserId = deepLinkRef.current.user;
         let paramProductId = deepLinkRef.current.product;
+
+        // A deep link to yourself (e.g. "Message Seller" on your own listing,
+        // from an old tab) would open a chat where sender = receiver, whose
+        // unread badge can never clear. Ignore it and show the plain inbox.
+        if (paramUserId && paramUserId === currentUserId) {
+          paramUserId = null;
+          paramProductId = null;
+          navigate("/messages", { replace: true });
+        }
+
         const isDeepLink = Boolean(paramUserId && paramProductId);
 
         if (!isDeepLink) {
