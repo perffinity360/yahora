@@ -75,7 +75,8 @@ function safeJson(text: string): unknown {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path, { method: 'GET' }),
+  /** `signal`: as on `post` (the server-back probe's timeout). */
+  get: <T>(path: string, signal?: AbortSignal) => request<T>(path, { method: 'GET', signal }),
   /** `signal` lets a caller give up on the request (the message send timeout). */
   post: <T>(path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal) =>
     request<T>(path, {

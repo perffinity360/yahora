@@ -1,9 +1,13 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api, type ApiError } from '../lib/api';
 import {
+  adoptServerRow,
   mergeMessage,
+  newestServerId,
+  unsentStillMissing,
   updateNewestPage,
   type ChatCache,
   type ChatPage,
@@ -95,12 +99,22 @@ export function useChatHistory(contactId?: string, productId?: string) {
       // Carry over anything still in flight or failed, or a send that was
       // interrupted by backgrounding would vanish along with its retry button.
       const cached = queryClient.getQueryData<ChatCache>(queryKey)?.pages[0]?.items ?? [];
-      const unsent = cached.filter(
-        (m) =>
-          (m.pending || m.failed) &&
-          !items.some((s) => s.sender_id === m.sender_id && s.content === m.content),
+      const unsent = unsentStillMissing(
+        items,
+        cached.filter((m) => m.pending || m.failed),
       );
-      return { items: unsent.length ? [...items, ...unsent] : items, next_cursor };
+      // Bubbles sent from here keep their key and typed time across a refetch
+      // too (adoptServerRow), so a resync doesn't rebuild or shift them.
+      const sentHere = new Map(
+        cached.filter((m) => m.client_tag && m.id !== m.client_tag).map((m) => [m.id, m]),
+      );
+      const fresh = sentHere.size
+        ? items.map((s) => {
+            const local = sentHere.get(s.id);
+            return local ? adoptServerRow(local, s) : s;
+          })
+        : items;
+      return { items: unsent.length ? [...fresh, ...unsent] : fresh, next_cursor };
     },
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!myId && !!contactId && !!productId,
@@ -195,8 +209,10 @@ export function useSendMessage(contactId?: string, productId?: string) {
       // Before a RETRY: if the bubble is no longer waiting, Realtime already
       // brought the real row in. The previous try reached the server and only
       // the answer got lost, so sending again would post the message twice.
+      // By id: the real row keeps the `client_tag` (adoptServerRow), but only
+      // the placeholder has it as its id.
       const waiting = (queryClient.getQueryData<ChatCache>(chatKey)?.pages[0]?.items ?? []).some(
-        (m) => m.client_tag === vars.clientTag,
+        (m) => m.id === vars.clientTag,
       );
       if (!waiting) return { message: null };
 
@@ -242,6 +258,7 @@ export function useSendMessage(contactId?: string, productId?: string) {
             is_read: false,
             is_delivered: false,
             created_at: new Date().toISOString(),
+            sent_after_id: newestServerId(list),
           };
           // At the bottom of the thread, where it was typed. Not sorted.
           return [...list, optimistic];
@@ -253,13 +270,13 @@ export function useSendMessage(contactId?: string, productId?: string) {
       // `message: null`: Realtime already swapped the real row in (see mutationFn).
       const sent = data.message;
       if (sent) {
+        // In place, in the placeholder's slot. Removing it and appending the
+        // real row moved it below any later message still queued behind it,
+        // so a burst sent offline shuffled itself when the network came back.
+        // If Realtime already inserted the real row, mergeMessage refreshes it
+        // instead of adding a duplicate.
         queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
-          updateNewestPage(prev, (list) => {
-            const withoutPlaceholder = list.filter((m) => m.client_tag !== vars.clientTag);
-            // Realtime may already have inserted the real row while we waited —
-            // mergeMessage refreshes it rather than appending a duplicate.
-            return mergeMessage(withoutPlaceholder, sent);
-          }),
+          updateNewestPage(prev, (list) => mergeMessage(list, sent, vars.clientTag)),
         );
       }
       // A first message creates a conversation the inbox has never seen.
@@ -274,13 +291,62 @@ export function useSendMessage(contactId?: string, productId?: string) {
         prev
           ? updateNewestPage(prev, (list) =>
               list.map((m) =>
-                m.client_tag === vars.clientTag ? { ...m, pending: false, failed: true } : m,
+                m.client_tag === vars.clientTag
+                  ? { ...m, pending: false, failed: true, auto_retry: isRetryableSendError(err) }
+                  : m,
               ),
             )
           : prev,
       );
     },
   });
+}
+
+/**
+ * How often to ask whether the server is back, while something is waiting on
+ * it. Same value on web (Messages.jsx).
+ */
+export const SERVER_PROBE_MS = 10_000;
+
+/**
+ * SENDING AGAIN ON ITS OWN (MESSAGES_SPEC §2). While `waiting`, ask
+ * GET /api/health at once and then every SERVER_PROBE_MS; an answer calls
+ * `onBack`, which sends the failed messages again. The chat screen folds
+ * "on screen, app in front, phone online" into `waiting`, so the network or
+ * the app coming back starts a probe straight away. One probe at a time, each
+ * given up after SERVER_PROBE_MS, so a server that hangs can't pile them up.
+ * Stops by itself once nothing waits (the messages are sending again).
+ */
+export function useServerBack(waiting: boolean, onBack: () => void | Promise<void>) {
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+
+  useEffect(() => {
+    if (!waiting) return;
+    let stopped = false;
+    let busy = false;
+    const probe = async () => {
+      if (busy) return;
+      busy = true;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), SERVER_PROBE_MS);
+      try {
+        await api.get('/api/health', controller.signal);
+        if (!stopped) await onBackRef.current();
+      } catch {
+        // Not back yet: the next tick asks again.
+      } finally {
+        clearTimeout(timer);
+        busy = false;
+      }
+    };
+    probe();
+    const interval = setInterval(probe, SERVER_PROBE_MS);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [waiting]);
 }
 
 /**

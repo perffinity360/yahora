@@ -68,10 +68,33 @@ function markUnsentAsFailed() {
     if (!data?.pages.some((page) => page.items.some((m) => m.pending))) continue;
     queryClient.setQueryData<ChatCache>(key, (prev) =>
       updateEveryPage(prev, (items) =>
-        items.map((m) => (m.pending ? { ...m, pending: false, failed: true } : m)),
+        // Interrupted, never refused: sent again by itself once the server answers.
+        items.map((m) => (m.pending ? { ...m, pending: false, failed: true, auto_retry: true } : m)),
       ),
     );
   }
+}
+
+/**
+ * A cache saved before withLeftOutColumns (src/lib/messages.ts) can hold a long
+ * message whose read tick wiped its text, and drawing it crashes the chat
+ * before the history refetch can fix it. Only server rows were ever hit, so
+ * dropping them loses nothing: that refetch brings them back. Marked stale so
+ * it runs as soon as the chat opens, even inside the 5-minute staleTime.
+ */
+function dropMessagesWithoutText() {
+  for (const [key, data] of queryClient.getQueriesData<ChatCache>({ queryKey: ['chat'] })) {
+    if (!data?.pages.some((page) => page.items.some((m) => typeof m.content !== 'string'))) continue;
+    queryClient.setQueryData<ChatCache>(key, (prev) =>
+      updateEveryPage(prev, (items) => items.filter((m) => typeof m.content === 'string')),
+    );
+    queryClient.invalidateQueries({ queryKey: key, exact: true, refetchType: 'none' });
+  }
+}
+
+function onCacheRestored() {
+  dropMessagesWithoutText();
+  markUnsentAsFailed();
 }
 
 function AuthGate() {
@@ -152,7 +175,7 @@ export default function RootLayout() {
           // chat caches into infinite queries (`{ pages, pageParams }`); a phone
           // restoring the old flat shapes would crash on `data.pages`.
           persistOptions={{ persister, maxAge: CACHE_MAX_AGE, buster: 'v5e-infinite' }}
-          onSuccess={markUnsentAsFailed}
+          onSuccess={onCacheRestored}
         >
           <AuthProvider>
             {/* Owns the app's only realtime channel. It must sit above the
