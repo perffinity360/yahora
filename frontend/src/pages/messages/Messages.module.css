@@ -893,8 +893,111 @@
   clip-path: inset(0 -100vmax);
 }
 
+/* Touch screens (phones and tablets, by input type, not width): a long-press
+   opens the actions menu, so it must not also start the browser's text
+   selection or iOS's Copy/Look Up callout. Menu → Copy copies the whole
+   message. A mouse keeps normal selection. The composer and the inbox search
+   are not inside these rows and keep theirs. */
+@media (hover: none) and (pointer: coarse) {
+  .messageWrapper,
+  .messageBubble,
+  .tombstone,
+  .quote {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .actionsBtn { transition: none; }
+}
+
+/* Jump to the original (§10.6): a full-width band behind the row, held
+   JUMP_HIGHLIGHT_HOLD_MS (1200), then faded over JUMP_HIGHLIGHT_FADE_MS (400).
+   Both come from messageActions.js as --jump-hold / --jump-fade on the row.
+   An opacity animation on a pseudo-element; Messages.jsx drops the class once
+   both have run. isolation keeps the band under the row's own content. */
+.rowHighlight {
+  position: relative;
+  isolation: isolate;
+}
+.rowHighlight::before {
+  content: "";
+  position: absolute;
+  inset: 0 -100vmax;
+  z-index: -1;
+  background: var(--chat-row-highlight);
+  pointer-events: none;
+  animation: rowHighlightFade var(--jump-fade, 400ms) cubic-bezier(0.4, 0, 0.2, 1) var(--jump-hold, 1200ms) forwards;
+}
+@keyframes rowHighlightFade {
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No fade: the band holds, then goes. */
+  .rowHighlight::before { animation: rowHighlightFade 1ms step-end var(--jump-hold, 1200ms) forwards; }
+}
+
+/* The quote inside a reply (§10.5). Radius 8; 6 vertical padding, 8 after the
+   3px accent; 6 above the reply's text. Full inner width of the bubble. */
+.quote {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 6px 8px 6px 11px; /* 3 accent + 8 */
+  border: none;
+  border-radius: 8px;
+  text-align: left;
+  font: inherit;
+  position: relative;
+  overflow: hidden;
+}
+.quote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.quoteMine { background: var(--chat-quote-mine-bg); }
+.quoteMine::before { background: var(--chat-quote-mine-bar); }
+.quoteTheirs { background: var(--chat-quote-theirs-bg); }
+.quoteTheirs::before { background: var(--purple); }
+.quoteName {
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+}
+.quoteMine .quoteName { color: var(--white); }
+.quoteTheirs .quoteName { color: var(--purple); }
+.quoteText {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+}
+.quoteMine .quoteText { color: var(--chat-quote-mine-text); }
+.quoteTheirs .quoteText { color: var(--msg-muted); }
+.quoteGone { font-style: italic; }
+.quoteLink {
+  cursor: pointer;
+  transition: filter 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.quoteLink:hover { filter: brightness(0.96); }
+.quoteMine.quoteLink:hover { filter: brightness(1.08); }
+.quoteLink:active { transform: scale(0.98); }
+.quoteLink:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+.quoteMine.quoteLink:focus-visible { outline-color: var(--white); }
+@media (prefers-reduced-motion: reduce) {
+  .quoteLink { transition: none; }
 }
 
 /* Only the bubble that closes a run gets the tail: radius 5 on the corner
@@ -1094,6 +1197,77 @@
 .emojiPickerContainer {
   position: relative;
   flex-shrink: 0;
+}
+
+/* The reply bar (§10.4): its own line above the input row. The composer row
+   wraps only to make room for it; min-width 0 keeps the form from wrapping. */
+.chatInputArea { flex-wrap: wrap; row-gap: 0; }
+.chatInputArea .chatForm { min-width: 0; }
+.replyBar {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 6px 6px 6px 13px; /* 13 = 3 accent + 10 */
+  border-radius: 12px;
+  background: var(--chat-quote-theirs-bg);
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+.replyBar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--purple);
+}
+.replyBarText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.replyBarName {
+  font-family: Inter, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--purple);
+}
+.replyBarPreview {
+  font-family: Inter, sans-serif;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--msg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.replyBarClose {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--msg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.replyBarClose:hover { background: rgba(128, 0, 128, 0.08); }
+.replyBarClose:active { transform: scale(0.94); }
+.replyBarClose:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .replyBarClose { transition: none; }
 }
 .emojiToggleBtn {
   width: 38px;
@@ -1449,8 +1623,9 @@
   outline: 2px solid var(--purple);
   outline-offset: 2px;
 }
-.chatInput:focus-visible,
-.searchInput:focus-visible {
+/* Not .searchInput: its pill (.searchBar:focus-within) already draws the
+   focus ring, and a second square outline inside it showed on every tap. */
+.chatInput:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: -1px;
 }

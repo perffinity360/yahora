@@ -45,6 +45,15 @@
 .danger,
 .danger .icon { color: var(--error-text); }
 
+/* Touch screens: no text selection or iOS callout on a long-press. */
+@media (hover: none) and (pointer: coarse) {
+  .menu {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
 @keyframes menuIn {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }

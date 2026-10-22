@@ -23,6 +23,15 @@
 }
 .visible { opacity: 1; }
 
+/* Touch screens: no text selection or iOS callout on a long-press. */
+@media (hover: none) and (pointer: coarse) {
+  .toast {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast { transition: none; }
 }

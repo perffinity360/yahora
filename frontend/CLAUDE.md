@@ -324,3 +324,20 @@ case for a value that dies with the next DHCP lease.
   runs with `server.host: true`, so it listens on the LAN and prints a Network URL.
 - The `http://localhost:...` proxy targets in `vite.config.js` are **correct and must stay** —
   they are resolved by the dev server process on the dev machine, not by the browser.
+
+---
+
+## 18. Same words and features on every screen size
+
+The website shows the **same text** and offers the **same features** on phone, tablet and
+desktop. Only the **layout** may adapt: stacking, sizes, spacing, what wraps.
+
+- Never use a JS screen-size check (`matchMedia` on a width, `innerWidth`, `isDesktop`,
+  `isMobile`, …) to change text, labels, placeholders, or which features/buttons exist.
+- Layout differences belong in CSS media queries. If a label doesn't fit at 375px, fix the
+  layout or pick one shorter label for every device — don't swap copy by width.
+- Checks on *input capability* (e.g. `(pointer: fine)` to avoid raising the phone keyboard)
+  are fine only when they change behaviour, never words or which features exist.
+- Adapting to the INPUT type (touch vs mouse) with (hover: none) and (pointer: coarse) is
+  allowed when a platform behaviour forces it (e.g. long-press text selection on touch). Never
+  adapt words or features by screen width.
