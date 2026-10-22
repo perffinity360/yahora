@@ -31,11 +31,22 @@ import {
   RotateCw,
   WifiOff,
   Ban,
+  ChevronDown,
+  CornerUpLeft,
+  Copy,
+  Trash2,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
 import { welcomeStickerFor } from "../../utils/stickers";
-import { isDeleted } from "../../utils/messageActions";
+import {
+  canDeleteForEveryone,
+  firstName,
+  isDeleted,
+} from "../../utils/messageActions";
+import { copyText } from "../../utils/share";
+import AppToast, { useToast } from "../../components/AppToast/AppToast";
+import MessageMenu from "../../components/MessageMenu/MessageMenu";
 import {
   formatClockTime,
   formatDayLabel,
@@ -515,6 +526,44 @@ export default function Messages() {
     if (!activeChat || !window.matchMedia("(pointer: fine)").matches) return;
     chatInputRef.current?.focus({ preventScroll: true });
   }, [activeChat?.contact_id, activeChat?.product_id]);
+
+  /* ── Message actions (spec §10.1, §10.2) ──
+     `actionsMenu`: the message whose menu is open, and the round button it
+     hangs from. `tappedRowKey`: on a touch screen, the one row whose button a
+     tap on its bubble has shown. `deleteTarget`: the message in the delete
+     confirmation (§10.8). */
+  const [actionsMenu, setActionsMenu] = useState(null);
+  const [tappedRowKey, setTappedRowKey] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const actionsBtnRefs = useRef(new Map()); // messageKey → its actions button
+  const menuAnchorRef = useRef(null);
+  const lastPointerTypeRef = useRef("mouse");
+  const { toast, showToast } = useToast();
+
+  const closeActionsMenu = useCallback((returnFocus) => {
+    const anchor = menuAnchorRef.current;
+    setActionsMenu(null);
+    if (returnFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
+  }, []);
+
+  // None of it carries over into another conversation.
+  useEffect(() => {
+    setActionsMenu(null);
+    setTappedRowKey(null);
+    setDeleteTarget(null);
+  }, [activeChat?.contact_id, activeChat?.product_id]);
+
+  // A tap anywhere outside the tapped row hides its button again.
+  useEffect(() => {
+    if (!tappedRowKey) return;
+    const onPointerDown = (e) => {
+      const row = e.target.closest?.("[data-actions-row]");
+      if (row?.dataset.actionsRow !== tappedRowKey) setTappedRowKey(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [tappedRowKey]);
+
   const emojiPickerRef = useRef(null);
   const activeChatRef = useRef(activeChat);
   const currentUserIdRef = useRef(currentUserId);
@@ -1809,6 +1858,78 @@ export default function Messages() {
     return null;
   };
 
+  /* Open (or, from its own button, close) one message's actions menu,
+     hanging from that message's round button. */
+  const openActionsMenu = (msg) => {
+    const key = messageKey(msg);
+    const anchorEl = actionsBtnRefs.current.get(key);
+    if (!anchorEl) return;
+    menuAnchorRef.current = anchorEl;
+    setActionsMenu({ key, msg, anchorEl });
+  };
+  const toggleActionsMenu = (msg) => {
+    if (actionsMenu?.key === messageKey(msg)) closeActionsMenu(false);
+    else openActionsMenu(msg);
+  };
+
+  /* §10.7. copyText's fallback (http pages, e.g. the site opened from a phone
+     over the LAN) needs the click's user gesture, so it runs before any await
+     of ours. Focus goes back to the button only afterwards: the fallback's
+     hidden <textarea> takes it while it copies. */
+  const handleCopy = async (msg) => {
+    closeActionsMenu(false);
+    const anchor = menuAnchorRef.current;
+    const ok = await copyText(msg.content);
+    if (anchor?.isConnected) anchor.focus({ preventScroll: true });
+    showToast(ok ? "Copied" : "Couldn't copy");
+  };
+
+  /* The menu's items (§10.1): Reply · Copy · Delete; a tombstone has only
+     Delete. Reply is wired in part 3. */
+  const actionsMenuItems = (msg) => {
+    const remove = {
+      key: "delete",
+      label: "Delete",
+      Icon: Trash2,
+      danger: true,
+      onSelect: () => {
+        closeActionsMenu(false);
+        setDeleteTarget(msg);
+      },
+    };
+    if (isDeleted(msg)) return [remove];
+    return [
+      {
+        key: "reply",
+        label: "Reply",
+        Icon: CornerUpLeft,
+        onSelect: () => closeActionsMenu(true),
+      },
+      { key: "copy", label: "Copy", Icon: Copy, onSelect: () => handleCopy(msg) },
+      remove,
+    ];
+  };
+
+  /* The delete confirmation's choices (§10.8). It closes at once; a refusal
+     comes back as a toast. */
+  const closeDeleteDialog = () => {
+    setDeleteTarget(null);
+    const anchor = menuAnchorRef.current;
+    if (anchor?.isConnected) anchor.focus({ preventScroll: true });
+  };
+  const confirmDelete = async (forEveryone) => {
+    const msg = deleteTarget;
+    if (!msg) return;
+    closeDeleteDialog();
+    const error = forEveryone ? await deleteForEveryone(msg) : await deleteForMe(msg);
+    if (!error) return;
+    showToast(
+      error === "DELETE_WINDOW_EXPIRED"
+        ? "It's too late to delete this for everyone"
+        : "Couldn't delete. Try again.",
+    );
+  };
+
   /* `unsentRef` (declared with the other refs) is threadKey → (client_tag →
      message). */
   const keepUnsent = (msg) => {
@@ -2511,6 +2632,12 @@ export default function Messages() {
                           );
                         }
 
+                        // §10.1: every message has actions, except one
+                        // still sending or failed (the pill handles those).
+                        const rowKey = messageKey(msg);
+                        const hasActions = !msg.pending && !msg.failed;
+                        const menuOpen = actionsMenu?.key === rowKey;
+
                         return (
                           <React.Fragment key={messageKey(msg) || index}>
                             {/* WhatsApp-style unread line. `unreadMarker` is
@@ -2530,12 +2657,15 @@ export default function Messages() {
                                  anchors on when a page of older messages is
                                  prepended — see `measureAnchor`. */
                               data-msg-id={msg.id}
+                              data-actions-row={hasActions ? rowKey : undefined}
                               className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs} ${
                                 isRunStart ? styles.runStart : ""
                               } ${isRunEnd ? styles.runEnd : ""} ${
                                 openingIdsRef.current.has(messageKey(msg))
                                   ? ""
                                   : styles.messageEnter
+                              } ${menuOpen ? styles.rowSelected : ""} ${
+                                menuOpen || tappedRowKey === rowKey ? styles.actionsShown : ""
                               }`}
                             >
                               {!isMine &&
@@ -2555,7 +2685,50 @@ export default function Messages() {
                                 className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs} ${
                                   msg.failed ? styles.bubbleFailed : ""
                                 }`}
+                                {...(hasActions && {
+                                  onPointerDown: (e) => {
+                                    lastPointerTypeRef.current = e.pointerType;
+                                  },
+                                  // Touch: a tap shows this row's button, and
+                                  // a second tap hides it. Not a tap on a
+                                  // link in the text.
+                                  onClick: (e) => {
+                                    if (lastPointerTypeRef.current !== "touch") return;
+                                    if (e.target.closest("a, button")) return;
+                                    setTappedRowKey((k) => (k === rowKey ? null : rowKey));
+                                  },
+                                  // Right-click; on Android Chrome a
+                                  // long-press fires this too.
+                                  onContextMenu: (e) => {
+                                    e.preventDefault();
+                                    openActionsMenu(msg);
+                                  },
+                                })}
                               >
+                                {/* §10.2: beside the bubble on its outer
+                                    side, absolutely placed so the bubble's
+                                    size never changes. */}
+                                {hasActions && (
+                                  <button
+                                    type="button"
+                                    ref={(el) => {
+                                      if (el) actionsBtnRefs.current.set(rowKey, el);
+                                      else actionsBtnRefs.current.delete(rowKey);
+                                    }}
+                                    className={`${styles.actionsBtn} ${
+                                      isMine ? styles.actionsBtnMine : styles.actionsBtnTheirs
+                                    }`}
+                                    aria-label="Message actions"
+                                    aria-haspopup="menu"
+                                    aria-expanded={menuOpen}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleActionsMenu(msg);
+                                    }}
+                                  >
+                                    <ChevronDown size={16} aria-hidden="true" />
+                                  </button>
+                                )}
                                 {/* Spec §10.8: a tombstone keeps its side
                                     and background; the label replaces the
                                     text, and the meta row has no tick. */}
@@ -2633,6 +2806,27 @@ export default function Messages() {
                   </div>
                 )}
               </div>
+
+                {/* §10.2: the open message's menu. Built from the live row,
+                    so a tombstone that lands while it is open shows only
+                    Delete; gone from the list (deleted for me) → closed. */}
+                {actionsMenu &&
+                  (() => {
+                    const live = messages.find((m) => messageKey(m) === actionsMenu.key);
+                    if (!live || live.pending || live.failed) return null;
+                    return (
+                      <MessageMenu
+                        items={actionsMenuItems(live)}
+                        anchorEl={actionsMenu.anchorEl}
+                        boundsEl={messagesContainerRef.current}
+                        align={live.sender_id === currentUserId ? "end" : "start"}
+                        onClose={closeActionsMenu}
+                      />
+                    );
+                  })()}
+
+                {/* §10.7: centred, 16 above the composer. */}
+                <AppToast toast={toast} bottom={16} />
 
                 {/* Jump to latest. Always mounted while there are messages, so
                     it can animate out as well as in; hidden, it takes no clicks
@@ -2785,6 +2979,68 @@ export default function Messages() {
           )}
         </div>
       </div>
+
+      {/* §10.8: the delete confirmation, in the Dashboard's modal look. */}
+      {deleteTarget &&
+        (() => {
+          const both = canDeleteForEveryone(deleteTarget, currentUserId);
+          return (
+            <div className={styles.modalOverlay} onClick={closeDeleteDialog}>
+              <div
+                className={styles.modalContent}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-message-title"
+                aria-describedby="delete-message-body"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.stopPropagation();
+                    closeDeleteDialog();
+                  }
+                }}
+              >
+                <h3 id="delete-message-title" className={styles.modalTitle}>
+                  Delete message?
+                </h3>
+                <p id="delete-message-body" className={styles.modalText}>
+                  {both
+                    ? "Delete it for everyone in this chat, or only for you?"
+                    : `It will be removed from this chat for you. ${firstName(
+                        activeChat?.contact_name,
+                      )} will still see it.`}
+                </p>
+                <div className={`${styles.modalActions} ${styles.modalActionsStacked}`}>
+                  {both && (
+                    <button
+                      type="button"
+                      autoFocus
+                      className={`${styles.modalBtn} ${styles.modalBtnDanger}`}
+                      onClick={() => confirmDelete(true)}
+                    >
+                      Delete for everyone
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    autoFocus={!both}
+                    className={styles.modalBtn}
+                    onClick={() => confirmDelete(false)}
+                  >
+                    Delete for me
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.modalBtn} ${styles.modalBtnCancel}`}
+                    onClick={closeDeleteDialog}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 } 

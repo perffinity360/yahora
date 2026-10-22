@@ -846,6 +846,57 @@
   word-break: break-word;
 }
 
+/* ── Message actions — spec §10.2 (web) ──
+   The round button sits beside the bubble on its outer side (left of mine,
+   right of theirs), top-aligned, gap 6. Absolutely placed against the bubble,
+   so the bubble's size never changes. Hidden until the row is hovered (real
+   hover only — a touch screen's sticky :hover would leave it up), holds
+   focus, has its menu open, or had its bubble tapped (.actionsShown). */
+.actionsBtn {
+  position: absolute;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--white);
+  border: 1px solid var(--msg-line);
+  color: var(--msg-muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 120ms ease,
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.actionsBtnMine   { right: calc(100% + 6px); }
+.actionsBtnTheirs { left: calc(100% + 6px); }
+@media (hover: hover) {
+  .messageWrapper:hover .actionsBtn { opacity: 1; pointer-events: auto; }
+  .actionsBtn:hover { background: var(--msg-pink-light); }
+}
+.messageWrapper:focus-within .actionsBtn,
+.actionsShown .actionsBtn { opacity: 1; pointer-events: auto; }
+.actionsBtn:active { transform: scale(0.94); background: var(--msg-pink-light); }
+.actionsBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+
+/* The row while its menu is open: a band the full width of the thread. The
+   shadow carries it across the thread's side padding; the clip keeps it to
+   the row's own height. */
+.rowSelected {
+  background: var(--chat-row-selected);
+  box-shadow: 0 0 0 100vmax var(--chat-row-selected);
+  clip-path: inset(0 -100vmax);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionsBtn { transition: none; }
+}
+
 /* Only the bubble that closes a run gets the tail: radius 5 on the corner
    nearest its sender. Mid-run bubbles stay fully rounded. */
 .runEnd .bubbleMine   { border-bottom-right-radius: 5px; }
@@ -1430,4 +1481,85 @@
   .sendBtnActive:active {
     animation: none;
   }
+}
+
+/* ════════════════════════════════════════════
+   DELETE CONFIRMATION — spec §10.8. The Dashboard's modal
+   (Dashboard.module.css .modalOverlay / .modalContent / .modalActions,
+   copied: CSS Modules can't share classes between pages), with the choices
+   stacked full width.
+════════════════════════════════════════════ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+.modalContent {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.modalTitle {
+  font-family: "Bree Serif", serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
+  font-size: 1.25rem;
+  color: var(--black-soft);
+  margin-bottom: 8px;
+}
+.modalText {
+  font-size: 0.95rem;
+  color: #666;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.modalActionsStacked {
+  flex-direction: column;
+  gap: 8px;
+}
+.modalBtn {
+  width: 100%;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  background: #f0f0f0;
+  color: var(--black-soft);
+  transition: background-color 0.2s, transform 0.15s;
+}
+.modalBtn:hover { background: #e4e4e4; }
+.modalBtn:active { transform: scale(0.98); }
+.modalBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* Spec's #B91C1C — the web's --error-text (same value as v3's --danger-text). */
+.modalBtnDanger { background: var(--error-bg); color: var(--error-text); }
+.modalBtnDanger:hover { background: #fde2e2; }
+.modalBtnCancel { background: transparent; color: #555; }
+.modalBtnCancel:hover { background: #f0f0f0; }
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modalOverlay,
+  .modalContent { animation: none; }
+  .modalBtn { transition: none; }
 }
