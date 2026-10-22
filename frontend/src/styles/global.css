@@ -60,6 +60,18 @@
      inputBorderFocus, the ChatState's subtitle and icon ring. */
   --muted-text: #6B6879;
   --input-border-focus: #E5C8E5;
+  /* Message actions (spec §3 v3, §10): mobile chatRowSelected … toastBg.
+     The spec's --danger-text #B91C1C is --error-text above (same value), so it
+     is not added twice. */
+  --chat-row-selected: rgba(128,0,128,0.10);
+  --chat-row-highlight: rgba(128,0,128,0.12);
+  --chat-quote-mine-bg: rgba(0,0,0,0.12);
+  --chat-quote-mine-bar: rgba(255,255,255,0.90);
+  --chat-quote-mine-text: rgba(255,255,255,0.85);
+  --chat-quote-theirs-bg: rgba(128,0,128,0.06);
+  --chat-tombstone-mine: rgba(255,255,255,0.90);
+  --scrim: rgba(11,11,11,0.32);
+  --toast-bg: rgba(26,26,26,0.88);
 
   /* Text & background */
   --black: #0B0B0B;

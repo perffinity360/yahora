@@ -348,6 +348,21 @@
 .inboxItemUnread .inboxTime { font-weight: 700; color: var(--purple); }
 .inboxItemUnread .inboxPreview { font-weight: 500; color: var(--black-soft); }
 
+/* Deleted for everyone (spec §10.9): Ban 12, gap 4, italic. Weight and colour
+   still come from .inboxPreview / .inboxItemUnread above. */
+.inboxPreviewDeleted {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-style: italic;
+}
+.inboxPreviewIcon { flex-shrink: 0; }
+.inboxPreviewDeletedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .unreadBadge {
   min-width: 20px;
   height: 20px;
@@ -862,6 +877,22 @@
   font-size: 14px;
   line-height: 20px;
 }
+
+/* The tombstone (spec §10.8): Ban 14, gap 6, italic 400 14/20, in the
+   bubble's usual shape, side and background. */
+.tombstone {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 20px;
+}
+.tombstoneMine { color: var(--chat-tombstone-mine); }
+.tombstoneTheirs { color: var(--msg-muted); }
+.tombstoneIcon { flex-shrink: 0; }
 
 /* An emoji inside text — EMOJI_SIZES.inline in src/utils/emoji.js, same as
    mobile. line-height 1 keeps the line box from growing around it. Jumbo

@@ -30,10 +30,12 @@ import {
   Clock,
   RotateCw,
   WifiOff,
+  Ban,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
 import { welcomeStickerFor } from "../../utils/stickers";
+import { isDeleted } from "../../utils/messageActions";
 import {
   formatClockTime,
   formatDayLabel,
@@ -1047,6 +1049,65 @@ export default function Messages() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showEmojiPicker]);
 
+  /* Page one of the inbox. Throws on a failed answer. */
+  const fetchInboxFirstPage = async (userId) => {
+    const token = authHeaderToken();
+    const res = await fetch(`${API_BASE_URL}/messages/inbox/${userId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(`inbox ${res.status} ${body?.error || ""}`.trim());
+    }
+    return res.json();
+  };
+
+  /* Reload the inbox from the server, and nothing else: no deep link, no
+     reopening a chat. After a delete (§10.8) the conversation's preview may
+     have been the deleted message, and only the server knows what is now
+     the newest message this student can see. Back to page one; scrolling
+     loads the rest again. The open chat stays open, and keeps its row even
+     when page one doesn't hold it (a brand-new deep-link chat, one further
+     down the list, or one whose every message was hidden). Reads refs only,
+     so the once-only Realtime handler can call it. */
+  const inboxRefreshSeqRef = useRef(0);
+  const refreshInbox = useCallback(async () => {
+    const myId = currentUserIdRef.current;
+    if (!myId) return;
+    const seq = ++inboxRefreshSeqRef.current;
+    try {
+      const data = await fetchInboxFirstPage(myId);
+      if (seq !== inboxRefreshSeqRef.current) return; // a newer refresh won
+      const fresh = data.items || [];
+      const open = activeChatRef.current;
+      setInbox((prev) => {
+        if (
+          !open ||
+          fresh.some(
+            (c) =>
+              c.contact_id === open.contact_id &&
+              c.product_id === open.product_id,
+          )
+        ) {
+          return fresh;
+        }
+        const openRow = prev.find(
+          (c) =>
+            c.contact_id === open.contact_id &&
+            c.product_id === open.product_id,
+        );
+        return openRow ? [openRow, ...fresh] : fresh;
+      });
+      const nextCursor = data.next_cursor ?? null;
+      setInboxCursor(nextCursor);
+      setHasMoreInbox(nextCursor !== null);
+    } catch (error) {
+      console.error("Failed to refresh the inbox:", error);
+    }
+    // fetchInboxFirstPage reads nothing from render scope but the module.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ── 1. Fetch inbox, then reopen whichever chat should be open ──
      Precedence: the ?user=&product= deep link (e.g. "Message Seller" on a
      product page) first, then the thread this student last had open.
@@ -1069,15 +1130,7 @@ export default function Messages() {
 
     const loadInboxAndCheckParams = async () => {
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/messages/inbox/${currentUserId}`,
-          {
-            headers: authHeaderToken()
-              ? { Authorization: `Bearer ${authHeaderToken()}` }
-              : {},
-          },
-        );
-        const data = await res.json();
+        const data = await fetchInboxFirstPage(currentUserId);
         let fetchedInbox = data.items || [];
 
         // 📄 Page one of the inbox. Everything past the first 20 conversations
@@ -1585,6 +1638,9 @@ export default function Messages() {
                 updatedChat = { ...updatedInbox.splice(chatIndex, 1)[0] };
                 updatedChat.last_message = newMsg.content;
                 updatedChat.last_message_time = newMsg.created_at;
+                // Spec §10.9: "You: " and the tombstone preview read these.
+                updatedChat.last_sender_id = newMsg.sender_id;
+                updatedChat.last_message_deleted = false;
                 
                 // Open, being watched, on screen AND at the live end — the only
                 // case where it is about to be read on sight. A thread sitting
@@ -1622,6 +1678,11 @@ export default function Messages() {
                 : msg,
             )
           );
+          // Deleted for everyone (§10.8): it may have been a conversation's
+          // inbox preview, open or not, and only the server knows what the
+          // preview is now. Replies whose quote was wiped arrive as their
+          // own UPDATEs and need nothing more than the swap above.
+          if (payload.new.deleted_at) refreshInbox();
         }
       )
       .subscribe();
@@ -1651,6 +1712,7 @@ export default function Messages() {
       is_read: false,
       is_delivered: false,
       sent_after_id: newestServerId(messagesRef.current),
+      reply_to_id: null,
     };
     setNewMessage("");
     setShowEmojiPicker(false);
@@ -1668,6 +1730,83 @@ export default function Messages() {
   const handleRetry = (msg) => {
     if (msg.pending) return;
     deliver(msg);
+  };
+
+  /* ── Delete (spec §10.8, API: V-C changelog) ──────────────────────────────
+     Both resolve to null on success, or the error code on failure
+     (DELETE_WINDOW_EXPIRED, NOT_MESSAGE_SENDER, MESSAGE_NOT_FOUND, …;
+     NETWORK_ERROR when there was no answer), for the menu's toasts. */
+  const postMessageAction = async (id, action) => {
+    const token = authHeaderToken();
+    try {
+      const res = await fetch(`${API_BASE_URL}/messages/${id}/${action}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { error: data?.error || `HTTP_${res.status}` };
+      return { data };
+    } catch {
+      return { error: "NETWORK_ERROR" };
+    }
+  };
+
+  /* The message becomes a tombstone for both people. Realtime brings the
+     same UPDATEs (this tombstone, and each reply whose quote is wiped);
+     replacing by id makes the second arrival a no-op. */
+  const deleteForEveryone = async (message) => {
+    const { data, error } = await postMessageAction(
+      message.id,
+      "delete-for-everyone",
+    );
+    if (error) return error;
+    const tombstone = data?.message;
+    if (tombstone) {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id === tombstone.id) return adoptServerRow(m, tombstone);
+          if (m.reply_to_id === tombstone.id && m.reply_preview != null) {
+            return { ...m, reply_preview: null };
+          }
+          return m;
+        }),
+      );
+    }
+    refreshInbox();
+    return null;
+  };
+
+  /* Hidden from my view only. There is NO Realtime event for this (runbook
+     §1.7), so removing it here is the only update the screen gets. Gone at
+     once; put back where it was if the server refuses. */
+  const deleteForMe = async (message) => {
+    const list = messagesRef.current;
+    const at = list.findIndex((m) => m.id === message.id);
+    const removed = at > -1 ? list[at] : message;
+    const nextId = at > -1 ? list[at + 1]?.id : undefined;
+    setMessages((prev) => prev.filter((m) => m.id !== message.id));
+
+    const { error } = await postMessageAction(message.id, "delete-for-me");
+    if (error) {
+      // Not into another conversation the student has opened since.
+      const chat = activeChatRef.current;
+      const stillOpen =
+        !!chat &&
+        chat.product_id === removed.product_id &&
+        (chat.contact_id === removed.sender_id ||
+          chat.contact_id === removed.receiver_id);
+      if (!stillOpen) return error;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === removed.id)) return prev;
+        // Before the message that followed it, if that is still on screen.
+        const before = nextId ? prev.findIndex((m) => m.id === nextId) : -1;
+        const pos = before > -1 ? before : Math.min(Math.max(at, 0), prev.length);
+        return [...prev.slice(0, pos), removed, ...prev.slice(pos)];
+      });
+      return error;
+    }
+    refreshInbox();
+    return null;
   };
 
   /* `unsentRef` (declared with the other refs) is threadKey → (client_tag →
@@ -1746,6 +1885,8 @@ export default function Messages() {
           receiver_id: msg.receiver_id,
           product_id: msg.product_id,
           content: msg.content,
+          // Only the id; the database fills the quote (V-C). Part 3 sets it.
+          reply_to_id: msg.reply_to_id ?? null,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -2055,9 +2196,26 @@ export default function Messages() {
                       </div>
 
                       <div className={styles.inboxItemBottom}>
-                        <span className={styles.inboxPreview}>
-                          {chat?.last_message || "Start the conversation ✨"}
-                        </span>
+                        {/* Spec §10.9. A tombstone keeps the row's
+                            read/unread weight; only the style is italic. */}
+                        {chat?.last_message_deleted ? (
+                          <span
+                            className={`${styles.inboxPreview} ${styles.inboxPreviewDeleted}`}
+                          >
+                            <Ban size={12} aria-hidden="true" className={styles.inboxPreviewIcon} />
+                            <span className={styles.inboxPreviewDeletedText}>
+                              {chat.last_sender_id === currentUserId
+                                ? "You deleted this message"
+                                : "This message was deleted"}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className={styles.inboxPreview}>
+                            {chat?.last_message == null
+                              ? "Start the conversation ✨"
+                              : `${chat.last_sender_id === currentUserId ? "You: " : ""}${chat.last_message}`}
+                          </span>
+                        )}
                         {unread > 0 && (
                           <span className={styles.unreadBadge}>
                             {unread > 99 ? "99+" : unread}
@@ -2398,12 +2556,28 @@ export default function Messages() {
                                   msg.failed ? styles.bubbleFailed : ""
                                 }`}
                               >
-                                <MessageText content={msg.content} />
+                                {/* Spec §10.8: a tombstone keeps its side
+                                    and background; the label replaces the
+                                    text, and the meta row has no tick. */}
+                                {isDeleted(msg) ? (
+                                  <p
+                                    className={`${styles.tombstone} ${
+                                      isMine ? styles.tombstoneMine : styles.tombstoneTheirs
+                                    }`}
+                                  >
+                                    <Ban size={14} aria-hidden="true" className={styles.tombstoneIcon} />
+                                    {isMine
+                                      ? "You deleted this message"
+                                      : "This message was deleted"}
+                                  </p>
+                                ) : (
+                                  <MessageText content={msg.content} />
+                                )}
                                 <div className={styles.messageMeta}>
                                   <span className={styles.messageTime}>
                                     {formatClockTime(msg.created_at)}
                                   </span>
-                                  {isMine && (
+                                  {isMine && !isDeleted(msg) && (
                                     <span className={styles.readReceipt}>
                                       {tickIcon}
                                     </span>
