@@ -1,5 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,13 +19,16 @@ import { BackButton } from '../src/components/CircleButton';
 import { AppText } from '../src/components/AppText';
 import { AppTextInput } from '../src/components/AppTextInput';
 import { AuroraBackground } from '../src/components/AuroraBackground';
+import { AvatarSheet } from '../src/components/AvatarSheet';
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { SearchablePicker } from '../src/components/SearchablePicker';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useCourses, useSpecializations } from '../src/hooks/useAcademics';
+import { useAvatarActions } from '../src/hooks/useAvatarActions';
 import { useDashboard } from '../src/hooks/useDashboard';
 import { useFloatingTopInset } from '../src/hooks/useFloatingTopInset';
 import { api } from '../src/lib/api';
+import { resolveMediaUrl } from '../src/lib/config';
 import { colors, font, radius, spacing } from '../src/theme';
 import type { UserProfile } from '../src/types';
 
@@ -93,6 +98,52 @@ export default function EditProfileScreen() {
   const [bioFocused, setBioFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // PROFILE PHOTO — the same upload the dashboard uses (useAvatarActions): it
+  // goes up the moment it is picked, not on Save, and every screen shows it at
+  // once. A photo already set opens the dashboard's Change / Remove sheet.
+  const { uploadAvatar, removeAvatar } = useAvatarActions(userId);
+  const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
+  const avatar = resolveMediaUrl(base?.avatar_url);
+
+  const handleChangePhoto = async () => {
+    setAvatarSheetOpen(false);
+    setAvatarError(null);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setAvatarError('Photo library access is needed to change your photo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      await uploadAvatar.mutateAsync({
+        uri: asset.uri,
+        mimeType: asset.mimeType ?? undefined,
+        fileName: asset.fileName ?? undefined,
+      });
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : 'Could not update your photo.');
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setAvatarSheetOpen(false);
+    setAvatarError(null);
+    try {
+      await removeAvatar.mutateAsync();
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : 'Could not remove your photo.');
+    }
+  };
+
+  const onAvatarPress = () => (avatar ? setAvatarSheetOpen(true) : handleChangePhoto());
 
   // The root layout renders a <Slot/>, which unmounts the tab navigator while
   // this screen is on top — so router.back() re-mounts the tabs at their initial
@@ -186,6 +237,60 @@ export default function EditProfileScreen() {
 
               <View style={styles.card}>
                 <AppText style={styles.sectionTitle}>Identity</AppText>
+
+                <View style={styles.avatarRow}>
+                  <Pressable
+                    onPress={onAvatarPress}
+                    disabled={avatarBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={avatar ? 'Change profile photo' : 'Add profile photo'}
+                    style={({ pressed }) => [
+                      styles.avatarPreview,
+                      pressed && styles.avatarPreviewPressed,
+                    ]}
+                  >
+                    {avatarBusy ? (
+                      <ActivityIndicator color={colors.purple} />
+                    ) : avatar ? (
+                      <Image
+                        source={{ uri: avatar }}
+                        style={styles.avatarImg}
+                        contentFit="cover"
+                        transition={220}
+                      />
+                    ) : (
+                      <Feather name="user" size={34} color={colors.mutedLabel} />
+                    )}
+                  </Pressable>
+                  <View style={styles.avatarActions}>
+                    <Pressable
+                      onPress={onAvatarPress}
+                      disabled={avatarBusy}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [
+                        styles.uploadBtn,
+                        pressed && styles.uploadBtnPressed,
+                        avatarBusy && styles.uploadBtnDisabled,
+                      ]}
+                    >
+                      <Feather name="image" size={16} color={colors.purple} />
+                      <AppText style={styles.uploadBtnText}>
+                        {uploadAvatar.isPending
+                          ? 'Uploading…'
+                          : removeAvatar.isPending
+                            ? 'Removing…'
+                            : avatar
+                              ? 'Change Photo'
+                              : 'Upload Photo (Optional)'}
+                      </AppText>
+                    </Pressable>
+                    {avatarError ? (
+                      <AppText style={styles.avatarErrorText}>{avatarError}</AppText>
+                    ) : (
+                      <AppText style={styles.helperText}>A real photo builds trust.</AppText>
+                    )}
+                  </View>
+                </View>
 
                 <View style={styles.group}>
                   <View style={styles.labelRow}>
@@ -308,6 +413,14 @@ export default function EditProfileScreen() {
           style={[styles.backBtn, { top: floatingTop }]}
         />
       </SafeAreaView>
+
+      <AvatarSheet
+        visible={avatarSheetOpen}
+        hasAvatar={!!avatar}
+        onChangePhoto={handleChangePhoto}
+        onRemovePhoto={handleRemovePhoto}
+        onClose={() => setAvatarSheetOpen(false)}
+      />
     </View>
   );
 }
@@ -399,6 +512,70 @@ const styles = StyleSheet.create({
   },
   sectionTitleSpaced: {
     marginTop: spacing.sm,
+  },
+
+  // Profile photo — the onboarding screen's avatar row, unchanged.
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  avatarPreview: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: colors.inputBg,
+    borderWidth: 2,
+    borderColor: colors.inputBorderFocus,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarPreviewPressed: {
+    borderColor: colors.purple,
+    backgroundColor: colors.pinkLight,
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarActions: {
+    flex: 1,
+    gap: 6,
+  },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 30,
+    backgroundColor: colors.pinkLight,
+    borderWidth: 1,
+    borderColor: colors.inputBorderFocus,
+  },
+  uploadBtnPressed: {
+    backgroundColor: colors.demoCardPurpleBg,
+  },
+  uploadBtnDisabled: {
+    opacity: 0.6,
+  },
+  uploadBtnText: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.body,
+    color: colors.purpleDark,
+  },
+  helperText: {
+    fontFamily: font.family.regular,
+    fontSize: font.sizes.caption,
+    color: colors.mutedText,
+  },
+  avatarErrorText: {
+    fontFamily: font.family.medium,
+    fontSize: font.sizes.caption,
+    color: colors.errorText,
   },
 
   group: {

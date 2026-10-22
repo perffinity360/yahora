@@ -1,5 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import Reanimated, { Easing, SlideInDown } from 'react-native-reanimated';
 
 import { AppText } from './AppText';
 import { colors, font, spacing } from '../theme';
@@ -13,6 +14,13 @@ interface AvatarSheetProps {
   onClose: () => void;
 }
 
+/**
+ * The sheet rises from the bottom; the dark scrim behind it does not. The
+ * Modal's own `slide` moved both together, so the scrim crept up the screen
+ * with the sheet. The Modal shows at once (`none`) and only the sheet animates.
+ */
+const SHEET_ENTER = SlideInDown.duration(280).easing(Easing.out(Easing.cubic));
+
 /** On-brand bottom sheet for managing the profile photo. */
 export function AvatarSheet({
   visible,
@@ -22,11 +30,11 @@ export function AvatarSheet({
   onClose,
 }: AvatarSheetProps) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
 
-        <View style={styles.sheet}>
+        <Reanimated.View entering={SHEET_ENTER} style={styles.sheet}>
           <View style={styles.handle} />
           <AppText style={styles.title}>Profile photo</AppText>
 
@@ -68,7 +76,7 @@ export function AvatarSheet({
           >
             <AppText style={styles.cancelText}>Cancel</AppText>
           </Pressable>
-        </View>
+        </Reanimated.View>
       </View>
     </Modal>
   );

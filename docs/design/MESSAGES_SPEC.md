@@ -89,6 +89,10 @@ already follows. Every pair is in §7.
 | §7 Contrast | — | 10 new rows, including two **rejected** options | The first quote and tombstone colours failed on the pink end; the shipped ones pass |
 | §8 Deferred | Price, `You: ` | Price only | `You: ` shipped in §10.9 |
 | §10 | — | **New**: message actions | Phase 6B |
+| §2 Bubbles | Failed message waits for a tap | A message that failed because the server couldn't be reached is **sent again by itself** once the server answers ("Sending again on its own"). A refusal still waits for a tap | Owner's call, 2026-10-18 |
+| §5 Allowed differences | Ten | **Eleven**: adds when the failed-load state shows | Mobile caches a thread; the website doesn't |
+| §2 Loading | Not specified for a failed load | **"Couldn't load this chat"** with Retry, on both. It reloads by itself once the server answers | Owner's call, 2026-10-18. The web used to show an empty thread, and dropped unsent messages with it |
+| §2 Unread behaviour | Seen once 50% of the row is visible | …or once it fills 50% of the thread | A long message taller than twice the thread was never marked read: no blue ticks for the sender, and the badge stayed |
 
 ---
 
@@ -297,10 +301,42 @@ timestamps stay readable. The old web bubble ended at `#EB487F`, where white tex
 `#9B1280` (the gradient's colour at 25%; white text 7.52:1). The two platforms must never
 disagree on this. Mobile ships `SENT_BUBBLE_STYLE = 'gradient'` until N-F decides.
 
-**Failed message:** the bubble drops to opacity 0.72, and a pill sits under it, right-aligned,
-3 below: background `#FEF0F0`, text "Failed — tap to retry" in Inter 600 11 `#B91C1C`, a
-rotate icon 11 in the same colour, gap 4, padding 3 vertical / 8 horizontal, radius 999.
-Tapping it resends the same message. Pressed (mobile): opacity 0.7.
+**Sending and retrying (Phase 6B, owner's call 2026-10-16).** A sent message shows at once
+with the clock tick. If a try fails for a reason that can pass, the app retries **by itself**,
+keeping the clock:
+
+| | Value |
+|---|---|
+| Retry after | 2, 4, 8, 16, 30 s (`SEND_MAX_RETRIES = 5`, `sendRetryDelay`) |
+| Retried | no answer, or no answer in 15 s (`SEND_TIMEOUT_MS`) · 401 · 408 · 429 · 5xx |
+| Not retried | any other 4xx: the server refused this message, so it fails at once |
+| Offline | waits for the network (mobile NetInfo, web `online`) and uses up no tries |
+| Order | one send at a time per conversation, in the order typed |
+| Already delivered | if Realtime brings the message in while a retry waits, the retry is dropped (no double post) |
+| Already on the server | when a reloaded history holds a message from me with the same text **after** the newest message the thread had when the bubble was typed (`sent_after_id`), the bubble is that message and is dropped. One server message accounts for one bubble. Text alone is not enough: an older "ok" must not swallow a new one |
+
+**Failed message** (only after the retries give up, or at once for a refusal): the bubble
+drops to opacity 0.72, its tick becomes the alert icon, and a pill sits under it,
+right-aligned, 3 below: background `#FEF0F0`, text "Failed to send" in Inter 600 11
+`#B91C1C`, a rotate icon 11 in the same colour, gap 4, padding 3 vertical / 8 horizontal,
+radius 999. Tapping it sends the same message again, with the full retry cycle. Pressed
+(mobile): opacity 0.7. Web: hover opacity 0.85, active 0.7, focus-visible outline.
+
+A failed message **stays** in its thread, through leaving and reopening the chat, with the
+server up or down. Only sending it removes it.
+
+**Sending again on its own (owner's call 2026-10-18).** A message that failed because the
+server couldn't be reached (every retry used up on a retried reason above, or the app closed
+while it was sending) is sent again **by itself** once the server answers. It goes through
+the full retry cycle, so its pill turns back into the clock. A message the server **refused**
+(any other 4xx) is never sent again by itself: only a tap sends it.
+
+| | Value |
+|---|---|
+| How "the server answers" is known | `GET /api/health` returns 200 |
+| When it asks | at once, then every 10 s (`SERVER_PROBE_MS = 10000`), while the open chat has such a message or its history failed to load. Also at once when the network comes back (mobile NetInfo, web `online`), when the app returns to the foreground, or when the tab is shown (web). One probe at a time, given up after 10 s |
+| What happens | the history is reloaded first if it had failed, then those messages are sent again, in the order typed |
+| Scope | the open chat only. Another chat's failed messages wait until it is opened |
 
 **Replies, copy and delete** — the quote at the top of a reply, the deleted-message tombstone,
 and how a message's actions open — are in **§10**.
@@ -318,7 +354,7 @@ margin-top 2 · time as `4:41 PM`.
 | Sent | single check, 14 | white 90% |
 | Delivered | double check, 15 | white 90% |
 | **Read** | double check, 15 | **blue `#53BDEB`** |
-| Failed | alert-circle, 12 | `#F87171` |
+| Failed | alert-circle, 12 | `#FFFFFF` (white, like the other ticks; owner's call 2026-10-16, was `#F87171`) |
 
 Blue — WhatsApp's read blue — on both platforms. v1's pale amber `#FDE68A` could hardly be
 told apart from the white delivered ticks beside it on the phone; the owner chose blue after
@@ -435,8 +471,12 @@ The same on both platforms. Constants named per platform.
 - **The chat opens at the band**, with the band about **35%** down the thread (mobile
   `UNREAD_VIEW_POSITION = 1 − 0.35` on its inverted list; web `UNREAD_ANCHOR_LEAD_RATIO =
   0.35`). With nothing unread it opens at the newest message.
-- **Read on sight.** A message counts as seen once **50%** of its row is visible (mobile
-  `VIEWABILITY_CONFIG.itemVisiblePercentThreshold = 50`; web `READ_VISIBLE_RATIO = 0.5`).
+- **Read on sight.** A message counts as seen once **50%** of its row is visible, **or** once
+  it fills **50%** of the thread. The second case is for a row taller than twice the thread,
+  such as a 2000-character message on a phone, which can never be half on screen. Mobile has
+  two viewability configs, `SEEN_BY_ROW` (`itemVisiblePercentThreshold: 50`) and
+  `SEEN_BY_THREAD` (`viewAreaCoveragePercentThreshold: 50`), and a row needs only one. Web uses
+  `READ_VISIBLE_RATIO = 0.5` of `min(row height, thread height)`.
   Newly seen messages are batched and, after **300 ms** of stillness (`READ_DEBOUNCE_MS` on
   both), sent as **one** `PUT /api/messages/read` with `upToId` = the newest of them.
   Messages after it stay unread and keep the inbox badge.
@@ -471,6 +511,26 @@ Initial thread load: **5** skeleton bubble shapes, alternating sides starting wi
 44 tall, radius 18, widths 62% · 48% · 70% · 40% · 55%, 16 apart, starting 24 from the top,
 12 side padding. Loading older messages while scrolling up: keep the Phase 5 indicator.
 
+**The history failed to load** (owner's call 2026-10-18), centred in the thread:
+
+- an icon circle 64, `pinkLight #FFF4F7`, 1 border `inputBorderFocus #E5C8E5`, wifi-off icon
+  26 `#800080`, 16 below it;
+- "Couldn't load this chat", Inter 700 16 `#1A1A1A`;
+- "Check your connection and try again.", Inter 400 13 / 19 `mutedText #6B6879`, 4 above,
+  max width 300;
+- a **Retry** pill 24 below: 44 tall, padding 0 32, radius 999, the brand gradient
+  `#800080` → `#EB487F`, Inter 600 13 white. Pressed (mobile): opacity 0.88. Web: hover 0.92,
+  active 0.88 + scale 0.98, focus-visible outline.
+
+Retry reloads at once. The thread also reloads **by itself** once the server answers (§2
+"Sending again on its own"). The welcome note ("This is the beginning…") is hidden meanwhile,
+because nobody knows that it is the beginning.
+
+The two platforms differ only in what sits around it. **Mobile** keeps the last copy of the
+thread it has, so it shows this only when it has none. **Web** holds no copy, so it shows this
+every time a load fails. Any unsent or failed messages of the thread show under it, because
+they exist only on this device and must never disappear.
+
 ---
 
 ## 3. Tokens
@@ -497,7 +557,7 @@ inboxFilterBg:      'rgba(255,255,255,0.78)',
 inboxRowPressed:    'rgba(128,0,128,0.06)',
 inboxProductChipBg: 'rgba(235,72,127,0.09)',
 bubbleMineMeta:     'rgba(255,255,255,0.90)',  // time + ticks on a sent bubble
-chatFailedTick:     '#F87171',
+chatFailedTick:     '#FFFFFF',
 ```
 
 Message actions (§10), added in v3:
@@ -588,7 +648,7 @@ that one line before running it anywhere else.
 
 ---
 
-## 5. Allowed differences — these ten and no others
+## 5. Allowed differences — these eleven and no others
 
 1. **Bubble shadows are web-only.** Android elevation shadows render grey and cost frames
    inside list rows (`mobile/DESIGN.md` §6).
@@ -615,6 +675,10 @@ that one line before running it anywhere else.
    modal on web. The title, body, choices and their order are the same.
 10. **Android 13 and newer show their own copy confirmation** (§10.7), so the app shows no
    toast there. Android 11–12 and the website show the app's `Copied` toast.
+11. **When "Couldn't load this chat" shows** (§2 "Loading"). Mobile keeps the last copy of a
+   thread and shows the state only when it has none; the website holds no copy and shows it
+   whenever a load fails, with the thread's unsent messages under it. The state itself is
+   the same.
 
 Anything else that differs between the two platforms is a bug.
 

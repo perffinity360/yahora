@@ -26,6 +26,10 @@ import {
   Smile,
   Users,
   ChevronsDown,
+  AlertCircle,
+  Clock,
+  RotateCw,
+  WifiOff,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
@@ -78,8 +82,161 @@ const JUMP_SHOW_AFTER = 80;
    has been seen. */
 const READ_DEBOUNCE_MS = 300;
 /* How much of a message has to be inside the thread's viewport to count as
-   seen. Mobile's `itemVisiblePercentThreshold: 50`. */
+   seen: this share of the message, or of the viewport when the message is
+   taller than it. A 2000-character message in a short window can be taller
+   than twice the viewport, and then half of it is never on screen. Mobile's
+   SEEN_BY_ROW / SEEN_BY_THREAD. */
 const READ_VISIBLE_RATIO = 0.5;
+
+/* ✏️ The composer's limit (spec §2 Composer, "up to 2000 characters"). Same
+   value as mobile's MAX_MESSAGE_LENGTH; the server refuses anything longer with
+   400 INVALID_FORMAT (Phase 6B V-C). */
+const MAX_MESSAGE_LENGTH = 2000;
+
+/* ✉️ Optimistic send (spec §2 "Failed message"; mobile's useSendMessage). A
+   message shows the moment you send it, with a clock, and is retried by itself
+   (below). If the server refuses it, or every retry fails, the bubble stays,
+   dimmed, with "Failed to send" under it. Until the server replies, the
+   bubble's id is its `client_tag`. A try that gets no answer within
+   SEND_TIMEOUT_MS counts as failed. fetch has no timeout of its own, so without one a send
+   on a connection that went quiet would show its clock forever. Same value as
+   mobile. */
+const SEND_TIMEOUT_MS = 15000;
+
+/* Automatic retry (spec §2): a send that fails for a reason that can pass is
+   tried again after 2, 4, 8, 16 and 30 s, keeping its clock. Only then, or at
+   once if the server refuses the message itself, does it become "Failed to
+   send". Offline, it waits for the `online` event and uses up no tries. Same
+   numbers as mobile (useMessages.ts). */
+const SEND_MAX_RETRIES = 5;
+const sendRetryDelay = (attempt) => Math.min(2000 * 2 ** attempt, 30000);
+
+/* No answer (network, timeout), 401 (the token was being refreshed), 408, 429
+   and 5xx can pass. Any other 4xx is the server refusing THIS message, and
+   asking again gets the same answer. */
+const isRetryableSendError = (error) =>
+  !error.status ||
+  error.status === 401 ||
+  error.status === 408 ||
+  error.status === 429 ||
+  error.status >= 500;
+
+/* Sending again on its own (spec §2): how often to ask GET /health whether
+   the server is back, while something in the open chat waits on it. Same
+   value as mobile (SERVER_PROBE_MS, useMessages.ts). */
+const SERVER_PROBE_MS = 10000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const waitForOnline = () =>
+  new Promise((resolve) =>
+    window.addEventListener("online", resolve, { once: true }),
+  );
+
+const threadKey = (contactId, productId) => `${contactId}|${productId}`;
+
+const newClientTag = () =>
+  `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+/* The server's copy of a message taking over the one on screen. Mobile's
+   adoptServerRow (mobile/src/lib/messages.ts); keep the two identical.
+   A bubble sent from this page keeps its `client_tag`, which is its React key
+   (`messageKey`), so it is updated in place and never remounted, and keeps the
+   time it was typed. A send that waited for the network gets a server
+   `created_at` from when it came back; drawing that would move its clock and
+   regroup it with its neighbours just as it lands. So the only change on
+   screen is the clock (or ⓘ) turning into ticks. The other person, and this
+   page after a reload, see the server's time. */
+const adoptServerRow = (local, incoming) =>
+  local.client_tag
+    ? { ...incoming, client_tag: local.client_tag, created_at: local.created_at }
+    : incoming;
+
+/* A Realtime UPDATE row, with the columns it left out taken from the copy on
+   screen. Mobile's withLeftOutColumns (mobile/src/lib/messages.ts).
+   Postgres leaves an unchanged column out of an UPDATE's change record when
+   its value is stored out of line (TOAST, roughly 2 KB and up), and `messages`
+   has the default replica identity. A long message's `content` is such a
+   value, so its delivered and read ticks arrive with no text; swapping that row
+   in gave the bubble `content: undefined`, and jumboEmojiCount threw. */
+const withLeftOutColumns = (local, updated) => ({
+  ...local,
+  ...Object.fromEntries(Object.entries(updated).filter(([, v]) => v !== undefined)),
+});
+
+/* A bubble's React key: its `client_tag` if it was sent from here. */
+const messageKey = (msg) => msg.client_tag || msg.id;
+
+/* The newest server message in a list: the anchor a new bubble records as
+   `sent_after_id`. Mobile's newestServerId. */
+const newestServerId = (list) => {
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].id !== list[i].client_tag) return list[i].id;
+  }
+  return null;
+};
+
+/* The unsent bubbles (pending or failed) a fresh history page does NOT hold
+   yet. Mobile's unsentStillMissing (mobile/src/lib/messages.ts); keep the two
+   identical. A bubble counts as already on the server only when the page has a
+   message from the same sender with the same text AFTER its `sent_after_id`:
+   a send that reached the server while its answer was lost. Matching the text
+   anywhere made a failed "ok" vanish because some older "ok" was in the
+   thread. Each server row accounts for one bubble at most; an anchor missing
+   from the page (older than it) leaves the whole page eligible. */
+function unsentStillMissing(history, unsent) {
+  const claimed = new Set();
+  return unsent.filter((u) => {
+    const from = u.sent_after_id
+      ? history.findIndex((s) => s.id === u.sent_after_id)
+      : -1;
+    const at = history.findIndex(
+      (s, i) =>
+        i > from &&
+        !claimed.has(s.id) &&
+        s.sender_id === u.sender_id &&
+        s.content === u.content,
+    );
+    if (at === -1) return true;
+    claimed.add(history[at].id);
+    return false;
+  });
+}
+
+/* Fold a server message into the thread. Mobile's mergeMessage
+   (mobile/src/lib/messages.ts); keep the two identical.
+   1. Already there by id → refresh it in place. If this is the send's own
+      response (`clientTag`) and Realtime got there first, any leftover
+      placeholder for it is dropped.
+   2. Else the bubble waiting on this send: by `clientTag` when the caller
+      knows it (the send's own response), else a pending bubble from the same
+      sender, on the same listing, with the same text (a Realtime INSERT that
+      beat the response) → the real row takes over its slot (adoptServerRow).
+   3. Else it's new → append it. */
+function mergeServerMessage(list, incoming, clientTag) {
+  const byId = list.findIndex((m) => m.id === incoming.id);
+  if (byId > -1) {
+    const next = [...list];
+    next[byId] = adoptServerRow(list[byId], incoming);
+    return clientTag
+      ? next.filter((m) => m.id === incoming.id || m.client_tag !== clientTag)
+      : next;
+  }
+  const waiting = list.findIndex((m) =>
+    clientTag
+      ? m.client_tag === clientTag
+      : m.pending &&
+        m.sender_id === incoming.sender_id &&
+        m.product_id === incoming.product_id &&
+        m.content === incoming.content,
+  );
+  if (waiting > -1) {
+    const next = [...list];
+    next[waiting] = adoptServerRow(list[waiting], incoming);
+    return next;
+  }
+  return [...list, incoming];
+}
 
 /* 📄 Block N-C. Where one message is sitting inside the scroll container right
    now, as `{ id, top }` with top measured from the container's own top edge.
@@ -285,6 +442,10 @@ export default function Messages() {
   const [inbox, setInbox] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
+  /* The open thread's history didn't load (spec §2 "Loading"): the thread
+     shows "Couldn't load this chat" with Retry, above its unsent messages,
+     and reloads by itself once the server answers. */
+  const [historyError, setHistoryError] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [showInboxOnMobile, setShowInboxOnMobile] = useState(true);
@@ -344,9 +505,25 @@ export default function Messages() {
     // scrollHeight excludes the border; add it back (border-box sizing).
     el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
   }, [newMessage]);
+
+  /* Opening or switching a chat puts the cursor in its composer, so you can
+     type straight away. Mouse and trackpad only: on a touch screen focusing
+     raises the keyboard over the thread before it has been read. */
+  useEffect(() => {
+    if (!activeChat || !window.matchMedia("(pointer: fine)").matches) return;
+    chatInputRef.current?.focus({ preventScroll: true });
+  }, [activeChat?.contact_id, activeChat?.product_id]);
   const emojiPickerRef = useRef(null);
   const activeChatRef = useRef(activeChat);
   const currentUserIdRef = useRef(currentUserId);
+  /* Messages not yet confirmed (pending or failed), per thread, kept OUTSIDE
+     `messages`: opening another chat replaces `messages` with that chat's
+     history, and a failed bubble must still be there, with its pill, when you
+     come back. fetchHistory adds them back; see `deliver`. Mobile keeps them in
+     its query cache instead. */
+  const unsentRef = useRef(new Map());
+  /* threadKey → the promise of that conversation's last queued send. */
+  const sendQueueRef = useRef(new Map());
   const unreadDividerRef = useRef(null);
 
   /* True between "a thread was picked" and "that thread's messages painted".
@@ -358,7 +535,7 @@ export default function Messages() {
      new message; a receipt rewrites the same rows in place. */
   const previousCountRef = useRef(0);
 
-  /* Ids the thread already had when it opened. Everything in here is history
+  /* Keys (`messageKey`) the thread already had when it opened. Everything in here is history
      and must render settled; only messages that arrive AFTER open animate in.
      Without this, opening a thread flew every message in at once — which is
      both noisy and self-defeating, since the point of anchoring on the unread
@@ -527,7 +704,7 @@ export default function Messages() {
       if (!el) continue;
       const r = el.getBoundingClientRect();
       const shown = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top);
-      if (r.height > 0 && shown / r.height >= READ_VISIBLE_RATIO) {
+      if (r.height > 0 && shown / Math.min(r.height, box.height) >= READ_VISIBLE_RATIO) {
         bound = i;
         break;
       }
@@ -1174,6 +1351,7 @@ export default function Messages() {
     pendingInitialScrollRef.current = true;
     pendingReturnAnchorRef.current = false;
     setUnreadMarker(null);
+    setHistoryError(false);
     // Belongs to the thread being left, not to this one.
     awayUnreadRef.current = null;
     // So does a pending read, and the position already sent.
@@ -1241,8 +1419,13 @@ export default function Messages() {
 
       const data = await res.json();
       const history = data.items || [];
-      openingIdsRef.current = new Set(history.map((m) => m.id));
-      setMessages(history);
+      // Bring back this thread's unsent messages (pending or failed), at the
+      // bottom where they were typed, unless the server already has one
+      // (unsentStillMissing). Same rule as mobile's useChatHistory.
+      const unsent = unsentStillMissing(history, unsentFor(chat));
+      const thread = unsent.length ? [...history, ...unsent] : history;
+      openingIdsRef.current = new Set(thread.map(messageKey));
+      setMessages(thread);
 
       // 📄 Page one of the history. `next_cursor` points at the messages
       // BEFORE this page — scrolling up is what asks for them — and a null
@@ -1286,10 +1469,15 @@ export default function Messages() {
       // Clear on failure. Leaving the previous chat's messages on screen under
       // the newly selected contact's header would render one student's
       // conversation as if it belonged to another — worse than showing nothing.
-      setMessages([]);
+      // This thread's own unsent messages stay: they are this conversation's,
+      // and only this page has them. Clearing them made a message that failed
+      // while the server was down vanish when the chat was reopened.
+      const unsent = unsentFor(chat);
+      setMessages(unsent);
+      setHistoryError(true);
       setUnreadMarker(null);
       awayUnreadRef.current = null;
-      openingIdsRef.current = new Set();
+      openingIdsRef.current = new Set(unsent.map(messageKey));
       // No first page means no cursor to continue from; leaving `hasOlder` set
       // would point the observer at a thread that was never loaded.
       setOlderCursor(null);
@@ -1345,11 +1533,21 @@ export default function Messages() {
               newMsg.product_id === chat.product_id &&
               (newMsg.sender_id === chat.contact_id || newMsg.receiver_id === chat.contact_id)
             ) {
-              // Prevent duplicate messages
-              setMessages((prev) => {
-                if (prev.some((m) => m.id === newMsg.id)) return prev;
-                return [...prev, newMsg];
-              });
+              // Never twice: refreshes a row already there, or replaces the
+              // pending bubble of my own send when this beats its response.
+              // That bubble keeps its key (adoptServerRow), so it doesn't
+              // remount or slide in again. Also take it out of the unsent
+              // store, which tells a retry loop waiting on it that the message
+              // got through.
+              const claimed = messagesRef.current.find(
+                (m) =>
+                  m.pending &&
+                  m.sender_id === newMsg.sender_id &&
+                  m.product_id === newMsg.product_id &&
+                  m.content === newMsg.content,
+              );
+              if (claimed) dropUnsent(claimed);
+              setMessages((prev) => mergeServerMessage(prev, newMsg));
               
               if (newMsg.receiver_id === myId) {
                 // They are on the thread with their eyes on it: no divider, and
@@ -1418,7 +1616,11 @@ export default function Messages() {
         { event: "UPDATE", schema: "public", table: "messages" },
         (payload) => {
           setMessages((prev) =>
-            prev.map((msg) => (msg.id === payload.new.id ? payload.new : msg))
+            prev.map((msg) =>
+              msg.id === payload.new.id
+                ? adoptServerRow(msg, withLeftOutColumns(msg, payload.new))
+                : msg,
+            )
           );
         }
       )
@@ -1437,7 +1639,19 @@ export default function Messages() {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
-    const tempMessage = newMessage;
+    const clientTag = newClientTag();
+    const draft = {
+      id: clientTag,
+      client_tag: clientTag,
+      sender_id: currentUserId,
+      receiver_id: activeChat.contact_id,
+      product_id: activeChat.product_id,
+      content: newMessage,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      is_delivered: false,
+      sent_after_id: newestServerId(messagesRef.current),
+    };
     setNewMessage("");
     setShowEmojiPicker(false);
 
@@ -1446,37 +1660,227 @@ export default function Messages() {
       setTimeout(() => setIsTyping(false), 5000);
     }
 
+    deliver(draft);
+  };
+
+  /* Tapping "Failed to send": the same message, the same bubble, back through
+     the automatic retries. */
+  const handleRetry = (msg) => {
+    if (msg.pending) return;
+    deliver(msg);
+  };
+
+  /* `unsentRef` (declared with the other refs) is threadKey → (client_tag →
+     message). */
+  const keepUnsent = (msg) => {
+    const key = threadKey(msg.receiver_id, msg.product_id);
+    const thread = new Map(unsentRef.current.get(key));
+    thread.set(msg.client_tag, msg);
+    unsentRef.current.set(key, thread);
+  };
+
+  /* This thread's unsent messages, in the order they were typed. */
+  const unsentFor = (chat) => [
+    ...(unsentRef.current.get(threadKey(chat.contact_id, chat.product_id))?.values() ?? []),
+  ];
+
+  const dropUnsent = (msg) => {
+    const key = threadKey(msg.receiver_id, msg.product_id);
+    const thread = unsentRef.current.get(key);
+    if (!thread) return;
+    thread.delete(msg.client_tag);
+    if (thread.size === 0) unsentRef.current.delete(key);
+  };
+
+  /* Is this message's conversation the one on screen right now? The answer
+     can change while a send is in flight. */
+  const isOpenThread = (msg) => {
+    const chat = activeChatRef.current;
+    return (
+      !!chat &&
+      chat.contact_id === msg.receiver_id &&
+      chat.product_id === msg.product_id
+    );
+  };
+
+  /* Show the message at once (clock), then queue it behind any earlier send
+     in the same conversation, so messages arrive in the order typed and a
+     retrying one can't be overtaken. Mobile does this with a mutation `scope`. */
+  const deliver = (draft) => {
+    const sending = { ...draft, pending: true, failed: false };
+    keepUnsent(sending);
+    if (isOpenThread(sending)) {
+      setMessages((prev) => {
+        const at = prev.findIndex((m) => m.client_tag === sending.client_tag);
+        if (at === -1) return [...prev, sending];
+        const next = [...prev];
+        next[at] = sending;
+        return next;
+      });
+    }
+
+    const key = threadKey(sending.receiver_id, sending.product_id);
+    const run = () => sendWithRetries(sending);
+    const queued = (sendQueueRef.current.get(key) ?? Promise.resolve()).then(run, run);
+    sendQueueRef.current.set(key, queued);
+    queued.finally(() => {
+      if (sendQueueRef.current.get(key) === queued) sendQueueRef.current.delete(key);
+    });
+  };
+
+  /* One POST, with the timeout. Resolves { message } or throws an Error
+     carrying `status` (absent when there was no answer at all). */
+  const postMessage = async (msg) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
     try {
       const res = await fetch(`${API_BASE_URL}/messages/send`, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           ...(authHeaderToken() ? { Authorization: `Bearer ${authHeaderToken()}` } : {}),
         },
         body: JSON.stringify({
           sender_id: currentUserId,
-          receiver_id: activeChat.contact_id,
-          product_id: activeChat.product_id,
-          content: tempMessage,
+          receiver_id: msg.receiver_id,
+          product_id: msg.product_id,
+          content: msg.content,
         }),
       });
-
-      const data = await res.json();
-
-      if (res.ok && data.message) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === data.message.id)) return prev;
-          return [...prev, data.message];
+      const data = await res.json().catch(() => null);
+      // Branch on the code, never the sentence.
+      if (!res.ok || !data?.message) {
+        throw Object.assign(new Error(`${res.status} ${data?.error ?? "no body"}`), {
+          status: res.status,
         });
       }
+      return data.message;
     } catch (error) {
-      console.error("Failed to send message:", error);
+      if (error.name === "AbortError") {
+        throw new Error(`timed out after ${SEND_TIMEOUT_MS / 1000}s`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
   };
 
+  /* The automatic retry (spec §2). The bubble keeps its clock throughout. */
+  const sendWithRetries = async (sending) => {
+    const tag = sending.client_tag;
+    const key = threadKey(sending.receiver_id, sending.product_id);
+    for (let failures = 0; ; ) {
+      // Realtime already brought the real row in: an earlier try reached the
+      // server and only its answer got lost. Sending again would post it twice.
+      if (!unsentRef.current.get(key)?.has(tag)) return;
+
+      // Offline: wait for the browser to come back. Costs no try.
+      if (!navigator.onLine) {
+        await waitForOnline();
+        continue;
+      }
+
+      try {
+        const message = await postMessage(sending);
+        dropUnsent(sending);
+        if (isOpenThread(sending)) {
+          // Into the bubble's own slot, keeping its key: only the ticks change.
+          setMessages((prev) => mergeServerMessage(prev, message, tag));
+        }
+        return;
+      } catch (error) {
+        failures += 1;
+        if (failures <= SEND_MAX_RETRIES && isRetryableSendError(error)) {
+          const wait = sendRetryDelay(failures - 1);
+          console.info(
+            `[send] try ${failures} failed (${error.message}); retrying in ${wait / 1000}s`,
+          );
+          await sleep(wait);
+          continue;
+        }
+        console.error(`[send] gave up (${tag}): ${error.message}`);
+        // Still waiting? (Realtime may have claimed it during the last try.)
+        if (!unsentRef.current.get(key)?.has(tag)) return;
+        // `auto_retry`: it failed because the server couldn't be reached, so
+        // it goes again by itself once the server answers (below). A refusal
+        // never does; only the pill sends it again.
+        const failed = {
+          ...sending,
+          pending: false,
+          failed: true,
+          auto_retry: isRetryableSendError(error),
+        };
+        keepUnsent(failed);
+        setMessages((prev) =>
+          prev.map((m) => (m.client_tag === tag ? failed : m)),
+        );
+        return;
+      }
+    }
+  };
+
+  /* Sending again on its own (spec §2). While the open thread has a message
+     that failed because the server couldn't be reached, or its history didn't
+     load, ask GET /health at once and every SERVER_PROBE_MS, and again the
+     moment the browser is back online or the tab is shown. The first answer
+     reloads the history if it had failed, then sends those messages again, in
+     order, through the normal retries. One probe at a time, each given up
+     after SERVER_PROBE_MS. Only for the open thread: another thread's failed
+     messages wait until it is opened. */
+  const waitingOnServer =
+    !!activeChat &&
+    (historyError || messages.some((m) => m.failed && m.auto_retry));
+  const onServerBackRef = useRef(null);
+  onServerBackRef.current = async () => {
+    const chat = activeChatRef.current;
+    if (!chat) return;
+    if (historyError) await handleSelectChat(chat, true);
+    // They may have opened another chat while the history loaded.
+    if (activeChatRef.current !== chat) return;
+    unsentFor(chat)
+      .filter((m) => m.failed && m.auto_retry)
+      .forEach(deliver);
+  };
+
+  useEffect(() => {
+    if (!waitingOnServer) return;
+    let stopped = false;
+    let busy = false;
+    const probe = async () => {
+      if (busy || document.visibilityState === "hidden" || !navigator.onLine) return;
+      busy = true;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), SERVER_PROBE_MS);
+      try {
+        const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
+        if (res.ok && !stopped) await onServerBackRef.current();
+      } catch {
+        // Not back yet: the next tick asks again.
+      } finally {
+        clearTimeout(timer);
+        busy = false;
+      }
+    };
+    probe();
+    const interval = setInterval(probe, SERVER_PROBE_MS);
+    window.addEventListener("online", probe);
+    document.addEventListener("visibilitychange", probe);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+      window.removeEventListener("online", probe);
+      document.removeEventListener("visibilitychange", probe);
+    };
+  }, [waitingOnServer]);
+
   /* ── Emoji insert ── */
   const handleEmojiClick = (emoji) => {
-    setNewMessage((prev) => prev + emoji);
+    // maxLength only stops typing and pasting; text set from code skips it.
+    // Refuse the whole emoji rather than cut it in half.
+    setNewMessage((prev) =>
+      prev.length + emoji.length > MAX_MESSAGE_LENGTH ? prev : prev + emoji,
+    );
     chatInputRef.current?.focus();
   };
 
@@ -1793,7 +2197,9 @@ export default function Messages() {
                     conversation" sitting above a thread with 200 older
                     messages under it is simply untrue. Once `next_cursor` is
                     null this IS the beginning, and it reappears. */}
-                {!hasOlder && (
+                {/* Not while the history failed: it isn't known to be the
+                    beginning. */}
+                {!hasOlder && !historyError && (
                   <div className={styles.chatWelcomeBanner}>
                     <div className={styles.chatWelcomeIcon}>
                       <Users size={18} />
@@ -1811,7 +2217,32 @@ export default function Messages() {
                   </div>
                 )}
 
-                {messages.length === 0 ? (
+                {/* Spec §2 "Loading": the history didn't load. Mobile's
+                    ChatState. Any unsent messages of this thread show below
+                    it. Retry reloads by hand; it also reloads by itself once
+                    the server answers (waitingOnServer). */}
+                {historyError && (
+                  <div className={styles.historyError} role="alert">
+                    <span className={styles.historyErrorIcon} aria-hidden="true">
+                      <WifiOff size={26} />
+                    </span>
+                    <p className={styles.historyErrorTitle}>
+                      Couldn&apos;t load this chat
+                    </p>
+                    <p className={styles.historyErrorText}>
+                      Check your connection and try again.
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.historyErrorBtn}
+                      onClick={() => activeChat && handleSelectChat(activeChat, true)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {messages.length === 0 && !historyError ? (
                   <div className={styles.emptyChat}>
                     {/* Still frame under reduced motion: a browser cannot pause
                         an animated WebP inside an <img>. */}
@@ -1883,14 +2314,30 @@ export default function Messages() {
                           !isGroupedWith(msg, nextMsg) ||
                           nextMsg.id === unreadMarker?.id;
 
-                        // Spec §2 "Ticks": sent ✓ 14, delivered ✓✓ 15, read
-                        // ✓✓ 15 in --chat-read-tick. The web sends without an
-                        // optimistic copy, so it has no pending or failed state.
+                        // Spec §2 "Ticks": failed ⓘ 12 in --chat-failed-tick,
+                        // sending 🕒 11, sent ✓ 14, delivered ✓✓ 15, read ✓✓
+                        // 15 in --chat-read-tick.
                         let tickIcon = (
                           <Check size={14} className={styles.tickSent} />
                         );
 
-                        if (msg.is_read) {
+                        if (msg.failed) {
+                          tickIcon = (
+                            <AlertCircle
+                              size={12}
+                              className={styles.tickFailed}
+                              aria-label="Not sent"
+                            />
+                          );
+                        } else if (msg.pending) {
+                          tickIcon = (
+                            <Clock
+                              size={11}
+                              className={styles.tickSent}
+                              aria-label="Sending"
+                            />
+                          );
+                        } else if (msg.is_read) {
                           tickIcon = (
                             <CheckCheck size={15} className={styles.tickRead} />
                           );
@@ -1907,7 +2354,7 @@ export default function Messages() {
                         }
 
                         return (
-                          <React.Fragment key={msg.id || index}>
+                          <React.Fragment key={messageKey(msg) || index}>
                             {/* WhatsApp-style unread line. `unreadMarker` is
                                 pinned when the thread opens, so this stays put
                                 as the messages under it get marked read. */}
@@ -1928,7 +2375,7 @@ export default function Messages() {
                               className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs} ${
                                 isRunStart ? styles.runStart : ""
                               } ${isRunEnd ? styles.runEnd : ""} ${
-                                openingIdsRef.current.has(msg.id)
+                                openingIdsRef.current.has(messageKey(msg))
                                   ? ""
                                   : styles.messageEnter
                               }`}
@@ -1947,7 +2394,9 @@ export default function Messages() {
                                   <span className={styles.avatarSpacer} />
                                 ))}
                               <div
-                                className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs}`}
+                                className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs} ${
+                                  msg.failed ? styles.bubbleFailed : ""
+                                }`}
                               >
                                 <MessageText content={msg.content} />
                                 <div className={styles.messageMeta}>
@@ -1962,6 +2411,21 @@ export default function Messages() {
                                 </div>
                               </div>
                             </div>
+                            {/* Spec §2 "Failed message": under the bubble,
+                                right-aligned. Shown only once the automatic
+                                retries have given up; tapping starts them
+                                again for the same message. */}
+                            {msg.failed && (
+                              <button
+                                type="button"
+                                className={styles.retryPill}
+                                onClick={() => handleRetry(msg)}
+                                aria-label="Message not sent. Tap to try again"
+                              >
+                                <RotateCw size={11} aria-hidden="true" />
+                                Failed to send
+                              </button>
+                            )}
                           </React.Fragment>
                         );
                       })}
@@ -2081,6 +2545,7 @@ export default function Messages() {
                     rows={1}
                     autoComplete="off"
                     placeholder="Message"
+                    maxLength={MAX_MESSAGE_LENGTH}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {

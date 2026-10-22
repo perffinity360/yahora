@@ -60,12 +60,37 @@ export function flattenThread(data: ChatCache | undefined): PendingMessage[] {
 }
 
 /**
+ * The server's copy of a message taking over the cached one.
+ *
+ * A bubble I sent from this phone keeps two things from its optimistic copy:
+ * - its `client_tag`, which is the row's list key (`chatRowKey`). The row is
+ *   updated where it is, never unmounted and rebuilt.
+ * - the time it was typed. A send that waited for the network gets a server
+ *   `created_at` from when the network came back, and drawing that would move
+ *   its clock and regroup it with its neighbours (margins, tails) at the very
+ *   moment it lands.
+ * So the only change on screen is the clock (or ⓘ) turning into ticks. The
+ * other person, and this phone after a cold reload, see the server's time.
+ */
+export function adoptServerRow(local: PendingMessage, incoming: Message): PendingMessage {
+  if (!local.client_tag) return { ...incoming };
+  return { ...incoming, client_tag: local.client_tag, created_at: local.created_at };
+}
+
+/** A message's list key: its `client_tag` if it was sent from here, so it stays put. */
+export function chatRowKey(message: PendingMessage): string {
+  return message.client_tag ?? message.id;
+}
+
+/**
  * Fold a server message into a cached thread.
  *
  * 1. Already present by `id` → refresh it in place (never append a second copy).
+ *    If this is the send's own response (`clientTag`) and Realtime got there
+ *    first, any leftover placeholder for it is dropped.
  * 2. Otherwise, if an optimistic message is waiting on this exact send — matched
  *    by `client_tag` when we know it, else by same sender + product + identical
- *    content — swap the real one in and drop the placeholder.
+ *    content — the real one takes over its slot (`adoptServerRow`).
  * 3. Otherwise it is genuinely new: append it, at the bottom of the thread.
  */
 export function mergeMessage(
@@ -78,8 +103,10 @@ export function mergeMessage(
   const byId = current.findIndex((m) => m.id === incoming.id);
   if (byId > -1) {
     const next = [...current];
-    next[byId] = { ...incoming };
-    return next;
+    next[byId] = adoptServerRow(current[byId], incoming);
+    return clientTag
+      ? next.filter((m) => m.id === incoming.id || m.client_tag !== clientTag)
+      : next;
   }
 
   const pendingIdx = current.findIndex((m) =>
@@ -92,16 +119,68 @@ export function mergeMessage(
   );
   if (pendingIdx > -1) {
     const next = [...current];
-    next[pendingIdx] = { ...incoming };
+    next[pendingIdx] = adoptServerRow(current[pendingIdx], incoming);
     return next;
   }
 
   return [...current, { ...incoming }];
 }
 
+/** The newest server message in a list: the anchor a new bubble records. */
+export function newestServerId(list: PendingMessage[]): string | null {
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].id !== list[i].client_tag) return list[i].id;
+  }
+  return null;
+}
+
+/**
+ * The unsent bubbles (pending or failed) a fresh history page does NOT hold yet.
+ *
+ * A bubble counts as already on the server only when the page has a message
+ * from the same sender with the same text AFTER the bubble's `sent_after_id`.
+ * That is the case this exists for: a send that reached the server while its
+ * answer was lost. Matching the text anywhere in the page made a failed "ok"
+ * vanish because some older "ok" was in the thread. Each server row accounts
+ * for one bubble at most. An anchor missing from the page (older than it)
+ * leaves the whole page eligible.
+ */
+export function unsentStillMissing(
+  history: Message[],
+  unsent: PendingMessage[],
+): PendingMessage[] {
+  const claimed = new Set<string>();
+  return unsent.filter((u) => {
+    const from = u.sent_after_id ? history.findIndex((s) => s.id === u.sent_after_id) : -1;
+    const at = history.findIndex(
+      (s, i) =>
+        i > from && !claimed.has(s.id) && s.sender_id === u.sender_id && s.content === u.content,
+    );
+    if (at === -1) return true;
+    claimed.add(history[at].id);
+    return false;
+  });
+}
+
+/**
+ * A Realtime UPDATE row, with the columns it left out taken from the cached copy.
+ *
+ * Postgres leaves an unchanged column out of an UPDATE's change record when its
+ * value is stored out of line (TOAST, roughly 2 KB and up), and `messages` has
+ * the default replica identity. A long message's `content` is such a value, so
+ * its delivered and read ticks arrive with no text. Swapping that row in drew a
+ * bubble with `content: undefined` and crashed the chat (jumboEmojiCount).
+ */
+export function withLeftOutColumns(cached: PendingMessage, updated: Message): PendingMessage {
+  const sent = Object.fromEntries(Object.entries(updated).filter(([, v]) => v !== undefined));
+  return { ...cached, ...sent };
+}
+
 /** Replace a message after an UPDATE (the read/delivered ticks). */
 export function replaceMessage(list: PendingMessage[], updated: Message): PendingMessage[] {
-  return list.map((m) => (m.id === updated.id ? { ...updated } : m));
+  return list.map((m) =>
+    m.id === updated.id ? adoptServerRow(m, withLeftOutColumns(m, updated)) : m,
+  );
 }
 
 /** Who the other party is, from my point of view. */

@@ -77,7 +77,7 @@ export const colors = {
   inboxRowPressed: 'rgba(128,0,128,0.06)',
   inboxProductChipBg: 'rgba(235,72,127,0.09)',
   bubbleMineMeta: 'rgba(255,255,255,0.90)', // time + ticks on a sent bubble
-  chatFailedTick: '#F87171',
+  chatFailedTick: '#FFFFFF', // owner's call 2026-10-16: white, like the other ticks (was #F87171)
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',

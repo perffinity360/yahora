@@ -41,9 +41,11 @@ import {
   useInbox,
   useMarkRead,
   useSendMessage,
+  useServerBack,
 } from '../../src/hooks/useMessages';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import {
+  chatRowKey,
   flattenThread,
   formatClockTime,
   formatDayLabel,
@@ -88,9 +90,13 @@ const JUMP_SHOW_AFTER = 80;
  *  the top of the chat — the web's UNREAD_ANCHOR_LEAD_RATIO (0.35). Inverted
  *  list, so viewPosition 1 is the TOP of the screen. */
 const UNREAD_VIEW_POSITION = 1 - 0.35;
-/** A row has been seen once half of it is on screen. Module-level: FlatList
- *  throws if its viewability config changes identity. */
-const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 };
+/** A row has been seen once half of it is on screen, or once it fills half the
+ *  thread. The second is for a row taller than twice the thread (a long
+ *  message on a phone), which can never be half on screen. A row has to pass
+ *  only one of the two configs. Module-level: FlatList throws if a viewability
+ *  config changes identity. Web: READ_VISIBLE_RATIO. */
+const SEEN_BY_ROW = { itemVisiblePercentThreshold: 50 };
+const SEEN_BY_THREAD = { viewAreaCoveragePercentThreshold: 50 };
 /** Newly seen unread rows are gathered until the list settles this long, then
  *  marked read in one call. */
 const READ_DEBOUNCE_MS = 300;
@@ -315,6 +321,22 @@ export default function ChatScreen() {
   retryRef.current = handleRetry;
   const onRetry = useCallback((message: PendingMessage) => retryRef.current(message), []);
 
+  /* SENDING AGAIN ON ITS OWN (spec §2). A message that failed because the
+     server couldn't be reached goes again by itself once the server answers,
+     and a history load that failed is reloaded first. A message the server
+     refused (auto_retry false) never goes by itself, only by a tap. Only while
+     this chat is on screen and live: leave it, and its failed messages wait
+     for you to come back. */
+  const waitingOnServer = isError || thread.some((m) => m.failed && m.auto_retry);
+  useServerBack(waitingOnServer && focused && reachable, async () => {
+    let list = thread;
+    if (isError) {
+      const result = await refetch();
+      if (result.data) list = flattenThread(result.data);
+    }
+    list.filter((m) => m.failed && m.auto_retry).forEach((m) => retryRef.current(m));
+  });
+
   const goBack = () => {
     if (fromParam) router.replace(fromParam);
     else if (router.canGoBack()) router.back();
@@ -366,6 +388,8 @@ export default function ChatScreen() {
   /* READ ON SIGHT bookkeeping (used further down): the message rows on screen
      right now, the ones already sent to the server, and the pending batch. */
   const visibleIdsRef = useRef<Set<string>>(new Set());
+  // What each viewability config last reported; visibleIdsRef is their union.
+  const visibleByConfigRef = useRef<Set<string>[]>([new Set(), new Set()]);
   const reportedIdsRef = useRef<Set<string>>(new Set());
   const pendingIdsRef = useRef<Set<string>>(new Set());
   const readTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -377,6 +401,7 @@ export default function ChatScreen() {
     setUnreadMarker(undefined);
     setLineToShow(null);
     visibleIdsRef.current = new Set();
+    visibleByConfigRef.current = [new Set(), new Set()];
     reportedIdsRef.current = new Set();
     pendingIdsRef.current = new Set();
   }, [contactId, productId]);
@@ -495,8 +520,8 @@ export default function ChatScreen() {
   };
 
   /* ── READ ON SIGHT (§1.10) ─────────────────────────────────────────────
-     A message is read once at least half of its row has been on screen
-     (onViewableItemsChanged + VIEWABILITY_CONFIG) — not when the chat opens.
+     A message is read once half of its row, or half the thread, has been on screen
+     (viewabilityPairs: SEEN_BY_ROW, SEEN_BY_THREAD) — not when the chat opens.
      Newly seen unread ids are gathered and, once the list has been still for
      READ_DEBOUNCE_MS, sent as ONE PUT /messages/read through useMarkRead.
 
@@ -585,17 +610,22 @@ export default function ChatScreen() {
     }, READ_DEBOUNCE_MS);
   };
 
-  // FlatList throws if this changes identity, so it is created once and reads
-  // everything live through refs.
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken<ChatRow>[] }) => {
-      const ids = new Set<string>();
-      for (const token of viewableItems) {
-        if (token.isViewable && token.item?.kind === 'msg') ids.add(token.item.message.id);
-      }
-      visibleIdsRef.current = ids;
-      markSeenRef.current();
-    },
+  // FlatList throws if these change identity, so they are created once and
+  // read everything live through refs. Each config reports its own rows; a row
+  // either one reports is on screen.
+  const viewabilityPairs = useRef(
+    [SEEN_BY_ROW, SEEN_BY_THREAD].map((viewabilityConfig, config) => ({
+      viewabilityConfig,
+      onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken<ChatRow>[] }) => {
+        const ids = new Set<string>();
+        for (const token of viewableItems) {
+          if (token.isViewable && token.item?.kind === 'msg') ids.add(token.item.message.id);
+        }
+        visibleByConfigRef.current[config] = ids;
+        visibleIdsRef.current = new Set(visibleByConfigRef.current.flatMap((set) => [...set]));
+        markSeenRef.current();
+      },
+    })),
   ).current;
 
   // Rows already on screen when reading becomes allowed (line pinned, back
@@ -671,7 +701,7 @@ export default function ChatScreen() {
       const next = thread[i + 1];
       if (!previous || !isSameDay(previous.created_at, message.created_at)) {
         const day = formatDayLabel(message.created_at);
-        out.push({ kind: 'day', key: `day-${day}-${message.id}`, label: day });
+        out.push({ kind: 'day', key: `day-${day}-${chatRowKey(message)}`, label: day });
       }
       // Above the first message they had not read, below everything they had.
       if (marker && message.id === marker.firstId) {
@@ -679,7 +709,9 @@ export default function ChatScreen() {
       }
       out.push({
         kind: 'msg',
-        key: message.id,
+        // Not `message.id`: a bubble sent from here changes id when the server
+        // row arrives, and a new key would rebuild it on screen (chatRowKey).
+        key: chatRowKey(message),
         message,
         mine: message.sender_id === myId,
         firstOfRun: !previous || !isGroupedWith(previous, message),
@@ -919,8 +951,7 @@ export default function ChatScreen() {
                   );
                 }}
                 // READ ON SIGHT — both must keep their identity for the list's life.
-                viewabilityConfig={VIEWABILITY_CONFIG}
-                onViewableItemsChanged={onViewableItemsChanged}
+                viewabilityConfigCallbackPairs={viewabilityPairs}
                 // A message arriving while scrolled up joins index 0 — the newest
                 // end — and would push the reader's rows along by its height.
                 // Hold them still, unless they were at the newest message.
@@ -1025,7 +1056,13 @@ export default function ChatScreen() {
                 {EMOJI_TABS[emojiTab].emojis.map((emoji) => (
                   <Pressable
                     key={emoji}
-                    onPress={() => setDraft((prev) => prev + emoji)}
+                    // maxLength only limits typing; text set from code skips
+                    // it. Refuse the whole emoji rather than split it.
+                    onPress={() =>
+                      setDraft((prev) =>
+                        prev.length + emoji.length > MAX_MESSAGE_LENGTH ? prev : prev + emoji,
+                      )
+                    }
                     accessibilityRole="button"
                     accessibilityLabel={`Insert ${emoji}`}
                     style={({ pressed }) => [styles.emojiBtn, pressed && styles.emojiBtnPressed]}
@@ -1205,11 +1242,13 @@ const MessageBubble = memo(function MessageBubble({
           onPress={() => onRetry(message)}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel="Retry sending this message"
+          accessibilityLabel="Message not sent. Tap to try again"
           style={({ pressed }) => [styles.retryRow, pressed && styles.retryRowPressed]}
         >
           <Feather name="rotate-cw" size={11} color={colors.errorText} />
-          <AppText style={styles.retryText}>Failed — tap to retry</AppText>
+          {/* Shown only after the automatic retries gave up (useSendMessage).
+              Tapping starts them again. */}
+          <AppText style={styles.retryText}>Failed to send</AppText>
         </Pressable>
       ) : null}
     </View>
