@@ -30,10 +30,28 @@ import {
   Clock,
   RotateCw,
   WifiOff,
+  Ban,
+  ChevronDown,
+  CornerUpLeft,
+  Copy,
+  Trash2,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
 import { welcomeStickerFor } from "../../utils/stickers";
+import {
+  canDeleteForEveryone,
+  firstName,
+  isDeleted,
+  isReply,
+  JUMP_HIGHLIGHT_FADE_MS,
+  JUMP_HIGHLIGHT_HOLD_MS,
+  JUMP_MAX_EXTRA_PAGES,
+  REPLY_MIN_BUBBLE_WIDTH,
+} from "../../utils/messageActions";
+import { copyText } from "../../utils/share";
+import AppToast, { useToast } from "../../components/AppToast/AppToast";
+import MessageMenu from "../../components/MessageMenu/MessageMenu";
 import {
   formatClockTime,
   formatDayLabel,
@@ -352,6 +370,35 @@ const EMOJI_ROWS = [
    text at EMOJI_SIZES.inline; a message of only one to three emoji drawn whole
    at the jumbo size. Memoised — the thread re-renders on every keystroke in
    the composer, and splitting text is not free. */
+/* The quote at the top of a reply's bubble (spec §10.5). `reply_preview` null
+   means the original was deleted for everyone: italic, and not a link. */
+function ReplyQuote({ msg, isMine, name, onJump }) {
+  const gone = msg.reply_preview == null;
+  const className = `${styles.quote} ${isMine ? styles.quoteMine : styles.quoteTheirs}`;
+  const body = (
+    <>
+      <span className={styles.quoteName}>{name}</span>
+      <span className={`${styles.quoteText} ${gone ? styles.quoteGone : ""}`}>
+        {gone ? "Original message was deleted" : msg.reply_preview}
+      </span>
+    </>
+  );
+  if (gone || !msg.reply_to_id) return <div className={className}>{body}</div>;
+  return (
+    <button
+      type="button"
+      className={`${className} ${styles.quoteLink}`}
+      onClick={(e) => {
+        e.stopPropagation(); // not the touch tap that shows the actions button
+        onJump(msg.reply_to_id);
+      }}
+      aria-label={`Go to the message from ${name}`}
+    >
+      {body}
+    </button>
+  );
+}
+
 const MessageText = memo(function MessageText({ content }) {
   const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
   const runs = useMemo(() => (jumbo ? null : splitEmoji(content)), [content, jumbo]);
@@ -513,6 +560,69 @@ export default function Messages() {
     if (!activeChat || !window.matchMedia("(pointer: fine)").matches) return;
     chatInputRef.current?.focus({ preventScroll: true });
   }, [activeChat?.contact_id, activeChat?.product_id]);
+
+  /* ── Message actions (spec §10.1, §10.2) ──
+     `actionsMenu`: the message whose menu is open, and the round button it
+     hangs from. `tappedRowKey`: on a touch screen, the one row whose button a
+     tap on its bubble has shown. `deleteTarget`: the message in the delete
+     confirmation (§10.8). */
+  const [actionsMenu, setActionsMenu] = useState(null);
+  const [tappedRowKey, setTappedRowKey] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  /* §10.4: the message being replied to, shown in the reply bar. */
+  const [replyTo, setReplyTo] = useState(null);
+  /* §10.6: the row flashing after a jump to the original. `n` restarts the
+     flash when the same message is jumped to again. */
+  const [jumpHighlight, setJumpHighlight] = useState(null);
+  const actionsBtnRefs = useRef(new Map()); // messageKey → its actions button
+  const menuAnchorRef = useRef(null);
+  const lastPointerTypeRef = useRef("mouse");
+  const { toast, showToast } = useToast();
+
+  const closeActionsMenu = useCallback((returnFocus) => {
+    const anchor = menuAnchorRef.current;
+    setActionsMenu(null);
+    if (returnFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
+  }, []);
+
+  // None of it carries over into another conversation.
+  useEffect(() => {
+    setActionsMenu(null);
+    setTappedRowKey(null);
+    setDeleteTarget(null);
+    setReplyTo(null);
+    setJumpHighlight(null);
+  }, [activeChat?.contact_id, activeChat?.product_id]);
+
+  // The message in the reply bar was deleted for everyone (Realtime, or here)
+  // or hidden for me: there is nothing left to reply to, so close the bar.
+  useEffect(() => {
+    if (!replyTo) return;
+    const live = messages.find((m) => m.id === replyTo.id);
+    if (!live || isDeleted(live)) setReplyTo(null);
+  }, [messages, replyTo]);
+
+  // The flash ends after its hold and fade (the CSS fades it out).
+  useEffect(() => {
+    if (!jumpHighlight) return;
+    const t = setTimeout(
+      () => setJumpHighlight(null),
+      JUMP_HIGHLIGHT_HOLD_MS + JUMP_HIGHLIGHT_FADE_MS,
+    );
+    return () => clearTimeout(t);
+  }, [jumpHighlight]);
+
+  // A tap anywhere outside the tapped row hides its button again.
+  useEffect(() => {
+    if (!tappedRowKey) return;
+    const onPointerDown = (e) => {
+      const row = e.target.closest?.("[data-actions-row]");
+      if (row?.dataset.actionsRow !== tappedRowKey) setTappedRowKey(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [tappedRowKey]);
+
   const emojiPickerRef = useRef(null);
   const activeChatRef = useRef(activeChat);
   const currentUserIdRef = useRef(currentUserId);
@@ -767,9 +877,16 @@ export default function Messages() {
 
      Returns false when there is no divider to anchor on, which is the caller's
      cue to fall back to the bottom of the thread. */
-  const anchorToUnreadDivider = () => {
+  const anchorToUnreadDivider = () =>
+    anchorAtLead(unreadDividerRef.current);
+
+  /* Scroll the thread so `target` sits UNREAD_ANCHOR_LEAD_RATIO (35%) down it.
+     The unread divider uses it, and so does jump-to-original (spec §10.6:
+     "the same placement the unread band uses, with the same function").
+     Returns false when there is nothing to anchor on. */
+  const anchorAtLead = (target) => {
     const container = messagesContainerRef.current;
-    const divider = unreadDividerRef.current;
+    const divider = target;
     if (!container || !divider) return false;
 
     // On a phone the chat pane is `display: none` while the inbox list is up
@@ -1047,6 +1164,65 @@ export default function Messages() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showEmojiPicker]);
 
+  /* Page one of the inbox. Throws on a failed answer. */
+  const fetchInboxFirstPage = async (userId) => {
+    const token = authHeaderToken();
+    const res = await fetch(`${API_BASE_URL}/messages/inbox/${userId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(`inbox ${res.status} ${body?.error || ""}`.trim());
+    }
+    return res.json();
+  };
+
+  /* Reload the inbox from the server, and nothing else: no deep link, no
+     reopening a chat. After a delete (§10.8) the conversation's preview may
+     have been the deleted message, and only the server knows what is now
+     the newest message this student can see. Back to page one; scrolling
+     loads the rest again. The open chat stays open, and keeps its row even
+     when page one doesn't hold it (a brand-new deep-link chat, one further
+     down the list, or one whose every message was hidden). Reads refs only,
+     so the once-only Realtime handler can call it. */
+  const inboxRefreshSeqRef = useRef(0);
+  const refreshInbox = useCallback(async () => {
+    const myId = currentUserIdRef.current;
+    if (!myId) return;
+    const seq = ++inboxRefreshSeqRef.current;
+    try {
+      const data = await fetchInboxFirstPage(myId);
+      if (seq !== inboxRefreshSeqRef.current) return; // a newer refresh won
+      const fresh = data.items || [];
+      const open = activeChatRef.current;
+      setInbox((prev) => {
+        if (
+          !open ||
+          fresh.some(
+            (c) =>
+              c.contact_id === open.contact_id &&
+              c.product_id === open.product_id,
+          )
+        ) {
+          return fresh;
+        }
+        const openRow = prev.find(
+          (c) =>
+            c.contact_id === open.contact_id &&
+            c.product_id === open.product_id,
+        );
+        return openRow ? [openRow, ...fresh] : fresh;
+      });
+      const nextCursor = data.next_cursor ?? null;
+      setInboxCursor(nextCursor);
+      setHasMoreInbox(nextCursor !== null);
+    } catch (error) {
+      console.error("Failed to refresh the inbox:", error);
+    }
+    // fetchInboxFirstPage reads nothing from render scope but the module.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ── 1. Fetch inbox, then reopen whichever chat should be open ──
      Precedence: the ?user=&product= deep link (e.g. "Message Seller" on a
      product page) first, then the thread this student last had open.
@@ -1069,15 +1245,7 @@ export default function Messages() {
 
     const loadInboxAndCheckParams = async () => {
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/messages/inbox/${currentUserId}`,
-          {
-            headers: authHeaderToken()
-              ? { Authorization: `Bearer ${authHeaderToken()}` }
-              : {},
-          },
-        );
-        const data = await res.json();
+        const data = await fetchInboxFirstPage(currentUserId);
         let fetchedInbox = data.items || [];
 
         // 📄 Page one of the inbox. Everything past the first 20 conversations
@@ -1269,6 +1437,55 @@ export default function Messages() {
       }
     }
   }, [currentUserId, hasOlder, olderCursor]);
+
+  /* ── Jump to the original (spec §10.6) ──
+     The quote's original is placed 35% down the thread with anchorAtLead (the
+     unread divider's placement) and its row flashes. Not loaded yet → up to
+     JUMP_MAX_EXTRA_PAGES older pages through loadOlderMessages, the call
+     scrolling up uses, checking after each. Reads and the unread band are
+     not touched here. Refs, because this outlives the renders it awaits. */
+  const loadOlderRef = useRef(loadOlderMessages);
+  loadOlderRef.current = loadOlderMessages;
+  const hasOlderRef = useRef(hasOlder);
+  hasOlderRef.current = hasOlder;
+
+  const nextFrame = () =>
+    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  const jumpToOriginal = async (originalId) => {
+    const container = messagesContainerRef.current;
+    if (!container || !originalId) return;
+    const run = historyRunRef.current;
+    const find = () =>
+      container.querySelector(`[data-msg-id="${CSS.escape(originalId)}"]`);
+
+    let row = find();
+    for (let pages = 0; !row && pages < JUMP_MAX_EXTRA_PAGES; ) {
+      if (run !== historyRunRef.current) return; // another chat was opened
+      if (!hasOlderRef.current) break; // the start of the conversation
+      if (historyInFlightRef.current) {
+        // A page the scroll already asked for: wait for it, don't count it.
+        await nextFrame();
+      } else {
+        await loadOlderRef.current();
+        pages += 1;
+        await nextFrame(); // the page rendered, and its scroll held still
+      }
+      row = find();
+    }
+    if (run !== historyRunRef.current) return;
+
+    if (!row) {
+      showToast("Couldn't find the original message");
+      return;
+    }
+    anchorAtLead(row);
+    // Off for a frame first, so jumping to the same message again restarts
+    // the flash instead of leaving the running one alone.
+    setJumpHighlight(null);
+    await nextFrame();
+    setJumpHighlight({ id: originalId });
+  };
 
   /* The trigger sits at the TOP of the thread — see the sentinel in the render
      below. `messagesEl` is the root because the thread scrolls inside its own
@@ -1585,6 +1802,9 @@ export default function Messages() {
                 updatedChat = { ...updatedInbox.splice(chatIndex, 1)[0] };
                 updatedChat.last_message = newMsg.content;
                 updatedChat.last_message_time = newMsg.created_at;
+                // Spec §10.9: "You: " and the tombstone preview read these.
+                updatedChat.last_sender_id = newMsg.sender_id;
+                updatedChat.last_message_deleted = false;
                 
                 // Open, being watched, on screen AND at the live end — the only
                 // case where it is about to be read on sight. A thread sitting
@@ -1622,6 +1842,11 @@ export default function Messages() {
                 : msg,
             )
           );
+          // Deleted for everyone (§10.8): it may have been a conversation's
+          // inbox preview, open or not, and only the server knows what the
+          // preview is now. Replies whose quote was wiped arrive as their
+          // own UPDATEs and need nothing more than the swap above.
+          if (payload.new.deleted_at) refreshInbox();
         }
       )
       .subscribe();
@@ -1651,8 +1876,14 @@ export default function Messages() {
       is_read: false,
       is_delivered: false,
       sent_after_id: newestServerId(messagesRef.current),
+      // §10.4. Only the id is sent; the database fills the quote. The bubble
+      // draws it at once from these two, and the server's row replaces them.
+      reply_to_id: replyTo?.id ?? null,
+      reply_to_sender_id: replyTo?.sender_id ?? null,
+      reply_preview: replyTo ? replyTo.content.slice(0, 200) : null,
     };
     setNewMessage("");
+    setReplyTo(null);
     setShowEmojiPicker(false);
 
     if (isDemoUser) {
@@ -1668,6 +1899,168 @@ export default function Messages() {
   const handleRetry = (msg) => {
     if (msg.pending) return;
     deliver(msg);
+  };
+
+  /* ── Delete (spec §10.8, API: V-C changelog) ──────────────────────────────
+     Both resolve to null on success, or the error code on failure
+     (DELETE_WINDOW_EXPIRED, NOT_MESSAGE_SENDER, MESSAGE_NOT_FOUND, …;
+     NETWORK_ERROR when there was no answer), for the menu's toasts. */
+  const postMessageAction = async (id, action) => {
+    const token = authHeaderToken();
+    try {
+      const res = await fetch(`${API_BASE_URL}/messages/${id}/${action}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { error: data?.error || `HTTP_${res.status}` };
+      return { data };
+    } catch {
+      return { error: "NETWORK_ERROR" };
+    }
+  };
+
+  /* The message becomes a tombstone for both people. Realtime brings the
+     same UPDATEs (this tombstone, and each reply whose quote is wiped);
+     replacing by id makes the second arrival a no-op. */
+  const deleteForEveryone = async (message) => {
+    const { data, error } = await postMessageAction(
+      message.id,
+      "delete-for-everyone",
+    );
+    if (error) return error;
+    const tombstone = data?.message;
+    if (tombstone) {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id === tombstone.id) return adoptServerRow(m, tombstone);
+          if (m.reply_to_id === tombstone.id && m.reply_preview != null) {
+            return { ...m, reply_preview: null };
+          }
+          return m;
+        }),
+      );
+    }
+    refreshInbox();
+    return null;
+  };
+
+  /* Hidden from my view only. There is NO Realtime event for this (runbook
+     §1.7), so removing it here is the only update the screen gets. Gone at
+     once; put back where it was if the server refuses. */
+  const deleteForMe = async (message) => {
+    const list = messagesRef.current;
+    const at = list.findIndex((m) => m.id === message.id);
+    const removed = at > -1 ? list[at] : message;
+    const nextId = at > -1 ? list[at + 1]?.id : undefined;
+    setMessages((prev) => prev.filter((m) => m.id !== message.id));
+
+    const { error } = await postMessageAction(message.id, "delete-for-me");
+    if (error) {
+      // Not into another conversation the student has opened since.
+      const chat = activeChatRef.current;
+      const stillOpen =
+        !!chat &&
+        chat.product_id === removed.product_id &&
+        (chat.contact_id === removed.sender_id ||
+          chat.contact_id === removed.receiver_id);
+      if (!stillOpen) return error;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === removed.id)) return prev;
+        // Before the message that followed it, if that is still on screen.
+        const before = nextId ? prev.findIndex((m) => m.id === nextId) : -1;
+        const pos = before > -1 ? before : Math.min(Math.max(at, 0), prev.length);
+        return [...prev.slice(0, pos), removed, ...prev.slice(pos)];
+      });
+      return error;
+    }
+    refreshInbox();
+    return null;
+  };
+
+  /* Open (or, from its own button, close) one message's actions menu,
+     hanging from that message's round button. */
+  const openActionsMenu = (msg) => {
+    const key = messageKey(msg);
+    const anchorEl = actionsBtnRefs.current.get(key);
+    if (!anchorEl) return;
+    menuAnchorRef.current = anchorEl;
+    setActionsMenu({ key, msg, anchorEl });
+  };
+  const toggleActionsMenu = (msg) => {
+    if (actionsMenu?.key === messageKey(msg)) closeActionsMenu(false);
+    else openActionsMenu(msg);
+  };
+
+  /* §10.7. copyText's fallback (http pages, e.g. the site opened from a phone
+     over the LAN) needs the click's user gesture, so it runs before any await
+     of ours. Focus goes back to the button only afterwards: the fallback's
+     hidden <textarea> takes it while it copies. */
+  const handleCopy = async (msg) => {
+    closeActionsMenu(false);
+    const anchor = menuAnchorRef.current;
+    const ok = await copyText(msg.content);
+    if (anchor?.isConnected) anchor.focus({ preventScroll: true });
+    showToast(ok ? "Copied" : "Couldn't copy");
+  };
+
+  /* §10.4: reply to a message. Checked against the newest copy of it, so a
+     message deleted for everyone since the menu was drawn is never quoted. */
+  const startReply = (msg) => {
+    const live =
+      messagesRef.current.find((m) => messageKey(m) === messageKey(msg)) ?? msg;
+    if (isDeleted(live) || live.pending || live.failed) return;
+    setReplyTo(live);
+    chatInputRef.current?.focus({ preventScroll: true });
+  };
+
+  /* The menu's items (§10.1): Reply · Copy · Delete; a tombstone has only
+     Delete. Reply is wired in part 3. */
+  const actionsMenuItems = (msg) => {
+    const remove = {
+      key: "delete",
+      label: "Delete",
+      Icon: Trash2,
+      danger: true,
+      onSelect: () => {
+        closeActionsMenu(false);
+        setDeleteTarget(msg);
+      },
+    };
+    if (isDeleted(msg)) return [remove];
+    return [
+      {
+        key: "reply",
+        label: "Reply",
+        Icon: CornerUpLeft,
+        onSelect: () => {
+          closeActionsMenu(false);
+          startReply(msg);
+        },
+      },
+      { key: "copy", label: "Copy", Icon: Copy, onSelect: () => handleCopy(msg) },
+      remove,
+    ];
+  };
+
+  /* The delete confirmation's choices (§10.8). It closes at once; a refusal
+     comes back as a toast. */
+  const closeDeleteDialog = () => {
+    setDeleteTarget(null);
+    const anchor = menuAnchorRef.current;
+    if (anchor?.isConnected) anchor.focus({ preventScroll: true });
+  };
+  const confirmDelete = async (forEveryone) => {
+    const msg = deleteTarget;
+    if (!msg) return;
+    closeDeleteDialog();
+    const error = forEveryone ? await deleteForEveryone(msg) : await deleteForMe(msg);
+    if (!error) return;
+    showToast(
+      error === "DELETE_WINDOW_EXPIRED"
+        ? "It's too late to delete this for everyone"
+        : "Couldn't delete. Try again.",
+    );
   };
 
   /* `unsentRef` (declared with the other refs) is threadKey → (client_tag →
@@ -1746,6 +2139,8 @@ export default function Messages() {
           receiver_id: msg.receiver_id,
           product_id: msg.product_id,
           content: msg.content,
+          // Only the id; the database fills the quote (V-C). Part 3 sets it.
+          reply_to_id: msg.reply_to_id ?? null,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -2055,9 +2450,26 @@ export default function Messages() {
                       </div>
 
                       <div className={styles.inboxItemBottom}>
-                        <span className={styles.inboxPreview}>
-                          {chat?.last_message || "Start the conversation ✨"}
-                        </span>
+                        {/* Spec §10.9. A tombstone keeps the row's
+                            read/unread weight; only the style is italic. */}
+                        {chat?.last_message_deleted ? (
+                          <span
+                            className={`${styles.inboxPreview} ${styles.inboxPreviewDeleted}`}
+                          >
+                            <Ban size={12} aria-hidden="true" className={styles.inboxPreviewIcon} />
+                            <span className={styles.inboxPreviewDeletedText}>
+                              {chat.last_sender_id === currentUserId
+                                ? "You deleted this message"
+                                : "This message was deleted"}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className={styles.inboxPreview}>
+                            {chat?.last_message == null
+                              ? "Start the conversation ✨"
+                              : `${chat.last_sender_id === currentUserId ? "You: " : ""}${chat.last_message}`}
+                          </span>
+                        )}
                         {unread > 0 && (
                           <span className={styles.unreadBadge}>
                             {unread > 99 ? "99+" : unread}
@@ -2353,6 +2765,12 @@ export default function Messages() {
                           );
                         }
 
+                        // §10.1: every message has actions, except one
+                        // still sending or failed (the pill handles those).
+                        const rowKey = messageKey(msg);
+                        const hasActions = !msg.pending && !msg.failed;
+                        const menuOpen = actionsMenu?.key === rowKey;
+
                         return (
                           <React.Fragment key={messageKey(msg) || index}>
                             {/* WhatsApp-style unread line. `unreadMarker` is
@@ -2372,12 +2790,25 @@ export default function Messages() {
                                  anchors on when a page of older messages is
                                  prepended — see `measureAnchor`. */
                               data-msg-id={msg.id}
+                              data-actions-row={hasActions ? rowKey : undefined}
+                              style={
+                                jumpHighlight?.id === msg.id
+                                  ? {
+                                      "--jump-hold": `${JUMP_HIGHLIGHT_HOLD_MS}ms`,
+                                      "--jump-fade": `${JUMP_HIGHLIGHT_FADE_MS}ms`,
+                                    }
+                                  : undefined
+                              }
                               className={`${styles.messageWrapper} ${isMine ? styles.messageMine : styles.messageTheirs} ${
                                 isRunStart ? styles.runStart : ""
                               } ${isRunEnd ? styles.runEnd : ""} ${
                                 openingIdsRef.current.has(messageKey(msg))
                                   ? ""
                                   : styles.messageEnter
+                              } ${menuOpen ? styles.rowSelected : ""} ${
+                                jumpHighlight?.id === msg.id ? styles.rowHighlight : ""
+                              } ${
+                                menuOpen || tappedRowKey === rowKey ? styles.actionsShown : ""
                               }`}
                             >
                               {!isMine &&
@@ -2397,13 +2828,91 @@ export default function Messages() {
                                 className={`${styles.messageBubble} ${isMine ? styles.bubbleMine : styles.bubbleTheirs} ${
                                   msg.failed ? styles.bubbleFailed : ""
                                 }`}
+                                style={
+                                  isReply(msg) && !isDeleted(msg)
+                                    ? { minWidth: REPLY_MIN_BUBBLE_WIDTH }
+                                    : undefined
+                                }
+                                {...(hasActions && {
+                                  onPointerDown: (e) => {
+                                    lastPointerTypeRef.current = e.pointerType;
+                                  },
+                                  // Touch: a tap shows this row's button, and
+                                  // a second tap hides it. Not a tap on a
+                                  // link in the text.
+                                  onClick: (e) => {
+                                    if (lastPointerTypeRef.current !== "touch") return;
+                                    if (e.target.closest("a, button")) return;
+                                    setTappedRowKey((k) => (k === rowKey ? null : rowKey));
+                                  },
+                                  // Right-click; on Android Chrome a
+                                  // long-press fires this too.
+                                  onContextMenu: (e) => {
+                                    e.preventDefault();
+                                    openActionsMenu(msg);
+                                  },
+                                })}
                               >
-                                <MessageText content={msg.content} />
+                                {/* §10.2: beside the bubble on its outer
+                                    side, absolutely placed so the bubble's
+                                    size never changes. */}
+                                {hasActions && (
+                                  <button
+                                    type="button"
+                                    ref={(el) => {
+                                      if (el) actionsBtnRefs.current.set(rowKey, el);
+                                      else actionsBtnRefs.current.delete(rowKey);
+                                    }}
+                                    className={`${styles.actionsBtn} ${
+                                      isMine ? styles.actionsBtnMine : styles.actionsBtnTheirs
+                                    }`}
+                                    aria-label="Message actions"
+                                    aria-haspopup="menu"
+                                    aria-expanded={menuOpen}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleActionsMenu(msg);
+                                    }}
+                                  >
+                                    <ChevronDown size={16} aria-hidden="true" />
+                                  </button>
+                                )}
+                                {/* Spec §10.8: a tombstone keeps its side
+                                    and background; the label replaces the
+                                    text, and the meta row has no tick. */}
+                                {isDeleted(msg) ? (
+                                  <p
+                                    className={`${styles.tombstone} ${
+                                      isMine ? styles.tombstoneMine : styles.tombstoneTheirs
+                                    }`}
+                                  >
+                                    <Ban size={14} aria-hidden="true" className={styles.tombstoneIcon} />
+                                    {isMine
+                                      ? "You deleted this message"
+                                      : "This message was deleted"}
+                                  </p>
+                                ) : (
+                                  <>
+                                    {isReply(msg) && (
+                                      <ReplyQuote
+                                        msg={msg}
+                                        isMine={isMine}
+                                        name={
+                                          msg.reply_to_sender_id === currentUserId
+                                            ? "You"
+                                            : firstName(activeChat?.contact_name)
+                                        }
+                                        onJump={jumpToOriginal}
+                                      />
+                                    )}
+                                    <MessageText content={msg.content} />
+                                  </>
+                                )}
                                 <div className={styles.messageMeta}>
                                   <span className={styles.messageTime}>
                                     {formatClockTime(msg.created_at)}
                                   </span>
-                                  {isMine && (
+                                  {isMine && !isDeleted(msg) && (
                                     <span className={styles.readReceipt}>
                                       {tickIcon}
                                     </span>
@@ -2460,6 +2969,27 @@ export default function Messages() {
                 )}
               </div>
 
+                {/* §10.2: the open message's menu. Built from the live row,
+                    so a tombstone that lands while it is open shows only
+                    Delete; gone from the list (deleted for me) → closed. */}
+                {actionsMenu &&
+                  (() => {
+                    const live = messages.find((m) => messageKey(m) === actionsMenu.key);
+                    if (!live || live.pending || live.failed) return null;
+                    return (
+                      <MessageMenu
+                        items={actionsMenuItems(live)}
+                        anchorEl={actionsMenu.anchorEl}
+                        boundsEl={messagesContainerRef.current}
+                        align={live.sender_id === currentUserId ? "end" : "start"}
+                        onClose={closeActionsMenu}
+                      />
+                    );
+                  })()}
+
+                {/* §10.7: centred, 16 above the composer. */}
+                <AppToast toast={toast} bottom={16} />
+
                 {/* Jump to latest. Always mounted while there are messages, so
                     it can animate out as well as in; hidden, it takes no clicks
                     and leaves the tab order. */}
@@ -2492,6 +3022,33 @@ export default function Messages() {
 
               {/* Chat Input Area */}
               <div className={styles.chatInputArea}>
+                {/* §10.4: the reply bar, above the input row. */}
+                {replyTo && (
+                  <div className={styles.replyBar}>
+                    <div className={styles.replyBarText}>
+                      <span className={styles.replyBarName}>
+                        Replying to{" "}
+                        {replyTo.sender_id === currentUserId
+                          ? "You"
+                          : firstName(activeChat?.contact_name)}
+                      </span>
+                      <span className={styles.replyBarPreview}>
+                        {replyTo.content}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.replyBarClose}
+                      onClick={() => {
+                        setReplyTo(null);
+                        chatInputRef.current?.focus({ preventScroll: true });
+                      }}
+                      aria-label="Cancel reply"
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </div>
+                )}
                 <div
                   className={styles.emojiPickerContainer}
                   ref={emojiPickerRef}
@@ -2549,6 +3106,13 @@ export default function Messages() {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {
+                      // §10.4: Esc closes the reply bar (not while the emoji
+                      // picker is open).
+                      if (e.key === "Escape" && replyTo && !showEmojiPicker) {
+                        e.preventDefault();
+                        setReplyTo(null);
+                        return;
+                      }
                       // Desktop: Enter sends, Shift+Enter is a new line. Touch
                       // keyboards: Enter is a new line and the button sends,
                       // as in WhatsApp. Never mid-IME composition.
@@ -2611,6 +3175,68 @@ export default function Messages() {
           )}
         </div>
       </div>
+
+      {/* §10.8: the delete confirmation, in the Dashboard's modal look. */}
+      {deleteTarget &&
+        (() => {
+          const both = canDeleteForEveryone(deleteTarget, currentUserId);
+          return (
+            <div className={styles.modalOverlay} onClick={closeDeleteDialog}>
+              <div
+                className={styles.modalContent}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-message-title"
+                aria-describedby="delete-message-body"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.stopPropagation();
+                    closeDeleteDialog();
+                  }
+                }}
+              >
+                <h3 id="delete-message-title" className={styles.modalTitle}>
+                  Delete message?
+                </h3>
+                <p id="delete-message-body" className={styles.modalText}>
+                  {both
+                    ? "Delete it for everyone in this chat, or only for you?"
+                    : `It will be removed from this chat for you. ${firstName(
+                        activeChat?.contact_name,
+                      )} will still see it.`}
+                </p>
+                <div className={`${styles.modalActions} ${styles.modalActionsStacked}`}>
+                  {both && (
+                    <button
+                      type="button"
+                      autoFocus
+                      className={`${styles.modalBtn} ${styles.modalBtnDanger}`}
+                      onClick={() => confirmDelete(true)}
+                    >
+                      Delete for everyone
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    autoFocus={!both}
+                    className={styles.modalBtn}
+                    onClick={() => confirmDelete(false)}
+                  >
+                    Delete for me
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.modalBtn} ${styles.modalBtnCancel}`}
+                    onClick={closeDeleteDialog}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 } 
