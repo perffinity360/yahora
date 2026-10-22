@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   ShieldCheck,
   User,
+  UserCheck,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
@@ -607,6 +608,10 @@ export default function ProductDetail() {
       </div>
     );
 
+  // The student's own listing: no "Message Seller" (it would open a chat with
+  // themselves). Same rule as mobile's isOwnListing in app/product/[id].tsx.
+  const isOwnListing =
+    !!currentUserId && product.seller?.id === currentUserId;
   const isForeignCampus =
     actualHomeUniId && product.university_id !== actualHomeUniId;
   const condCfg =
@@ -1096,7 +1101,12 @@ export default function ProductDetail() {
 
             {/* Action Buttons */}
             <div className={styles.actionButtons}>
-              {isForeignCampus ? (
+              {isOwnListing ? (
+                <div className={styles.disabledBtn} style={{ cursor: "default" }}>
+                  <UserCheck size={16} />
+                  Your listing
+                </div>
+              ) : isForeignCampus ? (
                 <button className={styles.disabledBtn} disabled>
                   Campus-exclusive listing
                 </button>

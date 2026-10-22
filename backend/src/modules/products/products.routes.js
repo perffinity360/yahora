@@ -6,7 +6,7 @@
 
 import express from 'express';
 import multer from 'multer';
-import { createProduct, updateProduct, deleteProduct, getProducts, getProductById, getProductMeta, toggleLikeProduct, toggleSaveProduct, addComment, toggleCommentVote, markProductAsSold, markProductAsAvailable } from './products.controller.js';
+import { createProduct, updateProduct, deleteProduct, getProducts, getProductById, getProductMeta, toggleLikeProduct, toggleSaveProduct, addComment, toggleCommentVote, markProductAsSold, markProductAsAvailable, getBuyerCandidates, removeMyPurchase } from './products.controller.js';
 import requireAuth from '../../middleware/requireAuth.js';
 import optionalAuth from '../../middleware/optionalAuth.js';
 
@@ -83,14 +83,19 @@ router.post('/:id/save', requireAuth, toggleSaveProduct);
 router.post('/:id/comments', requireAuth, addComment);
 router.post('/comments/:commentId/vote', requireAuth, toggleCommentVote);
 
-// 2. Add the new route under the sold route
+// <-- MARK AS SOLD (Phase 6B Block N-E, MARK_SOLD_SPEC) -->
 //
-// 🔒 requireAuth + an ownership check in the handler (Phase 4 Block V-A). These
-// had neither: any caller who knew a listing's uuid could mark it sold — taking
-// it out of the marketplace — or mark it available again, which deletes every
-// `purchases` row for it. Only the seller may change their own listing's status.
-// Both clients already send a token here, so this pair is not breaking.
+// 🔒 requireAuth on all four. The actor is always the token holder; the rules
+// live in the mark_sold migration's functions, which the handlers call.
+//   /sold, /available    — the seller only. The functions check ownership
+//                          (Phase 4 V-A first added auth here: before it, any
+//                          caller could mark any listing sold or relist it).
+//   /buyer-candidates    — the seller only: who to pick as the buyer.
+//   DELETE /purchase     — the BUYER only: "That wasn't me".
+// /sold still accepts exactly what the old website sends (buyer_id or null).
 router.post('/:id/sold', requireAuth, markProductAsSold);
 router.post('/:id/available', requireAuth, markProductAsAvailable);
+router.get('/:id/buyer-candidates', requireAuth, getBuyerCandidates);
+router.delete('/:id/purchase', requireAuth, removeMyPurchase);
 
 export default router;

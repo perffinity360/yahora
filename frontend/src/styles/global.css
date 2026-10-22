@@ -50,6 +50,16 @@
   --bubble-mine-end: #C02B7F;
   --bubble-mine-solid: #9B1280;
   --chat-read-tick: #53BDEB;
+  /* Failed send (spec §2 "Failed message"): mobile colors.chatFailedTick,
+     errorBg, errorText. The ⓘ is white, like the other ticks on a sent bubble
+     (owner's call, 2026-10-16; was #F87171). */
+  --chat-failed-tick: #FFFFFF;
+  --error-bg: #FEF0F0;
+  --error-text: #B91C1C;
+  /* "Couldn't load this chat" (spec §2 "Loading"): mobile colors.mutedText and
+     inputBorderFocus, the ChatState's subtitle and icon ring. */
+  --muted-text: #6B6879;
+  --input-border-focus: #E5C8E5;
 
   /* Text & background */
   --black: #0B0B0B;

@@ -249,6 +249,13 @@ export type PendingMessage = Message & {
   pending?: boolean;
   failed?: boolean;
   client_tag?: string;
+  /** Unsent bubbles only: the newest server message in the thread when it was
+   *  typed (null in an empty thread). See `unsentStillMissing`. */
+  sent_after_id?: string | null;
+  /** Failed bubbles only: it failed because the server couldn't be reached,
+   *  so it is sent again by itself once the server answers (useServerBack).
+   *  False when the server refused it: only a tap sends that again. */
+  auto_retry?: boolean;
 };
 
 /** Read-only profile as returned by GET /api/user/:id/public. */

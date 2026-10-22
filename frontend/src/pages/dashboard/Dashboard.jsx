@@ -1,5 +1,5 @@
 // frontend/src/pages/dashboard/Dashboard.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import styles from "./Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
@@ -208,6 +208,27 @@ function Avatar({
  onImageClick // Added for image zoom
 }) {
  const [showMenu, setShowMenu] = useState(false);
+ const editRef = useRef(null);
+ const menuRef = useRef(null);
+
+ // The menu closes on a press anywhere outside it and the pencil (the pencil
+ // toggles it itself), and on Escape — not only by picking an option.
+ useEffect(() => {
+   if (!showMenu) return;
+   const onPointerDown = (e) => {
+     if (editRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+     setShowMenu(false);
+   };
+   const onKeyDown = (e) => {
+     if (e.key === "Escape") setShowMenu(false);
+   };
+   document.addEventListener("pointerdown", onPointerDown);
+   document.addEventListener("keydown", onKeyDown);
+   return () => {
+     document.removeEventListener("pointerdown", onPointerDown);
+     document.removeEventListener("keydown", onKeyDown);
+   };
+ }, [showMenu]);
 
  const initials = (name || "User")
    .split(" ")
@@ -249,6 +270,7 @@ function Avatar({
      {editable && !isUploading && (
        <>
          <button
+           ref={editRef}
            className={styles.avatarEdit}
            onClick={() => setShowMenu(!showMenu)}
            title="Change photo"
@@ -256,7 +278,7 @@ function Avatar({
            <PenIcon size={14} />
          </button>
          {showMenu && (
-           <div className={styles.avatarMenu}>
+           <div ref={menuRef} className={styles.avatarMenu}>
              <button
                onClick={() => {
                  onUpload();

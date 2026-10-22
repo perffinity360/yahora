@@ -1,9 +1,13 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../lib/api';
+import { api, type ApiError } from '../lib/api';
 import {
+  adoptServerRow,
   mergeMessage,
+  newestServerId,
+  unsentStillMissing,
   updateNewestPage,
   type ChatCache,
   type ChatPage,
@@ -95,12 +99,22 @@ export function useChatHistory(contactId?: string, productId?: string) {
       // Carry over anything still in flight or failed, or a send that was
       // interrupted by backgrounding would vanish along with its retry button.
       const cached = queryClient.getQueryData<ChatCache>(queryKey)?.pages[0]?.items ?? [];
-      const unsent = cached.filter(
-        (m) =>
-          (m.pending || m.failed) &&
-          !items.some((s) => s.sender_id === m.sender_id && s.content === m.content),
+      const unsent = unsentStillMissing(
+        items,
+        cached.filter((m) => m.pending || m.failed),
       );
-      return { items: unsent.length ? [...items, ...unsent] : items, next_cursor };
+      // Bubbles sent from here keep their key and typed time across a refetch
+      // too (adoptServerRow), so a resync doesn't rebuild or shift them.
+      const sentHere = new Map(
+        cached.filter((m) => m.client_tag && m.id !== m.client_tag).map((m) => [m.id, m]),
+      );
+      const fresh = sentHere.size
+        ? items.map((s) => {
+            const local = sentHere.get(s.id);
+            return local ? adoptServerRow(local, s) : s;
+          })
+        : items;
+      return { items: unsent.length ? [...fresh, ...unsent] : fresh, next_cursor };
     },
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!myId && !!contactId && !!productId,
@@ -113,6 +127,48 @@ export function newClientTag(): string {
 }
 
 type SendVars = { content: string; clientTag: string };
+
+/**
+ * How long a send may take before it counts as failed. fetch has no timeout of
+ * its own, so on a connection that accepts the request and then goes quiet
+ * (weak signal, a server waking up) the bubble would sit on its clock forever,
+ * with no retry pill to tap. Same value on web (Messages.jsx).
+ */
+export const SEND_TIMEOUT_MS = 15_000;
+
+/**
+ * AUTOMATIC RETRY (MESSAGES_SPEC §2 "Failed message"). A send that fails for a
+ * reason that can pass is tried again by itself, after 2, 4, 8, 16 and 30
+ * seconds. The bubble keeps its clock the whole time. Only when all of those
+ * fail, or the server refuses the message outright, does it turn into
+ * "Failed to send". Offline (NetInfo) the clock simply waits, using up no
+ * tries, and the send goes when the phone is back. Same numbers on web.
+ */
+export const SEND_MAX_RETRIES = 5;
+
+export function sendRetryDelay(attempt: number): number {
+  return Math.min(2000 * 2 ** attempt, 30_000);
+}
+
+/**
+ * Worth trying again: no answer (network, timeout), 401 (the session was being
+ * refreshed; the next try reads the new token), 408, 429, and any 5xx. Every
+ * other 4xx is the server saying no to THIS message (too long, wrong campus,
+ * listing deleted…), and asking again gets the same answer.
+ */
+export function isRetryableSendError(err: unknown): boolean {
+  const e = err as ApiError;
+  if (!e?.status) return true;
+  return e.status === 401 || e.status === 408 || e.status === 429 || e.status >= 500;
+}
+
+/** One line for the Metro log, saying why a send failed. */
+function describeSendError(err: unknown): string {
+  const e = err as ApiError;
+  if (e?.name === 'AbortError') return `timed out after ${SEND_TIMEOUT_MS / 1000}s`;
+  if (e?.status) return `${e.status} ${String(e.body?.error ?? e.message)}`;
+  return `network: ${e?.message ?? String(err)}`;
+}
 
 /**
  * Send, optimistically and dedupe-safely.
@@ -129,16 +185,54 @@ export function useSendMessage(contactId?: string, productId?: string) {
   const chatKey = ['chat', contactId, productId];
 
   return useMutation({
-    mutationFn: (vars: SendVars) => {
-      if (!myId || !contactId || !productId) {
-        return Promise.reject(new Error('This chat is not ready yet.'));
+    // One send at a time per conversation, in the order typed. A message that
+    // is retrying holds the ones after it, so they can't overtake it.
+    scope: { id: `send:${contactId}:${productId}` },
+    // Offline: wait for the network instead of burning tries (see _layout.tsx).
+    networkMode: 'online',
+    retry: (failureCount, err) => {
+      const again = failureCount <= SEND_MAX_RETRIES && isRetryableSendError(err);
+      if (again) {
+        console.info(
+          `[send] try ${failureCount} failed (${describeSendError(err)}); ` +
+            `retrying in ${sendRetryDelay(failureCount - 1) / 1000}s`,
+        );
       }
-      return api.post<{ message: Message }>('/api/messages/send', {
-        sender_id: myId,
-        receiver_id: contactId,
-        product_id: productId,
-        content: vars.content,
-      });
+      return again;
+    },
+    retryDelay: (failureCount) => sendRetryDelay(failureCount - 1),
+
+    mutationFn: async (vars: SendVars): Promise<{ message: Message | null }> => {
+      if (!myId || !contactId || !productId) {
+        throw Object.assign(new Error('This chat is not ready yet.'), { status: 400 });
+      }
+      // Before a RETRY: if the bubble is no longer waiting, Realtime already
+      // brought the real row in. The previous try reached the server and only
+      // the answer got lost, so sending again would post the message twice.
+      // By id: the real row keeps the `client_tag` (adoptServerRow), but only
+      // the placeholder has it as its id.
+      const waiting = (queryClient.getQueryData<ChatCache>(chatKey)?.pages[0]?.items ?? []).some(
+        (m) => m.id === vars.clientTag,
+      );
+      if (!waiting) return { message: null };
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+      try {
+        return await api.post<{ message: Message }>(
+          '/api/messages/send',
+          {
+            sender_id: myId,
+            receiver_id: contactId,
+            product_id: productId,
+            content: vars.content,
+          },
+          undefined,
+          controller.signal,
+        );
+      } finally {
+        clearTimeout(timer);
+      }
     },
 
     onMutate: (vars) => {
@@ -164,6 +258,7 @@ export function useSendMessage(contactId?: string, productId?: string) {
             is_read: false,
             is_delivered: false,
             created_at: new Date().toISOString(),
+            sent_after_id: newestServerId(list),
           };
           // At the bottom of the thread, where it was typed. Not sorted.
           return [...list, optimistic];
@@ -172,30 +267,86 @@ export function useSendMessage(contactId?: string, productId?: string) {
     },
 
     onSuccess: (data, vars) => {
-      queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
-        updateNewestPage(prev, (list) => {
-          const withoutPlaceholder = list.filter((m) => m.client_tag !== vars.clientTag);
-          // Realtime may already have inserted the real row while we waited —
-          // mergeMessage refreshes it rather than appending a duplicate.
-          return mergeMessage(withoutPlaceholder, data.message);
-        }),
-      );
+      // `message: null`: Realtime already swapped the real row in (see mutationFn).
+      const sent = data.message;
+      if (sent) {
+        // In place, in the placeholder's slot. Removing it and appending the
+        // real row moved it below any later message still queued behind it,
+        // so a burst sent offline shuffled itself when the network came back.
+        // If Realtime already inserted the real row, mergeMessage refreshes it
+        // instead of adding a duplicate.
+        queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+          updateNewestPage(prev, (list) => mergeMessage(list, sent, vars.clientTag)),
+        );
+      }
       // A first message creates a conversation the inbox has never seen.
       queryClient.invalidateQueries({ queryKey: ['inbox', myId] });
     },
 
-    onError: (_err, vars) => {
+    onError: (err, vars) => {
+      // Reached only after the last automatic try, or at once for a refusal.
+      // Say why in the Metro log; without it a failure tells you nothing.
+      console.warn(`[send] gave up (${vars.clientTag}): ${describeSendError(err)}`);
       queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
         prev
           ? updateNewestPage(prev, (list) =>
               list.map((m) =>
-                m.client_tag === vars.clientTag ? { ...m, pending: false, failed: true } : m,
+                m.client_tag === vars.clientTag
+                  ? { ...m, pending: false, failed: true, auto_retry: isRetryableSendError(err) }
+                  : m,
               ),
             )
           : prev,
       );
     },
   });
+}
+
+/**
+ * How often to ask whether the server is back, while something is waiting on
+ * it. Same value on web (Messages.jsx).
+ */
+export const SERVER_PROBE_MS = 10_000;
+
+/**
+ * SENDING AGAIN ON ITS OWN (MESSAGES_SPEC §2). While `waiting`, ask
+ * GET /api/health at once and then every SERVER_PROBE_MS; an answer calls
+ * `onBack`, which sends the failed messages again. The chat screen folds
+ * "on screen, app in front, phone online" into `waiting`, so the network or
+ * the app coming back starts a probe straight away. One probe at a time, each
+ * given up after SERVER_PROBE_MS, so a server that hangs can't pile them up.
+ * Stops by itself once nothing waits (the messages are sending again).
+ */
+export function useServerBack(waiting: boolean, onBack: () => void | Promise<void>) {
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+
+  useEffect(() => {
+    if (!waiting) return;
+    let stopped = false;
+    let busy = false;
+    const probe = async () => {
+      if (busy) return;
+      busy = true;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), SERVER_PROBE_MS);
+      try {
+        await api.get('/api/health', controller.signal);
+        if (!stopped) await onBackRef.current();
+      } catch {
+        // Not back yet: the next tick asks again.
+      } finally {
+        clearTimeout(timer);
+        busy = false;
+      }
+    };
+    probe();
+    const interval = setInterval(probe, SERVER_PROBE_MS);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [waiting]);
 }
 
 /**

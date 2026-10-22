@@ -141,13 +141,19 @@ const fuzzyFilterOption = (option, rawInput) =>
 
 const SearchableSelect = ({ value, onChange, ...props }) => {
   const [inputValue, setInputValue] = useState("");
+  // The label onFocus dropped into the box, until the user edits it. That
+  // text is there for backspacing, not as a search: filtering on it showed
+  // only the selected option on the first click of an Edit Profile field.
+  const [seededLabel, setSeededLabel] = useState(null);
   const clearedAtRef = useRef(0);
 
   return (
     <Select
       {...props}
       value={value}
-      filterOption={fuzzyFilterOption}
+      filterOption={(option, rawInput) =>
+        rawInput === seededLabel || fuzzyFilterOption(option, rawInput)
+      }
       inputValue={inputValue}
       onFocus={(e) => {
         if (!value) return;
@@ -157,6 +163,7 @@ const SearchableSelect = ({ value, onChange, ...props }) => {
         if (Date.now() - clearedAtRef.current < 400) return;
         const label = value.label ?? "";
         setInputValue(label);
+        setSeededLabel(label);
         // A programmatically-set input value leaves the caret at position 0,
         // where Backspace has nothing to delete. Push it to the end so the
         // first Backspace removes the last character.
@@ -167,6 +174,7 @@ const SearchableSelect = ({ value, onChange, ...props }) => {
         });
       }}
       onInputChange={(next, meta) => {
+        setSeededLabel(null);
         if (meta.action !== "input-change") {
           // blur / select / menu-close: drop the search text so the chosen
           // value shows as a chip again instead of leftover text.
@@ -179,9 +187,13 @@ const SearchableSelect = ({ value, onChange, ...props }) => {
         // pick instead of the old value snapping back as a chip.
         if (next === "" && value) onChange(null, { action: "clear", name: props.name });
       }}
-      onBlur={() => setInputValue("")}
+      onBlur={() => {
+        setInputValue("");
+        setSeededLabel(null);
+      }}
       onChange={(option, meta) => {
         setInputValue("");
+        setSeededLabel(null);
         // Record clears (✕ or programmatic) so onFocus won't re-seed the label
         // straight after; a real pick resets it so editing works normally.
         clearedAtRef.current = option ? 0 : Date.now();
