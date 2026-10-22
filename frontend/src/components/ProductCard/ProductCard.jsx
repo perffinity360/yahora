@@ -159,6 +159,11 @@ const ProductCard = memo(function ProductCard({
   onMarkAvailable = null,
   onToggleLike = null,
   onToggleSave = null,
+  /* False on another campus's listing (Marketplace, visitor mode). The API
+     refuses like and save there (CROSS_CAMPUS_INTERACTION_BLOCKED), so the
+     heart is drawn as a plain count and the bookmark is left out, instead of
+     buttons that light up for a moment and go out again. */
+  canInteract = true,
   /* Live preview (Sell page): renders exactly like a real card and the photo
      carousel works, but nothing else does anything — there's no listing to
      like, save or share yet. */
@@ -350,12 +355,14 @@ const ProductCard = memo(function ProductCard({
           </>
         )}
 
-        <button
-          className={`${styles.overlayHeart} ${product.is_liked ? styles.overlayHeartLiked : ""}`}
-          onClick={handleLike}
-        >
-          <HeartIcon filled={product.is_liked} size={18} />
-        </button>
+        {canInteract && (
+          <button
+            className={`${styles.overlayHeart} ${product.is_liked ? styles.overlayHeartLiked : ""}`}
+            onClick={handleLike}
+          >
+            <HeartIcon filled={product.is_liked} size={18} />
+          </button>
+        )}
 
         {product.status === "sold" && (
           <div className={styles.soldBanner}>SOLD</div>
@@ -394,20 +401,32 @@ const ProductCard = memo(function ProductCard({
             detail page; it just lands at the top. */}
         <div className={styles.footerRow}>
           <div className={styles.stats}>
-            <button
-              className={`${styles.statBtn} ${styles.statBtnHeart} ${product.is_liked ? styles.statBtnLiked : ""}`}
-              onClick={handleLike}
-            >
-              <HeartIcon filled={product.is_liked} size={16} />
-              <span>{likeCount}</span>
-            </button>
+            {canInteract ? (
+              <>
+                <button
+                  className={`${styles.statBtn} ${styles.statBtnHeart} ${product.is_liked ? styles.statBtnLiked : ""}`}
+                  onClick={handleLike}
+                >
+                  <HeartIcon filled={product.is_liked} size={16} />
+                  <span>{likeCount}</span>
+                </button>
 
-            <button
-              className={`${styles.statBtn} ${product.is_saved ? styles.statBtnSaved : ""}`}
-              onClick={handleSave}
-            >
-              <BookmarkIcon filled={product.is_saved} size={16} />
-            </button>
+                <button
+                  className={`${styles.statBtn} ${product.is_saved ? styles.statBtnSaved : ""}`}
+                  onClick={handleSave}
+                >
+                  <BookmarkIcon filled={product.is_saved} size={16} />
+                </button>
+              </>
+            ) : (
+              <span
+                className={styles.statCount}
+                aria-label={`${likeCount} likes`}
+              >
+                <HeartIcon filled={product.is_liked} size={16} />
+                <span>{likeCount}</span>
+              </span>
+            )}
 
             <button
               className={styles.statBtn}

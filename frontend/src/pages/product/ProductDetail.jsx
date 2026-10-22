@@ -721,7 +721,7 @@ export default function ProductDetail() {
               <AlertTriangle size={16} />
               <span>
                 <strong>Visitor Mode:</strong> Viewing from another campus.
-                Purchasing & commenting are disabled.
+                Liking, saving, messaging & commenting are disabled.
               </span>
             </div>
           )}
@@ -1087,16 +1087,31 @@ export default function ProductDetail() {
                 <Eye size={12} />
                 {product.views || 0}
               </span>
-              <button
-                className={`${styles.statChip} ${styles.likeChip} ${product.is_liked ? styles.likeChipActive : ""} ${likeAnim ? styles.likeAnim : ""}`}
-                onClick={handleToggleLike}
-              >
-                <Heart
-                  size={12}
-                  fill={product.is_liked ? "currentColor" : "none"}
-                />
-                {product.likes_count || 0}
-              </button>
+              {/* Visitor mode: the API refuses a like on another campus's
+                  listing (CROSS_CAMPUS_INTERACTION_BLOCKED), so the heart is a
+                  plain count, not a button that lights up and goes out again. */}
+              {isForeignCampus ? (
+                <span
+                  className={`${styles.statChip} ${product.is_liked ? styles.likeChipActive : ""}`}
+                >
+                  <Heart
+                    size={12}
+                    fill={product.is_liked ? "currentColor" : "none"}
+                  />
+                  {product.likes_count || 0}
+                </span>
+              ) : (
+                <button
+                  className={`${styles.statChip} ${styles.likeChip} ${product.is_liked ? styles.likeChipActive : ""} ${likeAnim ? styles.likeAnim : ""}`}
+                  onClick={handleToggleLike}
+                >
+                  <Heart
+                    size={12}
+                    fill={product.is_liked ? "currentColor" : "none"}
+                  />
+                  {product.likes_count || 0}
+                </button>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -1124,16 +1139,19 @@ export default function ProductDetail() {
                 </button>
               )}
 
-              <button
-                className={`${styles.secondaryBtn} ${product.is_saved ? styles.savedActive : ""} ${savedAnim ? styles.savedAnim : ""}`}
-                onClick={handleToggleSave}
-              >
-                <Heart
-                  size={16}
-                  fill={product.is_saved ? "currentColor" : "none"}
-                />
-                {product.is_saved ? "Saved" : "Save Item"}
-              </button>
+              {/* Refused on another campus too; see the like chip above. */}
+              {!isForeignCampus && (
+                <button
+                  className={`${styles.secondaryBtn} ${product.is_saved ? styles.savedActive : ""} ${savedAnim ? styles.savedAnim : ""}`}
+                  onClick={handleToggleSave}
+                >
+                  <Heart
+                    size={16}
+                    fill={product.is_saved ? "currentColor" : "none"}
+                  />
+                  {product.is_saved ? "Saved" : "Save Item"}
+                </button>
+              )}
             </div>
 
             <div className={styles.divider} />

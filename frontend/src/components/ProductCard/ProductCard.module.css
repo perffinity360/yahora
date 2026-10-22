@@ -328,6 +328,19 @@
   fill: currentColor;
 }
 
+/* The heart as a count, not a button: another campus's listing, where the
+   API refuses a like (see `canInteract` in ProductCard.jsx). */
+.statCount {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #888;
+  padding: 4px 2px;
+  cursor: default;
+}
+
 /* Liked state — footer heart */
 .statBtnLiked {
   color: var(--pink-dark, #eb487f);

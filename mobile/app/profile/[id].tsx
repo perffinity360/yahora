@@ -57,7 +57,7 @@ export default function PublicProfileScreen() {
   const profileUserId = typeof id === 'string' ? id : undefined;
   const fromParam = typeof from === 'string' ? from : undefined;
 
-  const { profile: viewer } = useAuth();
+  const { profile: viewer, isDemoUser, signOut } = useAuth();
   const isOwnProfile = !!viewer?.id && viewer.id === profileUserId;
 
   const { data, isLoading, isError, error, refetch } = usePublicProfile(profileUserId);
@@ -82,6 +82,16 @@ export default function PublicProfileScreen() {
   // `from` param each opener passes (the dashboard, or a product's seller card),
   // falling back to the dashboard.
   const goBack = () => router.replace(fromParam ?? '/(tabs)/profile');
+
+  // Same way out of the demo as the Marketplace's demo alert: sign out, then
+  // the login screen.
+  const logInAsStudent = async () => {
+    try {
+      await signOut();
+    } finally {
+      router.replace('/(auth)/login');
+    }
+  };
 
   const profile = data?.profile;
   const listings = data?.listings ?? [];
@@ -117,7 +127,7 @@ export default function PublicProfileScreen() {
               <ListingsSkeleton cardWidth={cardWidth} />
             </>
           ) : isError && !profile && isProfileUnavailable(error) ? (
-            <UnavailableState onBack={goBack} />
+            <UnavailableState onBack={goBack} onLogIn={isDemoUser ? logInAsStudent : undefined} />
           ) : isError && !profile ? (
             <ErrorState onRetry={refetch} />
           ) : profile ? (
@@ -296,8 +306,52 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
  * no such person. The two are deliberately indistinguishable — saying which
  * would tell a demo account that the student exists. No retry: the answer
  * won't change.
+ *
+ * A demo account gets `onLogIn` and is told to log in: "isn't available" read
+ * as "this student isn't on Yahora". The wording is the same for every id, so
+ * it still says nothing about whether the person exists. Same copy as the
+ * web's logged-out profile gate.
  */
-function UnavailableState({ onBack }: { onBack: () => void }) {
+function UnavailableState({ onBack, onLogIn }: { onBack: () => void; onLogIn?: () => void }) {
+  if (onLogIn) {
+    return (
+      <View style={styles.errorWrap}>
+        <View style={styles.emptyIcon}>
+          <Feather name="lock" size={24} color={colors.purple} />
+        </View>
+        <Text style={[styles.emptyTitle, styles.unavailableTitle]}>Log in to see this profile</Text>
+        <AppText style={styles.emptySubtitle}>
+          Profiles on Yahora are visible only to verified students.
+        </AppText>
+        <Pressable
+          onPress={onLogIn}
+          accessibilityRole="button"
+          accessibilityLabel="Log in with your college email"
+          style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnDim]}
+        >
+          <LinearGradient
+            colors={BRAND}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.retryBtnGradient, styles.logInBtnGradient]}
+          >
+            <Feather name="log-in" size={16} color={colors.white} />
+            <AppText style={styles.retryBtnText}>Log in with college email</AppText>
+          </LinearGradient>
+        </Pressable>
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={8}
+          style={({ pressed }) => [styles.backLink, pressed && styles.retryBtnDim]}
+        >
+          <AppText style={styles.backLinkText}>Go back</AppText>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.errorWrap}>
       <View style={styles.emptyIcon}>
@@ -639,6 +693,18 @@ const styles = StyleSheet.create({
     fontFamily: font.family.semibold,
     fontSize: font.sizes.body,
     color: colors.white,
+  },
+  logInBtnGradient: {
+    paddingHorizontal: spacing.lg,
+  },
+  backLink: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  backLinkText: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.body,
+    color: colors.purple,
   },
 
   /* Skeleton bits */

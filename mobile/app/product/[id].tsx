@@ -664,10 +664,15 @@ function Content({
       >
         {isForeignCampus && !isOwnListing ? (
           <AppText style={styles.foreignNote}>
-            Viewing another campus — messaging is limited to your home campus.
+            Viewing another campus — liking, saving and messaging are for your home campus.
           </AppText>
         ) : null}
         <View style={styles.actionBar}>
+          {/* No heart or bookmark on another campus's listing: the API refuses
+              both (CROSS_CAMPUS_INTERACTION_BLOCKED), so a live button lit up
+              for a moment and went out again. The likes count above stays. */}
+          {isForeignCampus ? null : (
+          <>
           <Pressable
             onPress={onLike}
             accessibilityRole="button"
@@ -699,6 +704,8 @@ function Content({
               color={saved ? colors.purple : colors.mutedText}
             />
           </Pressable>
+          </>
+          )}
 
           {isOwnListing ? (
             <View style={[styles.msgBtn, styles.ownPill]}>

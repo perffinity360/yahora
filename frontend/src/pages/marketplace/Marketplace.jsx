@@ -220,6 +220,7 @@ const SwipeCard = memo(function SwipeCard({
   zIndex,
   isTop,
   currentUserId,
+  canInteract = true,
 }) {
   const cardRef = useRef(null);
   const startX = useRef(0);
@@ -378,6 +379,7 @@ const SwipeCard = memo(function SwipeCard({
           onCardClick={onCardClick ? handleCardClick : null}
           onToggleLike={triggerLike}
           onToggleSave={() => onSave(product.id, product.is_saved)}
+          canInteract={canInteract}
         />
       </div>
     </div>
@@ -1675,6 +1677,7 @@ export default function Marketplace() {
                       onToggleSave={() =>
                         handleToggleGridSave(product.id, product.is_saved)
                       }
+                      canInteract={!isForeignCampus}
                     />
                   </div>
                 ))}
@@ -1739,11 +1742,14 @@ export default function Marketplace() {
                       product={product}
                       isTop={i === arr.length - 1}
                       zIndex={i + 1}
-                      onLike={handleSwipeLike}
+                      // Visitor mode: a right swipe moves on like a pass.
+                      // The like would be refused (CROSS_CAMPUS_INTERACTION_BLOCKED).
+                      onLike={isForeignCampus ? handleSwipePass : handleSwipeLike}
                       onPass={handleSwipePass}
                       onSave={handleToggleGridSave}
                       onCardClick={(id) => navigate(`/product/${id}`)}
                       currentUserId={currentUserId}
+                      canInteract={!isForeignCampus}
                     />
                   ))}
                 </div>
