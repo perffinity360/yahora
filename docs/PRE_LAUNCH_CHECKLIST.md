@@ -95,6 +95,16 @@ ceilings do not model each other. Supabase can happily accept sends that Brevo t
 
 ---
 
+## Wiping production before launch
+
+Production data from before launch is wiped (see "When" under Activity and recommendations).
+
+- **The wipe must include the `products` and `avatars` storage buckets, not just the tables.**
+  Files uploaded before Phase 6B (V-FIX photo names) have the uploader's user id in their
+  names.
+
+---
+
 ## Seed photos
 
 **Phase 9:** mirror all seed photos into the Supabase products bucket and point the seeds at them.

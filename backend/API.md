@@ -1111,8 +1111,12 @@ no error middleware, the response is Express's default **HTML** error page.
 Deletion of the previous avatar is best-effort: the old public URL is split on `/avatars/`
 and the trailing segment removed from the `avatars` bucket. A delete failure is logged and
 swallowed on purpose, so the upload still succeeds and orphaned files accumulate. New object
-name is `<userId>-<Date.now()>.<ext>` with `upsert: true`; the extension comes from the
-client-supplied filename.
+name is `<random uuid>.<ext>` with `upsert: true` (Phase 6B V-FIX; it was
+`<userId>-<Date.now()>.<ext>`, which put the user's id in a public URL). `<ext>` is the
+client-supplied filename's extension, lower-cased, when it matches `/^[a-z0-9]{1,5}$/i`;
+otherwise it comes from the mimetype (`image/jpeg` → `jpg`, `image/png` → `png`,
+`image/webp` → `webp`, other `image/<x>` → `<x>` if it matches the same pattern), else `bin`.
+A filename with no dot has no extension of its own.
 
 The response returns only the URL — it does **not** return the updated `<users row>`, unlike
 every other user-mutating endpoint.
@@ -1478,11 +1482,12 @@ same id the caller had just made up. `status` is forced to `'available'`. (`sold
 in Phase 6B V-B; `sold_at` is set by a trigger when a listing is sold.)
 
 `requireAuth` runs **before** multer, so a caller with no token is refused on the headers alone
-and their upload is never buffered into process memory. The object name is still
-`<seller_id>-<Date.now()>-<random>.<ext>`, where `seller_id` is now the token holder.
+and their upload is never buffered into process memory.
 
-Images upload **sequentially** to the `products` bucket as
-`<seller_id>-<Date.now()>-<random>.<ext>`, `upsert: false`. There is no MIME or size
+Images upload **sequentially** to the `products` bucket as `<random uuid>.<ext>`,
+`upsert: false` (Phase 6B V-FIX; it was `<seller_id>-<Date.now()>-<random>.<ext>`, which
+leaked the seller's id through `image_urls` after the identity rule hid `seller_id`). `<ext>`
+follows the same rule as the avatar upload (`POST /api/user/:userId/avatar`). There is no MIME or size
 validation. **If upload N fails, uploads 1..N-1 stay in the bucket and no product row is
 created** — orphaned files, no cleanup path.
 
