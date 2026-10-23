@@ -7,9 +7,31 @@
 // ⚠ The four handlers below pre-date the ownership split and were
 // written by Vishwajeet. They are live in both web and mobile — do not
 // change their behaviour or response shapes. Phase 1 adds underneath.
+import { randomUUID } from 'node:crypto';
 import { supabase } from '../../config/supabase.js';
 import { sendError, mapDbError } from '../../utils/respond.js';
 import { resolveViewer, isDemoCampus, canSeeIdentity } from '../../utils/viewer.js';
+
+// 🔒 FILE NAMES (Phase 6B V-FIX, edited by Vishwajeet with Neeraj's agreement).
+// Avatar URLs are public, and a name that began with the user's id leaked it. A
+// stored name is now a random uuid plus an extension. The extension is the
+// original name's only when it is short and alphanumeric; otherwise it comes
+// from the mimetype, which the client sends, so it is held to the same pattern.
+// 'bin' when neither gives one. Twin of storageExt in products.controller.js.
+const SAFE_EXT = /^[a-z0-9]{1,5}$/i;
+const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
+const storageExt = (file) => {
+    const name = file.originalname ?? '';
+    const dot = name.lastIndexOf('.');
+    // No dot: no extension. split('.').pop() returned the whole name here.
+    const fromName = dot > -1 ? name.slice(dot + 1) : '';
+    if (SAFE_EXT.test(fromName)) return fromName.toLowerCase();
+
+    const mime = String(file.mimetype ?? '').toLowerCase();
+    const fromMime = MIME_EXT[mime] ?? (mime.startsWith('image/') ? mime.slice('image/'.length) : '');
+    return SAFE_EXT.test(fromMime) ? fromMime : 'bin';
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The only columns PUT /:userId/profile may write.
@@ -232,8 +254,8 @@ export const updateAvatar = async (req, res) => {
         }
 
         // C. Upload the new avatar
-        const fileExt = file.originalname.split('.').pop();
-        const newFileName = `${userId}-${Date.now()}.${fileExt}`;
+        // A random name: nothing in a public URL says whose avatar it is (V-FIX).
+        const newFileName = `${randomUUID()}.${storageExt(file)}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
             .from('avatars')
