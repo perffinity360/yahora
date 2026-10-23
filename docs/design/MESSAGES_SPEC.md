@@ -85,7 +85,7 @@ already follows. Every pair is in §7.
 | §1 Row | `You: ` prefix deferred (§8) | **Live**: your own last message starts with `You: `; deleted and hidden messages change the preview (§10.9) | The inbox now returns `last_sender_id` and `last_message_deleted` (migration `message_actions`) |
 | §2 Bubbles | — | Pointer to §10 | Replies show a quote; deleted messages show a tombstone |
 | §3 Tokens | — | 10 new mobile tokens, 10 new web variables | §10's colours, named so no screen holds a literal |
-| §5 Allowed differences | Six | **Ten**: adds swipe (mobile only), how the actions open, the delete dialog's look, Android 13's own copy confirmation | Each is a platform convention, not a design choice |
+| §5 Allowed differences | Six | **Ten**: adds swipe (touch only — the app, and the website on a touch screen), how the actions open, the delete dialog's look, Android 13's own copy confirmation | Each is a platform convention, not a design choice |
 | §7 Contrast | — | 10 new rows, including two **rejected** options | The first quote and tombstone colours failed on the pink end; the shipped ones pass |
 | §8 Deferred | Price, `You: ` | Price only | `You: ` shipped in §10.9 |
 | §10 | — | **New**: message actions | Phase 6B |
@@ -666,8 +666,9 @@ that one line before running it anywhere else.
    draws the purple shadow. Allowed because the button is a single floating control, not a
    list row, so the frame-cost reason behind #1 does not apply.
 
-7. **Swipe to reply is mobile-only** (§10.3). A swipe means nothing with a mouse; the website
-   reaches Reply through its menu.
+7. **Swipe to reply needs a touch screen** (§10.3). The app and the website on a touch
+   screen both do it, with the same constants. A swipe means nothing with a mouse or pen,
+   so there the website reaches Reply through its menu only.
 8. **How the actions open** (§10.2): long-press and a bottom sheet on mobile; a hover/tap
    button beside the bubble, right-click, and a popover menu on web. The three actions, their
    order, labels and icons are the same.
@@ -788,9 +789,11 @@ Where the picture and this section disagree, this section wins.
 
 Icons: Reply `corner-up-left` · Copy `copy` · Delete `trash-2` (Feather on mobile, lucide on web — same shapes).
 
-### 10.3 Swipe to reply (mobile only)
+### 10.3 Swipe to reply (touch screens: the app, and the website on a touch device)
 
-Swipe any bubble (mine or theirs) to the **right**:
+Swipe any bubble (mine or theirs) to the **right**. Mobile always; the website only for a
+**touch** pointer (Pointer Events, `pointerType === 'touch'`) — a mouse or pen there changes
+nothing and keeps the menu (§10.2).
 
 | | Value |
 |---|---|
@@ -801,6 +804,15 @@ Swipe any bubble (mine or theirs) to the **right**:
 | Returns | spring back to 0 (Reanimated `withSpring`, damping 20, stiffness 220) |
 
 Not on tombstones, pending or failed messages. All of it runs on the UI thread (Reanimated); no JS state changes while the finger moves.
+
+**Website, on a touch screen** — the same numbers and the same look, with these web-only details:
+
+- The row has `touch-action: pan-y`, so vertical scrolling stays the browser's own. A gesture that reaches 10 vertical (or 12 to the left) before 12 to the right is left alone for the rest of that touch.
+- A touch that starts within **24** of the screen's left edge is never a swipe: that is the phone's or browser's Back gesture.
+- The spring back is a **180 ms** CSS transition (`cubic-bezier(0.2, 0.8, 0.2, 1)`); with `prefers-reduced-motion` the bubble snaps back. The icon also scales 0.6 → 1 as it fades in.
+- Releasing past 56 does what the menu's Reply does (reply bar, input focused) and asks for a 10 ms vibration where the browser allows it.
+- No React state changes while the finger moves: the offset is written to the row as CSS variables.
+- A tap still shows the actions button and a long-press still opens the menu (§10.2). A swipe that has started cancels the long-press; a long-press that has opened the menu ends the swipe; the click that follows a swipe does not count as a tap.
 
 ### 10.4 Reply mode — the reply bar in the composer
 
@@ -906,8 +918,8 @@ No emoji sizing, no links, no quote, not swipeable. White 90% on the pink end me
 
 ```ts
 LONG_PRESS_MS               = 350
-SWIPE_REPLY_TRIGGER         = 56     // mobile only
-SWIPE_REPLY_MAX             = 72     // mobile only
+SWIPE_REPLY_TRIGGER         = 56     // touch only: the app, and the website on a touch screen
+SWIPE_REPLY_MAX             = 72     // touch only
 REPLY_MIN_BUBBLE_WIDTH      = 180
 JUMP_HIGHLIGHT_HOLD_MS      = 1200
 JUMP_HIGHLIGHT_FADE_MS      = 400
