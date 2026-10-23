@@ -4,8 +4,8 @@
    function delete_message_for_everyone too if the 60 changes. */
 
 export const LONG_PRESS_MS = 350;
-export const SWIPE_REPLY_TRIGGER = 56; // mobile only
-export const SWIPE_REPLY_MAX = 72; // mobile only
+export const SWIPE_REPLY_TRIGGER = 56; // touch only: the app, and the website on a touch screen
+export const SWIPE_REPLY_MAX = 72; // touch only
 export const REPLY_MIN_BUBBLE_WIDTH = 180;
 export const JUMP_HIGHLIGHT_HOLD_MS = 1200;
 export const JUMP_HIGHLIGHT_FADE_MS = 400;

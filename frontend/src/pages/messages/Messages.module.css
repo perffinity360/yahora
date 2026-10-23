@@ -69,6 +69,7 @@
   --msg-line: rgba(128, 0, 128, 0.08);     /* messagesLine: filter border, row divider, received-bubble border */
   --msg-bar-line: rgba(128, 0, 128, 0.07); /* messagesBarBorder: header, snippet, composer */
   --msg-note: rgba(255, 255, 255, 0.9);    /* chatNoteSurface: text on the wallpaper */
+  --msg-swipe-shadow: rgba(42, 8, 42, 0.12); /* the swipe-to-reply icon's shadow (§10.3) */
 
   display: flex;
   justify-content: center;
@@ -76,8 +77,10 @@
   padding: 16px;
   /* Exactly the space left under the chrome — never taller, so the page itself
      doesn't scroll and the chat input can't be pushed below the fold. dvh so
-     the mobile browser URL bar doesn't eat the bottom. */
-  height: calc(100dvh - var(--app-chrome));
+     the mobile browser URL bar doesn't eat the bottom. --vv-height: only while
+     a keyboard covers the screen in a browser where dvh doesn't shrink for it
+     (iOS Safari) — see the visualViewport effect in Messages.jsx. */
+  height: calc(var(--vv-height, 100dvh) - var(--app-chrome));
   min-height: 0;
   overflow: hidden;
   background:
@@ -894,23 +897,83 @@
 }
 
 /* Touch screens (phones and tablets, by input type, not width): a long-press
-   opens the actions menu, so it must not also start the browser's text
-   selection or iOS's Copy/Look Up callout. Menu → Copy copies the whole
-   message. A mouse keeps normal selection. The composer and the inbox search
-   are not inside these rows and keep theirs. */
+   anywhere on this page — a bubble, a date chip, the unread band, the welcome
+   card, the header, an inbox row — must not start the browser's text
+   selection or iOS's Copy/Look Up callout. On a bubble it opens the actions
+   menu, and Menu → Copy copies the whole message. Only the places you type
+   keep selection: the composer and the inbox search. A mouse keeps normal
+   selection everywhere. */
 @media (hover: none) and (pointer: coarse) {
-  .messageWrapper,
-  .messageBubble,
-  .tombstone,
-  .quote {
+  .root {
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+  }
+  .root .chatInput,
+  .root .searchInput {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .actionsBtn { transition: none; }
+}
+
+/* Swipe right to reply (§10.3) — touch only; Messages.jsx starts it from a
+   touch pointer and never from a mouse. pan-y leaves vertical scrolling to
+   the browser, so the thread scrolls natively and only a sideways move
+   reaches the page. While a swipe runs, Messages.jsx sets data-swipe on the
+   row ("drag", then "return" for the spring back) and writes --swipe-x
+   (0..SWIPE_REPLY_MAX) and --swipe-p (0..1 by SWIPE_REPLY_TRIGGER) straight
+   to it. The bubble (and their avatar) slide over the icon, which waits at
+   the row's left edge, bottom-aligned. */
+.swipeRow {
+  position: relative;
+  touch-action: pan-y;
+}
+.swipeRow[data-swipe] > .messageBubble,
+.swipeRow[data-swipe] > .messageAvatar,
+.swipeRow[data-swipe] > .avatarSpacer {
+  position: relative;
+  z-index: 1;
+  transform: translateX(var(--swipe-x, 0px));
+}
+.swipeReplyIcon {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--white);
+  color: var(--purple);
+  box-shadow: 0 1px 3px var(--msg-swipe-shadow);
+  pointer-events: none;
+  opacity: var(--swipe-p, 0);
+  transform: scale(calc(0.6 + 0.4 * var(--swipe-p, 0)));
+}
+/* The spring back: SWIPE_RETURN_MS (180) in Messages.jsx. */
+.swipeRow[data-swipe="return"] > .messageBubble,
+.swipeRow[data-swipe="return"] > .messageAvatar,
+.swipeRow[data-swipe="return"] > .avatarSpacer {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.swipeRow[data-swipe="return"] .swipeReplyIcon {
+  transition:
+    opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Snap back. */
+  .swipeRow[data-swipe="return"] > .messageBubble,
+  .swipeRow[data-swipe="return"] > .messageAvatar,
+  .swipeRow[data-swipe="return"] > .avatarSpacer,
+  .swipeRow[data-swipe="return"] .swipeReplyIcon { transition: none; }
 }
 
 /* Jump to the original (§10.6): a full-width band behind the row, held
@@ -1568,7 +1631,7 @@
 @media (max-width: 768px) {
   .root {
     padding: 0;
-    height: calc(100dvh - var(--app-chrome));
+    height: calc(var(--vv-height, 100dvh) - var(--app-chrome));
   }
   .container {
     border-radius: 0;

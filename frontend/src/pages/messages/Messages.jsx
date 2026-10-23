@@ -48,6 +48,8 @@ import {
   JUMP_HIGHLIGHT_HOLD_MS,
   JUMP_MAX_EXTRA_PAGES,
   REPLY_MIN_BUBBLE_WIDTH,
+  SWIPE_REPLY_MAX,
+  SWIPE_REPLY_TRIGGER,
 } from "../../utils/messageActions";
 import { copyText } from "../../utils/share";
 import AppToast, { useToast } from "../../components/AppToast/AppToast";
@@ -86,6 +88,17 @@ const UNREAD_ANCHOR_PADDING = 12;
    screen showing already-read history puts the line in the middle of the chat,
    which is what makes it legible as a seam between old and new. */
 const UNREAD_ANCHOR_LEAD_RATIO = 0.35;
+
+/* Swipe right to reply (spec §10.3), touch only. Which way a gesture goes is
+   decided by whichever comes first: SWIPE_START_PX to the right (a swipe) or
+   SWIPE_CANCEL_PX up/down (a scroll — left to the browser). A touch that
+   starts within SWIPE_EDGE_PX of the screen's left edge belongs to the
+   phone's or browser's Back gesture and is never a swipe. SWIPE_RETURN_MS is
+   the spring back, the same 180ms as .swipeRow in Messages.module.css. */
+const SWIPE_START_PX = 12;
+const SWIPE_CANCEL_PX = 10;
+const SWIPE_EDGE_PX = 24;
+const SWIPE_RETURN_MS = 180;
 
 /* How close to the bottom still counts as "reading the live end of the thread".
    Above this, an arriving message must not pull the viewport down. */
@@ -577,6 +590,11 @@ export default function Messages() {
   const actionsBtnRefs = useRef(new Map()); // messageKey → its actions button
   const menuAnchorRef = useRef(null);
   const lastPointerTypeRef = useRef("mouse");
+  /* §10.3: the touch gesture on a bubble, from its pointerdown until the next
+     one. `mode`: null while undecided, then "swipe" or "ignore". Kept after
+     the finger lifts so the click that follows a swipe can tell. */
+  const swipeRef = useRef(null);
+  const swipeReturnTimerRef = useRef(null);
   const { toast, showToast } = useToast();
 
   const closeActionsMenu = useCallback((returnFocus) => {
@@ -740,6 +758,55 @@ export default function Messages() {
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior });
   };
+
+  /* The keyboard on a phone. Android Chromium shrinks the layout viewport and
+     dvh for it (index.html: interactive-widget=resizes-content). A browser that
+     doesn't (iOS Safari) only shrinks the visual viewport, so the composer and
+     the reply bar would sit under the keyboard. While this page is mounted,
+     publish the visual viewport's height as --vv-height whenever it is shorter
+     than the layout viewport, and .root (and App's wrapper) size from it. Unset
+     otherwise, so desktop and Android keep plain 100dvh. × scale: a pinch-zoom
+     shrinks vv.height too, and that is not a keyboard. */
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const html = document.documentElement;
+    const update = () => {
+      const visible = vv.height * vv.scale;
+      if (visible < html.clientHeight - 1) {
+        html.style.setProperty("--vv-height", `${Math.round(visible)}px`);
+      } else {
+        html.style.removeProperty("--vv-height");
+      }
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      html.style.removeProperty("--vv-height");
+    };
+  }, []);
+
+  /* The thread got shorter — the keyboard opened, the reply bar appeared
+     (menu Reply or a swipe), or the composer grew a line. If the reader was
+     at the live end, keep them there so the newest messages stay right above
+     the composer. Shrinking doesn't move scrollTop, so no scroll event has
+     cleared isAtBottomRef by the time this runs. */
+  useEffect(() => {
+    if (!messagesEl) return;
+    let lastHeight = messagesEl.clientHeight;
+    const ro = new ResizeObserver(() => {
+      const h = messagesEl.clientHeight;
+      if (h < lastHeight && isAtBottomRef.current) {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+      lastHeight = h;
+    });
+    ro.observe(messagesEl);
+    return () => ro.disconnect();
+  }, [messagesEl]);
 
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
@@ -2014,6 +2081,77 @@ export default function Messages() {
     chatInputRef.current?.focus({ preventScroll: true });
   };
 
+  /* §10.3: swipe a bubble right to reply — touch only; a mouse or pen does
+     nothing here and keeps the menu. While the finger moves no state
+     changes: the offset is written to the row as --swipe-x / --swipe-p and
+     the CSS moves the bubble and fades the icon in. */
+  const setSwipeOffset = (row, x) => {
+    row.style.setProperty("--swipe-x", `${x}px`);
+    row.style.setProperty("--swipe-p", String(Math.min(x / SWIPE_REPLY_TRIGGER, 1)));
+  };
+  // `msg` is null for a row that has actions but can't be swiped (a
+  // tombstone): it still starts a fresh gesture, so an earlier swipe's
+  // leftover state can't swallow this tap.
+  const beginSwipe = (e, msg) => {
+    const prev = swipeRef.current;
+    if (prev?.mode === "swipe") {
+      // A new touch during the spring back: finish it at once.
+      clearTimeout(swipeReturnTimerRef.current);
+      delete prev.row.dataset.swipe;
+    }
+    swipeRef.current = null;
+    if (!msg || e.pointerType !== "touch" || !e.isPrimary) return;
+    swipeRef.current = {
+      pointerId: e.pointerId,
+      row: e.currentTarget.parentElement, // the bubble's row (.swipeRow)
+      msg,
+      x0: e.clientX,
+      y0: e.clientY,
+      x: 0,
+      mode: e.clientX < SWIPE_EDGE_PX ? "ignore" : null,
+      done: false,
+    };
+  };
+  const moveSwipe = (e) => {
+    const g = swipeRef.current;
+    if (!g || g.done || g.pointerId !== e.pointerId || g.mode === "ignore") return;
+    const dx = e.clientX - g.x0;
+    const dy = e.clientY - g.y0;
+    if (!g.mode) {
+      if (Math.abs(dy) >= SWIPE_CANCEL_PX || dx <= -SWIPE_START_PX) {
+        g.mode = "ignore";
+        return;
+      }
+      if (dx < SWIPE_START_PX) return;
+      g.mode = "swipe";
+      g.row.dataset.swipe = "drag";
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // Touch pointers are captured implicitly anyway.
+      }
+    }
+    g.x = Math.min(Math.max(dx, 0), SWIPE_REPLY_MAX);
+    setSwipeOffset(g.row, g.x);
+  };
+  const endSwipe = (e, cancelled) => {
+    const g = swipeRef.current;
+    if (!g || g.done || g.pointerId !== e.pointerId) return;
+    g.done = true;
+    if (g.mode !== "swipe") return;
+    const { row } = g;
+    row.dataset.swipe = "return";
+    setSwipeOffset(row, 0);
+    clearTimeout(swipeReturnTimerRef.current);
+    swipeReturnTimerRef.current = setTimeout(() => {
+      delete row.dataset.swipe;
+    }, SWIPE_RETURN_MS);
+    if (!cancelled && g.x >= SWIPE_REPLY_TRIGGER) {
+      navigator.vibrate?.(10);
+      startReply(g.msg);
+    }
+  };
+
   /* The menu's items (§10.1): Reply · Copy · Delete; a tombstone has only
      Delete. Reply is wired in part 3. */
   const actionsMenuItems = (msg) => {
@@ -2770,6 +2908,8 @@ export default function Messages() {
                         const rowKey = messageKey(msg);
                         const hasActions = !msg.pending && !msg.failed;
                         const menuOpen = actionsMenu?.key === rowKey;
+                        // §10.3: not a tombstone (nor pending or failed).
+                        const swipeable = hasActions && !isDeleted(msg);
 
                         return (
                           <React.Fragment key={messageKey(msg) || index}>
@@ -2809,8 +2949,13 @@ export default function Messages() {
                                 jumpHighlight?.id === msg.id ? styles.rowHighlight : ""
                               } ${
                                 menuOpen || tappedRowKey === rowKey ? styles.actionsShown : ""
-                              }`}
+                              } ${swipeable ? styles.swipeRow : ""}`}
                             >
+                              {swipeable && (
+                                <span className={styles.swipeReplyIcon} aria-hidden="true">
+                                  <CornerUpLeft size={18} />
+                                </span>
+                              )}
                               {!isMine &&
                                 (isRunEnd ? (
                                   <AvatarImg
@@ -2836,19 +2981,31 @@ export default function Messages() {
                                 {...(hasActions && {
                                   onPointerDown: (e) => {
                                     lastPointerTypeRef.current = e.pointerType;
+                                    beginSwipe(e, swipeable ? msg : null);
                                   },
+                                  onPointerMove: moveSwipe,
+                                  onPointerUp: (e) => endSwipe(e, false),
+                                  onPointerCancel: (e) => endSwipe(e, true),
                                   // Touch: a tap shows this row's button, and
                                   // a second tap hides it. Not a tap on a
-                                  // link in the text.
+                                  // link in the text, and not the click that
+                                  // can follow a swipe.
                                   onClick: (e) => {
                                     if (lastPointerTypeRef.current !== "touch") return;
+                                    if (swipeRef.current?.mode === "swipe") return;
                                     if (e.target.closest("a, button")) return;
                                     setTappedRowKey((k) => (k === rowKey ? null : rowKey));
                                   },
                                   // Right-click; on Android Chrome a
                                   // long-press fires this too.
+                                  // Once a swipe has started it wins; once
+                                  // the long-press has opened the menu, the
+                                  // finger can no longer start a swipe.
                                   onContextMenu: (e) => {
                                     e.preventDefault();
+                                    const g = swipeRef.current;
+                                    if (g?.mode === "swipe") return;
+                                    if (g) g.mode = "ignore";
                                     openActionsMenu(msg);
                                   },
                                 })}
