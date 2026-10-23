@@ -23,7 +23,7 @@ import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
 import { useToggleLike } from '../../src/hooks/useProductActions';
-import { usePublicProfile } from '../../src/hooks/usePublicProfile';
+import { isProfileUnavailable, usePublicProfile } from '../../src/hooks/usePublicProfile';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
@@ -57,10 +57,10 @@ export default function PublicProfileScreen() {
   const profileUserId = typeof id === 'string' ? id : undefined;
   const fromParam = typeof from === 'string' ? from : undefined;
 
-  const { profile: viewer } = useAuth();
+  const { profile: viewer, isDemoUser, signOut } = useAuth();
   const isOwnProfile = !!viewer?.id && viewer.id === profileUserId;
 
-  const { data, isLoading, isError, refetch } = usePublicProfile(profileUserId);
+  const { data, isLoading, isError, error, refetch } = usePublicProfile(profileUserId);
   const toggleLike = useToggleLike(['publicProfile', profileUserId]);
 
   const { width } = useWindowDimensions();
@@ -82,6 +82,16 @@ export default function PublicProfileScreen() {
   // `from` param each opener passes (the dashboard, or a product's seller card),
   // falling back to the dashboard.
   const goBack = () => router.replace(fromParam ?? '/(tabs)/profile');
+
+  // Same way out of the demo as the Marketplace's demo alert: sign out, then
+  // the login screen.
+  const logInAsStudent = async () => {
+    try {
+      await signOut();
+    } finally {
+      router.replace('/(auth)/login');
+    }
+  };
 
   const profile = data?.profile;
   const listings = data?.listings ?? [];
@@ -116,6 +126,8 @@ export default function PublicProfileScreen() {
               <HeaderSkeleton />
               <ListingsSkeleton cardWidth={cardWidth} />
             </>
+          ) : isError && !profile && isProfileUnavailable(error) ? (
+            <UnavailableState onBack={goBack} onLogIn={isDemoUser ? logInAsStudent : undefined} />
           ) : isError && !profile ? (
             <ErrorState onRetry={refetch} />
           ) : profile ? (
@@ -282,6 +294,86 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         >
           <Feather name="refresh-cw" size={16} color={colors.white} />
           <AppText style={styles.retryBtnText}>Retry</AppText>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The API won't show this person to this viewer (Phase 6B identity rule: a
+ * demo account that opened a real student's profile from a link), or there is
+ * no such person. The two are deliberately indistinguishable — saying which
+ * would tell a demo account that the student exists. No retry: the answer
+ * won't change.
+ *
+ * A demo account gets `onLogIn` and is told to log in: "isn't available" read
+ * as "this student isn't on Yahora". The wording is the same for every id, so
+ * it still says nothing about whether the person exists. Same copy as the
+ * web's logged-out profile gate.
+ */
+function UnavailableState({ onBack, onLogIn }: { onBack: () => void; onLogIn?: () => void }) {
+  if (onLogIn) {
+    return (
+      <View style={styles.errorWrap}>
+        <View style={styles.emptyIcon}>
+          <Feather name="lock" size={24} color={colors.purple} />
+        </View>
+        <Text style={[styles.emptyTitle, styles.unavailableTitle]}>Log in to see this profile</Text>
+        <AppText style={styles.emptySubtitle}>
+          Profiles on Yahora are visible only to verified students.
+        </AppText>
+        <Pressable
+          onPress={onLogIn}
+          accessibilityRole="button"
+          accessibilityLabel="Log in with your college email"
+          style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnDim]}
+        >
+          <LinearGradient
+            colors={BRAND}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.retryBtnGradient, styles.logInBtnGradient]}
+          >
+            <Feather name="log-in" size={16} color={colors.white} />
+            <AppText style={styles.retryBtnText}>Log in with college email</AppText>
+          </LinearGradient>
+        </Pressable>
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={8}
+          style={({ pressed }) => [styles.backLink, pressed && styles.retryBtnDim]}
+        >
+          <AppText style={styles.backLinkText}>Go back</AppText>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.errorWrap}>
+      <View style={styles.emptyIcon}>
+        <Feather name="user-x" size={26} color={colors.purple} />
+      </View>
+      <Text style={[styles.emptyTitle, styles.unavailableTitle]}>
+        This profile isn&apos;t available.
+      </Text>
+      <Pressable
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnDim]}
+      >
+        <LinearGradient
+          colors={BRAND}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.retryBtnGradient}
+        >
+          <Feather name="arrow-left" size={16} color={colors.white} />
+          <AppText style={styles.retryBtnText}>Go back</AppText>
         </LinearGradient>
       </Pressable>
     </View>
@@ -567,6 +659,11 @@ const styles = StyleSheet.create({
     color: colors.blackSoft,
     textAlign: 'center',
   },
+  // CC-V4 asks for Inter 600 15. 15 is not on the type scale (src/theme
+  // font.sizes), so this keeps emptyTitle's 14 and changes only the weight.
+  unavailableTitle: {
+    fontFamily: font.family.semibold,
+  },
   emptySubtitle: {
     fontFamily: font.family.regular,
     fontSize: font.sizes.body,
@@ -596,6 +693,18 @@ const styles = StyleSheet.create({
     fontFamily: font.family.semibold,
     fontSize: font.sizes.body,
     color: colors.white,
+  },
+  logInBtnGradient: {
+    paddingHorizontal: spacing.lg,
+  },
+  backLink: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  backLinkText: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.body,
+    color: colors.purple,
   },
 
   /* Skeleton bits */

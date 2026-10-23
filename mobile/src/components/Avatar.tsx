@@ -1,3 +1,4 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 
@@ -16,6 +17,7 @@ export function Avatar({
   uri,
   size,
   ringed = false,
+  hidden = false,
 }: {
   name?: string | null;
   uri?: string | null;
@@ -26,8 +28,23 @@ export function Avatar({
    * already a solid colour and gets no ring, on the card or here.
    */
   ringed?: boolean;
+  /**
+   * The API hid this person from the viewer (`seller_hidden` / `user_hidden`,
+   * the Phase 6B identity rule). A plain person icon on the brand disc instead
+   * of initials — every hidden person looks the same, so nothing on screen
+   * tells two of them apart. Name and photo are ignored.
+   */
+  hidden?: boolean;
 }) {
   const dims = { width: size, height: size, borderRadius: size / 2 };
+
+  if (hidden) {
+    return (
+      <View style={[styles.avatar, dims, styles.hiddenDisc]}>
+        <Feather name="user" size={Math.round(size * 0.5)} color={colors.white} />
+      </View>
+    );
+  }
 
   // An uploaded photo's URL is minted by the backend against its own
   // SUPABASE_URL, which is loopback in local dev and unreachable from a phone.
@@ -66,6 +83,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.pinkLight,
     overflow: 'hidden',
+  },
+  // The same purple as the product card's initials disc, which draws the
+  // hidden seller there (sellerAvatarFallback in ProductCard.tsx).
+  hiddenDisc: {
+    backgroundColor: colors.purple,
   },
   ring: {
     borderColor: colors.purpleDark,

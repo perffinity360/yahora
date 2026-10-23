@@ -544,11 +544,14 @@ export default function MarketplaceScreen() {
           sellerName={item.seller?.full_name}
           sellerAvatarUrl={item.seller?.avatar_url}
           onPress={() => openProduct(item.id)}
-          onLike={() => toggleLike.mutate({ productId: item.id })}
+          // Another campus's listing can't be liked (the API answers
+          // CROSS_CAMPUS_INTERACTION_BLOCKED), so the heart is a plain count
+          // there instead of a button that lights up and goes out again.
+          onLike={isForeignCampus ? undefined : () => toggleLike.mutate({ productId: item.id })}
         />
       </View>
     ),
-    [openProduct, toggleLike],
+    [openProduct, toggleLike, isForeignCampus],
   );
 
   /**
@@ -628,6 +631,30 @@ export default function MarketplaceScreen() {
     // was getting clobbered. An instant jump cannot be half-finished.
     gridRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [displayProducts]);
+
+  /**
+   * A new search or filter is a new list, so it starts at the top, as a re-sort
+   * does. Without this the grid kept the offset it had in the full feed: scroll
+   * a few rows down, type in the search box, and the shorter result list landed
+   * part-way into its own first row, with the top card cut off under the
+   * search bar.
+   *
+   * It runs after the filtered list is committed, the same moment the re-sort
+   * effect above scrolls, and costs nothing once the grid is at the top, which
+   * is every keystroke after the first.
+   */
+  useEffect(() => {
+    if (gridOffset.current <= 0) return;
+    gridRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [
+    filters.search,
+    filters.selCategories,
+    filters.priceRange,
+    filters.selConditions,
+    filters.selPostingDate,
+    filters.showWishlist,
+    filters.showMyListings,
+  ]);
 
   const emptyTitle = filters.search.trim()
     ? `No results for "${filters.search.trim()}"`
@@ -776,7 +803,11 @@ export default function MarketplaceScreen() {
       ) : viewMode === 'swipe' ? (
         <SwipeDeck
           products={displayProducts}
-          onLikeProduct={(id) => toggleLike.mutate({ productId: id })}
+          // A right swipe on another campus just moves on, like a pass: the
+          // like would be refused (see renderCard).
+          onLikeProduct={(id) => {
+            if (!isForeignCampus) toggleLike.mutate({ productId: id });
+          }}
           onOpenProduct={(id) => router.push(hrefWithFrom(`/product/${id}`, SWIPE_HREF))}
           onBackToGrid={() => setViewMode('grid')}
           onListItem={!isForeignCampus ? openSell : undefined}

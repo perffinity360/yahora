@@ -115,6 +115,7 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `MESSAGE_NOT_FOUND` | 404 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` and `/delete-for-me`, from `delete_message_for_everyone()` / `hide_message_for_me()` (migration `message_actions`) — no such message, or the caller is not one of its two people | — |
 | `NOT_MESSAGE_SENDER` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the caller didn't send the message | — |
 | `DELETE_WINDOW_EXPIRED` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the message is more than 60 minutes old | — |
+| `CANNOT_MESSAGE_SELF` | 400 | **Live (Phase 6B V-FIX).** `POST /api/messages/send` — `receiver_id` is the caller. Sent by the controller before any database call | `message` |
 | `REPLY_TARGET_INVALID` | 400 | **Live (Phase 6B V-C).** `POST /api/messages/send`, from trigger function `fill_message_reply()` — the quoted message isn't in this conversation, or was deleted for everyone | — |
 | `PRODUCT_NOT_FOUND` | 404 | **Live (Phase 6B N-E).** `POST /api/products/:id/sold`, `/available`, `GET /api/products/:id/buyer-candidates` — no such listing. Raised by `mark_product_sold()`, `mark_product_available()`, `get_product_buyer_candidates()` (migration `mark_sold`); sent by the controller itself for a `?q=` search | — |
 | `NOT_PRODUCT_OWNER` | 403 | **Live (Phase 6B N-E).** The same three routes — the caller isn't the listing's seller. Raised by the same three functions; sent by the controller itself for a `?q=` search | — |
@@ -2119,6 +2120,10 @@ campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 202
   missing, not a string, or only whitespace. Checked before anything touches the database
 **400:** `{ "error": "INVALID_FORMAT", "message": "receiver_id and product_id must be valid
   UUIDs." }` — either missing or malformed (Phase 6B V-C; both used to be 500s)
+**400:** `{ "error": "CANNOT_MESSAGE_SELF", "message": "You can't message yourself." }` —
+  `receiver_id` is the caller (compared case-insensitively). Checked before anything touches
+  the database (Phase 6B V-FIX; before that the message was stored, and the self-conversation's
+  unread badge never cleared)
 **400:** `{ "error": "INVALID_FORMAT", "message": "A message can be at most 2000 characters." }`
 **400:** `{ "error": "INVALID_FORMAT", "message": "reply_to_id must be a valid UUID." }` — only
   when `reply_to_id` is present and not `null`

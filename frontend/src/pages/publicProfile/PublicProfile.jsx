@@ -2,8 +2,11 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import styles from "../dashboard/Dashboard.module.css";
+import gateStyles from "./PublicProfile.module.css";
+import { ArrowLeft, LockKeyhole, LogIn, UserX } from "lucide-react";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import { API_BASE_URL } from '../../config/urls';
+import { useAuth } from "../../contexts/AuthContext";
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 
 
@@ -43,6 +46,53 @@ function DisplayAvatar({ src, name, size, onClick }) {
   );
 }
 
+/* The profile the API won't show (Phase 6B identity rule).
+   "login": logged out (401), or a demo account (its 404 reads as "log in",
+   for every id alike, so it never says whether the student exists).
+   "unavailable": a student asked for someone who isn't there. */
+function ProfileGate({ kind, isDemoUser, onLogIn, onBack }) {
+  const isLogin = kind === "login";
+  const Icon = isLogin ? LockKeyhole : UserX;
+
+  return (
+    <div className={gateStyles.gatePage}>
+      <section className={gateStyles.gateCard} aria-labelledby="profile-gate-title">
+        <div className={gateStyles.gateIcon} aria-hidden="true">
+          <Icon size={28} strokeWidth={1.75} />
+        </div>
+
+        {isLogin && <p className={gateStyles.gateEyebrow}>Students only</p>}
+        <h1 id="profile-gate-title" className={gateStyles.gateTitle}>
+          {isLogin ? "Log in to see this profile" : "This profile isn't available"}
+        </h1>
+        <p className={gateStyles.gateText}>
+          {isLogin
+            ? "Profiles on Yahora are visible only to verified students."
+            : "The link may be out of date, or the account may no longer be on Yahora."}
+        </p>
+
+        {isLogin && (
+          <>
+            <button type="button" className={gateStyles.gatePrimary} onClick={onLogIn}>
+              <LogIn size={18} strokeWidth={2} aria-hidden="true" />
+              {isDemoUser ? "Log in with college email" : "Log in"}
+            </button>
+            {isDemoUser && (
+              <p className={gateStyles.gateNote}>This ends your demo session.</p>
+            )}
+          </>
+        )}
+
+        <div className={gateStyles.gateDivider} />
+        <button type="button" className={gateStyles.gateBack} onClick={onBack}>
+          <ArrowLeft size={16} strokeWidth={2} aria-hidden="true" />
+          Go back
+        </button>
+      </section>
+    </div>
+  );
+}
+
 export default function PublicProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -50,6 +100,8 @@ export default function PublicProfile() {
 
   // 1. Fetch the current logged-in user's ID
   const currentUserId = localStorage.getItem("yahora_user_id");
+  const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
+  const { logout } = useAuth();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +136,11 @@ export default function PublicProfile() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (res.status === 401) return setGate("login");
-        if (res.status === 404) return setGate("unavailable");
+        // A demo account is refused a real student with a 404 (identity rule).
+        // "Isn't available" read as "not on Yahora", so it is told to log in
+        // instead, for every id alike: the wording still says nothing about
+        // whether the person exists.
+        if (res.status === 404) return setGate(isDemoUser ? "login" : "unavailable");
         if (!res.ok) throw new Error("Failed to fetch profile");
         setData(await res.json());
       } catch (err) {
@@ -95,7 +151,7 @@ export default function PublicProfile() {
       }
     };
     fetchProfile();
-  }, [id, currentUserId]);
+  }, [id, currentUserId, isDemoUser]);
 
   /* ── 2. Add Like and Save Handlers ── */
   const handleToggleLike = async (productId, currentState) => {
@@ -254,34 +310,20 @@ export default function PublicProfile() {
         <span>Loading profile…</span>
       </div>
     );
-  if (gate === "login")
+  if (gate)
     return (
-      <div className={styles.loading}>
-        <div
-          className={styles.bioCard}
-          style={{ maxWidth: 420, margin: "0 16px", textAlign: "center" }}
-        >
-          <h2 className={styles.sectionTitle} style={{ margin: "0 0 8px" }}>
-            Log in to see this profile
-          </h2>
-          <p style={{ margin: "0 0 20px", color: "#888", fontSize: "0.95rem", fontFamily: "inherit" }}>
-            Profiles on Yahora are visible only to verified students.
-          </p>
-          <button
-            className={styles.sellBtn}
-            style={{ margin: "0 auto" }}
-            onClick={() => navigate("/auth")}
-          >
-            Log in
-          </button>
-        </div>
-      </div>
-    );
-  if (gate === "unavailable")
-    return (
-      <div className={styles.loading}>
-        <div className={styles.emptyState}>This profile isn't available.</div>
-      </div>
+      <ProfileGate
+        kind={gate}
+        isDemoUser={isDemoUser}
+        onLogIn={() => {
+          // A demo account is signed in, so /auth's GuestOnly guard would
+          // bounce it home. logout() first, as the Marketplace's demo alert
+          // does.
+          if (isDemoUser) logout();
+          navigate("/auth");
+        }}
+        onBack={() => (window.history.length > 1 ? navigate(-1) : navigate("/marketplace"))}
+      />
     );
   if (error)
     return (

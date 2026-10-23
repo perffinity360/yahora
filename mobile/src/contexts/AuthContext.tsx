@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -59,6 +60,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isDemoUser, setIsDemoUser] = useState(false);
   const [onboardingSkipped, setOnboardingSkipped] = useState(false);
+  const queryClient = useQueryClient();
+
+  /**
+   * The query cache is saved to the phone (app/_layout.tsx) and answers belong
+   * to whoever asked: a listing fetched by a student names its seller and
+   * commenters, and the same listing fetched by a demo account does not
+   * (Phase 6B identity rule). Its keys don't say who asked, so a cache that
+   * outlives an account hands that account's pages to the next one, within
+   * staleTime with no refetch at all. Emptied on every sign-in and sign-out.
+   * In-flight requests are cancelled first so a late answer can't refill it.
+   */
+  const forgetCachedData = async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+  };
 
   useEffect(() => {
     let active = true;
@@ -183,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = body as unknown as AuthPayload;
+    await forgetCachedData();
     await supabase.auth.setSession({
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
@@ -195,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyOtp = async (email: string, otp: string) => {
     const data = await api.post<AuthPayload>('/api/auth/verify-otp', { email, otp });
+    await forgetCachedData();
     await supabase.auth.setSession({
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
@@ -207,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const demoLogin = async () => {
     const data = await api.post<AuthPayload>('/api/auth/demo-login', {});
+    await forgetCachedData();
     await supabase.auth.setSession({
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
@@ -220,6 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    await forgetCachedData();
     await AsyncStorage.multiRemove([
       PROFILE_STORAGE_KEY,
       DEMO_STORAGE_KEY,
