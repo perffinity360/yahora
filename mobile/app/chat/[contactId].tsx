@@ -53,6 +53,7 @@ import {
   isSameDay,
 } from '../../src/lib/messages';
 import { jumboEmojiCount, splitEmoji } from '../../src/lib/emoji';
+import { isDeleted } from '../../src/lib/messageActions';
 import { welcomeStickerFor } from '../../src/lib/stickers';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { supabase } from '../../src/lib/supabase';
@@ -313,7 +314,14 @@ export default function ChatScreen() {
 
   const handleRetry = (message: PendingMessage) => {
     if (!message.client_tag) return;
-    sendMessage.mutate({ content: message.content, clientTag: message.client_tag });
+    // A failed reply is sent again as the same reply: its quote is on the bubble.
+    sendMessage.mutate({
+      content: message.content,
+      clientTag: message.client_tag,
+      replyToId: message.reply_to_id,
+      replyToSenderId: message.reply_to_sender_id,
+      replyPreview: message.reply_preview,
+    });
   };
   // One stable function for every row, so the memoised bubbles do not
   // re-render each time the screen does. Same send, same mutation.
@@ -1194,6 +1202,7 @@ const MessageBubble = memo(function MessageBubble({
   widthStyle: { maxWidth: number };
   onRetry: (message: PendingMessage) => void;
 }) {
+  const deleted = isDeleted(message);
   return (
     <View style={firstOfRun ? styles.runStart : styles.runNext}>
       <View style={[styles.messageRow, mine ? styles.rowMine : styles.rowTheirs]}>
@@ -1227,12 +1236,17 @@ const MessageBubble = memo(function MessageBubble({
               pointerEvents="none"
             />
           ) : null}
-          <MessageText content={message.content} mine={mine} />
+          {deleted ? (
+            <Tombstone mine={mine} />
+          ) : (
+            <MessageText content={message.content} mine={mine} />
+          )}
           <View style={styles.bubbleMeta}>
             <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
               {formatClockTime(message.created_at)}
             </AppText>
-            {mine ? <Ticks message={message} /> : null}
+            {/* A tombstone shows its time only, never ticks (§10.8). */}
+            {mine && !deleted ? <Ticks message={message} /> : null}
           </View>
         </View>
       </View>
@@ -1307,6 +1321,23 @@ function MessageText({ content, mine }: { content: string; mine: boolean }) {
         );
       })}
     </AppText>
+  );
+}
+
+/**
+ * MESSAGES_SPEC.md §10.8 "The tombstone": a message deleted for everyone. Drawn
+ * inside the normal bubble of its side. No MessageText, so no emoji sizing and
+ * no links: there is no text left to draw.
+ */
+function Tombstone({ mine }: { mine: boolean }) {
+  const color = mine ? colors.chatTombstoneMine : colors.mutedText;
+  return (
+    <View style={styles.tombstone}>
+      <Feather name="slash" size={14} color={color} />
+      <AppText style={[styles.tombstoneText, mine ? styles.tombstoneMine : styles.tombstoneTheirs]}>
+        {mine ? 'You deleted this message' : 'This message was deleted'}
+      </AppText>
+    </View>
   );
 }
 
@@ -1613,6 +1644,18 @@ const styles = StyleSheet.create({
   emojiInline: { fontSize: EMOJI_SIZES.inline },
   bubbleTextMine: { color: colors.white },
   bubbleTextTheirs: { color: colors.blackSoft },
+  tombstone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tombstoneText: {
+    fontFamily: font.family.italic,
+    fontSize: font.sizes.bodyLg,
+    lineHeight: 20,
+  },
+  tombstoneMine: { color: colors.chatTombstoneMine },
+  tombstoneTheirs: { color: colors.mutedText },
   link: { textDecorationLine: 'underline' },
   linkMine: { color: colors.blueLight },
   linkTheirs: { color: colors.blueDark },

@@ -159,6 +159,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             ...row,
             last_message: msg.content,
             last_message_time: msg.created_at,
+            // §10.9: "You: " follows the sender; a new message is never a tombstone.
+            last_sender_id: msg.sender_id,
+            last_message_deleted: false,
             unread_count:
               msg.receiver_id === myId && !isActiveChat
                 ? Number(row.unread_count || 0) + 1
@@ -183,16 +186,24 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     [queryClient],
   );
 
-  /* ── Message updated (delivered / read ticks) ────────────────────────── */
+  /* ── Message updated (ticks; delete for everyone) ────────────────────── */
   const handleUpdate = useCallback(
     (msg: Message) => {
       const myId = userIdRef.current;
       if (!myId) return;
       if (msg.sender_id !== myId && msg.receiver_id !== myId) return;
 
+      // A tombstone (§10.8). The conversation's inbox preview may have been
+      // this message, and only the server knows what it shows now (§10.9).
+      // Checked before the no-cache return: the inbox needs this even when
+      // the chat was never opened.
+      if (msg.deleted_at) queryClient.invalidateQueries({ queryKey: ['inbox', myId] });
+
       const contactId = contactIdOf(msg, myId);
       const chatKey = ['chat', contactId, msg.product_id];
       if (!queryClient.getQueryData<ChatCache>(chatKey)) return;
+      // A tombstone or a wiped quote is a row change like a tick: replies whose
+      // reply_preview the delete wiped arrive as UPDATEs of their own.
       // Any page: a tick can land on a message you have scrolled far above.
       queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
         updateEveryPage(prev, (items) => replaceMessage(items, msg)),

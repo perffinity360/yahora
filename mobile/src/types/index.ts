@@ -220,6 +220,16 @@ export interface Message {
   is_read: boolean;
   is_delivered: boolean;
   created_at: string;
+  /* The four message-action fields (Phase 6B; API.md, MESSAGES_SPEC §10).
+     Optional because a cache saved before 6B holds rows without them. */
+  /** The message this one replies to, or null. */
+  reply_to_id?: string | null;
+  /** Who wrote the quoted message. Set = this is a reply (`isReply`). */
+  reply_to_sender_id?: string | null;
+  /** The quote's first 200 characters. Null on a reply = the original was deleted. */
+  reply_preview?: string | null;
+  /** Set = deleted for everyone: a tombstone, with `content` ''. */
+  deleted_at?: string | null;
 }
 
 /**
@@ -236,6 +246,10 @@ export interface InboxItem {
   last_message: string | null;
   last_message_time: string | null;
   unread_count: number;
+  /** Who sent the last message I can see; my own id → "You: " (§10.9). */
+  last_sender_id?: string | null;
+  /** That message is a tombstone, and `last_message` is ''. */
+  last_message_deleted?: boolean;
 }
 
 /**

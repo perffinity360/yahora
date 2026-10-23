@@ -75,6 +75,9 @@ export default function MessagesScreen() {
         // Demo campus contacts are always shown online, mirroring the web.
         online={isDemoUser || (onlineUsers.has(item.contact_id) && item.contact_id !== myId)}
         isSelf={item.contact_id === myId}
+        // `!!myId`: an older cached row has no last_sender_id, and
+        // undefined === undefined must not read as "You:".
+        lastFromMe={!!myId && item.last_sender_id === myId}
         onOpen={openChat}
       />
     ),
@@ -179,6 +182,7 @@ const ConversationRow = memo(function ConversationRow({
   first,
   online,
   isSelf,
+  lastFromMe,
   onOpen,
 }: {
   row: InboxItem;
@@ -186,6 +190,8 @@ const ConversationRow = memo(function ConversationRow({
   first: boolean;
   online: boolean;
   isSelf: boolean;
+  /** I sent the last message I can see (§10.9). */
+  lastFromMe: boolean;
   onOpen: (row: InboxItem) => void;
 }) {
   const unread = Number(row.unread_count || 0);
@@ -217,9 +223,33 @@ const ConversationRow = memo(function ConversationRow({
         </View>
 
         <View style={styles.rowBottom}>
-          <AppText style={[styles.preview, isUnread && styles.previewUnread]} numberOfLines={1}>
-            {row.last_message || 'Start the conversation ✨'}
-          </AppText>
+          {/* MESSAGES_SPEC §10.9. Only null/undefined is a conversation with
+              nothing in it: a tombstone's text is ''. */}
+          {row.last_message_deleted ? (
+            <View style={styles.previewDeleted}>
+              <Feather
+                name="slash"
+                size={12}
+                color={isUnread ? colors.blackSoft : colors.mutedText}
+              />
+              <AppText
+                style={[
+                  styles.preview,
+                  isUnread && styles.previewUnread,
+                  isUnread ? styles.previewItalicUnread : styles.previewItalic,
+                ]}
+                numberOfLines={1}
+              >
+                {lastFromMe ? 'You deleted this message' : 'This message was deleted'}
+              </AppText>
+            </View>
+          ) : (
+            <AppText style={[styles.preview, isUnread && styles.previewUnread]} numberOfLines={1}>
+              {row.last_message == null
+                ? 'Start the conversation ✨'
+                : `${lastFromMe ? 'You: ' : ''}${row.last_message}`}
+            </AppText>
+          )}
           {isUnread ? (
             <LinearGradient
               colors={BADGE}
@@ -399,6 +429,16 @@ const styles = StyleSheet.create({
     fontFamily: font.family.medium,
     color: colors.blackSoft,
   },
+  // A deleted last message (§10.9): slash icon, gap 4, then the same line in
+  // italic. The italic faces keep each state's own weight.
+  previewDeleted: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  previewItalic: { fontFamily: font.family.italic },
+  previewItalicUnread: { fontFamily: font.family.mediumItalic },
   badge: {
     minWidth: 20,
     height: 20,

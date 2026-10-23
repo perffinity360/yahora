@@ -5,9 +5,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { api, type ApiError } from '../lib/api';
 import {
   adoptServerRow,
+  clearReplyPreviews,
   mergeMessage,
   newestServerId,
+  removeMessage,
+  replaceMessage,
   unsentStillMissing,
+  updateEveryPage,
   updateNewestPage,
   type ChatCache,
   type ChatPage,
@@ -126,7 +130,20 @@ export function newClientTag(): string {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-type SendVars = { content: string; clientTag: string };
+type SendVars = {
+  content: string;
+  clientTag: string;
+  /* A reply (§10.4). Only the id is sent; the server fills the quote. The
+     other two are for the optimistic bubble, so its quote shows at once. */
+  replyToId?: string | null;
+  replyToSenderId?: string | null;
+  replyPreview?: string | null;
+};
+
+/** `reply_preview` as the database writes it: `left(content, 200)`, in characters, not UTF-16 units. */
+const REPLY_PREVIEW_LENGTH = 200;
+const previewOf = (text: string | null | undefined) =>
+  text == null ? null : Array.from(text).slice(0, REPLY_PREVIEW_LENGTH).join('');
 
 /**
  * How long a send may take before it counts as failed. fetch has no timeout of
@@ -226,6 +243,7 @@ export function useSendMessage(contactId?: string, productId?: string) {
             receiver_id: contactId,
             product_id: productId,
             content: vars.content,
+            reply_to_id: vars.replyToId ?? null,
           },
           undefined,
           controller.signal,
@@ -259,6 +277,13 @@ export function useSendMessage(contactId?: string, productId?: string) {
             is_delivered: false,
             created_at: new Date().toISOString(),
             sent_after_id: newestServerId(list),
+            // The quote shows before the server answers. The server's row
+            // replaces all three (the trigger writes them), and a retry sends
+            // them again from this bubble (handleRetry in the chat screen).
+            reply_to_id: vars.replyToId ?? null,
+            reply_to_sender_id: vars.replyToId ? (vars.replyToSenderId ?? null) : null,
+            reply_preview: vars.replyToId ? previewOf(vars.replyPreview) : null,
+            deleted_at: null,
           };
           // At the bottom of the thread, where it was typed. Not sorted.
           return [...list, optimistic];
@@ -298,6 +323,89 @@ export function useSendMessage(contactId?: string, productId?: string) {
             )
           : prev,
       );
+    },
+  });
+}
+
+/**
+ * DELETE FOR EVERYONE (MESSAGES_SPEC §10.8). The message becomes a tombstone
+ * for both people. The other phone hears it as a Realtime UPDATE; this one
+ * puts the returned tombstone in at once, on whichever page holds it, and wipes
+ * the quote on cached replies to it. Errors (DELETE_WINDOW_EXPIRED,
+ * NOT_MESSAGE_SENDER, MESSAGE_NOT_FOUND) are the caller's to show; nothing in
+ * the cache changes until the server says yes.
+ */
+export function useDeleteForEveryone(contactId?: string, productId?: string) {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const myId = profile?.id;
+  const chatKey = ['chat', contactId, productId];
+
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      api.post<{ message: Message }>(`/api/messages/${messageId}/delete-for-everyone`),
+    onSuccess: ({ message: tombstone }) => {
+      queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+        updateEveryPage(prev, (items) =>
+          clearReplyPreviews(replaceMessage(items, tombstone), tombstone.id),
+        ),
+      );
+      // The conversation's preview may have been this message (§10.9).
+      queryClient.invalidateQueries({ queryKey: ['inbox', myId] });
+    },
+  });
+}
+
+/** Where a message sat in the chat cache, so a failed "Delete for me" can put it back there. */
+type RemovedMessage = { message: PendingMessage; page: number; index: number };
+
+/**
+ * DELETE FOR ME (MESSAGES_SPEC §10.8). Gone from my view only. There is NO
+ * Realtime event for this, on purpose (runbook §1.7: the other person must not
+ * learn of it), so this local removal is the only update the screen gets. It
+ * happens at once; a failure puts the message back where it was.
+ */
+export function useDeleteForMe(contactId?: string, productId?: string) {
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const myId = profile?.id;
+  const chatKey = ['chat', contactId, productId];
+
+  const removeEverywhere = (messageId: string) =>
+    queryClient.setQueryData<ChatCache>(chatKey, (prev) =>
+      updateEveryPage(prev, (items) => removeMessage(items, messageId)),
+    );
+
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      api.post<{ id: string; hidden: true }>(`/api/messages/${messageId}/delete-for-me`),
+    onMutate: (messageId): RemovedMessage | undefined => {
+      const pages = queryClient.getQueryData<ChatCache>(chatKey)?.pages ?? [];
+      let removed: RemovedMessage | undefined;
+      pages.forEach((p, page) => {
+        const index = p.items.findIndex((m) => m.id === messageId);
+        if (index > -1 && !removed) removed = { message: p.items[index], page, index };
+      });
+      removeEverywhere(messageId);
+      return removed;
+    },
+    onSuccess: (_data, messageId) => {
+      // Again: a history refetch that left before the server hid it may have
+      // brought it back in the meantime.
+      removeEverywhere(messageId);
+      queryClient.invalidateQueries({ queryKey: ['inbox', myId] });
+    },
+    onError: (_err, messageId, removed) => {
+      if (!removed) return;
+      queryClient.setQueryData<ChatCache>(chatKey, (prev) => {
+        if (!prev || prev.pages.some((p) => p.items.some((m) => m.id === messageId))) return prev;
+        const pages = [...prev.pages];
+        const at = Math.min(removed.page, pages.length - 1);
+        const items = [...pages[at].items];
+        items.splice(Math.min(removed.index, items.length), 0, removed.message);
+        pages[at] = { ...pages[at], items };
+        return { ...prev, pages };
+      });
     },
   });
 }

@@ -79,6 +79,20 @@ export const colors = {
   bubbleMineMeta: 'rgba(255,255,255,0.90)', // time + ticks on a sent bubble
   chatFailedTick: '#FFFFFF', // owner's call 2026-10-16: white, like the other ticks (was #F87171)
 
+  // ── MESSAGES_SPEC.md §3 — message actions (§10), v3, Phase 6B ──
+  chatRowSelected: 'rgba(128,0,128,0.10)', // the row while its sheet is open
+  chatRowHighlight: 'rgba(128,0,128,0.12)', // jump-to-original flash
+  chatQuoteMineBg: 'rgba(0,0,0,0.12)', // quote inside a sent bubble (black, not white: §10.5, §7)
+  chatQuoteMineBar: 'rgba(255,255,255,0.90)',
+  chatQuoteMineText: 'rgba(255,255,255,0.85)',
+  chatQuoteTheirsBg: 'rgba(128,0,128,0.06)', // quote inside a received bubble; also the reply bar
+  chatTombstoneMine: 'rgba(255,255,255,0.90)', // "You deleted this message" (85% fails, §7)
+  sheetHandle: 'rgba(128,0,128,0.15)',
+  // The spec calls this one `scrim`, but `scrim` below (0.55) already backs
+  // nine other sheets and modals. Renaming keeps them as they are.
+  chatScrim: 'rgba(11,11,11,0.32)', // behind the actions sheet and dialogs
+  toastBg: 'rgba(26,26,26,0.88)', // "Copied" and other toasts
+
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
   appBgBottom: '#F1E6FF',
@@ -176,6 +190,10 @@ export const font = {
     bold: 'Inter_700Bold',
     extrabold: 'Inter_800ExtraBold',
     serif: 'BreeSerif_400Regular',
+    // Real italic faces: iOS won't slant a custom font for `fontStyle: 'italic'`.
+    // For deleted messages (MESSAGES_SPEC §10.8, §10.9).
+    italic: 'Inter_400Regular_Italic',
+    mediumItalic: 'Inter_500Medium_Italic',
   },
   /**
    * THE TYPE SCALE. Phase 5 Block V-C, 2026-09-20.
