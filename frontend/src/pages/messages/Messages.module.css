@@ -69,6 +69,7 @@
   --msg-line: rgba(128, 0, 128, 0.08);     /* messagesLine: filter border, row divider, received-bubble border */
   --msg-bar-line: rgba(128, 0, 128, 0.07); /* messagesBarBorder: header, snippet, composer */
   --msg-note: rgba(255, 255, 255, 0.9);    /* chatNoteSurface: text on the wallpaper */
+  --msg-swipe-shadow: rgba(42, 8, 42, 0.12); /* the swipe-to-reply icon's shadow (§10.3) */
 
   display: flex;
   justify-content: center;
@@ -76,8 +77,10 @@
   padding: 16px;
   /* Exactly the space left under the chrome — never taller, so the page itself
      doesn't scroll and the chat input can't be pushed below the fold. dvh so
-     the mobile browser URL bar doesn't eat the bottom. */
-  height: calc(100dvh - var(--app-chrome));
+     the mobile browser URL bar doesn't eat the bottom. --vv-height: only while
+     a keyboard covers the screen in a browser where dvh doesn't shrink for it
+     (iOS Safari) — see the visualViewport effect in Messages.jsx. */
+  height: calc(var(--vv-height, 100dvh) - var(--app-chrome));
   min-height: 0;
   overflow: hidden;
   background:
@@ -347,6 +350,21 @@
 .inboxItemUnread .inboxName { font-weight: 800; }
 .inboxItemUnread .inboxTime { font-weight: 700; color: var(--purple); }
 .inboxItemUnread .inboxPreview { font-weight: 500; color: var(--black-soft); }
+
+/* Deleted for everyone (spec §10.9): Ban 12, gap 4, italic. Weight and colour
+   still come from .inboxPreview / .inboxItemUnread above. */
+.inboxPreviewDeleted {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-style: italic;
+}
+.inboxPreviewIcon { flex-shrink: 0; }
+.inboxPreviewDeletedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .unreadBadge {
   min-width: 20px;
@@ -831,6 +849,220 @@
   word-break: break-word;
 }
 
+/* ── Message actions — spec §10.2 (web) ──
+   The round button sits beside the bubble on its outer side (left of mine,
+   right of theirs), top-aligned, gap 6. Absolutely placed against the bubble,
+   so the bubble's size never changes. Hidden until the row is hovered (real
+   hover only — a touch screen's sticky :hover would leave it up), holds
+   focus, has its menu open, or had its bubble tapped (.actionsShown). */
+.actionsBtn {
+  position: absolute;
+  top: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--white);
+  border: 1px solid var(--msg-line);
+  color: var(--msg-muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 120ms ease,
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.actionsBtnMine   { right: calc(100% + 6px); }
+.actionsBtnTheirs { left: calc(100% + 6px); }
+@media (hover: hover) {
+  .messageWrapper:hover .actionsBtn { opacity: 1; pointer-events: auto; }
+  .actionsBtn:hover { background: var(--msg-pink-light); }
+}
+.messageWrapper:focus-within .actionsBtn,
+.actionsShown .actionsBtn { opacity: 1; pointer-events: auto; }
+.actionsBtn:active { transform: scale(0.94); background: var(--msg-pink-light); }
+.actionsBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+
+/* The row while its menu is open: a band the full width of the thread. The
+   shadow carries it across the thread's side padding; the clip keeps it to
+   the row's own height. */
+.rowSelected {
+  background: var(--chat-row-selected);
+  box-shadow: 0 0 0 100vmax var(--chat-row-selected);
+  clip-path: inset(0 -100vmax);
+}
+
+/* Touch screens (phones and tablets, by input type, not width): a long-press
+   anywhere on this page — a bubble, a date chip, the unread band, the welcome
+   card, the header, an inbox row — must not start the browser's text
+   selection or iOS's Copy/Look Up callout. On a bubble it opens the actions
+   menu, and Menu → Copy copies the whole message. Only the places you type
+   keep selection: the composer and the inbox search. A mouse keeps normal
+   selection everywhere. */
+@media (hover: none) and (pointer: coarse) {
+  .root {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .root .chatInput,
+  .root .searchInput {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionsBtn { transition: none; }
+}
+
+/* Swipe right to reply (§10.3) — touch only; Messages.jsx starts it from a
+   touch pointer and never from a mouse. pan-y leaves vertical scrolling to
+   the browser, so the thread scrolls natively and only a sideways move
+   reaches the page. While a swipe runs, Messages.jsx sets data-swipe on the
+   row ("drag", then "return" for the spring back) and writes --swipe-x
+   (0..SWIPE_REPLY_MAX) and --swipe-p (0..1 by SWIPE_REPLY_TRIGGER) straight
+   to it. The bubble (and their avatar) slide over the icon, which waits at
+   the row's left edge, bottom-aligned. */
+.swipeRow {
+  position: relative;
+  touch-action: pan-y;
+}
+.swipeRow[data-swipe] > .messageBubble,
+.swipeRow[data-swipe] > .messageAvatar,
+.swipeRow[data-swipe] > .avatarSpacer {
+  position: relative;
+  z-index: 1;
+  transform: translateX(var(--swipe-x, 0px));
+}
+.swipeReplyIcon {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--white);
+  color: var(--purple);
+  box-shadow: 0 1px 3px var(--msg-swipe-shadow);
+  pointer-events: none;
+  opacity: var(--swipe-p, 0);
+  transform: scale(calc(0.6 + 0.4 * var(--swipe-p, 0)));
+}
+/* The spring back: SWIPE_RETURN_MS (180) in Messages.jsx. */
+.swipeRow[data-swipe="return"] > .messageBubble,
+.swipeRow[data-swipe="return"] > .messageAvatar,
+.swipeRow[data-swipe="return"] > .avatarSpacer {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.swipeRow[data-swipe="return"] .swipeReplyIcon {
+  transition:
+    opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Snap back. */
+  .swipeRow[data-swipe="return"] > .messageBubble,
+  .swipeRow[data-swipe="return"] > .messageAvatar,
+  .swipeRow[data-swipe="return"] > .avatarSpacer,
+  .swipeRow[data-swipe="return"] .swipeReplyIcon { transition: none; }
+}
+
+/* Jump to the original (§10.6): a full-width band behind the row, held
+   JUMP_HIGHLIGHT_HOLD_MS (1200), then faded over JUMP_HIGHLIGHT_FADE_MS (400).
+   Both come from messageActions.js as --jump-hold / --jump-fade on the row.
+   An opacity animation on a pseudo-element; Messages.jsx drops the class once
+   both have run. isolation keeps the band under the row's own content. */
+.rowHighlight {
+  position: relative;
+  isolation: isolate;
+}
+.rowHighlight::before {
+  content: "";
+  position: absolute;
+  inset: 0 -100vmax;
+  z-index: -1;
+  background: var(--chat-row-highlight);
+  pointer-events: none;
+  animation: rowHighlightFade var(--jump-fade, 400ms) cubic-bezier(0.4, 0, 0.2, 1) var(--jump-hold, 1200ms) forwards;
+}
+@keyframes rowHighlightFade {
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No fade: the band holds, then goes. */
+  .rowHighlight::before { animation: rowHighlightFade 1ms step-end var(--jump-hold, 1200ms) forwards; }
+}
+
+/* The quote inside a reply (§10.5). Radius 8; 6 vertical padding, 8 after the
+   3px accent; 6 above the reply's text. Full inner width of the bubble. */
+.quote {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 6px 8px 6px 11px; /* 3 accent + 8 */
+  border: none;
+  border-radius: 8px;
+  text-align: left;
+  font: inherit;
+  position: relative;
+  overflow: hidden;
+}
+.quote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.quoteMine { background: var(--chat-quote-mine-bg); }
+.quoteMine::before { background: var(--chat-quote-mine-bar); }
+.quoteTheirs { background: var(--chat-quote-theirs-bg); }
+.quoteTheirs::before { background: var(--purple); }
+.quoteName {
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+}
+.quoteMine .quoteName { color: var(--white); }
+.quoteTheirs .quoteName { color: var(--purple); }
+.quoteText {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+}
+.quoteMine .quoteText { color: var(--chat-quote-mine-text); }
+.quoteTheirs .quoteText { color: var(--msg-muted); }
+.quoteGone { font-style: italic; }
+.quoteLink {
+  cursor: pointer;
+  transition: filter 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.quoteLink:hover { filter: brightness(0.96); }
+.quoteMine.quoteLink:hover { filter: brightness(1.08); }
+.quoteLink:active { transform: scale(0.98); }
+.quoteLink:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+.quoteMine.quoteLink:focus-visible { outline-color: var(--white); }
+@media (prefers-reduced-motion: reduce) {
+  .quoteLink { transition: none; }
+}
+
 /* Only the bubble that closes a run gets the tail: radius 5 on the corner
    nearest its sender. Mid-run bubbles stay fully rounded. */
 .runEnd .bubbleMine   { border-bottom-right-radius: 5px; }
@@ -862,6 +1094,22 @@
   font-size: 14px;
   line-height: 20px;
 }
+
+/* The tombstone (spec §10.8): Ban 14, gap 6, italic 400 14/20, in the
+   bubble's usual shape, side and background. */
+.tombstone {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 20px;
+}
+.tombstoneMine { color: var(--chat-tombstone-mine); }
+.tombstoneTheirs { color: var(--msg-muted); }
+.tombstoneIcon { flex-shrink: 0; }
 
 /* An emoji inside text — EMOJI_SIZES.inline in src/utils/emoji.js, same as
    mobile. line-height 1 keeps the line box from growing around it. Jumbo
@@ -1012,6 +1260,77 @@
 .emojiPickerContainer {
   position: relative;
   flex-shrink: 0;
+}
+
+/* The reply bar (§10.4): its own line above the input row. The composer row
+   wraps only to make room for it; min-width 0 keeps the form from wrapping. */
+.chatInputArea { flex-wrap: wrap; row-gap: 0; }
+.chatInputArea .chatForm { min-width: 0; }
+.replyBar {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 6px 6px 6px 13px; /* 13 = 3 accent + 10 */
+  border-radius: 12px;
+  background: var(--chat-quote-theirs-bg);
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+.replyBar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--purple);
+}
+.replyBarText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.replyBarName {
+  font-family: Inter, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--purple);
+}
+.replyBarPreview {
+  font-family: Inter, sans-serif;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--msg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.replyBarClose {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--msg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 150ms ease, transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.replyBarClose:hover { background: rgba(128, 0, 128, 0.08); }
+.replyBarClose:active { transform: scale(0.94); }
+.replyBarClose:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .replyBarClose { transition: none; }
 }
 .emojiToggleBtn {
   width: 38px;
@@ -1312,7 +1631,7 @@
 @media (max-width: 768px) {
   .root {
     padding: 0;
-    height: calc(100dvh - var(--app-chrome));
+    height: calc(var(--vv-height, 100dvh) - var(--app-chrome));
   }
   .container {
     border-radius: 0;
@@ -1367,8 +1686,9 @@
   outline: 2px solid var(--purple);
   outline-offset: 2px;
 }
-.chatInput:focus-visible,
-.searchInput:focus-visible {
+/* Not .searchInput: its pill (.searchBar:focus-within) already draws the
+   focus ring, and a second square outline inside it showed on every tap. */
+.chatInput:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: -1px;
 }
@@ -1399,4 +1719,85 @@
   .sendBtnActive:active {
     animation: none;
   }
+}
+
+/* ════════════════════════════════════════════
+   DELETE CONFIRMATION — spec §10.8. The Dashboard's modal
+   (Dashboard.module.css .modalOverlay / .modalContent / .modalActions,
+   copied: CSS Modules can't share classes between pages), with the choices
+   stacked full width.
+════════════════════════════════════════════ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+.modalContent {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.modalTitle {
+  font-family: "Bree Serif", serif;
+  /* Bree Serif ships one weight (400). */
+  font-weight: 400;
+  font-size: 1.25rem;
+  color: var(--black-soft);
+  margin-bottom: 8px;
+}
+.modalText {
+  font-size: 0.95rem;
+  color: #666;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.modalActionsStacked {
+  flex-direction: column;
+  gap: 8px;
+}
+.modalBtn {
+  width: 100%;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  background: #f0f0f0;
+  color: var(--black-soft);
+  transition: background-color 0.2s, transform 0.15s;
+}
+.modalBtn:hover { background: #e4e4e4; }
+.modalBtn:active { transform: scale(0.98); }
+.modalBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* Spec's #B91C1C — the web's --error-text (same value as v3's --danger-text). */
+.modalBtnDanger { background: var(--error-bg); color: var(--error-text); }
+.modalBtnDanger:hover { background: #fde2e2; }
+.modalBtnCancel { background: transparent; color: #555; }
+.modalBtnCancel:hover { background: #f0f0f0; }
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modalOverlay,
+  .modalContent { animation: none; }
+  .modalBtn { transition: none; }
 }

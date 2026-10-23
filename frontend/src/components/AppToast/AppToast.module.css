@@ -1,0 +1,37 @@
+/* MESSAGES_SPEC §10.7: Inter 600 12 white on var(--toast-bg), radius 999,
+   padding 6/12, centred, 150 ms fades. */
+.toast {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: calc(100% - 32px);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--toast-bg);
+  color: var(--white);
+  font-family: Inter, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.visible { opacity: 1; }
+
+/* Touch screens: no text selection or iOS callout on a long-press. */
+@media (hover: none) and (pointer: coarse) {
+  .toast {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+}

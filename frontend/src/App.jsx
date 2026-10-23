@@ -161,8 +161,10 @@ function App() {
     // Chrome is the height WITHOUT the URL bar, so it left the page ~56px
     // taller than the screen: opening the keyboard scrolled into that extra
     // space and the page stayed there after it closed, leaving a gap under the
-    // composer. dvh there means the page has nothing to scroll.
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: location.pathname === '/messages' ? '100dvh' : '100vh' }}>
+    // composer. dvh there means the page has nothing to scroll. --vv-height is
+    // set by Messages only while a keyboard covers part of the screen in a
+    // browser that doesn't shrink dvh for it (iOS Safari); see Messages.jsx.
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: location.pathname === '/messages' ? 'var(--vv-height, 100dvh)' : '100vh' }}>
       
       {/* Demo banner + navbar are measured together as the app chrome */}
       <div ref={chromeRef}>

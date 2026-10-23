@@ -3,7 +3,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget=resizes-content: on Android Chromium (Chrome, Brave,
+         Samsung Internet) the on-screen keyboard shrinks the layout viewport and
+         dvh, not just the visual viewport, so a full-height page like Messages
+         keeps its composer above the keyboard. Browsers that don't know it
+         ignore it (iOS Safari — Messages.jsx covers that with --vv-height). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <link rel="icon" type="image/svg+xml" href="/yahora_favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

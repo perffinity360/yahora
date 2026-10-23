@@ -16,8 +16,6 @@ import { Turnstile } from "@marsidev/react-turnstile";
 import { API_BASE_URL, getTurnstileSiteKey } from '../../config/urls';
 import { getDeviceId } from '../../config/deviceId';
 
-const DESKTOP_QUERY = "(min-width: 969px)";
-
 // Persisted across in-tab reloads so that opening the mail app on mobile to
 // fetch the OTP — which can drop the page from memory and reload it on return —
 // doesn't reset the user back to the email screen mid-verification. sessionStorage
@@ -240,21 +238,10 @@ const Auth = () => {
   ); // 1: Email, 2: OTP
   const [otp, setOtp] = useState("");
 
-  // Desktop gets shorter copy on the tabs and placeholders. 968px matches the
-  // layout breakpoint in Auth.module.css, where the page stacks for mobile.
-  const [isDesktop, setIsDesktop] = useState(
-    () => window.matchMedia(DESKTOP_QUERY).matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_QUERY);
-    const onChange = (e) => setIsDesktop(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // Default is College Email & OTP. It is the only path that works for a
+  // Default is the College Email tab (email + OTP). It is the only path that works for a
   // brand-new student, and a first-time visitor has no stored preference.
   const [tab, setTab] = useState(() =>
     localStorage.getItem(AUTH_TAB_KEY) === TAB_PASSWORD ? TAB_PASSWORD : TAB_OTP,
@@ -587,7 +574,7 @@ const Auth = () => {
 
           <div className={styles.authFormWrapper}>
             {/* Marketing copy is for the OTP (signup) tab only. The
-                Username & Password tab is a returning-user surface, so it
+                Username tab is a returning-user surface, so it
                 shows the card alone and authLeft's align-items:center
                 recenters it. */}
             {tab === TAB_OTP && (
@@ -618,10 +605,10 @@ const Auth = () => {
 
               <h2>Join Yahora</h2>
 
-              {/* Segmented control. Labels are fixed copy from runbook §0.6 —
-                  "College Email & OTP", not just "Email": students think of it
-                  as their college ID. Both labels are nowrap and the control
-                  is sized to hold them side by side at 375px. */}
+              {/* Segmented control. "College Email", not just "Email":
+                  students think of it as their college ID. The same labels on
+                  every screen size (frontend/CLAUDE.md §18). Both are nowrap
+                  and the control holds them side by side at 375px. */}
               <div className={styles.tabSwitcher} role="tablist">
                 <button
                   type="button"
@@ -632,7 +619,7 @@ const Auth = () => {
                   }`}
                   onClick={() => switchTab(TAB_OTP)}
                 >
-                  {isDesktop ? "College Email" : "College Email & OTP"}
+                  College Email
                 </button>
                 <button
                   type="button"
@@ -643,7 +630,7 @@ const Auth = () => {
                   }`}
                   onClick={() => switchTab(TAB_PASSWORD)}
                 >
-                  {isDesktop ? "Username" : "Username & Password"}
+                  Username
                 </button>
               </div>
 
@@ -664,7 +651,7 @@ const Auth = () => {
                         id="identifier"
                         type="text"
                         name="identifier"
-                        placeholder={isDesktop ? "user.name" : "rahul.sharma"}
+                        placeholder="user.name"
                         value={identifier}
                         onChange={(e) => {
                           setIdentifier(e.target.value);
@@ -771,9 +758,7 @@ const Auth = () => {
                   <div className={styles.modernInputGroup}>
                     <input
                       type="email"
-                      placeholder={
-                        isDesktop ? "you@uni.edu" : "yourUniID@university.domain"
-                      }
+                      placeholder="you@uni.edu"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
@@ -805,8 +790,8 @@ const Auth = () => {
                     </button>
                   </div>
 
-                  {/* OTP FORM ONLY — deliberately not on the Username &
-                      Password tab above. The attack this stops is fake account
+                  {/* OTP FORM ONLY — deliberately not on the Username
+                      tab above. The attack this stops is fake account
                       creation, which can only happen through OTP; on the
                       password form it would be friction for every returning
                       student and defend nothing. Runbook N-Block C, C4.4.
