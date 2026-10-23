@@ -3298,7 +3298,8 @@ New in `utils/respond.js` (raised by the database, mapped by `mapDbError`):
 | `PURCHASE_NOT_FOUND` | 404 | you aren't this listing's buyer |
 
 Sent directly by controllers: `LOGIN_REQUIRED` (401, new), `USER_NOT_FOUND` (404),
-`CROSS_CAMPUS_INTERACTION_BLOCKED` (403), `MISSING_FIELDS` and `INVALID_FORMAT` (400).
+`CROSS_CAMPUS_INTERACTION_BLOCKED` (403), `MISSING_FIELDS` and `INVALID_FORMAT` (400),
+`CANNOT_MESSAGE_SELF` (400, new in V-FIX: `POST /api/messages/send` to your own id).
 
 ## C. URLs and commands you'll reuse
 

@@ -342,6 +342,16 @@ export const sendMessage = async (req, res) => {
             });
         }
 
+        // 🚫 SELF (Phase 6B V-FIX). A message to yourself makes a conversation
+        // whose unread badge never clears. UUID_RE is case-insensitive and
+        // Postgres compares uuids by value, so compare lowercased: an upper-case
+        // copy of your own id is still you.
+        if (receiver_id.toLowerCase() === sender_id.toLowerCase()) {
+            return sendError(res, 400, 'CANNOT_MESSAGE_SELF', {
+                message: "You can't message yourself.",
+            });
+        }
+
         // The composer's limit (MESSAGES_SPEC §2).
         if (content.length > MESSAGE_MAX_LENGTH) {
             return sendError(res, 400, 'INVALID_FORMAT', {
