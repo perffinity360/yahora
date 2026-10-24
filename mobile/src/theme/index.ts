@@ -80,7 +80,7 @@ export const colors = {
   chatFailedTick: '#FFFFFF', // owner's call 2026-10-16: white, like the other ticks (was #F87171)
 
   // ── MESSAGES_SPEC.md §3 — message actions (§10), v3, Phase 6B ──
-  chatRowSelected: 'rgba(128,0,128,0.10)', // a selected message's row (§10.2, §10.11)
+  chatRowSelected: 'rgba(128,0,128,0.15)', // a selected message's row (§10.2, §10.11); 0.10 was too faint on the wallpaper
   chatRowHighlight: 'rgba(128,0,128,0.12)', // jump-to-original flash
   chatQuoteMineBg: 'rgba(0,0,0,0.12)', // quote inside a sent bubble (black, not white: §10.5, §7)
   chatQuoteMineBar: 'rgba(255,255,255,0.90)',

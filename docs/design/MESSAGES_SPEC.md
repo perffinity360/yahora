@@ -93,6 +93,9 @@ already follows. Every pair is in §7.
 | §5 Allowed differences | Ten | **Eleven**: adds when the failed-load state shows | Mobile caches a thread; the website doesn't |
 | §2 Loading | Not specified for a failed load | **"Couldn't load this chat"** with Retry, on both. It reloads by itself once the server answers | Owner's call, 2026-10-18. The web used to show an empty thread, and dropped unsent messages with it |
 | §2 Unread behaviour | Seen once 50% of the row is visible | …or once it fills 50% of the thread | A long message taller than twice the thread was never marked read: no blue ticks for the sender, and the badge stayed |
+| §10.2, §10.10 | Long-press 350 ms; selected band 0.10 | **250 ms**; band **0.15**. On the app, focusing or typing in the composer closes the menu beside a message (the selection stays) | Owner's call, 2026-10-24: the hold felt slow, and selected rows were hard to tell apart on the wallpaper |
+| §10.3 | Reply icon 30/18, bottom-aligned | **36/22, centred** on the bubble | Owner's call, 2026-10-24 |
+| §10.8 | Trash icon, centred title, body text, full-width red buttons | **WhatsApp's layout**: left title, no body, text buttons stacked on the right | Owner's call, 2026-10-24 |
 
 ---
 
@@ -563,7 +566,7 @@ chatFailedTick:     '#FFFFFF',
 Message actions (§10), added in v3:
 
 ```ts
-chatRowSelected:   'rgba(128,0,128,0.10)',     // the row while its sheet/menu is open
+chatRowSelected:   'rgba(128,0,128,0.15)',     // a selected row (0.10 until 24 Oct: too faint on the wallpaper)
 chatRowHighlight:  'rgba(128,0,128,0.12)',     // jump-to-original flash
 chatQuoteMineBg:   'rgba(0,0,0,0.12)',         // quote inside a sent bubble
 chatQuoteMineBar:  'rgba(255,255,255,0.90)',
@@ -605,7 +608,7 @@ Message actions (§10), added in v3 — reuse an existing variable only where it
 identical:
 
 ```css
---chat-row-selected: rgba(128,0,128,0.10);
+--chat-row-selected: rgba(128,0,128,0.15);
 --chat-row-highlight: rgba(128,0,128,0.12);
 --chat-quote-mine-bg: rgba(0,0,0,0.12);
 --chat-quote-mine-bar: rgba(255,255,255,0.90);
@@ -782,8 +785,8 @@ goes in the community phase.*
 
 | | Mobile | Web |
 |---|---|---|
-| How | **Long-press** the message's **row**, **350 ms** (`LONG_PRESS_MS`) — the bubble or the empty space beside it, the thread's full width. It **selects** the message (§10.11) and opens the menu | **Hover** the bubble → an actions button appears beside it; click it. **Right-click** anywhere on the row opens the same menu. On a touch screen (no hover) **tap** the bubble to show the button, or **long-press** anywhere on the row (350 ms) to open the menu |
-| The row while open / selected | `rgba(128,0,128,0.10)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
+| How | **Long-press** the message's **row**, **250 ms** (`LONG_PRESS_MS`; 350 until 24 Oct) — the bubble or the empty space beside it, the thread's full width. It **selects** the message (§10.11) and opens the menu | **Hover** the bubble → an actions button appears beside it; click it. **Right-click** anywhere on the row opens the same menu. On a touch screen (no hover) **tap** the bubble to show the button, or **long-press** anywhere on the row (250 ms) to open the menu |
+| The row while open / selected | `rgba(128,0,128,0.15)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
 | Container | **Menu card beside the bubble**, no scrim | **Popover menu** anchored under the actions button, kept inside the thread's edges |
 
 **Mobile menu:** white · radius 16 · shadow `#2A082A` at 16%, radius 12, y 8 (Android elevation 8) · hairline border `rgba(128,0,128,0.08)` · width 196 · padding 6 vertical · each item 48 tall, padding 0/16, icon 20 then gap 14 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** in `#B91C1C`. Placed **8 below** the bubble when it fits inside the thread (12 from its edges), otherwise 8 above, otherwise over it (a bubble taller than the thread). Lined up with the bubble's right edge for mine, left edge for theirs. Grows in from the corner nearest the bubble (scale 0.86 → 1, opacity 0 → 1, 170 ms, ease-out cubic); fades out in 110 ms. Any touch in the thread or a scroll closes it and **keeps the selection** (the header then shows the actions); the Android back button or the header's arrow ends the selection.
@@ -804,7 +807,7 @@ nothing and keeps the menu (§10.2).
 |---|---|
 | Starts | after **12** of horizontal movement; **10** of vertical movement first cancels it, so the list still scrolls |
 | Follows the finger | up to **72** (`SWIPE_REPLY_MAX`), never left of its start |
-| Reply icon | `corner-up-left` 18 purple in a 30 white circle, shadow `0 1px 3px rgba(42,8,42,0.12)` (Android: `elevation: 1`), at the row's left edge, bottom-aligned with the bubble, opacity rising 0 → 1 as the bubble travels 0 → 56 |
+| Reply icon | `corner-up-left` 22 purple in a 36 white circle (18 in 30 until 24 Oct), shadow `0 1px 3px rgba(42,8,42,0.12)` (Android: `elevation: 1`), at the row's left edge, **centred on the bubble's height** (was bottom-aligned), opacity rising 0 → 1 as the bubble travels 0 → 56 |
 | Triggers | released past **56** (`SWIPE_REPLY_TRIGGER`) → reply mode for that message |
 | Returns | spring back to 0 (Reanimated `withSpring`, damping 20, stiffness 220) |
 
@@ -821,7 +824,7 @@ Not on tombstones, pending or failed messages. All of it runs on the UI thread (
 
 ### 10.4 Reply mode — the reply bar in the composer
 
-Starting a reply (from the menu, the sheet or a swipe) shows a **reply bar** inside the composer bar, above the input row, and focuses the input.
+Starting a reply (from the menu, the sheet or a swipe) shows a **reply bar** inside the composer bar, above the input row, and focuses the input — **the keyboard opens** on a phone, also when the input still had focus from before but its keyboard had been put away.
 
 | | Value |
 |---|---|
@@ -886,23 +889,22 @@ Choosing **Delete** opens a confirmation:
 | Mine, not deleted, sent **under 60 minutes ago** | `Delete message?` | **Delete for everyone** (`#B91C1C`) · **Delete for me** · **Cancel** |
 | Mine and older, or theirs, or any tombstone | `Delete message?` | **Delete for me** · **Cancel** |
 
-Body text under the title: `Delete it for everyone in this chat, or only for you?` when both delete choices show; `It will be removed from this chat for you. <name> will still see it.` when only "for me" shows (`<name>` = the contact's first name).
+**No body text** (owner's call, 24 Oct 2026): the choices explain themselves. Until then a line under the title explained them.
 
-For several selected messages (§10.11) the title is `Delete N messages?`, "Delete for everyone" shows only when **every** one of them allows it, and the body reads `Delete them for everyone in this chat, or only for you?` / `They will be removed from this chat for you. <name> will still see them.`
+For several selected messages (§10.11) the title is `Delete N messages?`, and "Delete for everyone" shows only when **every** one of them allows it.
 
-**The dialog — the same look on both platforms** (revised 24 Oct 2026; mobile no longer uses the phone's `Alert`):
+**The dialog — WhatsApp's layout, the same on both platforms** (revised 24 Oct 2026, twice; mobile no longer uses the phone's `Alert`):
 
 | | Value |
 |---|---|
 | Scrim | `rgba(11,11,11,0.55)` mobile (`scrim`) · `rgba(0,0,0,0.4)` web (the Dashboard modal's) |
-| Card | white · radius 24 mobile, 20 web · padding 24 top, 20 sides mobile (24 web) · max width 360 mobile, 400 web · centred |
-| Icon | `trash-2` 22 `#B91C1C` in a 52 circle `#FEF0F0` (errorBg), centred above the title |
-| Title | Bree Serif 400 20, `#1A1A1A`, centred, 12–14 under the icon |
-| Body | Inter 400 14/20 mutedText (web: `#666`, 0.95rem), centred |
-| Buttons | stacked, full width, gap 8, 20–24 under the body · 46–48 tall, radius 14, Inter 600 15 |
-| Delete for everyone | solid `#B91C1C`, white text |
-| Delete for me | **solid** `#B91C1C`, white text when it is the only delete choice; **soft** `#FEF0F0` with `#B91C1C` text when "for everyone" shows above it |
-| Cancel | no background, mutedText (web `#555`) |
+| Card | white · radius 24 · padding 22 top and sides, 12 bottom · max width 360 · centred on screen |
+| Icon | none (the trash circle was removed on 24 Oct) |
+| Title | Bree Serif 400 20, `#1A1A1A`, **left-aligned** |
+| Buttons | text buttons, **stacked and right-aligned**, each as wide as its label · 18 under the title, gap 4 · 44 tall, padding 0/12, radius 12 (the press/hover background), Inter 600 15 · the label's right edge lines up with the title's padding |
+| Delete for everyone | `#B91C1C` text; press/hover background `#FEF0F0` (errorBg) |
+| Delete for me | `#B91C1C` text; press/hover background `#FEF0F0` |
+| Cancel | purple `#800080` text; press background inboxRowPressed (mobile), hover `rgba(128,0,128,0.06)` (web) |
 | Motion | mobile: the scrim fades, the card scales 0.92 → 1 over 200 ms; web: the existing `modalIn` |
 
 Tapping the scrim, Esc (web) or the Android back button is Cancel. Cancel keeps a selection; a delete ends it.
@@ -938,7 +940,7 @@ No emoji sizing, no links, no quote, not swipeable. White 90% on the pink end me
 ### 10.10 Constants — same names, same values, both platforms
 
 ```ts
-LONG_PRESS_MS               = 350
+LONG_PRESS_MS               = 250    // 350 until 24 Oct
 SWIPE_REPLY_TRIGGER         = 56     // touch only: the app, and the website on a touch screen
 SWIPE_REPLY_MAX             = 72     // touch only
 REPLY_MIN_BUBBLE_WIDTH      = 180

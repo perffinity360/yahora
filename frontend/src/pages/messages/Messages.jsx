@@ -3122,7 +3122,7 @@ export default function Messages() {
                                 ))}
                               {swipeable && (
                                 <span className={styles.swipeReplyIcon} aria-hidden="true">
-                                  <CornerUpLeft size={18} />
+                                  <CornerUpLeft size={22} />
                                 </span>
                               )}
                               {!isMine &&
@@ -3538,14 +3538,13 @@ export default function Messages() {
         </div>
       </div>
 
-      {/* §10.8: the delete confirmation, in the Dashboard's modal look. One
-          message, or everything selected; "Delete for everyone" only when
-          every one of them allows it. */}
+      {/* §10.8: the delete confirmation, WhatsApp's layout. One message, or
+          everything selected; "Delete for everyone" only when every one of
+          them allows it. No explanation: the choices say it. */}
       {deleteTargets &&
         (() => {
           const both = deleteTargets.every((m) => canDeleteForEveryone(m, currentUserId));
           const many = deleteTargets.length > 1;
-          const name = firstName(activeChat?.contact_name);
           return (
             <div className={styles.modalOverlay} onClick={closeDeleteDialog}>
               <div
@@ -3553,7 +3552,6 @@ export default function Messages() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="delete-message-title"
-                aria-describedby="delete-message-body"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === "Escape") {
@@ -3562,20 +3560,10 @@ export default function Messages() {
                   }
                 }}
               >
-                <span className={styles.modalIcon} aria-hidden="true">
-                  <Trash2 size={22} />
-                </span>
                 <h3 id="delete-message-title" className={styles.modalTitle}>
                   {many ? `Delete ${deleteTargets.length} messages?` : "Delete message?"}
                 </h3>
-                <p id="delete-message-body" className={styles.modalText}>
-                  {both
-                    ? `Delete ${many ? "them" : "it"} for everyone in this chat, or only for you?`
-                    : many
-                      ? `They will be removed from this chat for you. ${name} will still see them.`
-                      : `It will be removed from this chat for you. ${name} will still see it.`}
-                </p>
-                <div className={`${styles.modalActions} ${styles.modalActionsStacked}`}>
+                <div className={styles.modalActions}>
                   {both && (
                     <button
                       type="button"
@@ -3589,16 +3577,14 @@ export default function Messages() {
                   <button
                     type="button"
                     autoFocus={!both}
-                    className={`${styles.modalBtn} ${
-                      both ? styles.modalBtnSoft : styles.modalBtnDanger
-                    }`}
+                    className={`${styles.modalBtn} ${styles.modalBtnDanger}`}
                     onClick={() => confirmDelete(false)}
                   >
                     Delete for me
                   </button>
                   <button
                     type="button"
-                    className={`${styles.modalBtn} ${styles.modalBtnCancel}`}
+                    className={styles.modalBtn}
                     onClick={closeDeleteDialog}
                   >
                     Cancel

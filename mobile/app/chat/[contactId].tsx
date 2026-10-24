@@ -13,6 +13,7 @@ import {
   BackHandler,
   FlatList,
   Image as RNImage,
+  Keyboard,
   Linking,
   Platform,
   Pressable,
@@ -184,6 +185,9 @@ const A11Y_SELECTING_ACTIONS = [
 ];
 /** Swipe to reply lets go of the bubble with this spring (§10.3). */
 const SWIPE_SPRING = { damping: 20, stiffness: 220 };
+/** The reply arrow's circle and glyph (§10.3; were 30 and 18). */
+const SWIPE_ICON_SIZE = 36;
+const SWIPE_ICON_GLYPH = 22;
 /** Android 13 and newer confirm a copy themselves; an app toast would double it (§10.7). */
 const SYSTEM_CONFIRMS_COPY = Platform.OS === 'android' && Number(Platform.Version) >= 33;
 /** The toast floats this far above the composer (§10.7). */
@@ -354,6 +358,9 @@ export default function ChatScreen() {
 
   const handleChangeText = (text: string) => {
     setDraft(text);
+    // Typing is done with the menu beside a message; the selection stays, and
+    // its actions are in the header (spec §10.2).
+    setMenu(null);
     if (text.trim()) broadcastTyping();
   };
 
@@ -364,7 +371,8 @@ export default function ChatScreen() {
     setShowEmoji(false);
     clearUnreadLine();
     // Your own message is always followed, wherever you were (web parity).
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    // Once its row is in the list, not now: see FOLLOW YOUR OWN MESSAGE.
+    followSendRef.current = true;
     // A reply (§10.4): the quote goes with it, and the bar closes.
     const quoted = replyTo && !isDeleted(replyTo) ? replyTo : null;
     sendMessage.mutate({
@@ -590,7 +598,20 @@ export default function ChatScreen() {
     if (!message || isDeleted(message) || message.pending || message.failed) return;
     setReplyToId(id);
     setShowEmoji(false);
-    inputRef.current?.focus();
+    focusComposer();
+  };
+
+  /** Raise the keyboard for a reply (§10.4). After this render, once the reply
+   *  bar is in and the menu is gone. A field that kept its focus while its
+   *  keyboard was put away (Android's back button, dragging the thread) ignores
+   *  focus(), so it is blurred first; with the keyboard up it is left alone. */
+  const focusComposer = () => {
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      if (input.isFocused() && !Keyboard.isVisible()) input.blur();
+      input.focus();
+    });
   };
   // Swipes call it from every row; one stable function keeps the rows memoised.
   const startReplyRef = useRef(startReply);
@@ -967,6 +988,19 @@ export default function ChatScreen() {
   }, [scrolledUp, jumpAnchor, thread, myId]);
 
   const jumpToLatest = () => listRef.current?.scrollToOffset({ offset: 0, animated: true });
+
+  /* ── FOLLOW YOUR OWN MESSAGE ── A send from higher up the thread lands at
+     the newest message. Scrolling as the send button is pressed did nothing
+     there: the optimistic row arrives a moment later, and
+     maintainVisibleContentPosition (KEEP_POSITION) then holds the reader where
+     they were, cancelling the glide. So the send raises this flag, and the
+     scroll waits until the new row — mine — is the newest one in the list. */
+  const followSendRef = useRef(false);
+  useEffect(() => {
+    if (!followSendRef.current || !lastMessageId || lastSenderId !== myId) return;
+    followSendRef.current = false;
+    requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
+  }, [lastMessageId, lastSenderId, myId]);
 
   /* ── Rows: day separators + grouping, built oldest-first then reversed
         because the list is inverted (index 0 renders at the bottom). ────── */
@@ -1520,7 +1554,11 @@ export default function ChatScreen() {
                 ref={inputRef}
                 value={draft}
                 onChangeText={handleChangeText}
-                onFocus={() => setShowEmoji(false)}
+                onFocus={() => {
+                  setShowEmoji(false);
+                  // The keyboard is about to move the thread from under it.
+                  setMenu(null);
+                }}
                 placeholder="Message"
                 placeholderTextColor={colors.mutedPlaceholder}
                 style={styles.input}
@@ -1569,7 +1607,6 @@ export default function ChatScreen() {
         visible={!!deleteTargets}
         count={deleteTargets?.length ?? 0}
         canDeleteForEveryone={deleteOffersEveryone}
-        contactName={contactFirstName}
         onCancel={() => setDeleteTargets(null)}
         onDeleteForMe={() => deleteTargets && runDelete(deleteTargets, false)}
         onDeleteForEveryone={() => deleteTargets && runDelete(deleteTargets, true)}
@@ -1761,7 +1798,7 @@ const MessageBubble = memo(function MessageBubble({
         <View>
           {swipeable ? (
             <Reanimated.View pointerEvents="none" style={[styles.swipeIcon, swipeIconStyle]}>
-              <Feather name="corner-up-left" size={18} color={colors.purple} />
+              <Feather name="corner-up-left" size={SWIPE_ICON_GLYPH} color={colors.purple} />
             </Reanimated.View>
           ) : null}
           <Reanimated.View style={[styles.messageRow, mine ? styles.rowMine : styles.rowTheirs, swipeStyle]}>
@@ -2303,14 +2340,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: colors.chatRowHighlight,
   },
-  /* Swipe to reply — spec §10.3: at the row's left edge, bottom-aligned. */
+  /* Swipe to reply — spec §10.3: at the row's left edge, level with the
+     middle of the bubble. */
   swipeIcon: {
     position: 'absolute',
     left: 0,
-    bottom: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    top: '50%',
+    marginTop: -SWIPE_ICON_SIZE / 2,
+    width: SWIPE_ICON_SIZE,
+    height: SWIPE_ICON_SIZE,
+    borderRadius: SWIPE_ICON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.white,

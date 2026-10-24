@@ -1,4 +1,3 @@
-import Feather from '@expo/vector-icons/Feather';
 import { useRef } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Reanimated, { Easing, Keyframe } from 'react-native-reanimated';
@@ -12,8 +11,6 @@ interface DeleteMessagesDialogProps {
   count: number;
   /** Offer "Delete for everyone": every one of them is mine, not deleted, under the hour (§10.8). */
   canDeleteForEveryone: boolean;
-  /** The contact's first name, for "<name> will still see it". */
-  contactName: string;
   onCancel: () => void;
   onDeleteForMe: () => void;
   onDeleteForEveryone: () => void;
@@ -27,15 +24,15 @@ const CARD_ENTER = new Keyframe({
 /**
  * The delete confirmation (MESSAGES_SPEC.md §10.8), drawn by the app instead of
  * the phone's Alert, so it looks the same on every phone and like the website's
- * dialog: title in Bree Serif, the choices stacked full width, the strongest
- * one first. "Delete for everyone" is solid red; "Delete for me" is solid red
- * when it is the only choice, and the softer red otherwise.
+ * dialog. WhatsApp's layout (owner's call, 24 Oct): the title on the left, no
+ * explanation under it (the choices say it), and the choices as text buttons
+ * stacked on the right, the strongest one first. The two deletes are red,
+ * Cancel is purple.
  */
 export function DeleteMessagesDialog({
   visible,
   count,
   canDeleteForEveryone,
-  contactName,
   onCancel,
   onDeleteForMe,
   onDeleteForEveryone,
@@ -45,13 +42,7 @@ export function DeleteMessagesDialog({
   const shownRef = useRef({ count, canDeleteForEveryone });
   if (visible) shownRef.current = { count, canDeleteForEveryone };
   const shown = shownRef.current;
-  const many = shown.count > 1;
-  const title = many ? `Delete ${shown.count} messages?` : 'Delete message?';
-  const body = shown.canDeleteForEveryone
-    ? `Delete ${many ? 'them' : 'it'} for everyone in this chat, or only for you?`
-    : many
-      ? `They will be removed from this chat for you. ${contactName} will still see them.`
-      : `It will be removed from this chat for you. ${contactName} will still see it.`;
+  const title = shown.count > 1 ? `Delete ${shown.count} messages?` : 'Delete message?';
 
   return (
     <Modal
@@ -70,22 +61,14 @@ export function DeleteMessagesDialog({
           accessibilityViewIsModal
           accessibilityRole="alert"
         >
-          <View style={styles.iconCircle}>
-            <Feather name="trash-2" size={22} color={colors.errorText} />
-          </View>
           <AppText style={styles.title}>{title}</AppText>
-          <AppText style={styles.body}>{body}</AppText>
 
           <View style={styles.actions}>
             {shown.canDeleteForEveryone ? (
-              <DialogButton label="Delete for everyone" tone="solid" onPress={onDeleteForEveryone} />
+              <DialogButton label="Delete for everyone" danger onPress={onDeleteForEveryone} />
             ) : null}
-            <DialogButton
-              label="Delete for me"
-              tone={shown.canDeleteForEveryone ? 'soft' : 'solid'}
-              onPress={onDeleteForMe}
-            />
-            <DialogButton label="Cancel" tone="plain" onPress={onCancel} />
+            <DialogButton label="Delete for me" danger onPress={onDeleteForMe} />
+            <DialogButton label="Cancel" onPress={onCancel} />
           </View>
         </Reanimated.View>
       </View>
@@ -95,33 +78,24 @@ export function DeleteMessagesDialog({
 
 function DialogButton({
   label,
-  tone,
+  danger = false,
   onPress,
 }: {
   label: string;
-  tone: 'solid' | 'soft' | 'plain';
+  danger?: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      hitSlop={4}
       style={({ pressed }) => [
         styles.button,
-        tone === 'solid' && styles.buttonSolid,
-        tone === 'soft' && styles.buttonSoft,
-        pressed && (tone === 'plain' ? styles.buttonPlainPressed : styles.buttonPressed),
+        pressed && (danger ? styles.buttonDangerPressed : styles.buttonPressed),
       ]}
     >
-      <AppText
-        style={[
-          styles.buttonText,
-          tone === 'solid' && styles.buttonTextSolid,
-          tone === 'soft' && styles.buttonTextSoft,
-        ]}
-      >
-        {label}
-      </AppText>
+      <AppText style={[styles.buttonText, danger && styles.buttonTextDanger]}>{label}</AppText>
     </Pressable>
   );
 }
@@ -146,10 +120,9 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
-    alignItems: 'center',
-    paddingTop: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 14,
+    paddingTop: 22,
+    paddingHorizontal: 22,
+    paddingBottom: 12,
     borderRadius: 24,
     backgroundColor: colors.white,
     shadowColor: colors.chatMenuShadow,
@@ -158,51 +131,31 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 12,
   },
-  iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.errorBg,
-  },
   title: {
-    marginTop: 14,
     fontFamily: font.family.serif,
     fontSize: 20,
     lineHeight: 26,
     color: colors.blackSoft,
-    textAlign: 'center',
   },
-  body: {
-    marginTop: 6,
-    fontFamily: font.family.regular,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.mutedText,
-    textAlign: 'center',
-  },
+  // Right-aligned, each button only as wide as its label.
   actions: {
-    alignSelf: 'stretch',
-    gap: 8,
-    marginTop: 20,
+    alignItems: 'flex-end',
+    gap: 4,
+    marginTop: 18,
   },
   button: {
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
+    minHeight: 44,
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    marginRight: -12, // the label, not the press area, lines up with the title's padding
+    borderRadius: 12,
   },
-  buttonSolid: { backgroundColor: colors.errorText },
-  buttonSoft: { backgroundColor: colors.errorBg },
-  buttonPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  buttonPlainPressed: { backgroundColor: colors.inboxRowPressed },
+  buttonPressed: { backgroundColor: colors.inboxRowPressed },
+  buttonDangerPressed: { backgroundColor: colors.errorBg },
   buttonText: {
     fontFamily: font.family.semibold,
     fontSize: 15,
-    color: colors.mutedText,
+    color: colors.purple,
   },
-  buttonTextSolid: { color: colors.white },
-  buttonTextSoft: { color: colors.errorText },
+  buttonTextDanger: { color: colors.errorText },
 });

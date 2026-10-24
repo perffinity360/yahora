@@ -8,7 +8,7 @@ import type { PendingMessage } from '../types';
  * Change both in the same commit, and the SQL function
  * `delete_message_for_everyone` too if DELETE_FOR_EVERYONE_MINUTES changes.
  */
-export const LONG_PRESS_MS = 350;
+export const LONG_PRESS_MS = 250;
 export const SWIPE_REPLY_TRIGGER = 56; // touch only: the app, and the website on a touch screen
 export const SWIPE_REPLY_MAX = 72; // touch only
 export const REPLY_MIN_BUBBLE_WIDTH = 180;
