@@ -1,17 +1,20 @@
 import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   AppState,
   FlatList,
   Image as RNImage,
   Linking,
+  Platform,
   Pressable,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -22,11 +25,14 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Reanimated, { useReducedMotion, ZoomIn, ZoomOut } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { runOnJS, useReducedMotion, ZoomIn, ZoomOut } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CircleButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
+import { AppToast, useToast } from '../../src/components/AppToast';
+import { MessageActionSheet, type MessageAction } from '../../src/components/MessageActionSheet';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
@@ -38,11 +44,14 @@ import { useRealtime } from '../../src/contexts/RealtimeContext';
 import {
   newClientTag,
   useChatHistory,
+  useDeleteForEveryone,
+  useDeleteForMe,
   useInbox,
   useMarkRead,
   useSendMessage,
   useServerBack,
 } from '../../src/hooks/useMessages';
+import type { ApiError } from '../../src/lib/api';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import {
   chatRowKey,
@@ -53,7 +62,12 @@ import {
   isSameDay,
 } from '../../src/lib/messages';
 import { jumboEmojiCount, splitEmoji } from '../../src/lib/emoji';
-import { isDeleted } from '../../src/lib/messageActions';
+import {
+  canDeleteForEveryone,
+  firstName,
+  isDeleted,
+  LONG_PRESS_MS,
+} from '../../src/lib/messageActions';
 import { welcomeStickerFor } from '../../src/lib/stickers';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { supabase } from '../../src/lib/supabase';
@@ -126,6 +140,21 @@ const TYPING_THROTTLE_MS = 2000;
 const TYPING_TIMEOUT_MS = 3000;
 /** Demo campus: the backend bot replies in ~3s, so show its "typing" for 5s. */
 const DEMO_TYPING_MS = 5000;
+
+/* Message actions (MESSAGES_SPEC.md §10.1), in the order the sheet shows them.
+   A tombstone has Delete only; a pending or failed message has no sheet. */
+const REPLY_ACTION: MessageAction = { key: 'reply', label: 'Reply', icon: 'corner-up-left' };
+const COPY_ACTION: MessageAction = { key: 'copy', label: 'Copy', icon: 'copy' };
+const DELETE_ACTION: MessageAction = { key: 'delete', label: 'Delete', icon: 'trash-2', danger: true };
+const MESSAGE_ACTIONS = [REPLY_ACTION, COPY_ACTION, DELETE_ACTION];
+const TOMBSTONE_ACTIONS = [DELETE_ACTION];
+/** TalkBack / VoiceOver reach the sheet through the standard long-press action. */
+const A11Y_ACTIONS = [{ name: 'longpress', label: 'Message actions' }];
+/** Android 13 and newer confirm a copy themselves; an app toast would double it (§10.7). */
+const SYSTEM_CONFIRMS_COPY = Platform.OS === 'android' && Number(Platform.Version) >= 33;
+/** The toast floats this far above the composer (§10.7). */
+const TOAST_ABOVE_COMPOSER = 16;
+const DELETE_FAILED = "Couldn't delete. Try again.";
 
 const EMOJI_TABS = [
   { label: 'Smileys', emojis: ['😊', '😂', '😍', '🥺', '😭', '😎', '🤔', '🥳', '😘', '🤗', '😅', '🤩', '😆', '🙂', '😉', '🫡'] },
@@ -328,6 +357,92 @@ export default function ChatScreen() {
   const retryRef = useRef(handleRetry);
   retryRef.current = handleRetry;
   const onRetry = useCallback((message: PendingMessage) => retryRef.current(message), []);
+
+  /* ── MESSAGE ACTIONS (spec §10.1, §10.2, §10.7, §10.8) ──────────────────
+     Long-press a bubble → the sheet. The screen holds which message it is for,
+     by id, and reads the message itself from the thread: if the other person
+     deletes it for everyone while the sheet is open, the sheet drops to
+     Delete only; if it leaves the thread, the sheet closes. */
+  const deleteForEveryone = useDeleteForEveryone(contactId, productId);
+  const deleteForMe = useDeleteForMe(contactId, productId);
+  const { toast, showToast } = useToast();
+  // The raw name: firstName() gives "Yahora student" when there is none (§10.4).
+  const contactFirstName = firstName(inboxRow?.contact_name || params.contactName);
+
+  const [actionId, setActionId] = useState<string | null>(null);
+  const actionMessage = useMemo(
+    () => (actionId ? (thread.find((m) => m.id === actionId) ?? null) : null),
+    [actionId, thread],
+  );
+  // The sheet hands back its choice after it has closed, when actionId is
+  // already cleared; this still holds the message it was opened on.
+  const actionMessageRef = useRef<PendingMessage | null>(null);
+  if (actionMessage) actionMessageRef.current = actionMessage;
+
+  useEffect(() => {
+    setActionId(null);
+  }, [contactId, productId]);
+
+  // Stable, so passing it to every memoised bubble re-renders none of them.
+  const openActions = useCallback((id: string) => setActionId(id), []);
+  const closeActions = useCallback(() => setActionId(null), []);
+
+  const copyMessage = async (message: PendingMessage) => {
+    let copied = false;
+    try {
+      copied = await Clipboard.setStringAsync(message.content);
+    } catch {
+      copied = false;
+    }
+    // Android shows nothing when a copy fails, so that toast is on every phone.
+    if (!copied) showToast("Couldn't copy");
+    else if (!SYSTEM_CONFIRMS_COPY) showToast('Copied');
+  };
+
+  const confirmDelete = (message: PendingMessage) => {
+    const cancel = { text: 'Cancel', style: 'cancel' as const };
+    const forMe = {
+      text: 'Delete for me',
+      onPress: () => deleteForMe.mutate(message.id, { onError: () => showToast(DELETE_FAILED) }),
+    };
+    if (!canDeleteForEveryone(message, myId)) {
+      Alert.alert(
+        'Delete message?',
+        `It will be removed from this chat for you. ${contactFirstName} will still see it.`,
+        [cancel, forMe],
+      );
+      return;
+    }
+    // Android places the buttons by role, not by this order; the labels are
+    // what the spec fixes.
+    Alert.alert('Delete message?', 'Delete it for everyone in this chat, or only for you?', [
+      cancel,
+      forMe,
+      {
+        text: 'Delete for everyone',
+        style: 'destructive',
+        onPress: () =>
+          deleteForEveryone.mutate(message.id, {
+            // The hour can run out while the dialog is open; the server decides.
+            onError: (err) =>
+              showToast(
+                (err as ApiError).body?.error === 'DELETE_WINDOW_EXPIRED'
+                  ? "It's too late to delete this for everyone"
+                  : DELETE_FAILED,
+              ),
+          }),
+      },
+    ]);
+  };
+
+  const handleAction = (key: string) => {
+    const message = actionMessageRef.current;
+    actionMessageRef.current = null;
+    if (!message) return;
+    if (key === 'copy') copyMessage(message);
+    else if (key === 'delete') confirmDelete(message);
+    // 'reply' is wired in part 3 (CC-V5c); for now choosing it only closes the sheet.
+  };
 
   /* SENDING AGAIN ON ITS OWN (spec §2). A message that failed because the
      server couldn't be reached goes again by itself once the server answers,
@@ -801,9 +916,13 @@ export default function ChatScreen() {
           contactAvatar={contactAvatar}
           widthStyle={bubbleWidth}
           onRetry={onRetry}
+          // Only the pressed row's `selected` changes, so the memo re-renders that
+          // bubble (and the one it replaces) and no other.
+          selected={item.message.id === actionId}
+          onOpenActions={openActions}
         />
       ),
-    [contactName, contactAvatar, bubbleWidth, onRetry],
+    [contactName, contactAvatar, bubbleWidth, onRetry, actionId, openActions],
   );
 
   /* ── Self-chat guard ─────────────────────────────────────────────────── */
@@ -1004,6 +1123,7 @@ export default function ChatScreen() {
                   ) : null
                 }
                 renderItem={renderRow}
+                extraData={actionId}
               />
             )}
 
@@ -1040,6 +1160,9 @@ export default function ChatScreen() {
                 ) : null}
               </Reanimated.View>
             ) : null}
+
+            {/* Bottom of the thread = top of the composer (or the emoji tray). */}
+            <AppToast message={toast} bottom={TOAST_ABOVE_COMPOSER} />
           </View>
 
           {/* ── Emoji tray ── */}
@@ -1134,6 +1257,13 @@ export default function ChatScreen() {
           </View>
         </SafeAreaView>
       </KeyboardAvoider>
+
+      <MessageActionSheet
+        visible={!!actionMessage}
+        actions={actionMessage && isDeleted(actionMessage) ? TOMBSTONE_ACTIONS : MESSAGE_ACTIONS}
+        onClose={closeActions}
+        onSelect={handleAction}
+      />
     </View>
   );
 }
@@ -1192,6 +1322,8 @@ const MessageBubble = memo(function MessageBubble({
   contactAvatar,
   widthStyle,
   onRetry,
+  selected,
+  onOpenActions,
 }: {
   message: PendingMessage;
   mine: boolean;
@@ -1201,10 +1333,34 @@ const MessageBubble = memo(function MessageBubble({
   contactAvatar: string | null;
   widthStyle: { maxWidth: number };
   onRetry: (message: PendingMessage) => void;
+  /** Its action sheet is open: the row gets the full-width band (spec §10.2). */
+  selected: boolean;
+  onOpenActions: (messageId: string) => void;
 }) {
   const deleted = isDeleted(message);
+  // A message still sending, or failed, has no actions (spec §10.1): its
+  // failed pill handles it.
+  const actionable = !message.pending && !message.failed;
+  const messageId = message.id;
+
+  /* Long-press opens the sheet (spec §10.2). On the UI thread; the only JS call
+     is the one that opens the sheet, once, at LONG_PRESS_MS. A finger that
+     moves (a scroll) fails it, and a quick tap still reaches a link's onPress.
+     Part 3 adds a Pan (swipe to reply) here: compose the two with
+     Gesture.Exclusive / Race and hand the result to the same GestureDetector. */
+  const gesture = useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(LONG_PRESS_MS)
+        .enabled(actionable)
+        .onStart(() => {
+          runOnJS(onOpenActions)(messageId);
+        }),
+    [actionable, messageId, onOpenActions],
+  );
+
   return (
-    <View style={firstOfRun ? styles.runStart : styles.runNext}>
+    <View style={[firstOfRun ? styles.runStart : styles.runNext, selected && styles.rowSelected]}>
       <View style={[styles.messageRow, mine ? styles.rowMine : styles.rowTheirs]}>
         {!mine ? (
           lastOfRun ? (
@@ -1214,41 +1370,45 @@ const MessageBubble = memo(function MessageBubble({
           )
         ) : null}
 
-        <View
-          style={[
-            styles.bubble,
-            widthStyle,
-            mine ? styles.bubbleMine : styles.bubbleTheirs,
-            mine && lastOfRun && styles.bubbleMineTail,
-            !mine && lastOfRun && styles.bubbleTheirsTail,
-            message.failed && styles.bubbleFailed,
-          ]}
-        >
-          {/* Always the first child of a sent bubble, with constant props, so it
-              is created once per bubble and never rebuilt. The bubble clips it
-              to its corners. */}
-          {mine && SENT_GRADIENT ? (
-            <LinearGradient
-              colors={SENT_GRADIENT}
-              start={GRADIENT_START}
-              end={GRADIENT_END}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
-          ) : null}
-          {deleted ? (
-            <Tombstone mine={mine} />
-          ) : (
-            <MessageText content={message.content} mine={mine} />
-          )}
-          <View style={styles.bubbleMeta}>
-            <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
-              {formatClockTime(message.created_at)}
-            </AppText>
-            {/* A tombstone shows its time only, never ticks (§10.8). */}
-            {mine && !deleted ? <Ticks message={message} /> : null}
+        <GestureDetector gesture={gesture}>
+          <View
+            style={[
+              styles.bubble,
+              widthStyle,
+              mine ? styles.bubbleMine : styles.bubbleTheirs,
+              mine && lastOfRun && styles.bubbleMineTail,
+              !mine && lastOfRun && styles.bubbleTheirsTail,
+              message.failed && styles.bubbleFailed,
+            ]}
+            accessibilityActions={actionable ? A11Y_ACTIONS : undefined}
+            onAccessibilityAction={actionable ? () => onOpenActions(messageId) : undefined}
+          >
+            {/* Always the first child of a sent bubble, with constant props, so it
+                is created once per bubble and never rebuilt. The bubble clips it
+                to its corners. */}
+            {mine && SENT_GRADIENT ? (
+              <LinearGradient
+                colors={SENT_GRADIENT}
+                start={GRADIENT_START}
+                end={GRADIENT_END}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+            ) : null}
+            {deleted ? (
+              <Tombstone mine={mine} />
+            ) : (
+              <MessageText content={message.content} mine={mine} />
+            )}
+            <View style={styles.bubbleMeta}>
+              <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
+                {formatClockTime(message.created_at)}
+              </AppText>
+              {/* A tombstone shows its time only, never ticks (§10.8). */}
+              {mine && !deleted ? <Ticks message={message} /> : null}
+            </View>
           </View>
-        </View>
+        </GestureDetector>
       </View>
 
       {message.failed ? (
@@ -1607,6 +1767,13 @@ const styles = StyleSheet.create({
   // Spec §2: 8 between runs, 2 inside one.
   runStart: { marginTop: spacing.sm },
   runNext: { marginTop: 2 },
+  // Full-bleed, like the unread band: undo the list's side padding, then put
+  // it back inside, so the bubble does not move when the band appears.
+  rowSelected: {
+    marginHorizontal: -THREAD_PAD,
+    paddingHorizontal: THREAD_PAD,
+    backgroundColor: colors.chatRowSelected,
+  },
   messageRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
