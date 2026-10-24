@@ -768,20 +768,25 @@ Where the picture and this section disagree, this section wins.
 
 | The message | Actions, in this order |
 |---|---|
-| A normal message (mine or theirs) | **Reply · Copy · Delete** |
-| A deleted-for-everyone message (tombstone, §10.8) | **Delete** only (it removes the tombstone from your own view) |
+| A normal message (mine or theirs) | **Reply · Copy · Delete** (web menu: **Reply · Copy · Select · Delete**) |
+| A deleted-for-everyone message (tombstone, §10.8) | **Delete** only (it removes the tombstone from your own view); web menu: **Select · Delete** |
 | Mobile: a message still sending, or failed | **none** — the failed pill (§2) already handles it |
 | The empty-chat card, the beginning note, the typing bubble, date chips, the unread band | none — they are not messages |
 
 ### 10.2 Opening the actions
 
+*Revised 24 Oct 2026 (owner's call): the mobile bottom sheet is gone. Both platforms now follow
+WhatsApp — the actions open **in the thread, beside the message**, and several messages can be
+selected at once (§10.11). The space between a message and its menu is where the reactions bar
+goes in the community phase.*
+
 | | Mobile | Web |
 |---|---|---|
-| How | **Long-press** the bubble, **350 ms** (`LONG_PRESS_MS`) | **Hover** the bubble → an actions button appears beside it; click it. **Right-click** on the bubble opens the same menu. On a touch screen (no hover) **tap** the bubble to show the button |
-| The row while open | `rgba(128,0,128,0.10)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
-| Container | **Bottom sheet** over a scrim `rgba(11,11,11,0.32)` | **Popover menu** anchored under the actions button, kept inside the thread's edges |
+| How | **Long-press** the message's **row**, **350 ms** (`LONG_PRESS_MS`) — the bubble or the empty space beside it, the thread's full width. It **selects** the message (§10.11) and opens the menu | **Hover** the bubble → an actions button appears beside it; click it. **Right-click** anywhere on the row opens the same menu. On a touch screen (no hover) **tap** the bubble to show the button, or **long-press** anywhere on the row (350 ms) to open the menu |
+| The row while open / selected | `rgba(128,0,128,0.10)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
+| Container | **Menu card beside the bubble**, no scrim | **Popover menu** anchored under the actions button, kept inside the thread's edges |
 
-**Mobile sheet:** white · radius 20 on the top corners · padding 8 top, 12 bottom (on mobile, the larger of 12 and the home-indicator inset) · handle 36×4, radius 2, `rgba(128,0,128,0.15)`, centred, 8 above the first item · each item 52 tall, padding 0/20, icon 20 then gap 16 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** item: icon and label `#B91C1C` (errorText). Tapping outside the sheet, or the Android back button, closes it.
+**Mobile menu:** white · radius 16 · shadow `#2A082A` at 16%, radius 12, y 8 (Android elevation 8) · hairline border `rgba(128,0,128,0.08)` · width 196 · padding 6 vertical · each item 48 tall, padding 0/16, icon 20 then gap 14 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** in `#B91C1C`. Placed **8 below** the bubble when it fits inside the thread (12 from its edges), otherwise 8 above, otherwise over it (a bubble taller than the thread). Lined up with the bubble's right edge for mine, left edge for theirs. Grows in from the corner nearest the bubble (scale 0.86 → 1, opacity 0 → 1, 170 ms, ease-out cubic); fades out in 110 ms. Any touch in the thread or a scroll closes it and **keeps the selection** (the header then shows the actions); the Android back button or the header's arrow ends the selection.
 
 **Web actions button:** a 28 circle **beside** the bubble, on its outer side — left of mine, right of theirs — aligned with the bubble's top, gap 6 · white · border 1px `rgba(128,0,128,0.08)` · `chevron-down` 16, mutedText · fades in over 120 ms · hover on the button itself: background pinkLight `#FFF4F7`. It sits outside the bubble so it never covers the message text, and the bubble's size never changes.
 
@@ -883,8 +888,24 @@ Choosing **Delete** opens a confirmation:
 
 Body text under the title: `Delete it for everyone in this chat, or only for you?` when both delete choices show; `It will be removed from this chat for you. <name> will still see it.` when only "for me" shows (`<name>` = the contact's first name).
 
-- **Mobile:** the phone's own `Alert` (Android draws it — its look follows the phone; the labels and their order are what this spec fixes).
-- **Web:** a modal using the site's existing modal styles: buttons stacked, full width, in the order above.
+For several selected messages (§10.11) the title is `Delete N messages?`, "Delete for everyone" shows only when **every** one of them allows it, and the body reads `Delete them for everyone in this chat, or only for you?` / `They will be removed from this chat for you. <name> will still see them.`
+
+**The dialog — the same look on both platforms** (revised 24 Oct 2026; mobile no longer uses the phone's `Alert`):
+
+| | Value |
+|---|---|
+| Scrim | `rgba(11,11,11,0.55)` mobile (`scrim`) · `rgba(0,0,0,0.4)` web (the Dashboard modal's) |
+| Card | white · radius 24 mobile, 20 web · padding 24 top, 20 sides mobile (24 web) · max width 360 mobile, 400 web · centred |
+| Icon | `trash-2` 22 `#B91C1C` in a 52 circle `#FEF0F0` (errorBg), centred above the title |
+| Title | Bree Serif 400 20, `#1A1A1A`, centred, 12–14 under the icon |
+| Body | Inter 400 14/20 mutedText (web: `#666`, 0.95rem), centred |
+| Buttons | stacked, full width, gap 8, 20–24 under the body · 46–48 tall, radius 14, Inter 600 15 |
+| Delete for everyone | solid `#B91C1C`, white text |
+| Delete for me | **solid** `#B91C1C`, white text when it is the only delete choice; **soft** `#FEF0F0` with `#B91C1C` text when "for everyone" shows above it |
+| Cancel | no background, mutedText (web `#555`) |
+| Motion | mobile: the scrim fades, the card scales 0.92 → 1 over 200 ms; web: the existing `modalIn` |
+
+Tapping the scrim, Esc (web) or the Android back button is Cancel. Cancel keeps a selection; a delete ends it.
 
 **What happens**
 
@@ -929,3 +950,17 @@ DELETE_FOR_EVERYONE_MINUTES = 60     // the database enforces this; apps only de
 ```
 
 Mobile keeps them in `mobile/src/lib/messageActions.ts`; web in `frontend/src/utils/messageActions.js`. Change both in the same commit, and the SQL function `delete_message_for_everyone` too if the 60 changes.
+
+### 10.11 Selecting several messages (WhatsApp's selection mode)
+
+| | Mobile | Web |
+|---|---|---|
+| Starts | a long-press on any message's row (§10.2) | **Select** in a message's menu |
+| While selecting | a **tap** on a message's row picks or unpicks it (a long-press too); links, quotes and swipes rest | a **click** anywhere on a row picks or unpicks it; links, quotes, the actions button and swipes rest |
+| Marked by | the selected band (§10.2) | the band, and a **tick box** at the start of every row: 22 square, radius 6, border 2 mutedText; picked → filled purple with a white `check` 14. A row that can't be picked (sending, failed) keeps the space |
+| Bar | **over the header**, same box: `arrow-left` (purple) · `N selected` Inter 600 16 · then, once the menu has closed, the actions: **Reply** (one message, not a tombstone) · **Copy** (no tombstone selected) · **Delete** (`#B91C1C`) | **in place of the composer** (the draft is kept): `x` · `N selected` · **Copy** (no tombstone selected) · **Delete** (`#B91C1C`), 40 round buttons |
+| Ends | the arrow, Android back, unpicking the last one, Copy, Reply, a delete, or opening another chat | `x`, Esc, unpicking the last one, Copy, a delete, or opening another chat |
+
+- **Copy** puts the texts on the clipboard **oldest first, one per line**, and toasts `Copied` (§10.7 rules).
+- **Delete** opens §10.8's dialog for all of them; each message is its own request, all sent together. Any refusal: `It's too late to delete this for everyone` / `Couldn't delete. Try again.` for one message; `Some were too old to delete for everyone` / `Couldn't delete some messages. Try again.` for several.
+- A selected message that is hidden or leaves the thread leaves the selection; one deleted for everyone while selected stays selected but takes Copy and Reply away.

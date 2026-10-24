@@ -80,7 +80,7 @@ export const colors = {
   chatFailedTick: '#FFFFFF', // owner's call 2026-10-16: white, like the other ticks (was #F87171)
 
   // ── MESSAGES_SPEC.md §3 — message actions (§10), v3, Phase 6B ──
-  chatRowSelected: 'rgba(128,0,128,0.10)', // the row while its sheet is open
+  chatRowSelected: 'rgba(128,0,128,0.10)', // a selected message's row (§10.2, §10.11)
   chatRowHighlight: 'rgba(128,0,128,0.12)', // jump-to-original flash
   chatQuoteMineBg: 'rgba(0,0,0,0.12)', // quote inside a sent bubble (black, not white: §10.5, §7)
   chatQuoteMineBar: 'rgba(255,255,255,0.90)',
@@ -90,8 +90,11 @@ export const colors = {
   sheetHandle: 'rgba(128,0,128,0.15)',
   // The spec calls this one `scrim`, but `scrim` below (0.55) already backs
   // nine other sheets and modals. Renaming keeps them as they are.
-  chatScrim: 'rgba(11,11,11,0.32)', // behind the actions sheet and dialogs
+  chatScrim: 'rgba(11,11,11,0.32)', // spec value; unused since the sheet became an in-thread menu (§10.2)
   toastBg: 'rgba(26,26,26,0.88)', // "Copied" and other toasts
+  // Shadow colour of the message menu and the delete dialog; the web menu's
+  // rgba(42,8,42,0.16) is this at shadowOpacity 0.16.
+  chatMenuShadow: '#2A082A',
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
