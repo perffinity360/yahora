@@ -896,6 +896,76 @@
   clip-path: inset(0 -100vmax);
 }
 
+/* ════════════════════════════════════════════
+   SELECTION MODE — WhatsApp Web's "Select messages". A tick box at the start
+   of each row, a click anywhere on a row picks it, and a bar with the count
+   and the actions stands in for the composer.
+════════════════════════════════════════════ */
+.rowSelecting { cursor: pointer; }
+.rowSelecting .actionsBtn { display: none; }
+.selectCheck,
+.selectCheckSpace {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  align-self: center;
+}
+.selectCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 2px solid var(--muted-text);
+  background: var(--white);
+  color: var(--white);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.selectCheckOn { background: var(--purple); border-color: var(--purple); }
+.selectCheck:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* Mine sit on the right: the box stays at the start, the bubble is pushed over. */
+.messageMine .selectCheck,
+.messageMine .selectCheckSpace { margin-right: auto; }
+
+.selectionBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  background: var(--white);
+  border-top: 1px solid var(--msg-bar-line);
+  flex-shrink: 0;
+  animation: fadeIn 0.15s ease;
+}
+.selectionCount {
+  flex: 1;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--black-soft);
+}
+.selectionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--black-soft);
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+.selectionBtn:hover { background: var(--msg-pink-light); }
+.selectionBtn:active { transform: scale(0.94); }
+.selectionBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+.selectionBtnDanger { color: var(--error-text); }
+.chatInputAreaHidden { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .selectCheck,
+  .selectionBtn { transition: none; }
+  .selectionBar { animation: none; }
+}
+
 /* Touch screens (phones and tablets, by input type, not width): a long-press
    anywhere on this page — a bubble, a date chip, the unread band, the welcome
    card, the header, an inbox row — must not start the browser's text
@@ -1773,8 +1843,9 @@
 }
 .modalBtn {
   width: 100%;
+  min-height: 46px;
   padding: 10px 20px;
-  border-radius: 12px;
+  border-radius: 14px;
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
@@ -1786,9 +1857,24 @@
 .modalBtn:hover { background: #e4e4e4; }
 .modalBtn:active { transform: scale(0.98); }
 .modalBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
-/* Spec's #B91C1C — the web's --error-text (same value as v3's --danger-text). */
-.modalBtnDanger { background: var(--error-bg); color: var(--error-text); }
-.modalBtnDanger:hover { background: #fde2e2; }
+/* Spec's #B91C1C — the web's --error-text (same value as v3's --danger-text).
+   Same look as the app's dialog: the strongest choice solid red, "Delete for
+   me" the softer red when both show, solid when it is the only one. */
+.modalBtnDanger { background: var(--error-text); color: var(--white); }
+.modalBtnDanger:hover { background: #991b1b; }
+.modalBtnSoft { background: var(--error-bg); color: var(--error-text); }
+.modalBtnSoft:hover { background: #fde2e2; }
+.modalIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  background: var(--error-bg);
+  color: var(--error-text);
+}
 .modalBtnCancel { background: transparent; color: #555; }
 .modalBtnCancel:hover { background: #f0f0f0; }
 
