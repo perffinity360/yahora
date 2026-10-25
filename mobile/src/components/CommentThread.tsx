@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { ScrollViewInstance, StyleProp, ViewInstance, ViewStyle } from 'react-native';
 import Animated, { Easing, FadeIn, LinearTransition } from 'react-native-reanimated';
 
 import { AppText } from './AppText';
@@ -69,7 +69,7 @@ export interface CommentSectionProps {
   onReplyingChange?: (commentId: string | null) => void;
   /** The screen's scroll view + its live offset, used to lift an opening reply
    *  composer above the keyboard. */
-  scrollRef?: React.RefObject<ScrollView | null>;
+  scrollRef?: React.RefObject<ScrollViewInstance | null>;
   scrollOffsetRef?: React.RefObject<number>;
   style?: StyleProp<ViewStyle>;
 }
@@ -396,10 +396,10 @@ function ReplyComposer({
   onCancel: () => void;
   onSubmit: () => void;
   submitting: boolean;
-  scrollRef?: React.RefObject<ScrollView | null>;
+  scrollRef?: React.RefObject<ScrollViewInstance | null>;
   scrollOffsetRef?: React.RefObject<number>;
 }) {
-  const viewRef = useRef<View>(null);
+  const viewRef = useRef<ViewInstance>(null);
   const keyboardHeight = useRef(Keyboard.metrics()?.height ?? 0);
   const firstName = (parentName ?? '').trim().split(/\s+/)[0] || 'the seller';
   const canSend = !!value.trim() && !submitting;

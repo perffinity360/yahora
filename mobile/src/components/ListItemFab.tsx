@@ -71,7 +71,8 @@ export function ListItemFab({
       if (target === previous) return;
       progress.value = reduceMotion ? target : withTiming(target, FOLD);
     },
-    [reduceMotion],
+    // No dependency array: native ignores one and warns. The reaction picks up
+    // `reduceMotion` through its closure, which Reanimated re-reads each render.
   );
 
   const shell = useAnimatedStyle(() => {

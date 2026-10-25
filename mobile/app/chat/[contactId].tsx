@@ -1,32 +1,74 @@
 import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ActivityIndicator,
   Animated,
   AppState,
+  BackHandler,
   FlatList,
   Image as RNImage,
+  Keyboard,
   Linking,
+  PixelRatio,
+  Platform,
   Pressable,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  type ViewToken,
+  type KeyboardEventName,
+  type ListViewToken,
+  type TextInputInstance,
+  type ViewInstance,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-import Reanimated, { useReducedMotion, ZoomIn, ZoomOut } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, {
+  FadeIn,
+  FadeOut,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+  ZoomIn,
+  ZoomOut,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CircleButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
+import { AppToast, useToast } from '../../src/components/AppToast';
+import { DeleteMessagesDialog } from '../../src/components/DeleteMessagesDialog';
+import {
+  MessageActionMenu,
+  type MenuRect,
+  type MessageAction,
+} from '../../src/components/MessageActionMenu';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
@@ -38,11 +80,14 @@ import { useRealtime } from '../../src/contexts/RealtimeContext';
 import {
   newClientTag,
   useChatHistory,
+  useDeleteForEveryone,
+  useDeleteForMe,
   useInbox,
   useMarkRead,
   useSendMessage,
   useServerBack,
 } from '../../src/hooks/useMessages';
+import type { ApiError } from '../../src/lib/api';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import {
   chatRowKey,
@@ -53,6 +98,22 @@ import {
   isSameDay,
 } from '../../src/lib/messages';
 import { jumboEmojiCount, splitEmoji } from '../../src/lib/emoji';
+import {
+  canDeleteForEveryone,
+  firstName,
+  isDeleted,
+  isReply,
+  JUMP_HIGHLIGHT_FADE_MS,
+  JUMP_HIGHLIGHT_HOLD_MS,
+  JUMP_MAX_EXTRA_PAGES,
+  LONG_PRESS_MS,
+  PRESS_FEEDBACK_DELAY_MS,
+  PRESS_FEEDBACK_IN_MS,
+  PRESS_FEEDBACK_OUT_MS,
+  REPLY_MIN_BUBBLE_WIDTH,
+  SWIPE_REPLY_MAX,
+  SWIPE_REPLY_TRIGGER,
+} from '../../src/lib/messageActions';
 import { welcomeStickerFor } from '../../src/lib/stickers';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { supabase } from '../../src/lib/supabase';
@@ -125,6 +186,32 @@ const TYPING_THROTTLE_MS = 2000;
 const TYPING_TIMEOUT_MS = 3000;
 /** Demo campus: the backend bot replies in ~3s, so show its "typing" for 5s. */
 const DEMO_TYPING_MS = 5000;
+
+/* Message actions (MESSAGES_SPEC.md §10.1), in the order the menu shows them.
+   A tombstone has Delete only; a pending or failed message has no menu. */
+const REPLY_ACTION: MessageAction = { key: 'reply', label: 'Reply', icon: 'corner-up-left' };
+const COPY_ACTION: MessageAction = { key: 'copy', label: 'Copy', icon: 'copy' };
+const DELETE_ACTION: MessageAction = { key: 'delete', label: 'Delete', icon: 'trash-2', danger: true };
+const MESSAGE_ACTIONS = [REPLY_ACTION, COPY_ACTION, DELETE_ACTION];
+const TOMBSTONE_ACTIONS = [DELETE_ACTION];
+/** TalkBack / VoiceOver: both standard actions do what a long-press does —
+ *  select the message, or in selection mode add or remove it. */
+const A11Y_ACTIONS = [
+  { name: 'activate', label: 'Select or unselect' },
+  { name: 'longpress', label: 'Select or unselect' },
+];
+/** How far a finger may drift and still be a tap (Android's touch slop, in dp). */
+const TAP_SLOP = 10;
+/** Swipe to reply lets go of the bubble with this spring (§10.3). */
+const SWIPE_SPRING = { damping: 20, stiffness: 220 };
+/** The reply arrow's circle and glyph (§10.3; were 30 and 18). */
+const SWIPE_ICON_SIZE = 36;
+const SWIPE_ICON_GLYPH = 22;
+/** Android 13 and newer confirm a copy themselves; an app toast would double it (§10.7). */
+const SYSTEM_CONFIRMS_COPY = Platform.OS === 'android' && Number(Platform.Version) >= 33;
+/** The toast floats this far above the composer (§10.7). */
+const TOAST_ABOVE_COMPOSER = 16;
+const DELETE_FAILED = "Couldn't delete. Try again.";
 
 const EMOJI_TABS = [
   { label: 'Smileys', emojis: ['😊', '😂', '😍', '🥺', '😭', '😎', '🤔', '🥳', '😘', '🤗', '😅', '🤩', '😆', '🙂', '😉', '🫡'] },
@@ -290,6 +377,9 @@ export default function ChatScreen() {
 
   const handleChangeText = (text: string) => {
     setDraft(text);
+    // Typing is done with the menu beside a message; the selection stays, and
+    // its actions are in the header (spec §10.2).
+    setMenu(null);
     if (text.trim()) broadcastTyping();
   };
 
@@ -300,8 +390,18 @@ export default function ChatScreen() {
     setShowEmoji(false);
     clearUnreadLine();
     // Your own message is always followed, wherever you were (web parity).
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    sendMessage.mutate({ content, clientTag: newClientTag() });
+    // Once its row is in the list, not now: see FOLLOW YOUR OWN MESSAGE.
+    followSendRef.current = true;
+    // A reply (§10.4): the quote goes with it, and the bar closes.
+    const quoted = replyTo && !isDeleted(replyTo) ? replyTo : null;
+    sendMessage.mutate({
+      content,
+      clientTag: newClientTag(),
+      replyToId: quoted?.id ?? null,
+      replyToSenderId: quoted?.sender_id ?? null,
+      replyPreview: quoted?.content ?? null,
+    });
+    setReplyToId(null);
 
     // Demo campus: the bot is about to reply, so show its typing bubble now.
     if (isDemoUser) {
@@ -313,13 +413,255 @@ export default function ChatScreen() {
 
   const handleRetry = (message: PendingMessage) => {
     if (!message.client_tag) return;
-    sendMessage.mutate({ content: message.content, clientTag: message.client_tag });
+    // A failed reply is sent again as the same reply: its quote is on the bubble.
+    sendMessage.mutate({
+      content: message.content,
+      clientTag: message.client_tag,
+      replyToId: message.reply_to_id,
+      replyToSenderId: message.reply_to_sender_id,
+      replyPreview: message.reply_preview,
+    });
   };
   // One stable function for every row, so the memoised bubbles do not
   // re-render each time the screen does. Same send, same mutation.
   const retryRef = useRef(handleRetry);
   retryRef.current = handleRetry;
   const onRetry = useCallback((message: PendingMessage) => retryRef.current(message), []);
+
+  /* ── MESSAGE ACTIONS (spec §10.1, §10.2, §10.7, §10.8) — WhatsApp's model ──
+     Long-press a message (the bubble or the empty part of its row) and it is
+     SELECTED: its row gets the band, the header turns into "1 selected", and a
+     menu opens next to it in the thread. While anything is selected, a tap on
+     another message adds it (and a tap on a selected one removes it); the
+     menu closes as soon as the thread is touched, and the header carries the
+     actions for everything selected. Back, or the header's arrow, leaves.
+
+     The screen holds the selection as ids and reads the messages from the
+     thread, so a message deleted for everyone while selected loses Copy, and
+     one that leaves the thread leaves the selection. */
+  const deleteForEveryone = useDeleteForEveryone(contactId, productId);
+  const deleteForMe = useDeleteForMe(contactId, productId);
+  const { toast, showToast } = useToast();
+  // The raw name: firstName() gives "Yahora student" when there is none (§10.4).
+  const contactFirstName = firstName(inboxRow?.contact_name || params.contactName);
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  /** The menu beside the long-pressed message, in the root view's coordinates. */
+  const [menu, setMenu] = useState<{ id: string; anchor: MenuRect; bounds: MenuRect } | null>(
+    null,
+  );
+  /** The messages the delete dialog is open for. */
+  const [deleteTargets, setDeleteTargets] = useState<PendingMessage[] | null>(null);
+
+  // Oldest first, like the thread: copying several gives them in chat order.
+  const selectedMessages = useMemo(() => {
+    if (!selectedIds.length) return [];
+    const ids = new Set(selectedIds);
+    return thread.filter((m) => ids.has(m.id));
+  }, [selectedIds, thread]);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selecting = selectedIds.length > 0;
+  const menuMessage = menu ? (selectedMessages.find((m) => m.id === menu.id) ?? null) : null;
+
+  // A selected message that leaves the thread (hidden for me here, or a new
+  // conversation's history) leaves the selection too.
+  useEffect(() => {
+    if (selectedMessages.length !== selectedIds.length) {
+      setSelectedIds(selectedMessages.map((m) => m.id));
+    }
+  }, [selectedMessages, selectedIds.length]);
+  useEffect(() => {
+    if (!selecting) setMenu(null);
+  }, [selecting]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds([]);
+    setMenu(null);
+  }, []);
+
+  useEffect(() => {
+    clearSelection();
+    setDeleteTargets(null);
+  }, [contactId, productId, clearSelection]);
+
+  // Android back leaves selection mode before it leaves the chat.
+  useEffect(() => {
+    if (!selecting) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      clearSelection();
+      return true;
+    });
+    return () => sub.remove();
+  }, [selecting, clearSelection]);
+
+  const rootRef = useRef<ViewInstance>(null);
+  const threadBoxRef = useRef<ViewInstance>(null);
+  const selectingRef = useRef(selecting);
+  selectingRef.current = selecting;
+  // The rows' gestures read this on the UI thread (MessageBubble), so
+  // entering or leaving selection re-renders no row.
+  const selectingSV = useSharedValue(false);
+  useEffect(() => {
+    selectingSV.value = selecting;
+  }, [selecting, selectingSV]);
+
+  /* WhatsApp closes the menu whenever the screen is touched outside it (see
+     the SafeAreaView's onTouchStart) and whenever the keyboard comes or goes:
+     the keyboard moves the thread from under it, and a menu left behind
+     floats over the wrong message. The selection and the header's actions
+     stay. */
+  useEffect(() => {
+    if (!menu) return;
+    const events: KeyboardEventName[] =
+      Platform.OS === 'ios'
+        ? ['keyboardWillShow', 'keyboardWillHide']
+        : ['keyboardDidShow', 'keyboardDidHide'];
+    const subs = events.map((name) => Keyboard.addListener(name, () => setMenu(null)));
+    return () => subs.forEach((sub) => sub.remove());
+  }, [menu]);
+
+  const onOpenLink = useCallback((url: string) => {
+    if (selectingRef.current) return;
+    Linking.openURL(url).catch(() => {});
+  }, []);
+
+  const toggleSelected = useCallback((id: string) => {
+    setMenu(null);
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+
+  /* Stable, so passing them to every memoised row re-renders none of them.
+     `bubble` is the bubble's box in window coordinates; the menu is placed in
+     the root view's, inside the thread's. */
+  const onLongPressMessage = useCallback(
+    (id: string, bubble: MenuRect | null) => {
+      if (selectingRef.current) {
+        toggleSelected(id);
+        return;
+      }
+      const root = rootRef.current;
+      const box = threadBoxRef.current;
+      if (!bubble || !root || !box) {
+        setSelectedIds([id]);
+        return;
+      }
+      // Selected and menu in the same render, so the header never shows its
+      // own actions for the frame before the menu arrives.
+      root.measureInWindow((rx, ry) => {
+        box.measureInWindow((tx, ty, tw, th) => {
+          setSelectedIds([id]);
+          setMenu({
+            id,
+            anchor: { ...bubble, x: bubble.x - rx, y: bubble.y - ry },
+            bounds: { x: tx - rx, y: ty - ry, width: tw, height: th },
+          });
+        });
+      });
+    },
+    [toggleSelected],
+  );
+
+  const copyMessages = async (messages: PendingMessage[]) => {
+    let copied = false;
+    try {
+      copied = await Clipboard.setStringAsync(messages.map((m) => m.content).join('\n'));
+    } catch {
+      copied = false;
+    }
+    // Android shows nothing when a copy fails, so that toast is on every phone.
+    if (!copied) showToast("Couldn't copy");
+    else if (!SYSTEM_CONFIRMS_COPY) showToast('Copied');
+  };
+
+  /* Several at once is one request per message, all together; the hooks keep
+     the thread right for each (a tombstone in place, or the row gone). */
+  const runDelete = async (messages: PendingMessage[], forEveryone: boolean) => {
+    setDeleteTargets(null);
+    clearSelection();
+    const results = await Promise.allSettled(
+      messages.map((m) =>
+        forEveryone ? deleteForEveryone.mutateAsync(m.id) : deleteForMe.mutateAsync(m.id),
+      ),
+    );
+    const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (!failed.length) return;
+    // The hour can run out while the dialog is open; the server decides.
+    const expired = failed.some(
+      (r) => (r.reason as ApiError)?.body?.error === 'DELETE_WINDOW_EXPIRED',
+    );
+    const one = messages.length === 1;
+    if (expired) {
+      showToast(
+        one ? "It's too late to delete this for everyone" : 'Some were too old to delete for everyone',
+      );
+    } else showToast(one ? DELETE_FAILED : "Couldn't delete some messages. Try again.");
+  };
+
+  /** What the selection offers, in the header and (for one message) the menu. */
+  const selectionHasTombstone = selectedMessages.some(isDeleted);
+  const canReplyToSelection = selectedMessages.length === 1 && !selectionHasTombstone;
+  const canCopySelection = selectedMessages.length > 0 && !selectionHasTombstone;
+
+  const handleAction = (key: string) => {
+    const messages = selectedMessages;
+    if (!messages.length) return;
+    if (key === 'reply') {
+      if (messages.length !== 1) return;
+      clearSelection();
+      startReplyRef.current(messages[0].id);
+    } else if (key === 'copy') {
+      clearSelection();
+      copyMessages(messages);
+    } else if (key === 'delete') {
+      // The selection stays under the dialog; Cancel goes back to it.
+      setMenu(null);
+      setDeleteTargets(messages);
+    }
+  };
+
+  const deleteOffersEveryone =
+    !!deleteTargets && deleteTargets.every((m) => canDeleteForEveryone(m, myId));
+
+  /* ── REPLY (spec §10.4) ── The message being answered, shown in the reply bar
+     over the composer. By id, read from the thread: deleted for everyone or
+     hidden while the bar is up, it closes. */
+  const inputRef = useRef<TextInputInstance>(null);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const replyTo = useMemo(
+    () => (replyToId ? (thread.find((m) => m.id === replyToId) ?? null) : null),
+    [replyToId, thread],
+  );
+  useEffect(() => {
+    if (replyToId && (!replyTo || isDeleted(replyTo))) setReplyToId(null);
+  }, [replyToId, replyTo]);
+  useEffect(() => {
+    setReplyToId(null);
+  }, [contactId, productId]);
+
+  const startReply = (id: string) => {
+    const message = threadRef.current.find((m) => m.id === id);
+    if (!message || isDeleted(message) || message.pending || message.failed) return;
+    setReplyToId(id);
+    setShowEmoji(false);
+    focusComposer();
+  };
+
+  /** Raise the keyboard for a reply (§10.4). After this render, once the reply
+   *  bar is in and the menu is gone. A field that kept its focus while its
+   *  keyboard was put away (Android's back button, dragging the thread) ignores
+   *  focus(), so it is blurred first; with the keyboard up it is left alone. */
+  const focusComposer = () => {
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      if (input.isFocused() && !Keyboard.isVisible()) input.blur();
+      input.focus();
+    });
+  };
+  // Swipes call it from every row; one stable function keeps the rows memoised.
+  const startReplyRef = useRef(startReply);
+  startReplyRef.current = startReply;
+  const onSwipeReply = useCallback((id: string) => startReplyRef.current(id), []);
 
   /* SENDING AGAIN ON ITS OWN (spec §2). A message that failed because the
      server couldn't be reached goes again by itself once the server answers,
@@ -616,10 +958,12 @@ export default function ChatScreen() {
   const viewabilityPairs = useRef(
     [SEEN_BY_ROW, SEEN_BY_THREAD].map((viewabilityConfig, config) => ({
       viewabilityConfig,
-      onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken<ChatRow>[] }) => {
+      onViewableItemsChanged: ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
         const ids = new Set<string>();
         for (const token of viewableItems) {
-          if (token.isViewable && token.item?.kind === 'msg') ids.add(token.item.message.id);
+          // RN 0.88's ListViewToken isn't generic; its item is `any`.
+          const item = token.item as ChatRow | undefined;
+          if (token.isViewable && item?.kind === 'msg') ids.add(item.message.id);
         }
         visibleByConfigRef.current[config] = ids;
         visibleIdsRef.current = new Set(visibleByConfigRef.current.flatMap((set) => [...set]));
@@ -692,6 +1036,19 @@ export default function ChatScreen() {
 
   const jumpToLatest = () => listRef.current?.scrollToOffset({ offset: 0, animated: true });
 
+  /* ── FOLLOW YOUR OWN MESSAGE ── A send from higher up the thread lands at
+     the newest message. Scrolling as the send button is pressed did nothing
+     there: the optimistic row arrives a moment later, and
+     maintainVisibleContentPosition (KEEP_POSITION) then holds the reader where
+     they were, cancelling the glide. So the send raises this flag, and the
+     scroll waits until the new row — mine — is the newest one in the list. */
+  const followSendRef = useRef(false);
+  useEffect(() => {
+    if (!followSendRef.current || !lastMessageId || lastSenderId !== myId) return;
+    followSendRef.current = false;
+    requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true }));
+  }, [lastMessageId, lastSenderId, myId]);
+
   /* ── Rows: day separators + grouping, built oldest-first then reversed
         because the list is inverted (index 0 renders at the bottom). ────── */
   const rows = useMemo<ChatRow[]>(() => {
@@ -721,6 +1078,63 @@ export default function ChatScreen() {
     return out.reverse();
   }, [thread, myId, marker]);
 
+  /** THE scroller for a row by index: the unread line, and the jump to a
+   *  quoted message (§10.6) — the same placement (UNREAD_VIEW_POSITION, 35%
+   *  down the thread) and the same retries (onScrollToIndexFailed). */
+  const scrollToRow = (index: number, animated: boolean) => {
+    scrollRetryRef.current = 0;
+    listRef.current?.scrollToIndex({ index, viewPosition: UNREAD_VIEW_POSITION, animated });
+  };
+
+  /* ── JUMP TO THE ORIGINAL (spec §10.6) ──────────────────────────────────
+     Pressing a quote scrolls to the message it quotes and flashes its row.
+     Not loaded yet: older pages are fetched — the same fetchNextPage that
+     scrolling up uses — at most JUMP_MAX_EXTRA_PAGES of them, checking after
+     each. Nothing here touches read state or the unread line. */
+  const [flash, setFlash] = useState<{ id: string; n: number } | null>(null);
+  const [pendingJump, setPendingJump] = useState<{ id: string; pagesLeft: number } | null>(null);
+  const jumpFetchingRef = useRef(false);
+
+  const jumpToRow = (id: string): boolean => {
+    const index = rows.findIndex((row) => row.kind === 'msg' && row.message.id === id);
+    if (index === -1) return false;
+    scrollToRow(index, true);
+    setFlash((prev) => ({ id, n: (prev?.n ?? 0) + 1 }));
+    return true;
+  };
+  const jumpToRowRef = useRef(jumpToRow);
+  jumpToRowRef.current = jumpToRow;
+
+  const onJumpToOriginal = useCallback((id: string) => {
+    if (selectingRef.current) return;
+    if (!jumpToRowRef.current(id)) setPendingJump({ id, pagesLeft: JUMP_MAX_EXTRA_PAGES });
+  }, []);
+
+  useEffect(() => {
+    if (!pendingJump || isFetchingNextPage || jumpFetchingRef.current) return;
+    if (jumpToRowRef.current(pendingJump.id)) {
+      setPendingJump(null);
+      return;
+    }
+    if (!hasNextPage || pendingJump.pagesLeft <= 0) {
+      setPendingJump(null);
+      showToast("Couldn't find the original message");
+      return;
+    }
+    jumpFetchingRef.current = true;
+    const { id } = pendingJump;
+    fetchNextPage().finally(() => {
+      jumpFetchingRef.current = false;
+      // Checked again once the page has rendered (this effect, on `rows`).
+      setPendingJump((prev) => (prev?.id === id ? { id, pagesLeft: prev.pagesLeft - 1 } : prev));
+    });
+  }, [pendingJump, rows, hasNextPage, isFetchingNextPage, fetchNextPage, showToast]);
+
+  useEffect(() => {
+    setPendingJump(null);
+    setFlash(null);
+  }, [contactId, productId]);
+
   /* A line was pinned — on open, or on return from away: bring it into view,
      a third of the way down (UNREAD_VIEW_POSITION). A long run would otherwise
      leave it above the top of the screen. Once, per pin: receipts and older
@@ -737,14 +1151,9 @@ export default function ChatScreen() {
     );
     if (index === -1) return;
     setLineToShow(null);
-    scrollRetryRef.current = 0;
     // From near the bottom the offset clamps and nothing moves, which is right
     // — the line is already in view.
-    listRef.current?.scrollToIndex({
-      index,
-      viewPosition: UNREAD_VIEW_POSITION,
-      animated: lineToShow.animated,
-    });
+    scrollToRow(index, lineToShow.animated);
     // Reading waits until the viewport has settled on the line (READ ON SIGHT).
     setAnchorHold(true);
     if (anchorHoldTimerRef.current) clearTimeout(anchorHoldTimerRef.current);
@@ -793,9 +1202,36 @@ export default function ChatScreen() {
           contactAvatar={contactAvatar}
           widthStyle={bubbleWidth}
           onRetry={onRetry}
+          contactFirstName={contactFirstName}
+          // Selecting one more message changes only that row's `selected`, and
+          // a flash only that row's `flashToken`: the memo re-renders that row
+          // and no other. Entering or leaving selection mode re-renders none:
+          // the rows read it from `selectingSV`.
+          selected={selectedSet.has(item.message.id)}
+          selectingSV={selectingSV}
+          flashToken={flash?.id === item.message.id ? flash.n : 0}
+          onLongPress={onLongPressMessage}
+          onTap={toggleSelected}
+          onSwipeReply={onSwipeReply}
+          onJumpToOriginal={onJumpToOriginal}
+          onOpenLink={onOpenLink}
         />
       ),
-    [contactName, contactAvatar, bubbleWidth, onRetry],
+    [
+      contactName,
+      contactAvatar,
+      bubbleWidth,
+      onRetry,
+      contactFirstName,
+      selectedSet,
+      selectingSV,
+      flash,
+      onLongPressMessage,
+      toggleSelected,
+      onSwipeReply,
+      onJumpToOriginal,
+      onOpenLink,
+    ],
   );
 
   /* ── Self-chat guard ─────────────────────────────────────────────────── */
@@ -814,77 +1250,143 @@ export default function ChatScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} ref={rootRef}>
       <KeyboardAvoider style={styles.flex}>
-        <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
-          <ConnectionBanner />
+        <SafeAreaView
+          style={styles.flex}
+          // The top inset is drawn inside WholePixelHeight below, with the header.
+          edges={['left', 'right']}
+          // Any touch outside the menu closes it (WhatsApp); the touch itself
+          // still selects, scrolls, types or opens a link. The menu is drawn
+          // outside this view, so a touch on it never reaches here.
+          onTouchStart={menu ? () => setMenu(null) : undefined}
+        >
+          {/* Everything above the thread, ending on a whole physical pixel:
+              see WholePixelHeight. */}
+          <WholePixelHeight>
+            <View style={{ height: insets.top }} />
+            <ConnectionBanner />
 
-          {/* ── Header ── */}
-          <View style={styles.header}>
-            <CircleButton
-              icon="chevron-left"
-              iconSize={24}
-              iconColor={colors.purple}
-              onPress={goBack}
-              variant="plain"
-              hitSlop={10}
-              accessibilityLabel="Back"
-            />
+            {/* ── Header ── */}
+            <View style={styles.header}>
+              <CircleButton
+                icon="chevron-left"
+                iconSize={24}
+                iconColor={colors.purple}
+                onPress={goBack}
+                variant="plain"
+                hitSlop={10}
+                accessibilityLabel="Back"
+              />
 
-            <View>
-              <Avatar name={contactName} uri={contactAvatar} size={36} />
-              {isOnline ? <View style={styles.headerDot} /> : null}
-            </View>
+              <View>
+                <Avatar name={contactName} uri={contactAvatar} size={36} />
+                {isOnline ? <View style={styles.headerDot} /> : null}
+              </View>
 
-            <View style={styles.headerInfo}>
-              <AppText style={styles.headerName} numberOfLines={1}>
-                {contactName}
-              </AppText>
-              {statusLine ? (
-                <AppText style={styles.headerStatus} numberOfLines={1}>
-                  {statusLine}
+              <View style={styles.headerInfo}>
+                <AppText style={styles.headerName} numberOfLines={1}>
+                  {contactName}
                 </AppText>
+                {statusLine ? (
+                  <AppText style={styles.headerStatus} numberOfLines={1}>
+                    {statusLine}
+                  </AppText>
+                ) : null}
+              </View>
+
+              {/* Selection mode (WhatsApp): over the header, in the same box, so
+                  nothing below it moves. The actions show here once the menu
+                  beside the message has closed. */}
+              {selecting ? (
+                <Reanimated.View
+                  entering={FadeIn.duration(140)}
+                  exiting={FadeOut.duration(120)}
+                  style={styles.selectionBar}
+                >
+                  <CircleButton
+                    icon="arrow-left"
+                    iconSize={22}
+                    iconColor={colors.purple}
+                    onPress={clearSelection}
+                    variant="plain"
+                    hitSlop={10}
+                    accessibilityLabel="Cancel selection"
+                  />
+                  <AppText style={styles.selectionCount} accessibilityLiveRegion="polite">
+                    {selectedMessages.length} selected
+                  </AppText>
+                  {!menu ? (
+                    <View style={styles.selectionActions}>
+                      {canReplyToSelection ? (
+                        <CircleButton
+                          icon="corner-up-left"
+                          iconColor={colors.blackSoft}
+                          onPress={() => handleAction('reply')}
+                          variant="plain"
+                          accessibilityLabel="Reply"
+                        />
+                      ) : null}
+                      {canCopySelection ? (
+                        <CircleButton
+                          icon="copy"
+                          iconColor={colors.blackSoft}
+                          onPress={() => handleAction('copy')}
+                          variant="plain"
+                          accessibilityLabel="Copy"
+                        />
+                      ) : null}
+                      <CircleButton
+                        icon="trash-2"
+                        iconColor={colors.errorText}
+                        onPress={() => handleAction('delete')}
+                        variant="plain"
+                        accessibilityLabel="Delete"
+                      />
+                    </View>
+                  ) : null}
+                </Reanimated.View>
               ) : null}
             </View>
-          </View>
 
-          {/* ── Product snippet: on the header's white surface (spec §2) ── */}
-          <View style={styles.snippetBar}>
-            <Pressable
-              onPress={() =>
-                productId &&
-                router.push(
-                  hrefWithFrom(
-                    `/product/${productId}`,
-                    hrefWithFrom(`/chat/${contactId}?productId=${productId}`, fromParam),
-                  ),
-                )
-              }
-              accessibilityRole="button"
-              accessibilityLabel={`View ${productTitle}`}
-              style={({ pressed }) => [styles.snippet, pressed && styles.snippetPressed]}
-            >
-              {productImage ? (
-                <Image
-                  // Loopback-safe in local dev; see src/lib/config.ts.
-                  source={{ uri: resolveMediaUrl(productImage) ?? productImage }}
-                  style={styles.productThumb}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={[styles.productThumb, styles.productThumbFallback]}>
-                  <Feather name="image" size={13} color={colors.mutedPlaceholder} />
-                </View>
-              )}
-              <AppText style={styles.productTitle} numberOfLines={1}>
-                {productTitle}
-              </AppText>
-              <Feather name="chevron-right" size={13} color={colors.purple} />
-            </Pressable>
-          </View>
+            {/* ── Product snippet: on the header's white surface (spec §2) ── */}
+            <View style={styles.snippetBar}>
+              <Pressable
+                onPress={() =>
+                  productId &&
+                  router.push(
+                    hrefWithFrom(
+                      `/product/${productId}`,
+                      hrefWithFrom(`/chat/${contactId}?productId=${productId}`, fromParam),
+                    ),
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`View ${productTitle}`}
+                style={({ pressed }) => [styles.snippet, pressed && styles.snippetPressed]}
+              >
+                {productImage ? (
+                  <Image
+                    // Loopback-safe in local dev; see src/lib/config.ts.
+                    source={{ uri: resolveMediaUrl(productImage) ?? productImage }}
+                    style={styles.productThumb}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={[styles.productThumb, styles.productThumbFallback]}>
+                    <Feather name="image" size={13} color={colors.mutedPlaceholder} />
+                  </View>
+                )}
+                <AppText style={styles.productTitle} numberOfLines={1}>
+                  {productTitle}
+                </AppText>
+                <Feather name="chevron-right" size={13} color={colors.purple} />
+              </Pressable>
+            </View>
+          </WholePixelHeight>
 
           {/* ── Thread ── */}
-          <View style={styles.thread}>
+          <View style={styles.thread} ref={threadBoxRef}>
             {/* OUTSIDE the inverted FlatList on purpose: inside, it would be
                 flipped and would scroll with the messages. */}
             <ChatWallpaper />
@@ -968,7 +1470,7 @@ export default function ChatScreen() {
                 contentContainerStyle={styles.listContent}
                 // Inverted: the header renders at the BOTTOM, under the newest message.
                 ListHeaderComponent={
-                  contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : null
+                  contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : undefined
                 }
                 // ── OLDER MESSAGES (Phase 5 V-E) ──
                 // Inverted, "the end" of the list is the TOP of the screen, so this
@@ -993,9 +1495,13 @@ export default function ChatScreen() {
                         This is the beginning of your conversation about {productTitle}.
                       </AppText>
                     </View>
-                  ) : null
+                  ) : undefined
                 }
                 renderItem={renderRow}
+                extraData={renderRow}
+                // The menu belongs to where the message was; scrolling closes it
+                // and keeps the selection.
+                onScrollBeginDrag={menu ? () => setMenu(null) : undefined}
               />
             )}
 
@@ -1032,6 +1538,9 @@ export default function ChatScreen() {
                 ) : null}
               </Reanimated.View>
             ) : null}
+
+            {/* Bottom of the thread = top of the composer (or the emoji tray). */}
+            <AppToast message={toast} bottom={TOAST_ABOVE_COMPOSER} />
           </View>
 
           {/* ── Emoji tray ── */}
@@ -1076,56 +1585,89 @@ export default function ChatScreen() {
 
           {/* ── Composer ── */}
           <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, COMPOSER_BOTTOM) }]}>
-            <Pressable
-              onPress={() => setShowEmoji((prev) => !prev)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={showEmoji ? 'Hide emoji' : 'Show emoji'}
-              style={({ pressed }) => [
-                styles.emojiToggle,
-                showEmoji && styles.emojiToggleActive,
-                pressed && styles.emojiTogglePressed,
-              ]}
-            >
-              <Feather name="smile" size={20} color={showEmoji ? colors.purple : colors.mutedText} />
-            </Pressable>
-
-            <AppTextInput
-              value={draft}
-              onChangeText={handleChangeText}
-              onFocus={() => setShowEmoji(false)}
-              placeholder="Message"
-              placeholderTextColor={colors.mutedPlaceholder}
-              style={styles.input}
-              multiline
-              maxLength={MAX_MESSAGE_LENGTH}
-              accessibilityLabel="Message"
-            />
-
-            <Pressable
-              onPress={handleSend}
-              disabled={!canSend}
-              accessibilityRole="button"
-              accessibilityLabel="Send message"
-              accessibilityState={{ disabled: !canSend }}
-              style={({ pressed }) => [
-                styles.sendBtn,
-                !canSend && styles.sendBtnDisabled,
-                pressed && canSend && styles.sendBtnPressed,
-              ]}
-            >
-              <LinearGradient
-                colors={BRAND}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.sendGradient}
+            {replyTo ? (
+              <ReplyBar
+                name={replyTo.sender_id === myId ? 'You' : contactFirstName}
+                text={replyTo.content}
+                onClose={() => setReplyToId(null)}
+              />
+            ) : null}
+            <View style={styles.composerRow}>
+              <Pressable
+                onPress={() => setShowEmoji((prev) => !prev)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={showEmoji ? 'Hide emoji' : 'Show emoji'}
+                style={({ pressed }) => [
+                  styles.emojiToggle,
+                  showEmoji && styles.emojiToggleActive,
+                  pressed && styles.emojiTogglePressed,
+                ]}
               >
-                <Feather name="send" size={17} color={colors.white} />
-              </LinearGradient>
-            </Pressable>
+                <Feather name="smile" size={20} color={showEmoji ? colors.purple : colors.mutedText} />
+              </Pressable>
+
+              <AppTextInput
+                ref={inputRef}
+                value={draft}
+                onChangeText={handleChangeText}
+                onFocus={() => {
+                  setShowEmoji(false);
+                  // The keyboard is about to move the thread from under it.
+                  setMenu(null);
+                }}
+                placeholder="Message"
+                placeholderTextColor={colors.mutedPlaceholder}
+                style={styles.input}
+                multiline
+                maxLength={MAX_MESSAGE_LENGTH}
+                accessibilityLabel="Message"
+              />
+
+              <Pressable
+                onPress={handleSend}
+                disabled={!canSend}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                accessibilityState={{ disabled: !canSend }}
+                style={({ pressed }) => [
+                  styles.sendBtn,
+                  !canSend && styles.sendBtnDisabled,
+                  pressed && canSend && styles.sendBtnPressed,
+                ]}
+              >
+                <LinearGradient
+                  colors={BRAND}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.sendGradient}
+                >
+                  <Feather name="send" size={17} color={colors.white} />
+                </LinearGradient>
+              </Pressable>
+            </View>
           </View>
         </SafeAreaView>
       </KeyboardAvoider>
+
+      {menu && menuMessage ? (
+        <MessageActionMenu
+          anchor={menu.anchor}
+          bounds={menu.bounds}
+          side={menuMessage.sender_id === myId ? 'mine' : 'theirs'}
+          actions={isDeleted(menuMessage) ? TOMBSTONE_ACTIONS : MESSAGE_ACTIONS}
+          onSelect={handleAction}
+        />
+      ) : null}
+
+      <DeleteMessagesDialog
+        visible={!!deleteTargets}
+        count={deleteTargets?.length ?? 0}
+        canDeleteForEveryone={deleteOffersEveryone}
+        onCancel={() => setDeleteTargets(null)}
+        onDeleteForMe={() => deleteTargets && runDelete(deleteTargets, false)}
+        onDeleteForEveryone={() => deleteTargets && runDelete(deleteTargets, true)}
+      />
     </View>
   );
 }
@@ -1144,6 +1686,38 @@ export default function ChatScreen() {
  * React Native's own Image, with the 1x path only: RN picks @2x/@3x by suffix.
  * The tile size on device was confirmed with exactly this component.
  */
+/**
+ * Gives its children a box that is a whole number of physical pixels tall,
+ * so the thread below it starts on a pixel boundary.
+ *
+ * Why: Yoga rounds each row's POSITION relative to its parent but its HEIGHT
+ * from absolute screen edges (yoga/algorithm/PixelGrid.cpp). When the list's
+ * own top falls between two pixels — the header's text makes that the usual
+ * case — two neighbouring rows can come out 1px apart or 1px overlapping.
+ * Under two selected rows that is a 1px line of wallpaper (white) or of
+ * doubled band (purple). On a pixel boundary the two roundings agree.
+ *
+ * How: the inner view reports its height already rounded, which is within a
+ * pixel of the real one; one pixel more is always enough, and costs one
+ * pixel of the screen's background under the header.
+ */
+function WholePixelHeight({ children }: { children: ReactNode }) {
+  const [height, setHeight] = useState<number | undefined>(undefined);
+  return (
+    <View style={height === undefined ? undefined : { height }}>
+      <View
+        onLayout={(e) => {
+          const ratio = PixelRatio.get();
+          const next = (Math.round(e.nativeEvent.layout.height * ratio) + 1) / ratio;
+          setHeight((prev) => (prev === next ? prev : next));
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 function ChatWallpaper() {
   const [box, setBox] = useState({ w: 0, h: 0 });
   const cols = Math.ceil(box.w / TILE);
@@ -1174,7 +1748,12 @@ function ChatWallpaper() {
 /* ────────────────────────── Bubble ──────────────────────────
    MESSAGES_SPEC.md §2 "Bubbles". Memoised: every prop is either a message from
    the cache (whose identity only changes when that message does) or stable, so
-   a new message re-renders one row, not the thread. No shadows on mobile (§5). */
+   a new message re-renders one row, not the thread. No shadows on mobile (§5).
+
+   THE ROW, NOT THE BUBBLE, TAKES THE GESTURES (WhatsApp): it spans the thread's
+   full width, so a long-press on the empty space beside a message selects it
+   too. All of it runs on the UI thread; the only JS calls are the ones that
+   change something (select, unselect, reply), once per gesture. */
 const MessageBubble = memo(function MessageBubble({
   message,
   mine,
@@ -1184,6 +1763,15 @@ const MessageBubble = memo(function MessageBubble({
   contactAvatar,
   widthStyle,
   onRetry,
+  contactFirstName,
+  selected,
+  selectingSV,
+  flashToken,
+  onLongPress,
+  onTap,
+  onSwipeReply,
+  onJumpToOriginal,
+  onOpenLink,
 }: {
   message: PendingMessage;
   mine: boolean;
@@ -1193,74 +1781,423 @@ const MessageBubble = memo(function MessageBubble({
   contactAvatar: string | null;
   widthStyle: { maxWidth: number };
   onRetry: (message: PendingMessage) => void;
+  /** The name in a quote of their message (§10.5). */
+  contactFirstName: string;
+  /** Selected: the row gets the full-width band (spec §10.2). */
+  selected: boolean;
+  /** Something is selected: a tap selects or unselects, and links, quotes and swipes rest.
+   *  A shared value, not a prop, so entering or leaving selection re-renders no row
+   *  and rebuilds no row's gestures; the gestures read it on the UI thread. */
+  selectingSV: SharedValue<boolean>;
+  /** Changes each time this row is jumped to (§10.6); 0 = never. */
+  flashToken: number;
+  /** `bubble`: the bubble's box in window coordinates, for the menu beside it. */
+  onLongPress: (messageId: string, bubble: MenuRect | null) => void;
+  onTap: (messageId: string) => void;
+  onSwipeReply: (messageId: string) => void;
+  onJumpToOriginal: (messageId: string) => void;
+  /** Opens a link in the text; does nothing while selecting. */
+  onOpenLink: (url: string) => void;
 }) {
+  const deleted = isDeleted(message);
+  // A message still sending, or failed, has no actions (spec §10.1): its
+  // failed pill handles it. A tombstone can't be replied to (§10.3).
+  const actionable = !message.pending && !message.failed;
+  const swipeable = actionable && !deleted;
+  const reply = isReply(message) && !deleted;
+  const messageId = message.id;
+  const bubbleRef = useRef<ViewInstance>(null);
+
+  const handleLongPress = useCallback(() => {
+    // WhatsApp's tick under the finger when a message is picked.
+    if (Platform.OS === 'android') {
+      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch(() => {});
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    const node = bubbleRef.current;
+    if (!node) {
+      onLongPress(messageId, null);
+      return;
+    }
+    node.measureInWindow((x, y, width, height) => onLongPress(messageId, { x, y, width, height }));
+  }, [messageId, onLongPress]);
+
+  /* Swipe right to reply (§10.3). The bubble follows the finger up to
+     SWIPE_REPLY_MAX; let go past SWIPE_REPLY_TRIGGER and it is a reply. */
+  const swipeX = useSharedValue(0);
+  const swipeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: swipeX.value }] }));
+  const swipeIconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(swipeX.value, [0, SWIPE_REPLY_TRIGGER], [0, 1], 'clamp'),
+  }));
+
+  /* The band the moment a long-press lands, drawn from the UI thread; the
+     render that selects the row takes over from it (and resets it). Without
+     it the band waited for the JS thread, which is what made the hold feel
+     slow whenever that thread was busy. */
+  const held = useSharedValue(0);
+  const heldStyle = useAnimatedStyle(() => ({ opacity: held.value }));
+  useEffect(() => {
+    held.value = 0;
+  }, [selected, held]);
+
+  /* Where the finger went down, whether it has moved off, and whether this
+     touch ended up a long-press. */
+  const touchX = useSharedValue(0);
+  const touchY = useSharedValue(0);
+  const touchMoved = useSharedValue(false);
+  const longPressed = useSharedValue(false);
+
+  /* Long-press: select (or, in selection mode, select / unselect). A finger
+     that moves (a scroll) fails it, and a quick tap still reaches a link's
+     onPress. Pan: the swipe; 12 to the right starts it, 10 up or down or 12
+     to the left gives the touch to the list. Race: whichever activates first
+     cancels the other. Neither depends on selection mode: they read
+     `selectingSV` on the UI thread, so a long-press rebuilds nothing. */
+  const gesture = useMemo(() => {
+    const longPress = Gesture.LongPress()
+      .minDuration(LONG_PRESS_MS)
+      .enabled(actionable)
+      .onStart(() => {
+        longPressed.value = true;
+        if (!selectingSV.value) held.value = 1;
+        runOnJS(handleLongPress)();
+      });
+    const pan = Gesture.Pan()
+      .enabled(swipeable)
+      .activeOffsetX(12)
+      .failOffsetX(-12)
+      .failOffsetY([-10, 10])
+      .onUpdate((event) => {
+        if (selectingSV.value) return;
+        swipeX.value = Math.min(Math.max(event.translationX, 0), SWIPE_REPLY_MAX);
+      })
+      .onEnd(() => {
+        if (!selectingSV.value && swipeX.value >= SWIPE_REPLY_TRIGGER) {
+          runOnJS(onSwipeReply)(messageId);
+        }
+      })
+      .onFinalize(() => {
+        swipeX.value = withSpring(0, SWIPE_SPRING);
+      });
+    /* The tap that picks or unpicks a message in selection mode. A Manual
+       gesture that only watches and never activates: an activated Tap would
+       take the touch from a link or the quote outside selection mode, which
+       is why the old one had to be rebuilt each time selection began. */
+    const tap = Gesture.Manual()
+      .enabled(actionable)
+      .onTouchesDown((event) => {
+        const touch = event.changedTouches[0];
+        touchX.value = touch.absoluteX;
+        touchY.value = touch.absoluteY;
+        touchMoved.value = false;
+        longPressed.value = false;
+      })
+      .onTouchesMove((event) => {
+        const touch = event.changedTouches[0];
+        const dx = touch.absoluteX - touchX.value;
+        const dy = touch.absoluteY - touchY.value;
+        if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) touchMoved.value = true;
+      })
+      .onTouchesUp((_event, manager) => {
+        if (selectingSV.value && !touchMoved.value && !longPressed.value) {
+          runOnJS(onTap)(messageId);
+        }
+        manager.fail();
+      })
+      .onTouchesCancelled((_event, manager) => {
+        manager.fail();
+      });
+    return Gesture.Simultaneous(tap, Gesture.Race(pan, longPress));
+  }, [
+    actionable,
+    swipeable,
+    messageId,
+    handleLongPress,
+    onTap,
+    onSwipeReply,
+    swipeX,
+    held,
+    selectingSV,
+    touchX,
+    touchY,
+    touchMoved,
+    longPressed,
+  ]);
+
+  /* Touch feedback (§10.12), WhatsApp's pressed bubble: an overlay that comes
+     up once the finger has rested PRESS_FEEDBACK_DELAY_MS (so a scroll never
+     lights it), stays while held, and fades on release. A tap quicker than
+     the delay flashes it once. On the bubble only, as in WhatsApp: the empty
+     space beside it takes the row's gestures but shows nothing. */
+  const press = useSharedValue(0);
+  const pressStyle = useAnimatedStyle(() => ({ opacity: press.value }));
+  const pressX = useSharedValue(0);
+  const pressY = useSharedValue(0);
+  const pressMoved = useSharedValue(false);
+  const feedback = useMemo(
+    () =>
+      Gesture.Manual()
+        .enabled(actionable)
+        .onTouchesDown((event) => {
+          const touch = event.changedTouches[0];
+          pressX.value = touch.absoluteX;
+          pressY.value = touch.absoluteY;
+          pressMoved.value = false;
+          press.value = withDelay(
+            PRESS_FEEDBACK_DELAY_MS,
+            withTiming(1, { duration: PRESS_FEEDBACK_IN_MS }),
+          );
+        })
+        .onTouchesMove((event) => {
+          if (pressMoved.value) return;
+          const touch = event.changedTouches[0];
+          const dx = touch.absoluteX - pressX.value;
+          const dy = touch.absoluteY - pressY.value;
+          if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) {
+            pressMoved.value = true;
+            press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
+          }
+        })
+        .onTouchesUp((_event, manager) => {
+          if (!pressMoved.value) {
+            press.value = withSequence(
+              withTiming(1, { duration: PRESS_FEEDBACK_IN_MS }),
+              withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS }),
+            );
+          }
+          manager.fail();
+        })
+        .onTouchesCancelled((_event, manager) => {
+          press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
+          manager.fail();
+        }),
+    [actionable, press, pressX, pressY, pressMoved],
+  );
+
+  /* The flash after a jump to this message (§10.6): the band at full strength,
+     held, then faded. Only this row re-renders for it. */
+  const flashOpacity = useSharedValue(0);
+  useEffect(() => {
+    if (!flashToken) return;
+    flashOpacity.value = withSequence(
+      withTiming(1, { duration: 0 }),
+      withDelay(JUMP_HIGHLIGHT_HOLD_MS, withTiming(0, { duration: JUMP_HIGHLIGHT_FADE_MS })),
+    );
+  }, [flashToken, flashOpacity]);
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flashOpacity.value }));
+
+  // "You" when the quoted message is mine: on my bubble I am the sender, on
+  // theirs the receiver.
+  const quoteName =
+    message.reply_to_sender_id === (mine ? message.sender_id : message.receiver_id)
+      ? 'You'
+      : contactFirstName;
+
   return (
-    <View style={firstOfRun ? styles.runStart : styles.runNext}>
-      <View style={[styles.messageRow, mine ? styles.rowMine : styles.rowTheirs]}>
-        {!mine ? (
-          lastOfRun ? (
-            <Avatar name={contactName} uri={contactAvatar} size={26} />
-          ) : (
-            <View style={styles.avatarSpacer} />
-          )
+    <GestureDetector gesture={gesture}>
+      <View style={[styles.row, firstOfRun ? styles.runStart : styles.runNext, selected && styles.rowSelected]}>
+        {/* Selecting, a tap on a link or the quote picks the message instead of
+            opening it: onOpenLink and onJumpToOriginal do nothing then. */}
+        {!selected ? (
+          <Reanimated.View pointerEvents="none" style={[styles.rowHeld, heldStyle]} />
         ) : null}
-
-        <View
-          style={[
-            styles.bubble,
-            widthStyle,
-            mine ? styles.bubbleMine : styles.bubbleTheirs,
-            mine && lastOfRun && styles.bubbleMineTail,
-            !mine && lastOfRun && styles.bubbleTheirsTail,
-            message.failed && styles.bubbleFailed,
-          ]}
-        >
-          {/* Always the first child of a sent bubble, with constant props, so it
-              is created once per bubble and never rebuilt. The bubble clips it
-              to its corners. */}
-          {mine && SENT_GRADIENT ? (
-            <LinearGradient
-              colors={SENT_GRADIENT}
-              start={GRADIENT_START}
-              end={GRADIENT_END}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            />
+        {flashToken ? (
+          <Reanimated.View pointerEvents="none" style={[styles.rowFlash, flashStyle]} />
+        ) : null}
+        <View>
+          {swipeable ? (
+            <Reanimated.View pointerEvents="none" style={[styles.swipeIcon, swipeIconStyle]}>
+              <Feather name="corner-up-left" size={SWIPE_ICON_GLYPH} color={colors.purple} />
+            </Reanimated.View>
           ) : null}
-          <MessageText content={message.content} mine={mine} />
-          <View style={styles.bubbleMeta}>
-            <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
-              {formatClockTime(message.created_at)}
-            </AppText>
-            {mine ? <Ticks message={message} /> : null}
-          </View>
-        </View>
-      </View>
+          <Reanimated.View style={[styles.messageRow, mine ? styles.rowMine : styles.rowTheirs, swipeStyle]}>
+            {!mine ? (
+              lastOfRun ? (
+                <Avatar name={contactName} uri={contactAvatar} size={26} />
+              ) : (
+                <View style={styles.avatarSpacer} />
+              )
+            ) : null}
 
-      {message.failed ? (
-        <Pressable
-          onPress={() => onRetry(message)}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel="Message not sent. Tap to try again"
-          style={({ pressed }) => [styles.retryRow, pressed && styles.retryRowPressed]}
-        >
-          <Feather name="rotate-cw" size={11} color={colors.errorText} />
-          {/* Shown only after the automatic retries gave up (useSendMessage).
-              Tapping starts them again. */}
-          <AppText style={styles.retryText}>Failed to send</AppText>
-        </Pressable>
-      ) : null}
-    </View>
+            <GestureDetector gesture={feedback}>
+              <View
+                ref={bubbleRef}
+                collapsable={false}
+                style={[
+                  styles.bubble,
+                  widthStyle,
+                  mine ? styles.bubbleMine : styles.bubbleTheirs,
+                  mine && lastOfRun && styles.bubbleMineTail,
+                  !mine && lastOfRun && styles.bubbleTheirsTail,
+                  message.failed && styles.bubbleFailed,
+                  reply && styles.bubbleReply,
+                ]}
+                accessibilityState={{ selected }}
+                accessibilityActions={actionable ? A11Y_ACTIONS : undefined}
+                // A long-press does both jobs: outside selection it selects and
+                // opens the menu, inside it picks or unpicks (onLongPressMessage).
+                onAccessibilityAction={actionable ? handleLongPress : undefined}
+              >
+                {/* Always the first child of a sent bubble, with constant props, so it
+                    is created once per bubble and never rebuilt. The bubble clips it
+                    to its corners. */}
+                {mine && SENT_GRADIENT ? (
+                  <LinearGradient
+                    colors={SENT_GRADIENT}
+                    start={GRADIENT_START}
+                    end={GRADIENT_END}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                  />
+                ) : null}
+                {deleted ? (
+                  <Tombstone mine={mine} />
+                ) : (
+                  <>
+                    {reply ? (
+                      <ReplyQuote
+                        message={message}
+                        mine={mine}
+                        name={quoteName}
+                        onJump={onJumpToOriginal}
+                      />
+                    ) : null}
+                    <MessageText content={message.content} mine={mine} onOpenLink={onOpenLink} />
+                  </>
+                )}
+                <View style={styles.bubbleMeta}>
+                  <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
+                    {formatClockTime(message.created_at)}
+                  </AppText>
+                  {/* A tombstone shows its time only, never ticks (§10.8). */}
+                  {mine && !deleted ? <Ticks message={message} /> : null}
+                </View>
+                {/* Last, so it lies over the text too; the bubble clips it. */}
+                {actionable ? (
+                  <Reanimated.View
+                    pointerEvents="none"
+                    style={[
+                      StyleSheet.absoluteFill,
+                      mine ? styles.bubblePressMine : styles.bubblePressTheirs,
+                      pressStyle,
+                    ]}
+                  />
+                ) : null}
+              </View>
+            </GestureDetector>
+          </Reanimated.View>
+        </View>
+
+        {message.failed ? (
+          <Pressable
+            onPress={() => onRetry(message)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Message not sent. Tap to try again"
+            style={({ pressed }) => [styles.retryRow, pressed && styles.retryRowPressed]}
+          >
+            <Feather name="rotate-cw" size={11} color={colors.errorText} />
+            {/* Shown only after the automatic retries gave up (useSendMessage).
+                Tapping starts them again. */}
+            <AppText style={styles.retryText}>Failed to send</AppText>
+          </Pressable>
+        ) : null}
+      </View>
+    </GestureDetector>
   );
 });
+
+/**
+ * The quote at the top of a reply (MESSAGES_SPEC.md §10.5). Pressing it jumps
+ * to the original (§10.6) — unless the original was deleted for everyone
+ * (`reply_preview` null) or is gone from the table (`reply_to_id` null).
+ */
+function ReplyQuote({
+  message,
+  mine,
+  name,
+  onJump,
+}: {
+  message: PendingMessage;
+  mine: boolean;
+  name: string;
+  onJump: (messageId: string) => void;
+}) {
+  const gone = message.reply_preview == null;
+  const target = gone ? null : (message.reply_to_id ?? null);
+  const body = (
+    <>
+      <View style={[styles.quoteAccent, mine ? styles.quoteAccentMine : styles.quoteAccentTheirs]} />
+      <AppText style={[styles.quoteName, mine ? styles.quoteNameMine : styles.quoteNameTheirs]} numberOfLines={1}>
+        {name}
+      </AppText>
+      <AppText
+        style={[
+          gone ? styles.quoteGone : styles.quoteText,
+          mine ? styles.quoteTextMine : styles.quoteTextTheirs,
+        ]}
+        numberOfLines={2}
+      >
+        {gone ? 'Original message was deleted' : message.reply_preview}
+      </AppText>
+    </>
+  );
+  const look = [styles.quote, mine ? styles.quoteMine : styles.quoteTheirs];
+  if (!target) return <View style={look}>{body}</View>;
+  return (
+    <Pressable
+      onPress={() => onJump(target)}
+      accessibilityRole="button"
+      accessibilityLabel={`Reply to ${name}: ${message.reply_preview}. Show the original`}
+      style={({ pressed }) => [look, pressed && styles.quotePressed]}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+/** The reply bar over the composer's input (MESSAGES_SPEC.md §10.4). */
+function ReplyBar({ name, text, onClose }: { name: string; text: string; onClose: () => void }) {
+  return (
+    <Reanimated.View entering={FadeIn.duration(150)} style={styles.replyBar}>
+      <View style={styles.replyAccent} />
+      <View style={styles.replyBarText}>
+        <AppText style={styles.replyBarName} numberOfLines={1}>
+          Replying to {name}
+        </AppText>
+        {/* Plain text: an emoji-only message stays at this size (no jumbo). */}
+        <AppText style={styles.replyBarQuote} numberOfLines={1}>
+          {text}
+        </AppText>
+      </View>
+      <Pressable
+        onPress={onClose}
+        hitSlop={4}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel reply"
+        style={({ pressed }) => [styles.replyClose, pressed && styles.replyClosePressed]}
+      >
+        <Feather name="x" size={16} color={colors.mutedText} />
+      </Pressable>
+    </Reanimated.View>
+  );
+}
 
 /**
  * Message body: tappable links, and emoji drawn at emoji size (src/lib/emoji.ts).
  * A message of only one to three emoji is drawn jumbo instead, the whole text
  * at that size — WhatsApp's rule.
  */
-function MessageText({ content, mine }: { content: string; mine: boolean }) {
+function MessageText({
+  content,
+  mine,
+  onOpenLink,
+}: {
+  content: string;
+  mine: boolean;
+  onOpenLink: (url: string) => void;
+}) {
   const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
   const parts = useMemo(
     () =>
@@ -1300,13 +2237,30 @@ function MessageText({ content, mine }: { content: string; mine: boolean }) {
           <AppText
             key={`${part}-${i}`}
             style={[styles.link, mine ? styles.linkMine : styles.linkTheirs]}
-            onPress={() => Linking.openURL(url).catch(() => {})}
+            onPress={() => onOpenLink(url)}
           >
             {body}
           </AppText>
         );
       })}
     </AppText>
+  );
+}
+
+/**
+ * MESSAGES_SPEC.md §10.8 "The tombstone": a message deleted for everyone. Drawn
+ * inside the normal bubble of its side. No MessageText, so no emoji sizing and
+ * no links: there is no text left to draw.
+ */
+function Tombstone({ mine }: { mine: boolean }) {
+  const color = mine ? colors.chatTombstoneMine : colors.mutedText;
+  return (
+    <View style={styles.tombstone}>
+      <Feather name="slash" size={14} color={color} />
+      <AppText style={[styles.tombstoneText, mine ? styles.tombstoneMine : styles.tombstoneTheirs]}>
+        {mine ? 'You deleted this message' : 'This message was deleted'}
+      </AppText>
+    </View>
   );
 }
 
@@ -1493,6 +2447,25 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
   },
   headerInfo: { flex: 1, minWidth: 0 },
+  selectionBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: THREAD_PAD,
+    backgroundColor: colors.white,
+  },
+  selectionCount: {
+    flex: 1,
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.title,
+    color: colors.blackSoft,
+  },
+  selectionActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerName: {
     fontFamily: font.family.semibold,
     fontSize: font.sizes.title,
@@ -1573,9 +2546,79 @@ const styles = StyleSheet.create({
     color: colors.mutedText,
     textAlign: 'center',
   },
-  // Spec §2: 8 between runs, 2 inside one.
-  runStart: { marginTop: spacing.sm },
-  runNext: { marginTop: 2 },
+  // Full-bleed, like the unread band: undo the list's side padding, then put
+  // it back inside. The whole width is the row's touch target (a long-press
+  // beside a message selects it), and the bands below cover all of it.
+  row: {
+    marginHorizontal: -THREAD_PAD,
+    paddingHorizontal: THREAD_PAD,
+  },
+  // Spec §2: 8 between runs, 2 inside one. Padding, not margin, so the gap
+  // above a row is part of it: selected rows' bands meet, and a long-press in
+  // the gap still lands on a message.
+  runStart: { paddingTop: spacing.sm },
+  runNext: { paddingTop: 2 },
+  rowSelected: { backgroundColor: colors.chatRowSelected },
+  // The same band, shown from the UI thread the moment a long-press lands.
+  rowHeld: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.chatRowSelected,
+  },
+  rowFlash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.chatRowHighlight,
+  },
+  /* Swipe to reply — spec §10.3: at the row's left edge, level with the
+     middle of the bubble. */
+  swipeIcon: {
+    position: 'absolute',
+    left: 0,
+    top: '50%',
+    marginTop: -SWIPE_ICON_SIZE / 2,
+    width: SWIPE_ICON_SIZE,
+    height: SWIPE_ICON_SIZE,
+    borderRadius: SWIPE_ICON_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    shadowColor: colors.chatMenuShadow,
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  /* The quote inside a reply — spec §10.5. */
+  bubbleReply: { minWidth: REPLY_MIN_BUBBLE_WIDTH },
+  quote: {
+    alignSelf: 'stretch',
+    marginBottom: 6,
+    paddingVertical: 6,
+    paddingLeft: 11,
+    paddingRight: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  quoteMine: { backgroundColor: colors.chatQuoteMineBg },
+  quoteTheirs: { backgroundColor: colors.chatQuoteTheirsBg },
+  quotePressed: { opacity: 0.75 },
+  quoteAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+  quoteAccentMine: { backgroundColor: colors.chatQuoteMineBar },
+  quoteAccentTheirs: { backgroundColor: colors.purple },
+  quoteName: { fontFamily: font.family.semibold, fontSize: font.sizes.caption, lineHeight: 16 },
+  quoteNameMine: { color: colors.white },
+  quoteNameTheirs: { color: colors.purple },
+  quoteText: { fontFamily: font.family.regular, fontSize: font.sizes.caption, lineHeight: 16 },
+  quoteGone: { fontFamily: font.family.italic, fontSize: font.sizes.caption, lineHeight: 16 },
+  quoteTextMine: { color: colors.chatQuoteMineText },
+  quoteTextTheirs: { color: colors.mutedText },
   messageRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -1590,11 +2633,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: 6,
     borderRadius: BUBBLE_RADIUS,
-  },
-  bubbleMine: {
-    // 'solid' paints this; 'gradient' paints over it, clipped to the corners.
-    backgroundColor: colors.bubbleMineSolid,
+    // Clips the touch-feedback overlay (and a sent bubble's gradient) to the corners.
     overflow: 'hidden',
+  },
+  bubblePressMine: { backgroundColor: colors.chatBubblePressMine },
+  bubblePressTheirs: { backgroundColor: colors.chatBubblePressTheirs },
+  bubbleMine: {
+    // 'solid' paints this; 'gradient' paints over it, clipped to the corners by `bubble`.
+    backgroundColor: colors.bubbleMineSolid,
   },
   bubbleTheirs: {
     backgroundColor: colors.white,
@@ -1613,6 +2659,18 @@ const styles = StyleSheet.create({
   emojiInline: { fontSize: EMOJI_SIZES.inline },
   bubbleTextMine: { color: colors.white },
   bubbleTextTheirs: { color: colors.blackSoft },
+  tombstone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tombstoneText: {
+    fontFamily: font.family.italic,
+    fontSize: font.sizes.bodyLg,
+    lineHeight: 20,
+  },
+  tombstoneMine: { color: colors.chatTombstoneMine },
+  tombstoneTheirs: { color: colors.mutedText },
   link: { textDecorationLine: 'underline' },
   linkMine: { color: colors.blueLight },
   linkTheirs: { color: colors.blueDark },
@@ -1826,15 +2884,60 @@ const styles = StyleSheet.create({
 
   /* Composer — spec §2; the gap between controls is the mockup's `.comp`. */
   composer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
     paddingHorizontal: 10,
     paddingTop: spacing.sm,
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.messagesBarBorder,
   },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  /* Reply bar — spec §10.4. */
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+    paddingTop: 6,
+    paddingBottom: 6,
+    paddingLeft: 13,
+    paddingRight: 6,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.chatQuoteTheirsBg,
+  },
+  replyAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.purple,
+  },
+  replyBarText: { flex: 1, minWidth: 0 },
+  replyBarName: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.caption,
+    lineHeight: 16,
+    color: colors.purple,
+  },
+  replyBarQuote: {
+    fontFamily: font.family.regular,
+    fontSize: font.sizes.caption,
+    lineHeight: 16,
+    color: colors.mutedText,
+  },
+  replyClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  replyClosePressed: { backgroundColor: colors.inboxRowPressed },
   emojiToggle: {
     width: 40,
     height: 40,

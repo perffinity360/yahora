@@ -79,6 +79,27 @@ export const colors = {
   bubbleMineMeta: 'rgba(255,255,255,0.90)', // time + ticks on a sent bubble
   chatFailedTick: '#FFFFFF', // owner's call 2026-10-16: white, like the other ticks (was #F87171)
 
+  // ── MESSAGES_SPEC.md §3 — message actions (§10), v3, Phase 6B ──
+  chatRowSelected: 'rgba(128,0,128,0.15)', // a selected message's row (§10.2, §10.11); 0.10 was too faint on the wallpaper
+  chatRowHighlight: 'rgba(128,0,128,0.12)', // jump-to-original flash
+  // Touch feedback on a bubble (§10.12): WhatsApp's pressed state. White on the
+  // purple sent bubble; on the white received one white would not show, so a tint.
+  chatBubblePressMine: 'rgba(255,255,255,0.22)',
+  chatBubblePressTheirs: 'rgba(128,0,128,0.07)',
+  chatQuoteMineBg: 'rgba(0,0,0,0.12)', // quote inside a sent bubble (black, not white: §10.5, §7)
+  chatQuoteMineBar: 'rgba(255,255,255,0.90)',
+  chatQuoteMineText: 'rgba(255,255,255,0.85)',
+  chatQuoteTheirsBg: 'rgba(128,0,128,0.06)', // quote inside a received bubble; also the reply bar
+  chatTombstoneMine: 'rgba(255,255,255,0.90)', // "You deleted this message" (85% fails, §7)
+  sheetHandle: 'rgba(128,0,128,0.15)',
+  // The spec calls this one `scrim`, but `scrim` below (0.55) already backs
+  // nine other sheets and modals. Renaming keeps them as they are.
+  chatScrim: 'rgba(11,11,11,0.32)', // spec value; unused since the sheet became an in-thread menu (§10.2)
+  toastBg: 'rgba(26,26,26,0.88)', // "Copied" and other toasts
+  // Shadow colour of the message menu and the delete dialog; the web menu's
+  // rgba(42,8,42,0.16) is this at shadowOpacity 0.16.
+  chatMenuShadow: '#2A082A',
+
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
   appBgBottom: '#F1E6FF',
@@ -176,6 +197,10 @@ export const font = {
     bold: 'Inter_700Bold',
     extrabold: 'Inter_800ExtraBold',
     serif: 'BreeSerif_400Regular',
+    // Real italic faces: iOS won't slant a custom font for `fontStyle: 'italic'`.
+    // For deleted messages (MESSAGES_SPEC §10.8, §10.9).
+    italic: 'Inter_400Regular_Italic',
+    mediumItalic: 'Inter_500Medium_Italic',
   },
   /**
    * THE TYPE SCALE. Phase 5 Block V-C, 2026-09-20.

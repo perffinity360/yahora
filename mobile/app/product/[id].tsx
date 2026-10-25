@@ -18,7 +18,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent, ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton, CircleButton } from '../../src/components/CircleButton';
@@ -129,7 +129,9 @@ export default function ProductDetailScreen() {
       if (!sameListing) break;
       copies += 1;
     }
-    if (index - copies > 0) {
+    // canGoBack(): the state read above can be a render old, and a back sent
+    // with nothing to go back to is the "GO_BACK was not handled" error.
+    if (index - copies > 0 && router.canGoBack()) {
       if (copies === 0) router.back();
       else router.dismiss(copies + 1);
     } else {
@@ -321,7 +323,7 @@ function Content({
      One dock at the bottom of the screen serves three states: the normal action
      bar, the "ask a question" composer, and nothing at all while an inline reply
      composer is open (that one owns the space above the keyboard instead). */
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const scrollOffset = useRef(0);
   const keyboardUp = useKeyboardVisible();
   const [composerOpen, setComposerOpen] = useState(false);

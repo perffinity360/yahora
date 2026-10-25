@@ -10,7 +10,7 @@ Supabase project as the web app** (`../frontend` + `../backend`).
 or Bootstrap. You may mirror logic patterns, but do not import web code.
 
 ## Stack
-- Expo SDK 57 · React Native 0.86 · React 19.2 · **TypeScript**
+- Expo SDK 58 · React Native 0.88 · React 19.3 · **TypeScript**
 - **Navigation:** Expo Router (file-based, under `app/`)
 - **Server state + caching:** TanStack Query, with AsyncStorage persistence for offline use
 - **Backend:** REST calls to the existing Express API (same endpoints the web app uses)
@@ -151,17 +151,23 @@ mobile/
 ```
 
 ## Mobile gotchas (learned the hard way)
-- **File uploads:** the global `fetch` is Expo SDK 57's **Winter** implementation. Its FormData
+- **File uploads:** the global `fetch` is Expo SDK 58's **Winter** implementation. Its FormData
   rejects React Native's classic `{ uri, name, type }` file part ("Unsupported FormDataPart
   implementation"). Build parts with `toUploadFile()` (`src/lib/upload.ts`) — an object exposing
   `name`, `type`, and a `bytes()` reader (via expo-file-system's `File`). Applies to every
   `api.uploadForm` call (Sell images, avatar).
 - **Feed list:** `@shopify/flash-list` v2 (auto-sized, no `estimatedItemSize`); it needs the New
-  Architecture, which SDK 57 enables by default.
+  Architecture, which SDK 58 enables by default.
+- **RN 0.88 strict types (SDK 58):** a ref is typed by its *instance*, not the component:
+  `useRef<ViewInstance>`, `ScrollViewInstance`, `TextInputInstance` (type imports from
+  `react-native`), never `useRef<View>`. List tokens are `ListViewToken` (not generic). Deep imports
+  from `react-native/Libraries/*` are type errors.
 - **Gestures/animation:** reanimated v4 + `react-native-worklets` + gesture-handler are installed and
   configured. `GestureHandlerRootView` wraps the app in `app/_layout.tsx`; worklet transforms come
   from babel-preset-expo (see the no-babel.config.js note above). `SwipeCard`/`SwipeDeck` use them.
-  `Skeleton` still uses core `Animated` (fine to keep).
+  `Skeleton` still uses core `Animated` (fine to keep). Gesture-handler is v3: the `Gesture.Pan()`-style builder
+  still works but is deprecated in favour of hooks (`usePanGesture`, …). New code may use either;
+  migrating the existing gestures is its own task.
 - **Root navigation is a `<Slot/>`** which unmounts inactive screens, so `router.back()` from a
   detail screen resets the tabs to Marketplace. Navigate to a tab explicitly
   (`router.replace('/(tabs)/profile')`) instead of relying on `back()`.

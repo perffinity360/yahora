@@ -35,6 +35,7 @@ import {
   CornerUpLeft,
   Copy,
   Trash2,
+  SquareCheck,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
@@ -47,6 +48,9 @@ import {
   JUMP_HIGHLIGHT_FADE_MS,
   JUMP_HIGHLIGHT_HOLD_MS,
   JUMP_MAX_EXTRA_PAGES,
+  LONG_PRESS_MS,
+  PRESS_FEEDBACK_DELAY_MS,
+  PRESS_FEEDBACK_IN_MS,
   REPLY_MIN_BUBBLE_WIDTH,
   SWIPE_REPLY_MAX,
   SWIPE_REPLY_TRIGGER,
@@ -577,11 +581,14 @@ export default function Messages() {
   /* ── Message actions (spec §10.1, §10.2) ──
      `actionsMenu`: the message whose menu is open, and the round button it
      hangs from. `tappedRowKey`: on a touch screen, the one row whose button a
-     tap on its bubble has shown. `deleteTarget`: the message in the delete
-     confirmation (§10.8). */
+     tap on its bubble has shown. `deleteTargets`: the messages in the delete
+     confirmation (§10.8) — one, or everything selected. `selectedKeys`: the
+     messages picked in selection mode (WhatsApp's "Select messages"), in the
+     order they were picked; empty = not selecting. */
   const [actionsMenu, setActionsMenu] = useState(null);
   const [tappedRowKey, setTappedRowKey] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteTargets, setDeleteTargets] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState([]);
   /* §10.4: the message being replied to, shown in the reply bar. */
   const [replyTo, setReplyTo] = useState(null);
   /* §10.6: the row flashing after a jump to the original. `n` restarts the
@@ -607,7 +614,8 @@ export default function Messages() {
   useEffect(() => {
     setActionsMenu(null);
     setTappedRowKey(null);
-    setDeleteTarget(null);
+    setDeleteTargets(null);
+    setSelectedKeys([]);
     setReplyTo(null);
     setJumpHighlight(null);
   }, [activeChat?.contact_id, activeChat?.product_id]);
@@ -619,6 +627,37 @@ export default function Messages() {
     const live = messages.find((m) => m.id === replyTo.id);
     if (!live || isDeleted(live)) setReplyTo(null);
   }, [messages, replyTo]);
+
+  /* Selection mode. The messages are read from the live list, oldest first
+     (the order Copy gives them in); one that leaves the list (deleted for me)
+     leaves the selection. */
+  const selecting = selectedKeys.length > 0;
+  const selectedMessages = useMemo(() => {
+    if (!selectedKeys.length) return [];
+    const keys = new Set(selectedKeys);
+    return messages.filter((m) => keys.has(messageKey(m)));
+  }, [messages, selectedKeys]);
+  useEffect(() => {
+    if (selectedMessages.length !== selectedKeys.length) {
+      setSelectedKeys(selectedMessages.map(messageKey));
+    }
+  }, [selectedMessages, selectedKeys.length]);
+  const toggleSelected = (msg) => {
+    const key = messageKey(msg);
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  };
+  // Esc leaves selection mode (not while the delete dialog is open: its own
+  // Esc closes it first).
+  useEffect(() => {
+    if (!selecting || deleteTargets) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setSelectedKeys([]);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selecting, deleteTargets]);
 
   // The flash ends after its hold and fade (the CSS fades it out).
   useEffect(() => {
@@ -2100,7 +2139,7 @@ export default function Messages() {
       delete prev.row.dataset.swipe;
     }
     swipeRef.current = null;
-    if (!msg || e.pointerType !== "touch" || !e.isPrimary) return;
+    if (!msg || selecting || e.pointerType !== "touch" || !e.isPrimary) return;
     swipeRef.current = {
       pointerId: e.pointerId,
       row: e.currentTarget.parentElement, // the bubble's row (.swipeRow)
@@ -2152,9 +2191,20 @@ export default function Messages() {
     }
   };
 
-  /* The menu's items (§10.1): Reply · Copy · Delete; a tombstone has only
-     Delete. Reply is wired in part 3. */
+  /* The menu's items (§10.1): Reply · Copy · Select · Delete; a tombstone has
+     Select · Delete. Select starts selection mode with this message picked
+     (WhatsApp Web's "Select messages"). */
   const actionsMenuItems = (msg) => {
+    const select = {
+      key: "select",
+      label: "Select",
+      Icon: SquareCheck,
+      onSelect: () => {
+        closeActionsMenu(false);
+        setTappedRowKey(null);
+        setSelectedKeys([messageKey(msg)]);
+      },
+    };
     const remove = {
       key: "delete",
       label: "Delete",
@@ -2162,10 +2212,10 @@ export default function Messages() {
       danger: true,
       onSelect: () => {
         closeActionsMenu(false);
-        setDeleteTarget(msg);
+        setDeleteTargets([msg]);
       },
     };
-    if (isDeleted(msg)) return [remove];
+    if (isDeleted(msg)) return [select, remove];
     return [
       {
         key: "reply",
@@ -2177,29 +2227,132 @@ export default function Messages() {
         },
       },
       { key: "copy", label: "Copy", Icon: Copy, onSelect: () => handleCopy(msg) },
+      select,
       remove,
     ];
   };
 
   /* The delete confirmation's choices (§10.8). It closes at once; a refusal
-     comes back as a toast. */
+     comes back as a toast. Several messages are one request each, all at
+     once. Cancel keeps the selection; deleting ends it. */
   const closeDeleteDialog = () => {
-    setDeleteTarget(null);
+    setDeleteTargets(null);
     const anchor = menuAnchorRef.current;
-    if (anchor?.isConnected) anchor.focus({ preventScroll: true });
+    if (!selecting && anchor?.isConnected) anchor.focus({ preventScroll: true });
   };
   const confirmDelete = async (forEveryone) => {
-    const msg = deleteTarget;
-    if (!msg) return;
+    const targets = deleteTargets;
+    if (!targets?.length) return;
     closeDeleteDialog();
-    const error = forEveryone ? await deleteForEveryone(msg) : await deleteForMe(msg);
-    if (!error) return;
+    setSelectedKeys([]);
+    const errors = (
+      await Promise.all(
+        targets.map((m) => (forEveryone ? deleteForEveryone(m) : deleteForMe(m))),
+      )
+    ).filter(Boolean);
+    if (!errors.length) return;
+    const one = targets.length === 1;
     showToast(
-      error === "DELETE_WINDOW_EXPIRED"
-        ? "It's too late to delete this for everyone"
-        : "Couldn't delete. Try again.",
+      errors.includes("DELETE_WINDOW_EXPIRED")
+        ? one
+          ? "It's too late to delete this for everyone"
+          : "Some were too old to delete for everyone"
+        : one
+          ? "Couldn't delete. Try again."
+          : "Couldn't delete some messages. Try again.",
     );
   };
+
+  /* The selection bar's actions. Copy gives the texts oldest first, one per
+     line; it isn't offered while a deleted message is selected. */
+  const selectionHasTombstone = selectedMessages.some(isDeleted);
+  const copySelection = async () => {
+    const ok = await copyText(selectedMessages.map((m) => m.content).join("\n"));
+    setSelectedKeys([]);
+    showToast(ok ? "Copied" : "Couldn't copy");
+  };
+
+  /* §10.2 on a touch screen: a long-press opens the menu, anywhere on the
+     row — the bubble or the empty space beside it. Android Chrome also fires
+     `contextmenu` for it (handled on the row); iPhone Safari never does, so a
+     timer does it there. A finger that moves first (a scroll, a swipe) is not
+     a long-press, and the tap that a long-press ends with shows nothing. */
+  const longPressRef = useRef(null);
+  const cancelLongPress = () => {
+    clearTimeout(longPressRef.current?.timer);
+    if (longPressRef.current) longPressRef.current.timer = null;
+  };
+  const beginLongPress = (e, msg) => {
+    cancelLongPress();
+    longPressRef.current = null;
+    if (e.pointerType !== "touch" || !e.isPrimary || selecting) return;
+    const press = { x0: e.clientX, y0: e.clientY, fired: false, timer: null };
+    press.timer = setTimeout(() => {
+      press.timer = null;
+      const g = swipeRef.current;
+      if (g?.mode === "swipe") return;
+      if (g) g.mode = "ignore";
+      press.fired = true;
+      setTappedRowKey(null);
+      openActionsMenu(msg);
+    }, LONG_PRESS_MS);
+    longPressRef.current = press;
+  };
+  const moveLongPress = (e) => {
+    const press = longPressRef.current;
+    if (!press?.timer) return;
+    if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) > SWIPE_CANCEL_PX) {
+      cancelLongPress();
+    }
+  };
+  useEffect(() => () => clearTimeout(longPressRef.current?.timer), []);
+
+  /* §10.12 Touch feedback, WhatsApp's pressed bubble. On a touch screen the
+     bubble lights once the finger has rested PRESS_FEEDBACK_DELAY_MS (so a
+     scroll or a swipe never lights it), stays lit while held, and fades on
+     release; a tap quicker than that flashes once. Touch only: WhatsApp Web
+     shows nothing for a mouse click. A data attribute, not state or a class:
+     state would re-render the thread twice per touch, and React rewrites
+     className on every render, which would drop a class it didn't set. */
+  const pressRef = useRef(null);
+  const clearPressFeedback = () => {
+    const press = pressRef.current;
+    if (!press) return;
+    pressRef.current = null;
+    clearTimeout(press.timer);
+    delete press.el.dataset.pressed;
+  };
+  const beginPressFeedback = (e) => {
+    clearPressFeedback();
+    if (e.pointerType !== "touch" || !e.isPrimary) return;
+    const el = e.currentTarget;
+    const press = { el, x0: e.clientX, y0: e.clientY, lit: false, timer: null };
+    press.timer = setTimeout(() => {
+      press.lit = true;
+      el.dataset.pressed = "";
+    }, PRESS_FEEDBACK_DELAY_MS);
+    pressRef.current = press;
+  };
+  const movePressFeedback = (e) => {
+    const press = pressRef.current;
+    if (!press || press.el !== e.currentTarget) return;
+    if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) > SWIPE_CANCEL_PX) {
+      clearPressFeedback();
+    }
+  };
+  const releasePressFeedback = () => {
+    const press = pressRef.current;
+    if (!press) return;
+    if (press.lit) {
+      clearPressFeedback();
+      return;
+    }
+    // Quicker than the delay: light it now, and fade once it is up.
+    clearTimeout(press.timer);
+    press.el.dataset.pressed = "";
+    press.timer = setTimeout(clearPressFeedback, PRESS_FEEDBACK_IN_MS);
+  };
+  useEffect(() => () => clearTimeout(pressRef.current?.timer), []);
 
   /* `unsentRef` (declared with the other refs) is threadKey → (client_tag →
      message). */
@@ -2908,6 +3061,7 @@ export default function Messages() {
                         const rowKey = messageKey(msg);
                         const hasActions = !msg.pending && !msg.failed;
                         const menuOpen = actionsMenu?.key === rowKey;
+                        const picked = selecting && selectedKeys.includes(rowKey);
                         // §10.3: not a tombstone (nor pending or failed).
                         const swipeable = hasActions && !isDeleted(msg);
 
@@ -2945,15 +3099,79 @@ export default function Messages() {
                                 openingIdsRef.current.has(messageKey(msg))
                                   ? ""
                                   : styles.messageEnter
-                              } ${menuOpen ? styles.rowSelected : ""} ${
+                              } ${menuOpen || picked ? styles.rowSelected : ""} ${
                                 jumpHighlight?.id === msg.id ? styles.rowHighlight : ""
                               } ${
                                 menuOpen || tappedRowKey === rowKey ? styles.actionsShown : ""
-                              } ${swipeable ? styles.swipeRow : ""}`}
+                              } ${swipeable ? styles.swipeRow : ""} ${
+                                selecting ? styles.rowSelecting : ""
+                              }`}
+                              /* The whole row, not just the bubble: a
+                                 right-click or long-press on the empty space
+                                 beside a message opens its menu too, and in
+                                 selection mode a click anywhere on it picks it. */
+                              {...(hasActions && {
+                                onPointerDown: (e) => beginLongPress(e, msg),
+                                onPointerMove: moveLongPress,
+                                onPointerUp: cancelLongPress,
+                                onPointerCancel: cancelLongPress,
+                                // Right-click; on Android Chrome a long-press
+                                // fires this too. Once a swipe has started it
+                                // wins; once the long-press has opened the
+                                // menu, the finger can no longer start a swipe.
+                                onContextMenu: (e) => {
+                                  e.preventDefault();
+                                  if (selecting) return;
+                                  const g = swipeRef.current;
+                                  if (g?.mode === "swipe") return;
+                                  if (g) g.mode = "ignore";
+                                  openActionsMenu(msg);
+                                },
+                                // Capture: decided before a link, the quote or
+                                // the bubble's own tap handler sees the click.
+                                onClickCapture: (e) => {
+                                  if (selecting) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    toggleSelected(msg);
+                                    return;
+                                  }
+                                  if (longPressRef.current?.fired) {
+                                    longPressRef.current.fired = false;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }
+                                },
+                              })}
                             >
+                              {/* Selection mode: a tick box at the start of
+                                  every row (WhatsApp Web). A row that can't
+                                  be picked (sending, failed) keeps the space. */}
+                              {selecting &&
+                                (hasActions ? (
+                                  <span
+                                    role="checkbox"
+                                    aria-checked={picked}
+                                    aria-label="Select message"
+                                    tabIndex={0}
+                                    className={`${styles.selectCheck} ${
+                                      picked ? styles.selectCheckOn : ""
+                                    }`}
+                                    onKeyDown={(e) => {
+                                      if (e.key === " " || e.key === "Enter") {
+                                        e.preventDefault();
+                                        toggleSelected(msg);
+                                      }
+                                    }}
+                                  >
+                                    {picked && <Check size={14} strokeWidth={3} aria-hidden="true" />}
+                                  </span>
+                                ) : (
+                                  <span className={styles.selectCheckSpace} aria-hidden="true" />
+                                ))}
                               {swipeable && (
                                 <span className={styles.swipeReplyIcon} aria-hidden="true">
-                                  <CornerUpLeft size={18} />
+                                  <CornerUpLeft size={22} />
                                 </span>
                               )}
                               {!isMine &&
@@ -2982,10 +3200,20 @@ export default function Messages() {
                                   onPointerDown: (e) => {
                                     lastPointerTypeRef.current = e.pointerType;
                                     beginSwipe(e, swipeable ? msg : null);
+                                    beginPressFeedback(e);
                                   },
-                                  onPointerMove: moveSwipe,
-                                  onPointerUp: (e) => endSwipe(e, false),
-                                  onPointerCancel: (e) => endSwipe(e, true),
+                                  onPointerMove: (e) => {
+                                    moveSwipe(e);
+                                    movePressFeedback(e);
+                                  },
+                                  onPointerUp: (e) => {
+                                    endSwipe(e, false);
+                                    releasePressFeedback();
+                                  },
+                                  onPointerCancel: (e) => {
+                                    endSwipe(e, true);
+                                    clearPressFeedback();
+                                  },
                                   // Touch: a tap shows this row's button, and
                                   // a second tap hides it. Not a tap on a
                                   // link in the text, and not the click that
@@ -2995,18 +3223,6 @@ export default function Messages() {
                                     if (swipeRef.current?.mode === "swipe") return;
                                     if (e.target.closest("a, button")) return;
                                     setTappedRowKey((k) => (k === rowKey ? null : rowKey));
-                                  },
-                                  // Right-click; on Android Chrome a
-                                  // long-press fires this too.
-                                  // Once a swipe has started it wins; once
-                                  // the long-press has opened the menu, the
-                                  // finger can no longer start a swipe.
-                                  onContextMenu: (e) => {
-                                    e.preventDefault();
-                                    const g = swipeRef.current;
-                                    if (g?.mode === "swipe") return;
-                                    if (g) g.mode = "ignore";
-                                    openActionsMenu(msg);
                                   },
                                 })}
                               >
@@ -3177,8 +3393,56 @@ export default function Messages() {
                 )}
               </div>
 
+              {/* Selection mode: this bar stands in for the composer
+                  (WhatsApp Web). The composer stays mounted underneath, so a
+                  half-typed message is still there afterwards. */}
+              {selecting && (
+                <div
+                  className={styles.selectionBar}
+                  role="toolbar"
+                  aria-label="Selected messages"
+                >
+                  <button
+                    type="button"
+                    className={styles.selectionBtn}
+                    onClick={() => setSelectedKeys([])}
+                    aria-label="Cancel selection"
+                    title="Cancel"
+                  >
+                    <X size={20} aria-hidden="true" />
+                  </button>
+                  <span className={styles.selectionCount} aria-live="polite">
+                    {selectedMessages.length} selected
+                  </span>
+                  {!selectionHasTombstone && (
+                    <button
+                      type="button"
+                      className={styles.selectionBtn}
+                      onClick={copySelection}
+                      aria-label="Copy"
+                      title="Copy"
+                    >
+                      <Copy size={20} aria-hidden="true" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`${styles.selectionBtn} ${styles.selectionBtnDanger}`}
+                    onClick={() => setDeleteTargets(selectedMessages)}
+                    aria-label="Delete"
+                    title="Delete"
+                  >
+                    <Trash2 size={20} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
               {/* Chat Input Area */}
-              <div className={styles.chatInputArea}>
+              <div
+                className={`${styles.chatInputArea} ${
+                  selecting ? styles.chatInputAreaHidden : ""
+                }`}
+              >
                 {/* §10.4: the reply bar, above the input row. */}
                 {replyTo && (
                   <div className={styles.replyBar}>
@@ -3333,10 +3597,13 @@ export default function Messages() {
         </div>
       </div>
 
-      {/* §10.8: the delete confirmation, in the Dashboard's modal look. */}
-      {deleteTarget &&
+      {/* §10.8: the delete confirmation, WhatsApp's layout. One message, or
+          everything selected; "Delete for everyone" only when every one of
+          them allows it. No explanation: the choices say it. */}
+      {deleteTargets &&
         (() => {
-          const both = canDeleteForEveryone(deleteTarget, currentUserId);
+          const both = deleteTargets.every((m) => canDeleteForEveryone(m, currentUserId));
+          const many = deleteTargets.length > 1;
           return (
             <div className={styles.modalOverlay} onClick={closeDeleteDialog}>
               <div
@@ -3344,7 +3611,6 @@ export default function Messages() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="delete-message-title"
-                aria-describedby="delete-message-body"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === "Escape") {
@@ -3354,16 +3620,9 @@ export default function Messages() {
                 }}
               >
                 <h3 id="delete-message-title" className={styles.modalTitle}>
-                  Delete message?
+                  {many ? `Delete ${deleteTargets.length} messages?` : "Delete message?"}
                 </h3>
-                <p id="delete-message-body" className={styles.modalText}>
-                  {both
-                    ? "Delete it for everyone in this chat, or only for you?"
-                    : `It will be removed from this chat for you. ${firstName(
-                        activeChat?.contact_name,
-                      )} will still see it.`}
-                </p>
-                <div className={`${styles.modalActions} ${styles.modalActionsStacked}`}>
+                <div className={styles.modalActions}>
                   {both && (
                     <button
                       type="button"
@@ -3377,14 +3636,14 @@ export default function Messages() {
                   <button
                     type="button"
                     autoFocus={!both}
-                    className={styles.modalBtn}
+                    className={`${styles.modalBtn} ${styles.modalBtnDanger}`}
                     onClick={() => confirmDelete(false)}
                   >
                     Delete for me
                   </button>
                   <button
                     type="button"
-                    className={`${styles.modalBtn} ${styles.modalBtnCancel}`}
+                    className={styles.modalBtn}
                     onClick={closeDeleteDialog}
                   >
                     Cancel

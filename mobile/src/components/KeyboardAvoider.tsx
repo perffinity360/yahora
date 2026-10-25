@@ -8,6 +8,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
@@ -108,7 +109,7 @@ export function KeyboardAvoider({
   const restingBottomInset = useRef(insets.bottom);
   if (insets.bottom > 0) restingBottomInset.current = insets.bottom;
 
-  const viewRef = useRef<View>(null);
+  const viewRef = useRef<ViewInstance>(null);
   // Refs, not state: these are inputs to the calculation and each lands on its
   // own native event. Only the result is allowed to cause a render.
   /** How far the keyboard reaches up from the bottom of the window. */

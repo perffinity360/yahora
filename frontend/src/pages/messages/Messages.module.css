@@ -849,6 +849,29 @@
   word-break: break-word;
 }
 
+/* Touch feedback (spec §10.12), WhatsApp's pressed bubble: an overlay in the
+   bubble's own shape. `data-pressed` is set by Messages.jsx on a touch that
+   rests PRESS_FEEDBACK_DELAY_MS (or, for a quicker tap, for
+   PRESS_FEEDBACK_IN_MS on release). Comes up in 60 ms, fades in 220 ms. */
+.messageBubble::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--chat-bubble-press-theirs);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+.bubbleMine::after { background: var(--chat-bubble-press-mine); }
+.messageBubble[data-pressed]::after {
+  opacity: 1;
+  transition-duration: 60ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .messageBubble::after { transition: none; }
+}
+
 /* ── Message actions — spec §10.2 (web) ──
    The round button sits beside the bubble on its outer side (left of mine,
    right of theirs), top-aligned, gap 6. Absolutely placed against the bubble,
@@ -896,6 +919,76 @@
   clip-path: inset(0 -100vmax);
 }
 
+/* ════════════════════════════════════════════
+   SELECTION MODE — WhatsApp Web's "Select messages". A tick box at the start
+   of each row, a click anywhere on a row picks it, and a bar with the count
+   and the actions stands in for the composer.
+════════════════════════════════════════════ */
+.rowSelecting { cursor: pointer; }
+.rowSelecting .actionsBtn { display: none; }
+.selectCheck,
+.selectCheckSpace {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  align-self: center;
+}
+.selectCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 2px solid var(--muted-text);
+  background: var(--white);
+  color: var(--white);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.selectCheckOn { background: var(--purple); border-color: var(--purple); }
+.selectCheck:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* Mine sit on the right: the box stays at the start, the bubble is pushed over. */
+.messageMine .selectCheck,
+.messageMine .selectCheckSpace { margin-right: auto; }
+
+.selectionBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  background: var(--white);
+  border-top: 1px solid var(--msg-bar-line);
+  flex-shrink: 0;
+  animation: fadeIn 0.15s ease;
+}
+.selectionCount {
+  flex: 1;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--black-soft);
+}
+.selectionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--black-soft);
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+.selectionBtn:hover { background: var(--msg-pink-light); }
+.selectionBtn:active { transform: scale(0.94); }
+.selectionBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+.selectionBtnDanger { color: var(--error-text); }
+.chatInputAreaHidden { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .selectCheck,
+  .selectionBtn { transition: none; }
+  .selectionBar { animation: none; }
+}
+
 /* Touch screens (phones and tablets, by input type, not width): a long-press
    anywhere on this page — a bubble, a date chip, the unread band, the welcome
    card, the header, an inbox row — must not start the browser's text
@@ -940,12 +1033,16 @@
   z-index: 1;
   transform: translateX(var(--swipe-x, 0px));
 }
+/* Level with the middle of the bubble (§10.3): top/bottom 0 + auto margins
+   centre it without a transform, which the scale below already uses. */
 .swipeReplyIcon {
   position: absolute;
   left: 0;
+  top: 0;
   bottom: 0;
-  width: 30px;
-  height: 30px;
+  margin: auto 0;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1722,10 +1819,10 @@
 }
 
 /* ════════════════════════════════════════════
-   DELETE CONFIRMATION — spec §10.8. The Dashboard's modal
-   (Dashboard.module.css .modalOverlay / .modalContent / .modalActions,
-   copied: CSS Modules can't share classes between pages), with the choices
-   stacked full width.
+   DELETE CONFIRMATION — spec §10.8. WhatsApp's layout, the same as the
+   app's DeleteMessagesDialog (owner's call, 24 Oct): the title on the left,
+   no explanation under it, and the choices as text buttons stacked on the
+   right, the strongest first. The two deletes are red, Cancel is purple.
 ════════════════════════════════════════════ */
 .modalOverlay {
   position: fixed;
@@ -1740,11 +1837,11 @@
 }
 .modalContent {
   background: var(--white);
-  border-radius: 20px;
-  padding: 24px;
+  border-radius: 24px;
+  padding: 22px 22px 12px;
   width: 100%;
-  max-width: 400px;
-  text-align: center;
+  max-width: 360px;
+  text-align: left;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -1753,44 +1850,37 @@
   /* Bree Serif ships one weight (400). */
   font-weight: 400;
   font-size: 1.25rem;
+  line-height: 1.3;
   color: var(--black-soft);
-  margin-bottom: 8px;
+  margin: 0;
 }
-.modalText {
-  font-size: 0.95rem;
-  color: #666;
-  margin-bottom: 24px;
-  line-height: 1.5;
-}
+/* Right-aligned, each button only as wide as its label. The negative margin
+   lines the label (not the hover area) up with the title's padding. */
 .modalActions {
   display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-.modalActionsStacked {
   flex-direction: column;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 4px;
+  margin: 18px -12px 0 0;
 }
 .modalBtn {
-  width: 100%;
-  padding: 10px 20px;
+  min-height: 44px;
+  padding: 10px 12px;
   border-radius: 12px;
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
   border: none;
-  background: #f0f0f0;
-  color: var(--black-soft);
+  background: transparent;
+  color: var(--purple);
   transition: background-color 0.2s, transform 0.15s;
 }
-.modalBtn:hover { background: #e4e4e4; }
+.modalBtn:hover { background: var(--chat-quote-theirs-bg); }
 .modalBtn:active { transform: scale(0.98); }
 .modalBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 /* Spec's #B91C1C — the web's --error-text (same value as v3's --danger-text). */
-.modalBtnDanger { background: var(--error-bg); color: var(--error-text); }
-.modalBtnDanger:hover { background: #fde2e2; }
-.modalBtnCancel { background: transparent; color: #555; }
-.modalBtnCancel:hover { background: #f0f0f0; }
+.modalBtnDanger { color: var(--error-text); }
+.modalBtnDanger:hover { background: var(--error-bg); }
 
 @keyframes modalIn {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }

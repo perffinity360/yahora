@@ -183,6 +183,23 @@ export function replaceMessage(list: PendingMessage[], updated: Message): Pendin
   );
 }
 
+/** Take a message out of a list — "Delete for me" (§10.8). No Realtime event follows one. */
+export function removeMessage(list: PendingMessage[], id: string): PendingMessage[] {
+  return list.some((m) => m.id === id) ? list.filter((m) => m.id !== id) : list;
+}
+
+/**
+ * After a delete-for-everyone: every cached reply quoting that message shows
+ * "Original message was deleted". The database wipes the same column in the
+ * same transaction, and the replies' own UPDATEs bring that too; this only
+ * makes the deleter's screen show it at once.
+ */
+export function clearReplyPreviews(list: PendingMessage[], deletedId: string): PendingMessage[] {
+  return list.some((m) => m.reply_to_id === deletedId && m.reply_preview != null)
+    ? list.map((m) => (m.reply_to_id === deletedId ? { ...m, reply_preview: null } : m))
+    : list;
+}
+
 /** Who the other party is, from my point of view. */
 export function contactIdOf(message: Message, myId: string): string {
   return message.sender_id === myId ? message.receiver_id : message.sender_id;

@@ -93,6 +93,12 @@ already follows. Every pair is in §7.
 | §5 Allowed differences | Ten | **Eleven**: adds when the failed-load state shows | Mobile caches a thread; the website doesn't |
 | §2 Loading | Not specified for a failed load | **"Couldn't load this chat"** with Retry, on both. It reloads by itself once the server answers | Owner's call, 2026-10-18. The web used to show an empty thread, and dropped unsent messages with it |
 | §2 Unread behaviour | Seen once 50% of the row is visible | …or once it fills 50% of the thread | A long message taller than twice the thread was never marked read: no blue ticks for the sender, and the badge stayed |
+| §10.2, §10.10 | Long-press 350 ms; selected band 0.10 | **250 ms**; band **0.15**. On the app, focusing or typing in the composer closes the menu beside a message (the selection stays) | Owner's call, 2026-10-24: the hold felt slow, and selected rows were hard to tell apart on the wallpaper |
+| §10.3 | Reply icon 30/18, bottom-aligned | **36/22, centred** on the bubble | Owner's call, 2026-10-24 |
+| §10.8 | Trash icon, centred title, body text, full-width red buttons | **WhatsApp's layout**: left title, no body, text buttons stacked on the right | Owner's call, 2026-10-24 |
+| §10.12 | No touch feedback on a bubble | **New: WhatsApp's pressed bubble** — an overlay in the bubble's shape after 100 ms of rest, held while the finger is down, faded on release; a quicker tap flashes once. App, and the website on a touch screen | Owner's call, 2026-10-25: a tap gave no sign it had landed |
+| §10.2 | On mobile, a touch **in the thread**, a scroll, or focusing the composer closes the menu | A touch **anywhere** outside the menu (header, thread, composer), a scroll, or the keyboard opening or closing. The keyboard moves the thread, and a menu left behind floated over the wrong message | Owner's report, 2026-10-25 |
+| §10.2 | The selected band appeared once the JS thread had rendered it | **The band shows the moment the hold completes** (drawn from the UI thread), with WhatsApp's long-press haptic | Owner's report, 2026-10-25: the hold sometimes felt slow |
 
 ---
 
@@ -563,8 +569,10 @@ chatFailedTick:     '#FFFFFF',
 Message actions (§10), added in v3:
 
 ```ts
-chatRowSelected:   'rgba(128,0,128,0.10)',     // the row while its sheet/menu is open
+chatRowSelected:   'rgba(128,0,128,0.15)',     // a selected row (0.10 until 24 Oct: too faint on the wallpaper)
 chatRowHighlight:  'rgba(128,0,128,0.12)',     // jump-to-original flash
+chatBubblePressMine:   'rgba(255,255,255,0.22)', // pressed sent bubble (§10.12)
+chatBubblePressTheirs: 'rgba(128,0,128,0.07)',   // pressed received bubble: white wouldn't show on white
 chatQuoteMineBg:   'rgba(0,0,0,0.12)',         // quote inside a sent bubble
 chatQuoteMineBar:  'rgba(255,255,255,0.90)',
 chatQuoteMineText: 'rgba(255,255,255,0.85)',
@@ -605,8 +613,10 @@ Message actions (§10), added in v3 — reuse an existing variable only where it
 identical:
 
 ```css
---chat-row-selected: rgba(128,0,128,0.10);
+--chat-row-selected: rgba(128,0,128,0.15);
 --chat-row-highlight: rgba(128,0,128,0.12);
+--chat-bubble-press-mine: rgba(255,255,255,0.22);
+--chat-bubble-press-theirs: rgba(128,0,128,0.07);
 --chat-quote-mine-bg: rgba(0,0,0,0.12);
 --chat-quote-mine-bar: rgba(255,255,255,0.90);
 --chat-quote-mine-text: rgba(255,255,255,0.85);
@@ -768,20 +778,27 @@ Where the picture and this section disagree, this section wins.
 
 | The message | Actions, in this order |
 |---|---|
-| A normal message (mine or theirs) | **Reply · Copy · Delete** |
-| A deleted-for-everyone message (tombstone, §10.8) | **Delete** only (it removes the tombstone from your own view) |
+| A normal message (mine or theirs) | **Reply · Copy · Delete** (web menu: **Reply · Copy · Select · Delete**) |
+| A deleted-for-everyone message (tombstone, §10.8) | **Delete** only (it removes the tombstone from your own view); web menu: **Select · Delete** |
 | Mobile: a message still sending, or failed | **none** — the failed pill (§2) already handles it |
 | The empty-chat card, the beginning note, the typing bubble, date chips, the unread band | none — they are not messages |
 
 ### 10.2 Opening the actions
 
+*Revised 24 Oct 2026 (owner's call): the mobile bottom sheet is gone. Both platforms now follow
+WhatsApp — the actions open **in the thread, beside the message**, and several messages can be
+selected at once (§10.11). The space between a message and its menu is where the reactions bar
+goes in the community phase.*
+
 | | Mobile | Web |
 |---|---|---|
-| How | **Long-press** the bubble, **350 ms** (`LONG_PRESS_MS`) | **Hover** the bubble → an actions button appears beside it; click it. **Right-click** on the bubble opens the same menu. On a touch screen (no hover) **tap** the bubble to show the button |
-| The row while open | `rgba(128,0,128,0.10)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
-| Container | **Bottom sheet** over a scrim `rgba(11,11,11,0.32)` | **Popover menu** anchored under the actions button, kept inside the thread's edges |
+| How | **Long-press** the message's **row**, **250 ms** (`LONG_PRESS_MS`; 350 until 24 Oct) — the bubble or the empty space beside it, the thread's full width. It **selects** the message (§10.11) and opens the menu | **Hover** the bubble → an actions button appears beside it; click it. **Right-click** anywhere on the row opens the same menu. On a touch screen (no hover) **tap** the bubble to show the button, or **long-press** anywhere on the row (250 ms) to open the menu |
+| The row while open / selected | `rgba(128,0,128,0.15)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
+| Container | **Menu card beside the bubble**, no scrim | **Popover menu** anchored under the actions button, kept inside the thread's edges |
 
-**Mobile sheet:** white · radius 20 on the top corners · padding 8 top, 12 bottom (on mobile, the larger of 12 and the home-indicator inset) · handle 36×4, radius 2, `rgba(128,0,128,0.15)`, centred, 8 above the first item · each item 52 tall, padding 0/20, icon 20 then gap 16 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** item: icon and label `#B91C1C` (errorText). Tapping outside the sheet, or the Android back button, closes it.
+**Mobile menu:** white · radius 16 · shadow `#2A082A` at 16%, radius 12, y 8 (Android elevation 8) · hairline border `rgba(128,0,128,0.08)` · width 196 · padding 6 vertical · each item 48 tall, padding 0/16, icon 20 then gap 14 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** in `#B91C1C`. Placed **8 below** the bubble when it fits inside the thread (12 from its edges), otherwise 8 above, otherwise over it (a bubble taller than the thread). Lined up with the bubble's right edge for mine, left edge for theirs. Grows in from the corner nearest the bubble (scale 0.86 → 1, opacity 0 → 1, 170 ms, ease-out cubic); fades out in 110 ms. **Any touch outside the menu** — in the thread, the header or the composer — a scroll, or the **keyboard opening or closing** closes it and **keeps the selection** (the header then shows the actions); the Android back button or the header's arrow ends the selection. The keyboard rule is there because the keyboard moves the thread: a menu left open would float over a different message.
+
+**The hold (mobile):** the band appears the moment the 250 ms hold completes, drawn on the UI thread, together with the phone's long-press haptic (Android `LONG_PRESS`; iPhone light impact). Nothing waits for the JS thread, so a busy JS thread can't make the hold feel slow.
 
 **Web actions button:** a 28 circle **beside** the bubble, on its outer side — left of mine, right of theirs — aligned with the bubble's top, gap 6 · white · border 1px `rgba(128,0,128,0.08)` · `chevron-down` 16, mutedText · fades in over 120 ms · hover on the button itself: background pinkLight `#FFF4F7`. It sits outside the bubble so it never covers the message text, and the bubble's size never changes.
 
@@ -799,7 +816,7 @@ nothing and keeps the menu (§10.2).
 |---|---|
 | Starts | after **12** of horizontal movement; **10** of vertical movement first cancels it, so the list still scrolls |
 | Follows the finger | up to **72** (`SWIPE_REPLY_MAX`), never left of its start |
-| Reply icon | `corner-up-left` 18 purple in a 30 white circle, shadow `0 1px 3px rgba(42,8,42,0.12)` (Android: `elevation: 1`), at the row's left edge, bottom-aligned with the bubble, opacity rising 0 → 1 as the bubble travels 0 → 56 |
+| Reply icon | `corner-up-left` 22 purple in a 36 white circle (18 in 30 until 24 Oct), shadow `0 1px 3px rgba(42,8,42,0.12)` (Android: `elevation: 1`), at the row's left edge, **centred on the bubble's height** (was bottom-aligned), opacity rising 0 → 1 as the bubble travels 0 → 56 |
 | Triggers | released past **56** (`SWIPE_REPLY_TRIGGER`) → reply mode for that message |
 | Returns | spring back to 0 (Reanimated `withSpring`, damping 20, stiffness 220) |
 
@@ -816,7 +833,7 @@ Not on tombstones, pending or failed messages. All of it runs on the UI thread (
 
 ### 10.4 Reply mode — the reply bar in the composer
 
-Starting a reply (from the menu, the sheet or a swipe) shows a **reply bar** inside the composer bar, above the input row, and focuses the input.
+Starting a reply (from the menu, the sheet or a swipe) shows a **reply bar** inside the composer bar, above the input row, and focuses the input — **the keyboard opens** on a phone, also when the input still had focus from before but its keyboard had been put away.
 
 | | Value |
 |---|---|
@@ -881,10 +898,25 @@ Choosing **Delete** opens a confirmation:
 | Mine, not deleted, sent **under 60 minutes ago** | `Delete message?` | **Delete for everyone** (`#B91C1C`) · **Delete for me** · **Cancel** |
 | Mine and older, or theirs, or any tombstone | `Delete message?` | **Delete for me** · **Cancel** |
 
-Body text under the title: `Delete it for everyone in this chat, or only for you?` when both delete choices show; `It will be removed from this chat for you. <name> will still see it.` when only "for me" shows (`<name>` = the contact's first name).
+**No body text** (owner's call, 24 Oct 2026): the choices explain themselves. Until then a line under the title explained them.
 
-- **Mobile:** the phone's own `Alert` (Android draws it — its look follows the phone; the labels and their order are what this spec fixes).
-- **Web:** a modal using the site's existing modal styles: buttons stacked, full width, in the order above.
+For several selected messages (§10.11) the title is `Delete N messages?`, and "Delete for everyone" shows only when **every** one of them allows it.
+
+**The dialog — WhatsApp's layout, the same on both platforms** (revised 24 Oct 2026, twice; mobile no longer uses the phone's `Alert`):
+
+| | Value |
+|---|---|
+| Scrim | `rgba(11,11,11,0.55)` mobile (`scrim`) · `rgba(0,0,0,0.4)` web (the Dashboard modal's) |
+| Card | white · radius 24 · padding 22 top and sides, 12 bottom · max width 360 · centred on screen |
+| Icon | none (the trash circle was removed on 24 Oct) |
+| Title | Bree Serif 400 20, `#1A1A1A`, **left-aligned** |
+| Buttons | text buttons, **stacked and right-aligned**, each as wide as its label · 18 under the title, gap 4 · 44 tall, padding 0/12, radius 12 (the press/hover background), Inter 600 15 · the label's right edge lines up with the title's padding |
+| Delete for everyone | `#B91C1C` text; press/hover background `#FEF0F0` (errorBg) |
+| Delete for me | `#B91C1C` text; press/hover background `#FEF0F0` |
+| Cancel | purple `#800080` text; press background inboxRowPressed (mobile), hover `rgba(128,0,128,0.06)` (web) |
+| Motion | mobile: the scrim fades, the card scales 0.92 → 1 over 200 ms; web: the existing `modalIn` |
+
+Tapping the scrim, Esc (web) or the Android back button is Cancel. Cancel keeps a selection; a delete ends it.
 
 **What happens**
 
@@ -917,7 +949,7 @@ No emoji sizing, no links, no quote, not swipeable. White 90% on the pink end me
 ### 10.10 Constants — same names, same values, both platforms
 
 ```ts
-LONG_PRESS_MS               = 350
+LONG_PRESS_MS               = 250    // 350 until 24 Oct
 SWIPE_REPLY_TRIGGER         = 56     // touch only: the app, and the website on a touch screen
 SWIPE_REPLY_MAX             = 72     // touch only
 REPLY_MIN_BUBBLE_WIDTH      = 180
@@ -926,6 +958,36 @@ JUMP_HIGHLIGHT_FADE_MS      = 400
 JUMP_MAX_EXTRA_PAGES        = 5
 COPY_TOAST_MS               = 1500
 DELETE_FOR_EVERYONE_MINUTES = 60     // the database enforces this; apps only decide what to show
+PRESS_FEEDBACK_DELAY_MS     = 100    // §10.12; touch only
+PRESS_FEEDBACK_IN_MS        = 60     // §10.12
+PRESS_FEEDBACK_OUT_MS       = 220    // §10.12 (the web writes it in Messages.module.css)
 ```
 
 Mobile keeps them in `mobile/src/lib/messageActions.ts`; web in `frontend/src/utils/messageActions.js`. Change both in the same commit, and the SQL function `delete_message_for_everyone` too if the 60 changes.
+
+### 10.11 Selecting several messages (WhatsApp's selection mode)
+
+| | Mobile | Web |
+|---|---|---|
+| Starts | a long-press on any message's row (§10.2) | **Select** in a message's menu |
+| While selecting | a **tap** on a message's row picks or unpicks it (a long-press too); links, quotes and swipes rest | a **click** anywhere on a row picks or unpicks it; links, quotes, the actions button and swipes rest |
+| Marked by | the selected band (§10.2) | the band, and a **tick box** at the start of every row: 22 square, radius 6, border 2 mutedText; picked → filled purple with a white `check` 14. A row that can't be picked (sending, failed) keeps the space |
+| Bar | **over the header**, same box: `arrow-left` (purple) · `N selected` Inter 600 16 · then, once the menu has closed, the actions: **Reply** (one message, not a tombstone) · **Copy** (no tombstone selected) · **Delete** (`#B91C1C`) | **in place of the composer** (the draft is kept): `x` · `N selected` · **Copy** (no tombstone selected) · **Delete** (`#B91C1C`), 40 round buttons |
+| Ends | the arrow, Android back, unpicking the last one, Copy, Reply, a delete, or opening another chat | `x`, Esc, unpicking the last one, Copy, a delete, or opening another chat |
+
+- **Copy** puts the texts on the clipboard **oldest first, one per line**, and toasts `Copied` (§10.7 rules).
+- **Delete** opens §10.8's dialog for all of them; each message is its own request, all sent together. Any refusal: `It's too late to delete this for everyone` / `Couldn't delete. Try again.` for one message; `Some were too old to delete for everyone` / `Couldn't delete some messages. Try again.` for several.
+- A selected message that is hidden or leaves the thread leaves the selection; one deleted for everyone while selected stays selected but takes Copy and Reply away.
+
+### 10.12 Touch feedback on a bubble (WhatsApp's pressed state)
+
+*Added 25 Oct 2026 (owner's call): a tap on a message gave no sign it had landed.*
+
+A finger on a bubble lights it, the way WhatsApp's bubbles do:
+
+- **When:** after the finger has rested **100 ms** (`PRESS_FEEDBACK_DELAY_MS`, Android's tap timeout) without moving more than 10 dp/px. A finger that starts a scroll or a swipe within that time never lights it.
+- **Look:** an overlay in the bubble's own shape (its corners and tail), over the text: `chatBubblePressMine` / `--chat-bubble-press-mine` (white 22%) on a sent bubble; `chatBubblePressTheirs` / `--chat-bubble-press-theirs` (purple 7%) on a received one, because white doesn't show on white.
+- **Motion:** up in **60 ms**, held while the finger stays down (a long-press keeps it lit under the menu's arrival), faded in **220 ms** on release. A tap quicker than 100 ms flashes once: up in 60, then the fade. A scroll, a swipe or a cancelled touch fades it at once.
+- **Where:** the bubble only. The empty part of the row still takes long-presses and selection taps (§10.2, §10.11) but shows nothing, as in WhatsApp. Only messages with actions (not sending, not failed).
+- **Platforms:** the app always; the **website only for touch**. WhatsApp Web shows nothing for a mouse click, and the website already has hover.
+- **Reduced motion:** the overlay switches on and off with no fade.

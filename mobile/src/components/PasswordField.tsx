@@ -1,6 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { forwardRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 
 import { AppText } from './AppText';
 import { AppTextInput } from './AppTextInput';
@@ -26,7 +27,7 @@ export const MIN_PASSWORD_LENGTH = 8;
  * label, autoComplete hint and keyboard return key are all props rather than
  * being hardcoded for the sign-up case.
  */
-export const PasswordField = forwardRef<TextInput, {
+export const PasswordField = forwardRef<TextInputInstance, {
   value: string;
   onChangeText: (next: string) => void;
   placeholder?: string;
