@@ -87,7 +87,7 @@ export default function MessagesScreen() {
   const refreshControl = (
     <RefreshControl
       refreshing={isRefetching && !isLoading}
-      onRefresh={refetch}
+      onRefresh={() => void refetch()}
       tintColor={colors.purple}
       colors={[colors.purple]}
     />

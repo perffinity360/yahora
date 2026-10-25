@@ -1,8 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import MaskedView from '@react-native-masked-view/masked-view';
+import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactElement,
+  type RefObject,
+} from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -17,6 +25,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import type { ScrollViewInstance, ViewInstance, ViewProps } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../../src/components/AppText';
@@ -47,6 +56,13 @@ type Step = 'email' | 'otp';
 type Tab = 'otp' | 'password';
 
 /** Same key the web uses, so the two clients describe the same preference. */
+// masked-view 0.3.2 (still Expo's pinned version on SDK 58) types itself through
+// ReactNative.NativeMethods, which React Native 0.88 removed, so TypeScript no longer
+// sees a component. Same component at runtime, re-typed with its real props.
+const MaskedView = RNMaskedView as unknown as ComponentType<
+  ViewProps & { maskElement: ReactElement; androidRenderingMode?: 'software' | 'hardware' }
+>;
+
 const AUTH_TAB_KEY = 'yahora_auth_tab';
 
 /**
@@ -256,15 +272,15 @@ export default function LoginScreen() {
   const restingBottomInset = useRef(insets.bottom);
   if (insets.bottom > 0) restingBottomInset.current = insets.bottom;
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   /** Live scroll offset — ScrollView has no getter, so onScroll keeps it. */
   const scrollY = useRef(0);
   /** Window y of the keyboard's top edge. 0 when there is no keyboard. */
   const keyboardTop = useRef(0);
   /** Whichever row is being typed into, so the listener knows what to lift. */
-  const focusedRow = useRef<RefObject<View | null> | null>(null);
-  const emailRow = useRef<View>(null);
-  const otpRow = useRef<View>(null);
+  const focusedRow = useRef<RefObject<ViewInstance | null> | null>(null);
+  const emailRow = useRef<ViewInstance>(null);
+  const otpRow = useRef<ViewInstance>(null);
 
   const revealFocusedRow = useCallback(() => {
     const row = focusedRow.current?.current;
@@ -312,7 +328,7 @@ export default function LoginScreen() {
 
   /** Called from a field's onFocus: remember the row, then lift it. */
   const focusRow = useCallback(
-    (row: RefObject<View | null>) => {
+    (row: RefObject<ViewInstance | null>) => {
       focusedRow.current = row;
       // Already-open keyboard (switching fields) needs no wait; a closed one is
       // handled by the keyboardDidShow listener above.

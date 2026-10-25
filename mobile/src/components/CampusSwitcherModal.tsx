@@ -267,7 +267,7 @@ export function CampusSwitcherModal({ visible, onClose, currentId, homeId, onSel
             <FlatList
               data={filtered}
               ListHeaderComponent={
-                homeUniversity ? <AppText style={styles.sectionLabel}>ALL CAMPUSES</AppText> : null
+                homeUniversity ? <AppText style={styles.sectionLabel}>ALL CAMPUSES</AppText> : undefined
               }
               keyExtractor={(u) => u.id}
               style={styles.list}

@@ -37,6 +37,8 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // These two are what every tabBarIcon's `color` is. RN 0.88 types that as the wide
+        // ColorValue (number | null too), which Feather won't take, hence `color as string`.
         tabBarActiveTintColor: colors.purple,
         tabBarInactiveTintColor: colors.blackSoft,
         // `height` is the whole bar: the tab bar pads its own bottom by the
@@ -53,14 +55,14 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Marketplace',
-          tabBarIcon: ({ color, size }) => <Feather name="shopping-bag" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Feather name="shopping-bag" size={size} color={color as string} />,
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
           title: 'Messages',
-          tabBarIcon: ({ color, size }) => <Feather name="message-square" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Feather name="message-square" size={size} color={color as string} />,
           tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.pinkDark,
@@ -74,7 +76,7 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color as string} />,
         }}
       />
     </Tabs>

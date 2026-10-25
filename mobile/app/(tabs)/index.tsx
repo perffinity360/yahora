@@ -16,6 +16,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import type { ViewInstance } from 'react-native';
 import {
   cancelAnimation,
   Easing as ReEasing,
@@ -576,7 +577,7 @@ export default function MarketplaceScreen() {
   /** Wide enough for "Lowest Price" plus its tick without wrapping. */
   const SORT_MENU_MIN_WIDTH = 168;
 
-  const sortAnchor = useRef<View>(null);
+  const sortAnchor = useRef<ViewInstance>(null);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   /** Where to draw the menu, measured from the trigger so it opens under it. */
   const [sortMenuAt, setSortMenuAt] = useState({ top: 0, left: 0, width: 0 });

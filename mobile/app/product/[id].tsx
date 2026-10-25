@@ -18,7 +18,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent, ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton, CircleButton } from '../../src/components/CircleButton';
@@ -321,7 +321,7 @@ function Content({
      One dock at the bottom of the screen serves three states: the normal action
      bar, the "ask a question" composer, and nothing at all while an inline reply
      composer is open (that one owns the space above the keyboard instead). */
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const scrollOffset = useRef(0);
   const keyboardUp = useKeyboardVisible();
   const [composerOpen, setComposerOpen] = useState(false);

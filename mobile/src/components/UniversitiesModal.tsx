@@ -140,7 +140,7 @@ export function UniversitiesModal({ visible, onClose, homeId }: Props) {
             <FlatList
               data={filtered}
               ListHeaderComponent={
-                homeUniversity ? <AppText style={styles.sectionLabel}>ALL CAMPUSES</AppText> : null
+                homeUniversity ? <AppText style={styles.sectionLabel}>ALL CAMPUSES</AppText> : undefined
               }
               keyExtractor={(u) => u.id}
               style={styles.list}

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   LayoutChangeEvent,
-  NativeSyntheticEvent,
   StyleSheet,
-  TextLayoutEventData,
+  TextLayoutEvent,
   View,
 } from 'react-native';
 
@@ -43,7 +42,7 @@ export function ExpandableBio({ text }: { text: string }) {
     setLines(null);
   }, [text]);
 
-  const onMeasureLines = useCallback((e: NativeSyntheticEvent<TextLayoutEventData>) => {
+  const onMeasureLines = useCallback((e: TextLayoutEvent) => {
     setLines(e.nativeEvent.lines.map((l) => ({ text: l.text, width: l.width })));
   }, []);
 

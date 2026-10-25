@@ -19,7 +19,9 @@ import {
   Pressable,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  type ViewToken,
+  type ListViewToken,
+  type TextInputInstance,
+  type ViewInstance,
   ScrollView,
   StyleSheet,
   Text,
@@ -475,8 +477,8 @@ export default function ChatScreen() {
     return () => sub.remove();
   }, [selecting, clearSelection]);
 
-  const rootRef = useRef<View>(null);
-  const threadBoxRef = useRef<View>(null);
+  const rootRef = useRef<ViewInstance>(null);
+  const threadBoxRef = useRef<ViewInstance>(null);
   const selectingRef = useRef(selecting);
   selectingRef.current = selecting;
 
@@ -580,7 +582,7 @@ export default function ChatScreen() {
   /* ── REPLY (spec §10.4) ── The message being answered, shown in the reply bar
      over the composer. By id, read from the thread: deleted for everyone or
      hidden while the bar is up, it closes. */
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const replyTo = useMemo(
     () => (replyToId ? (thread.find((m) => m.id === replyToId) ?? null) : null),
@@ -913,10 +915,12 @@ export default function ChatScreen() {
   const viewabilityPairs = useRef(
     [SEEN_BY_ROW, SEEN_BY_THREAD].map((viewabilityConfig, config) => ({
       viewabilityConfig,
-      onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken<ChatRow>[] }) => {
+      onViewableItemsChanged: ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
         const ids = new Set<string>();
         for (const token of viewableItems) {
-          if (token.isViewable && token.item?.kind === 'msg') ids.add(token.item.message.id);
+          // RN 0.88's ListViewToken isn't generic; its item is `any`.
+          const item = token.item as ChatRow | undefined;
+          if (token.isViewable && item?.kind === 'msg') ids.add(item.message.id);
         }
         visibleByConfigRef.current[config] = ids;
         visibleIdsRef.current = new Set(visibleByConfigRef.current.flatMap((set) => [...set]));
@@ -1413,7 +1417,7 @@ export default function ChatScreen() {
                 contentContainerStyle={styles.listContent}
                 // Inverted: the header renders at the BOTTOM, under the newest message.
                 ListHeaderComponent={
-                  contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : null
+                  contactTyping ? <TypingBubble name={contactName} avatar={contactAvatar} /> : undefined
                 }
                 // ── OLDER MESSAGES (Phase 5 V-E) ──
                 // Inverted, "the end" of the list is the TOP of the screen, so this
@@ -1438,7 +1442,7 @@ export default function ChatScreen() {
                         This is the beginning of your conversation about {productTitle}.
                       </AppText>
                     </View>
-                  ) : null
+                  ) : undefined
                 }
                 renderItem={renderRow}
                 extraData={renderRow}
@@ -1712,7 +1716,7 @@ const MessageBubble = memo(function MessageBubble({
   const swipeable = actionable && !deleted;
   const reply = isReply(message) && !deleted;
   const messageId = message.id;
-  const bubbleRef = useRef<View>(null);
+  const bubbleRef = useRef<ViewInstance>(null);
 
   const handleLongPress = useCallback(() => {
     const node = bubbleRef.current;
