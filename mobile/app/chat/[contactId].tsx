@@ -1745,6 +1745,26 @@ function ChatWallpaper() {
   );
 }
 
+/* ── WATCH-ONLY GESTURES ──
+   The selection tap and the touch feedback only watch a finger; they must
+   never take the touch from the list, a link or the quote. A Pan with manual
+   activation does exactly that: it never activates, and gesture-handler
+   fails it by itself when the finger lifts (after onTouchesUp has run) or
+   cancels it when a scroll takes over.
+
+   Not Gesture.Manual: a Manual gesture has to be ended by hand, and the
+   version that did so from its touch callbacks closed the app on Android
+   (25 Oct, two phones: a scroll that started on a bubble, and taps in
+   selection mode). The likely mechanism, from gesture-handler's source (no
+   crash log was taken): a cancel runs the callback while the library is
+   itself moving the gesture to a new state; a second state change inside the
+   first cleans the gesture up, and the first then trips the library's check
+   "Manually handled gesture had not been assigned to any detector". Never
+   call a state manager from these callbacks. */
+function watchOnlyGesture() {
+  return Gesture.Pan().manualActivation(true);
+}
+
 /* ────────────────────────── Bubble ──────────────────────────
    MESSAGES_SPEC.md §2 "Bubbles". Memoised: every prop is either a message from
    the cache (whose identity only changes when that message does) or stable, so
@@ -1880,14 +1900,17 @@ const MessageBubble = memo(function MessageBubble({
       .onFinalize(() => {
         swipeX.value = withSpring(0, SWIPE_SPRING);
       });
-    /* The tap that picks or unpicks a message in selection mode. A Manual
-       gesture that only watches and never activates: an activated Tap would
-       take the touch from a link or the quote outside selection mode, which
-       is why the old one had to be rebuilt each time selection began. */
-    const tap = Gesture.Manual()
+    /* The tap that picks or unpicks a message in selection mode. A gesture
+       that only watches and never activates: an activated Tap would take the
+       touch from a link or the quote outside selection mode, which is why the
+       old one had to be rebuilt each time selection began. See WATCH-ONLY
+       GESTURES above the component for why it is a Pan and never calls its
+       state manager. */
+    const tap = watchOnlyGesture()
       .enabled(actionable)
       .onTouchesDown((event) => {
         const touch = event.changedTouches[0];
+        if (!touch) return;
         touchX.value = touch.absoluteX;
         touchY.value = touch.absoluteY;
         touchMoved.value = false;
@@ -1895,18 +1918,15 @@ const MessageBubble = memo(function MessageBubble({
       })
       .onTouchesMove((event) => {
         const touch = event.changedTouches[0];
+        if (!touch) return;
         const dx = touch.absoluteX - touchX.value;
         const dy = touch.absoluteY - touchY.value;
         if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) touchMoved.value = true;
       })
-      .onTouchesUp((_event, manager) => {
+      .onTouchesUp(() => {
         if (selectingSV.value && !touchMoved.value && !longPressed.value) {
           runOnJS(onTap)(messageId);
         }
-        manager.fail();
-      })
-      .onTouchesCancelled((_event, manager) => {
-        manager.fail();
       });
     return Gesture.Simultaneous(tap, Gesture.Race(pan, longPress));
   }, [
@@ -1937,10 +1957,11 @@ const MessageBubble = memo(function MessageBubble({
   const pressMoved = useSharedValue(false);
   const feedback = useMemo(
     () =>
-      Gesture.Manual()
+      watchOnlyGesture()
         .enabled(actionable)
         .onTouchesDown((event) => {
           const touch = event.changedTouches[0];
+          if (!touch) return;
           pressX.value = touch.absoluteX;
           pressY.value = touch.absoluteY;
           pressMoved.value = false;
@@ -1952,6 +1973,7 @@ const MessageBubble = memo(function MessageBubble({
         .onTouchesMove((event) => {
           if (pressMoved.value) return;
           const touch = event.changedTouches[0];
+          if (!touch) return;
           const dx = touch.absoluteX - pressX.value;
           const dy = touch.absoluteY - pressY.value;
           if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) {
@@ -1959,18 +1981,17 @@ const MessageBubble = memo(function MessageBubble({
             press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
           }
         })
-        .onTouchesUp((_event, manager) => {
+        .onTouchesUp(() => {
           if (!pressMoved.value) {
             press.value = withSequence(
               withTiming(1, { duration: PRESS_FEEDBACK_IN_MS }),
               withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS }),
             );
           }
-          manager.fail();
         })
-        .onTouchesCancelled((_event, manager) => {
+        // A scroll took the touch.
+        .onTouchesCancelled(() => {
           press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
-          manager.fail();
         }),
     [actionable, press, pressX, pressY, pressMoved],
   );

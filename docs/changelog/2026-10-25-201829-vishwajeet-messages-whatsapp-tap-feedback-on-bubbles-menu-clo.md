@@ -58,8 +58,12 @@ are updated.
   therefore re-rendered every mounted row (FlatList keeps far more than the screen) and
   re-registered about three worklet gestures per row, all on the JS thread, before the band could
   appear. The gestures now read a shared value on the UI thread, and the selection tap became a
-  watch-only `Gesture.Manual` (an activated `Tap` steals the touch from links and quotes, which is
-  why it used to be switched on and off). The band shows from the UI thread at once.
+  watch-only gesture (an activated `Tap` steals the touch from links and quotes, which is why it
+  used to be switched on and off). The band shows from the UI thread at once.
+- **The watch-only gestures are `Gesture.Pan().manualActivation(true)`, never `Gesture.Manual`.**
+  The first version used `Gesture.Manual` and ended it by hand from its touch callbacks. That closed
+  the app on Android (a scroll that started on a bubble, and taps in selection mode). The library
+  fails a never-activated Pan by itself. This is app-only; the website has no gesture-handler.
 - **Fixed console noise:** the Reanimated "Dependencies should only be used on the web" warning
   (`ListItemFab`), and the product page's back now checks `router.canGoBack()` (the "GO_BACK was
   not handled" dev warning).
