@@ -129,7 +129,9 @@ export default function ProductDetailScreen() {
       if (!sameListing) break;
       copies += 1;
     }
-    if (index - copies > 0) {
+    // canGoBack(): the state read above can be a render old, and a back sent
+    // with nothing to go back to is the "GO_BACK was not handled" error.
+    if (index - copies > 0 && router.canGoBack()) {
       if (copies === 0) router.back();
       else router.dismiss(copies + 1);
     } else {

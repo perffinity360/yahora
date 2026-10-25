@@ -65,6 +65,10 @@
      is not added twice. */
   --chat-row-selected: rgba(128,0,128,0.15);
   --chat-row-highlight: rgba(128,0,128,0.12);
+  /* Touch feedback on a bubble (§10.12): white on the purple sent bubble; on
+     the white received one white would not show, so a tint. */
+  --chat-bubble-press-mine: rgba(255,255,255,0.22);
+  --chat-bubble-press-theirs: rgba(128,0,128,0.07);
   --chat-quote-mine-bg: rgba(0,0,0,0.12);
   --chat-quote-mine-bar: rgba(255,255,255,0.90);
   --chat-quote-mine-text: rgba(255,255,255,0.85);

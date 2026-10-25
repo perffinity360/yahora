@@ -82,6 +82,10 @@ export const colors = {
   // ── MESSAGES_SPEC.md §3 — message actions (§10), v3, Phase 6B ──
   chatRowSelected: 'rgba(128,0,128,0.15)', // a selected message's row (§10.2, §10.11); 0.10 was too faint on the wallpaper
   chatRowHighlight: 'rgba(128,0,128,0.12)', // jump-to-original flash
+  // Touch feedback on a bubble (§10.12): WhatsApp's pressed state. White on the
+  // purple sent bubble; on the white received one white would not show, so a tint.
+  chatBubblePressMine: 'rgba(255,255,255,0.22)',
+  chatBubblePressTheirs: 'rgba(128,0,128,0.07)',
   chatQuoteMineBg: 'rgba(0,0,0,0.12)', // quote inside a sent bubble (black, not white: §10.5, §7)
   chatQuoteMineBar: 'rgba(255,255,255,0.90)',
   chatQuoteMineText: 'rgba(255,255,255,0.85)',

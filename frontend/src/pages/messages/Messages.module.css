@@ -849,6 +849,29 @@
   word-break: break-word;
 }
 
+/* Touch feedback (spec §10.12), WhatsApp's pressed bubble: an overlay in the
+   bubble's own shape. `data-pressed` is set by Messages.jsx on a touch that
+   rests PRESS_FEEDBACK_DELAY_MS (or, for a quicker tap, for
+   PRESS_FEEDBACK_IN_MS on release). Comes up in 60 ms, fades in 220 ms. */
+.messageBubble::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--chat-bubble-press-theirs);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+.bubbleMine::after { background: var(--chat-bubble-press-mine); }
+.messageBubble[data-pressed]::after {
+  opacity: 1;
+  transition-duration: 60ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .messageBubble::after { transition: none; }
+}
+
 /* ── Message actions — spec §10.2 (web) ──
    The round button sits beside the bubble on its outer side (left of mine,
    right of theirs), top-aligned, gap 6. Absolutely placed against the bubble,

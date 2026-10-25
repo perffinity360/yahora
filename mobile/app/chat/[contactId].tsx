@@ -2,10 +2,20 @@ import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -15,10 +25,12 @@ import {
   Image as RNImage,
   Keyboard,
   Linking,
+  PixelRatio,
   Platform,
   Pressable,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type KeyboardEventName,
   type ListViewToken,
   type TextInputInstance,
   type ViewInstance,
@@ -44,6 +56,7 @@ import Reanimated, {
   withTiming,
   ZoomIn,
   ZoomOut,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -94,6 +107,9 @@ import {
   JUMP_HIGHLIGHT_HOLD_MS,
   JUMP_MAX_EXTRA_PAGES,
   LONG_PRESS_MS,
+  PRESS_FEEDBACK_DELAY_MS,
+  PRESS_FEEDBACK_IN_MS,
+  PRESS_FEEDBACK_OUT_MS,
   REPLY_MIN_BUBBLE_WIDTH,
   SWIPE_REPLY_MAX,
   SWIPE_REPLY_TRIGGER,
@@ -178,13 +194,14 @@ const COPY_ACTION: MessageAction = { key: 'copy', label: 'Copy', icon: 'copy' };
 const DELETE_ACTION: MessageAction = { key: 'delete', label: 'Delete', icon: 'trash-2', danger: true };
 const MESSAGE_ACTIONS = [REPLY_ACTION, COPY_ACTION, DELETE_ACTION];
 const TOMBSTONE_ACTIONS = [DELETE_ACTION];
-/** TalkBack / VoiceOver: the standard long-press action selects the message,
- *  and in selection mode the standard activate action adds or removes it. */
-const A11Y_ACTIONS = [{ name: 'longpress', label: 'Select message' }];
-const A11Y_SELECTING_ACTIONS = [
+/** TalkBack / VoiceOver: both standard actions do what a long-press does —
+ *  select the message, or in selection mode add or remove it. */
+const A11Y_ACTIONS = [
   { name: 'activate', label: 'Select or unselect' },
   { name: 'longpress', label: 'Select or unselect' },
 ];
+/** How far a finger may drift and still be a tap (Android's touch slop, in dp). */
+const TAP_SLOP = 10;
 /** Swipe to reply lets go of the bubble with this spring (§10.3). */
 const SWIPE_SPRING = { damping: 20, stiffness: 220 };
 /** The reply arrow's circle and glyph (§10.3; were 30 and 18). */
@@ -481,6 +498,32 @@ export default function ChatScreen() {
   const threadBoxRef = useRef<ViewInstance>(null);
   const selectingRef = useRef(selecting);
   selectingRef.current = selecting;
+  // The rows' gestures read this on the UI thread (MessageBubble), so
+  // entering or leaving selection re-renders no row.
+  const selectingSV = useSharedValue(false);
+  useEffect(() => {
+    selectingSV.value = selecting;
+  }, [selecting, selectingSV]);
+
+  /* WhatsApp closes the menu whenever the screen is touched outside it (see
+     the SafeAreaView's onTouchStart) and whenever the keyboard comes or goes:
+     the keyboard moves the thread from under it, and a menu left behind
+     floats over the wrong message. The selection and the header's actions
+     stay. */
+  useEffect(() => {
+    if (!menu) return;
+    const events: KeyboardEventName[] =
+      Platform.OS === 'ios'
+        ? ['keyboardWillShow', 'keyboardWillHide']
+        : ['keyboardDidShow', 'keyboardDidHide'];
+    const subs = events.map((name) => Keyboard.addListener(name, () => setMenu(null)));
+    return () => subs.forEach((sub) => sub.remove());
+  }, [menu]);
+
+  const onOpenLink = useCallback((url: string) => {
+    if (selectingRef.current) return;
+    Linking.openURL(url).catch(() => {});
+  }, []);
 
   const toggleSelected = useCallback((id: string) => {
     setMenu(null);
@@ -1162,15 +1205,16 @@ export default function ChatScreen() {
           contactFirstName={contactFirstName}
           // Selecting one more message changes only that row's `selected`, and
           // a flash only that row's `flashToken`: the memo re-renders that row
-          // and no other. Entering or leaving selection mode (`selecting`)
-          // re-renders the rows on screen once.
+          // and no other. Entering or leaving selection mode re-renders none:
+          // the rows read it from `selectingSV`.
           selected={selectedSet.has(item.message.id)}
-          selecting={selecting}
+          selectingSV={selectingSV}
           flashToken={flash?.id === item.message.id ? flash.n : 0}
           onLongPress={onLongPressMessage}
           onTap={toggleSelected}
           onSwipeReply={onSwipeReply}
           onJumpToOriginal={onJumpToOriginal}
+          onOpenLink={onOpenLink}
         />
       ),
     [
@@ -1180,12 +1224,13 @@ export default function ChatScreen() {
       onRetry,
       contactFirstName,
       selectedSet,
-      selecting,
+      selectingSV,
       flash,
       onLongPressMessage,
       toggleSelected,
       onSwipeReply,
       onJumpToOriginal,
+      onOpenLink,
     ],
   );
 
@@ -1207,133 +1252,141 @@ export default function ChatScreen() {
   return (
     <View style={styles.root} ref={rootRef}>
       <KeyboardAvoider style={styles.flex}>
-        <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
-          <ConnectionBanner />
+        <SafeAreaView
+          style={styles.flex}
+          // The top inset is drawn inside WholePixelHeight below, with the header.
+          edges={['left', 'right']}
+          // Any touch outside the menu closes it (WhatsApp); the touch itself
+          // still selects, scrolls, types or opens a link. The menu is drawn
+          // outside this view, so a touch on it never reaches here.
+          onTouchStart={menu ? () => setMenu(null) : undefined}
+        >
+          {/* Everything above the thread, ending on a whole physical pixel:
+              see WholePixelHeight. */}
+          <WholePixelHeight>
+            <View style={{ height: insets.top }} />
+            <ConnectionBanner />
 
-          {/* ── Header ── */}
-          <View style={styles.header}>
-            <CircleButton
-              icon="chevron-left"
-              iconSize={24}
-              iconColor={colors.purple}
-              onPress={goBack}
-              variant="plain"
-              hitSlop={10}
-              accessibilityLabel="Back"
-            />
+            {/* ── Header ── */}
+            <View style={styles.header}>
+              <CircleButton
+                icon="chevron-left"
+                iconSize={24}
+                iconColor={colors.purple}
+                onPress={goBack}
+                variant="plain"
+                hitSlop={10}
+                accessibilityLabel="Back"
+              />
 
-            <View>
-              <Avatar name={contactName} uri={contactAvatar} size={36} />
-              {isOnline ? <View style={styles.headerDot} /> : null}
-            </View>
+              <View>
+                <Avatar name={contactName} uri={contactAvatar} size={36} />
+                {isOnline ? <View style={styles.headerDot} /> : null}
+              </View>
 
-            <View style={styles.headerInfo}>
-              <AppText style={styles.headerName} numberOfLines={1}>
-                {contactName}
-              </AppText>
-              {statusLine ? (
-                <AppText style={styles.headerStatus} numberOfLines={1}>
-                  {statusLine}
+              <View style={styles.headerInfo}>
+                <AppText style={styles.headerName} numberOfLines={1}>
+                  {contactName}
                 </AppText>
+                {statusLine ? (
+                  <AppText style={styles.headerStatus} numberOfLines={1}>
+                    {statusLine}
+                  </AppText>
+                ) : null}
+              </View>
+
+              {/* Selection mode (WhatsApp): over the header, in the same box, so
+                  nothing below it moves. The actions show here once the menu
+                  beside the message has closed. */}
+              {selecting ? (
+                <Reanimated.View
+                  entering={FadeIn.duration(140)}
+                  exiting={FadeOut.duration(120)}
+                  style={styles.selectionBar}
+                >
+                  <CircleButton
+                    icon="arrow-left"
+                    iconSize={22}
+                    iconColor={colors.purple}
+                    onPress={clearSelection}
+                    variant="plain"
+                    hitSlop={10}
+                    accessibilityLabel="Cancel selection"
+                  />
+                  <AppText style={styles.selectionCount} accessibilityLiveRegion="polite">
+                    {selectedMessages.length} selected
+                  </AppText>
+                  {!menu ? (
+                    <View style={styles.selectionActions}>
+                      {canReplyToSelection ? (
+                        <CircleButton
+                          icon="corner-up-left"
+                          iconColor={colors.blackSoft}
+                          onPress={() => handleAction('reply')}
+                          variant="plain"
+                          accessibilityLabel="Reply"
+                        />
+                      ) : null}
+                      {canCopySelection ? (
+                        <CircleButton
+                          icon="copy"
+                          iconColor={colors.blackSoft}
+                          onPress={() => handleAction('copy')}
+                          variant="plain"
+                          accessibilityLabel="Copy"
+                        />
+                      ) : null}
+                      <CircleButton
+                        icon="trash-2"
+                        iconColor={colors.errorText}
+                        onPress={() => handleAction('delete')}
+                        variant="plain"
+                        accessibilityLabel="Delete"
+                      />
+                    </View>
+                  ) : null}
+                </Reanimated.View>
               ) : null}
             </View>
 
-            {/* Selection mode (WhatsApp): over the header, in the same box, so
-                nothing below it moves. The actions show here once the menu
-                beside the message has closed. */}
-            {selecting ? (
-              <Reanimated.View
-                entering={FadeIn.duration(140)}
-                exiting={FadeOut.duration(120)}
-                style={styles.selectionBar}
+            {/* ── Product snippet: on the header's white surface (spec §2) ── */}
+            <View style={styles.snippetBar}>
+              <Pressable
+                onPress={() =>
+                  productId &&
+                  router.push(
+                    hrefWithFrom(
+                      `/product/${productId}`,
+                      hrefWithFrom(`/chat/${contactId}?productId=${productId}`, fromParam),
+                    ),
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`View ${productTitle}`}
+                style={({ pressed }) => [styles.snippet, pressed && styles.snippetPressed]}
               >
-                <CircleButton
-                  icon="arrow-left"
-                  iconSize={22}
-                  iconColor={colors.purple}
-                  onPress={clearSelection}
-                  variant="plain"
-                  hitSlop={10}
-                  accessibilityLabel="Cancel selection"
-                />
-                <AppText style={styles.selectionCount} accessibilityLiveRegion="polite">
-                  {selectedMessages.length} selected
-                </AppText>
-                {!menu ? (
-                  <View style={styles.selectionActions}>
-                    {canReplyToSelection ? (
-                      <CircleButton
-                        icon="corner-up-left"
-                        iconColor={colors.blackSoft}
-                        onPress={() => handleAction('reply')}
-                        variant="plain"
-                        accessibilityLabel="Reply"
-                      />
-                    ) : null}
-                    {canCopySelection ? (
-                      <CircleButton
-                        icon="copy"
-                        iconColor={colors.blackSoft}
-                        onPress={() => handleAction('copy')}
-                        variant="plain"
-                        accessibilityLabel="Copy"
-                      />
-                    ) : null}
-                    <CircleButton
-                      icon="trash-2"
-                      iconColor={colors.errorText}
-                      onPress={() => handleAction('delete')}
-                      variant="plain"
-                      accessibilityLabel="Delete"
-                    />
+                {productImage ? (
+                  <Image
+                    // Loopback-safe in local dev; see src/lib/config.ts.
+                    source={{ uri: resolveMediaUrl(productImage) ?? productImage }}
+                    style={styles.productThumb}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <View style={[styles.productThumb, styles.productThumbFallback]}>
+                    <Feather name="image" size={13} color={colors.mutedPlaceholder} />
                   </View>
-                ) : null}
-              </Reanimated.View>
-            ) : null}
-          </View>
+                )}
+                <AppText style={styles.productTitle} numberOfLines={1}>
+                  {productTitle}
+                </AppText>
+                <Feather name="chevron-right" size={13} color={colors.purple} />
+              </Pressable>
+            </View>
+          </WholePixelHeight>
 
-          {/* ── Product snippet: on the header's white surface (spec §2) ── */}
-          <View style={styles.snippetBar}>
-            <Pressable
-              onPress={() =>
-                productId &&
-                router.push(
-                  hrefWithFrom(
-                    `/product/${productId}`,
-                    hrefWithFrom(`/chat/${contactId}?productId=${productId}`, fromParam),
-                  ),
-                )
-              }
-              accessibilityRole="button"
-              accessibilityLabel={`View ${productTitle}`}
-              style={({ pressed }) => [styles.snippet, pressed && styles.snippetPressed]}
-            >
-              {productImage ? (
-                <Image
-                  // Loopback-safe in local dev; see src/lib/config.ts.
-                  source={{ uri: resolveMediaUrl(productImage) ?? productImage }}
-                  style={styles.productThumb}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={[styles.productThumb, styles.productThumbFallback]}>
-                  <Feather name="image" size={13} color={colors.mutedPlaceholder} />
-                </View>
-              )}
-              <AppText style={styles.productTitle} numberOfLines={1}>
-                {productTitle}
-              </AppText>
-              <Feather name="chevron-right" size={13} color={colors.purple} />
-            </Pressable>
-          </View>
-
-          {/* ── Thread ── Any touch in it closes the menu beside a message (the
-              touch itself still selects, scrolls or opens a link). */}
-          <View
-            style={styles.thread}
-            ref={threadBoxRef}
-            onTouchStart={menu ? () => setMenu(null) : undefined}
-          >
+          {/* ── Thread ── */}
+          <View style={styles.thread} ref={threadBoxRef}>
             {/* OUTSIDE the inverted FlatList on purpose: inside, it would be
                 flipped and would scroll with the messages. */}
             <ChatWallpaper />
@@ -1633,6 +1686,38 @@ export default function ChatScreen() {
  * React Native's own Image, with the 1x path only: RN picks @2x/@3x by suffix.
  * The tile size on device was confirmed with exactly this component.
  */
+/**
+ * Gives its children a box that is a whole number of physical pixels tall,
+ * so the thread below it starts on a pixel boundary.
+ *
+ * Why: Yoga rounds each row's POSITION relative to its parent but its HEIGHT
+ * from absolute screen edges (yoga/algorithm/PixelGrid.cpp). When the list's
+ * own top falls between two pixels — the header's text makes that the usual
+ * case — two neighbouring rows can come out 1px apart or 1px overlapping.
+ * Under two selected rows that is a 1px line of wallpaper (white) or of
+ * doubled band (purple). On a pixel boundary the two roundings agree.
+ *
+ * How: the inner view reports its height already rounded, which is within a
+ * pixel of the real one; one pixel more is always enough, and costs one
+ * pixel of the screen's background under the header.
+ */
+function WholePixelHeight({ children }: { children: ReactNode }) {
+  const [height, setHeight] = useState<number | undefined>(undefined);
+  return (
+    <View style={height === undefined ? undefined : { height }}>
+      <View
+        onLayout={(e) => {
+          const ratio = PixelRatio.get();
+          const next = (Math.round(e.nativeEvent.layout.height * ratio) + 1) / ratio;
+          setHeight((prev) => (prev === next ? prev : next));
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 function ChatWallpaper() {
   const [box, setBox] = useState({ w: 0, h: 0 });
   const cols = Math.ceil(box.w / TILE);
@@ -1680,12 +1765,13 @@ const MessageBubble = memo(function MessageBubble({
   onRetry,
   contactFirstName,
   selected,
-  selecting,
+  selectingSV,
   flashToken,
   onLongPress,
   onTap,
   onSwipeReply,
   onJumpToOriginal,
+  onOpenLink,
 }: {
   message: PendingMessage;
   mine: boolean;
@@ -1699,8 +1785,10 @@ const MessageBubble = memo(function MessageBubble({
   contactFirstName: string;
   /** Selected: the row gets the full-width band (spec §10.2). */
   selected: boolean;
-  /** Something is selected: a tap selects or unselects, and links, quotes and swipes rest. */
-  selecting: boolean;
+  /** Something is selected: a tap selects or unselects, and links, quotes and swipes rest.
+   *  A shared value, not a prop, so entering or leaving selection re-renders no row
+   *  and rebuilds no row's gestures; the gestures read it on the UI thread. */
+  selectingSV: SharedValue<boolean>;
   /** Changes each time this row is jumped to (§10.6); 0 = never. */
   flashToken: number;
   /** `bubble`: the bubble's box in window coordinates, for the menu beside it. */
@@ -1708,6 +1796,8 @@ const MessageBubble = memo(function MessageBubble({
   onTap: (messageId: string) => void;
   onSwipeReply: (messageId: string) => void;
   onJumpToOriginal: (messageId: string) => void;
+  /** Opens a link in the text; does nothing while selecting. */
+  onOpenLink: (url: string) => void;
 }) {
   const deleted = isDeleted(message);
   // A message still sending, or failed, has no actions (spec §10.1): its
@@ -1719,6 +1809,12 @@ const MessageBubble = memo(function MessageBubble({
   const bubbleRef = useRef<ViewInstance>(null);
 
   const handleLongPress = useCallback(() => {
+    // WhatsApp's tick under the finger when a message is picked.
+    if (Platform.OS === 'android') {
+      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch(() => {});
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
     const node = bubbleRef.current;
     if (!node) {
       onLongPress(messageId, null);
@@ -1735,39 +1831,149 @@ const MessageBubble = memo(function MessageBubble({
     opacity: interpolate(swipeX.value, [0, SWIPE_REPLY_TRIGGER], [0, 1], 'clamp'),
   }));
 
+  /* The band the moment a long-press lands, drawn from the UI thread; the
+     render that selects the row takes over from it (and resets it). Without
+     it the band waited for the JS thread, which is what made the hold feel
+     slow whenever that thread was busy. */
+  const held = useSharedValue(0);
+  const heldStyle = useAnimatedStyle(() => ({ opacity: held.value }));
+  useEffect(() => {
+    held.value = 0;
+  }, [selected, held]);
+
+  /* Where the finger went down, whether it has moved off, and whether this
+     touch ended up a long-press. */
+  const touchX = useSharedValue(0);
+  const touchY = useSharedValue(0);
+  const touchMoved = useSharedValue(false);
+  const longPressed = useSharedValue(false);
+
   /* Long-press: select (or, in selection mode, select / unselect). A finger
      that moves (a scroll) fails it, and a quick tap still reaches a link's
-     onPress. Tap: only in selection mode. Pan: the swipe; 12 to the right
-     starts it, 10 up or down or 12 to the left gives the touch to the list.
-     Race: whichever activates first cancels the others. */
+     onPress. Pan: the swipe; 12 to the right starts it, 10 up or down or 12
+     to the left gives the touch to the list. Race: whichever activates first
+     cancels the other. Neither depends on selection mode: they read
+     `selectingSV` on the UI thread, so a long-press rebuilds nothing. */
   const gesture = useMemo(() => {
     const longPress = Gesture.LongPress()
       .minDuration(LONG_PRESS_MS)
       .enabled(actionable)
       .onStart(() => {
+        longPressed.value = true;
+        if (!selectingSV.value) held.value = 1;
         runOnJS(handleLongPress)();
       });
-    const tap = Gesture.Tap()
-      .enabled(actionable && selecting)
-      .onEnd((_event, success) => {
-        if (success) runOnJS(onTap)(messageId);
-      });
     const pan = Gesture.Pan()
-      .enabled(swipeable && !selecting)
+      .enabled(swipeable)
       .activeOffsetX(12)
       .failOffsetX(-12)
       .failOffsetY([-10, 10])
       .onUpdate((event) => {
+        if (selectingSV.value) return;
         swipeX.value = Math.min(Math.max(event.translationX, 0), SWIPE_REPLY_MAX);
       })
       .onEnd(() => {
-        if (swipeX.value >= SWIPE_REPLY_TRIGGER) runOnJS(onSwipeReply)(messageId);
+        if (!selectingSV.value && swipeX.value >= SWIPE_REPLY_TRIGGER) {
+          runOnJS(onSwipeReply)(messageId);
+        }
       })
       .onFinalize(() => {
         swipeX.value = withSpring(0, SWIPE_SPRING);
       });
-    return Gesture.Race(pan, longPress, tap);
-  }, [actionable, swipeable, selecting, messageId, handleLongPress, onTap, onSwipeReply, swipeX]);
+    /* The tap that picks or unpicks a message in selection mode. A Manual
+       gesture that only watches and never activates: an activated Tap would
+       take the touch from a link or the quote outside selection mode, which
+       is why the old one had to be rebuilt each time selection began. */
+    const tap = Gesture.Manual()
+      .enabled(actionable)
+      .onTouchesDown((event) => {
+        const touch = event.changedTouches[0];
+        touchX.value = touch.absoluteX;
+        touchY.value = touch.absoluteY;
+        touchMoved.value = false;
+        longPressed.value = false;
+      })
+      .onTouchesMove((event) => {
+        const touch = event.changedTouches[0];
+        const dx = touch.absoluteX - touchX.value;
+        const dy = touch.absoluteY - touchY.value;
+        if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) touchMoved.value = true;
+      })
+      .onTouchesUp((_event, manager) => {
+        if (selectingSV.value && !touchMoved.value && !longPressed.value) {
+          runOnJS(onTap)(messageId);
+        }
+        manager.fail();
+      })
+      .onTouchesCancelled((_event, manager) => {
+        manager.fail();
+      });
+    return Gesture.Simultaneous(tap, Gesture.Race(pan, longPress));
+  }, [
+    actionable,
+    swipeable,
+    messageId,
+    handleLongPress,
+    onTap,
+    onSwipeReply,
+    swipeX,
+    held,
+    selectingSV,
+    touchX,
+    touchY,
+    touchMoved,
+    longPressed,
+  ]);
+
+  /* Touch feedback (§10.12), WhatsApp's pressed bubble: an overlay that comes
+     up once the finger has rested PRESS_FEEDBACK_DELAY_MS (so a scroll never
+     lights it), stays while held, and fades on release. A tap quicker than
+     the delay flashes it once. On the bubble only, as in WhatsApp: the empty
+     space beside it takes the row's gestures but shows nothing. */
+  const press = useSharedValue(0);
+  const pressStyle = useAnimatedStyle(() => ({ opacity: press.value }));
+  const pressX = useSharedValue(0);
+  const pressY = useSharedValue(0);
+  const pressMoved = useSharedValue(false);
+  const feedback = useMemo(
+    () =>
+      Gesture.Manual()
+        .enabled(actionable)
+        .onTouchesDown((event) => {
+          const touch = event.changedTouches[0];
+          pressX.value = touch.absoluteX;
+          pressY.value = touch.absoluteY;
+          pressMoved.value = false;
+          press.value = withDelay(
+            PRESS_FEEDBACK_DELAY_MS,
+            withTiming(1, { duration: PRESS_FEEDBACK_IN_MS }),
+          );
+        })
+        .onTouchesMove((event) => {
+          if (pressMoved.value) return;
+          const touch = event.changedTouches[0];
+          const dx = touch.absoluteX - pressX.value;
+          const dy = touch.absoluteY - pressY.value;
+          if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) {
+            pressMoved.value = true;
+            press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
+          }
+        })
+        .onTouchesUp((_event, manager) => {
+          if (!pressMoved.value) {
+            press.value = withSequence(
+              withTiming(1, { duration: PRESS_FEEDBACK_IN_MS }),
+              withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS }),
+            );
+          }
+          manager.fail();
+        })
+        .onTouchesCancelled((_event, manager) => {
+          press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
+          manager.fail();
+        }),
+    [actionable, press, pressX, pressY, pressMoved],
+  );
 
   /* The flash after a jump to this message (§10.6): the band at full strength,
      held, then faded. Only this row re-renders for it. */
@@ -1790,12 +1996,12 @@ const MessageBubble = memo(function MessageBubble({
 
   return (
     <GestureDetector gesture={gesture}>
-      <View
-        style={[styles.row, firstOfRun ? styles.runStart : styles.runNext, selected && styles.rowSelected]}
-        // Selecting: the whole row is one target, so a tap on a link or a
-        // quote selects the message instead of opening it.
-        pointerEvents={selecting ? 'box-only' : 'auto'}
-      >
+      <View style={[styles.row, firstOfRun ? styles.runStart : styles.runNext, selected && styles.rowSelected]}>
+        {/* Selecting, a tap on a link or the quote picks the message instead of
+            opening it: onOpenLink and onJumpToOriginal do nothing then. */}
+        {!selected ? (
+          <Reanimated.View pointerEvents="none" style={[styles.rowHeld, heldStyle]} />
+        ) : null}
         {flashToken ? (
           <Reanimated.View pointerEvents="none" style={[styles.rowFlash, flashStyle]} />
         ) : null}
@@ -1814,63 +2020,72 @@ const MessageBubble = memo(function MessageBubble({
               )
             ) : null}
 
-            <View
-              ref={bubbleRef}
-              collapsable={false}
-              style={[
-                styles.bubble,
-                widthStyle,
-                mine ? styles.bubbleMine : styles.bubbleTheirs,
-                mine && lastOfRun && styles.bubbleMineTail,
-                !mine && lastOfRun && styles.bubbleTheirsTail,
-                message.failed && styles.bubbleFailed,
-                reply && styles.bubbleReply,
-              ]}
-              accessibilityState={selecting ? { selected } : undefined}
-              accessibilityActions={
-                actionable ? (selecting ? A11Y_SELECTING_ACTIONS : A11Y_ACTIONS) : undefined
-              }
-              onAccessibilityAction={
-                actionable
-                  ? () => (selecting ? onTap(messageId) : handleLongPress())
-                  : undefined
-              }
-            >
-              {/* Always the first child of a sent bubble, with constant props, so it
-                  is created once per bubble and never rebuilt. The bubble clips it
-                  to its corners. */}
-              {mine && SENT_GRADIENT ? (
-                <LinearGradient
-                  colors={SENT_GRADIENT}
-                  start={GRADIENT_START}
-                  end={GRADIENT_END}
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                />
-              ) : null}
-              {deleted ? (
-                <Tombstone mine={mine} />
-              ) : (
-                <>
-                  {reply ? (
-                    <ReplyQuote
-                      message={message}
-                      mine={mine}
-                      name={quoteName}
-                      onJump={onJumpToOriginal}
-                    />
-                  ) : null}
-                  <MessageText content={message.content} mine={mine} />
-                </>
-              )}
-              <View style={styles.bubbleMeta}>
-                <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
-                  {formatClockTime(message.created_at)}
-                </AppText>
-                {/* A tombstone shows its time only, never ticks (§10.8). */}
-                {mine && !deleted ? <Ticks message={message} /> : null}
+            <GestureDetector gesture={feedback}>
+              <View
+                ref={bubbleRef}
+                collapsable={false}
+                style={[
+                  styles.bubble,
+                  widthStyle,
+                  mine ? styles.bubbleMine : styles.bubbleTheirs,
+                  mine && lastOfRun && styles.bubbleMineTail,
+                  !mine && lastOfRun && styles.bubbleTheirsTail,
+                  message.failed && styles.bubbleFailed,
+                  reply && styles.bubbleReply,
+                ]}
+                accessibilityState={{ selected }}
+                accessibilityActions={actionable ? A11Y_ACTIONS : undefined}
+                // A long-press does both jobs: outside selection it selects and
+                // opens the menu, inside it picks or unpicks (onLongPressMessage).
+                onAccessibilityAction={actionable ? handleLongPress : undefined}
+              >
+                {/* Always the first child of a sent bubble, with constant props, so it
+                    is created once per bubble and never rebuilt. The bubble clips it
+                    to its corners. */}
+                {mine && SENT_GRADIENT ? (
+                  <LinearGradient
+                    colors={SENT_GRADIENT}
+                    start={GRADIENT_START}
+                    end={GRADIENT_END}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                  />
+                ) : null}
+                {deleted ? (
+                  <Tombstone mine={mine} />
+                ) : (
+                  <>
+                    {reply ? (
+                      <ReplyQuote
+                        message={message}
+                        mine={mine}
+                        name={quoteName}
+                        onJump={onJumpToOriginal}
+                      />
+                    ) : null}
+                    <MessageText content={message.content} mine={mine} onOpenLink={onOpenLink} />
+                  </>
+                )}
+                <View style={styles.bubbleMeta}>
+                  <AppText style={[styles.bubbleTime, mine ? styles.bubbleMetaMine : styles.bubbleMetaTheirs]}>
+                    {formatClockTime(message.created_at)}
+                  </AppText>
+                  {/* A tombstone shows its time only, never ticks (§10.8). */}
+                  {mine && !deleted ? <Ticks message={message} /> : null}
+                </View>
+                {/* Last, so it lies over the text too; the bubble clips it. */}
+                {actionable ? (
+                  <Reanimated.View
+                    pointerEvents="none"
+                    style={[
+                      StyleSheet.absoluteFill,
+                      mine ? styles.bubblePressMine : styles.bubblePressTheirs,
+                      pressStyle,
+                    ]}
+                  />
+                ) : null}
               </View>
-            </View>
+            </GestureDetector>
           </Reanimated.View>
         </View>
 
@@ -1974,7 +2189,15 @@ function ReplyBar({ name, text, onClose }: { name: string; text: string; onClose
  * A message of only one to three emoji is drawn jumbo instead, the whole text
  * at that size — WhatsApp's rule.
  */
-function MessageText({ content, mine }: { content: string; mine: boolean }) {
+function MessageText({
+  content,
+  mine,
+  onOpenLink,
+}: {
+  content: string;
+  mine: boolean;
+  onOpenLink: (url: string) => void;
+}) {
   const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
   const parts = useMemo(
     () =>
@@ -2014,7 +2237,7 @@ function MessageText({ content, mine }: { content: string; mine: boolean }) {
           <AppText
             key={`${part}-${i}`}
             style={[styles.link, mine ? styles.linkMine : styles.linkTheirs]}
-            onPress={() => Linking.openURL(url).catch(() => {})}
+            onPress={() => onOpenLink(url)}
           >
             {body}
           </AppText>
@@ -2336,6 +2559,15 @@ const styles = StyleSheet.create({
   runStart: { paddingTop: spacing.sm },
   runNext: { paddingTop: 2 },
   rowSelected: { backgroundColor: colors.chatRowSelected },
+  // The same band, shown from the UI thread the moment a long-press lands.
+  rowHeld: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.chatRowSelected,
+  },
   rowFlash: {
     position: 'absolute',
     top: 0,
@@ -2401,11 +2633,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: 6,
     borderRadius: BUBBLE_RADIUS,
-  },
-  bubbleMine: {
-    // 'solid' paints this; 'gradient' paints over it, clipped to the corners.
-    backgroundColor: colors.bubbleMineSolid,
+    // Clips the touch-feedback overlay (and a sent bubble's gradient) to the corners.
     overflow: 'hidden',
+  },
+  bubblePressMine: { backgroundColor: colors.chatBubblePressMine },
+  bubblePressTheirs: { backgroundColor: colors.chatBubblePressTheirs },
+  bubbleMine: {
+    // 'solid' paints this; 'gradient' paints over it, clipped to the corners by `bubble`.
+    backgroundColor: colors.bubbleMineSolid,
   },
   bubbleTheirs: {
     backgroundColor: colors.white,

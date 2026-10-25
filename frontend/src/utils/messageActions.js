@@ -4,6 +4,12 @@
    function delete_message_for_everyone too if the 60 changes. */
 
 export const LONG_PRESS_MS = 250;
+// Touch feedback on a bubble (§10.12), touch only. Android's tap timeout: a
+// finger that starts a scroll within it never lights the bubble. A tap
+// shorter than it still flashes once, on release.
+export const PRESS_FEEDBACK_DELAY_MS = 100;
+export const PRESS_FEEDBACK_IN_MS = 60;
+export const PRESS_FEEDBACK_OUT_MS = 220;
 export const SWIPE_REPLY_TRIGGER = 56; // touch only: the app, and the website on a touch screen
 export const SWIPE_REPLY_MAX = 72; // touch only
 export const REPLY_MIN_BUBBLE_WIDTH = 180;

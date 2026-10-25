@@ -96,6 +96,9 @@ already follows. Every pair is in §7.
 | §10.2, §10.10 | Long-press 350 ms; selected band 0.10 | **250 ms**; band **0.15**. On the app, focusing or typing in the composer closes the menu beside a message (the selection stays) | Owner's call, 2026-10-24: the hold felt slow, and selected rows were hard to tell apart on the wallpaper |
 | §10.3 | Reply icon 30/18, bottom-aligned | **36/22, centred** on the bubble | Owner's call, 2026-10-24 |
 | §10.8 | Trash icon, centred title, body text, full-width red buttons | **WhatsApp's layout**: left title, no body, text buttons stacked on the right | Owner's call, 2026-10-24 |
+| §10.12 | No touch feedback on a bubble | **New: WhatsApp's pressed bubble** — an overlay in the bubble's shape after 100 ms of rest, held while the finger is down, faded on release; a quicker tap flashes once. App, and the website on a touch screen | Owner's call, 2026-10-25: a tap gave no sign it had landed |
+| §10.2 | On mobile, a touch **in the thread**, a scroll, or focusing the composer closes the menu | A touch **anywhere** outside the menu (header, thread, composer), a scroll, or the keyboard opening or closing. The keyboard moves the thread, and a menu left behind floated over the wrong message | Owner's report, 2026-10-25 |
+| §10.2 | The selected band appeared once the JS thread had rendered it | **The band shows the moment the hold completes** (drawn from the UI thread), with WhatsApp's long-press haptic | Owner's report, 2026-10-25: the hold sometimes felt slow |
 
 ---
 
@@ -568,6 +571,8 @@ Message actions (§10), added in v3:
 ```ts
 chatRowSelected:   'rgba(128,0,128,0.15)',     // a selected row (0.10 until 24 Oct: too faint on the wallpaper)
 chatRowHighlight:  'rgba(128,0,128,0.12)',     // jump-to-original flash
+chatBubblePressMine:   'rgba(255,255,255,0.22)', // pressed sent bubble (§10.12)
+chatBubblePressTheirs: 'rgba(128,0,128,0.07)',   // pressed received bubble: white wouldn't show on white
 chatQuoteMineBg:   'rgba(0,0,0,0.12)',         // quote inside a sent bubble
 chatQuoteMineBar:  'rgba(255,255,255,0.90)',
 chatQuoteMineText: 'rgba(255,255,255,0.85)',
@@ -610,6 +615,8 @@ identical:
 ```css
 --chat-row-selected: rgba(128,0,128,0.15);
 --chat-row-highlight: rgba(128,0,128,0.12);
+--chat-bubble-press-mine: rgba(255,255,255,0.22);
+--chat-bubble-press-theirs: rgba(128,0,128,0.07);
 --chat-quote-mine-bg: rgba(0,0,0,0.12);
 --chat-quote-mine-bar: rgba(255,255,255,0.90);
 --chat-quote-mine-text: rgba(255,255,255,0.85);
@@ -789,7 +796,9 @@ goes in the community phase.*
 | The row while open / selected | `rgba(128,0,128,0.15)` band behind the whole row, full thread width (it cancels the thread's 12 side padding) | same band |
 | Container | **Menu card beside the bubble**, no scrim | **Popover menu** anchored under the actions button, kept inside the thread's edges |
 
-**Mobile menu:** white · radius 16 · shadow `#2A082A` at 16%, radius 12, y 8 (Android elevation 8) · hairline border `rgba(128,0,128,0.08)` · width 196 · padding 6 vertical · each item 48 tall, padding 0/16, icon 20 then gap 14 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** in `#B91C1C`. Placed **8 below** the bubble when it fits inside the thread (12 from its edges), otherwise 8 above, otherwise over it (a bubble taller than the thread). Lined up with the bubble's right edge for mine, left edge for theirs. Grows in from the corner nearest the bubble (scale 0.86 → 1, opacity 0 → 1, 170 ms, ease-out cubic); fades out in 110 ms. Any touch in the thread or a scroll closes it and **keeps the selection** (the header then shows the actions); the Android back button or the header's arrow ends the selection.
+**Mobile menu:** white · radius 16 · shadow `#2A082A` at 16%, radius 12, y 8 (Android elevation 8) · hairline border `rgba(128,0,128,0.08)` · width 196 · padding 6 vertical · each item 48 tall, padding 0/16, icon 20 then gap 14 then label Inter 500 15 `#1A1A1A` · icons mutedText · **Delete** in `#B91C1C`. Placed **8 below** the bubble when it fits inside the thread (12 from its edges), otherwise 8 above, otherwise over it (a bubble taller than the thread). Lined up with the bubble's right edge for mine, left edge for theirs. Grows in from the corner nearest the bubble (scale 0.86 → 1, opacity 0 → 1, 170 ms, ease-out cubic); fades out in 110 ms. **Any touch outside the menu** — in the thread, the header or the composer — a scroll, or the **keyboard opening or closing** closes it and **keeps the selection** (the header then shows the actions); the Android back button or the header's arrow ends the selection. The keyboard rule is there because the keyboard moves the thread: a menu left open would float over a different message.
+
+**The hold (mobile):** the band appears the moment the 250 ms hold completes, drawn on the UI thread, together with the phone's long-press haptic (Android `LONG_PRESS`; iPhone light impact). Nothing waits for the JS thread, so a busy JS thread can't make the hold feel slow.
 
 **Web actions button:** a 28 circle **beside** the bubble, on its outer side — left of mine, right of theirs — aligned with the bubble's top, gap 6 · white · border 1px `rgba(128,0,128,0.08)` · `chevron-down` 16, mutedText · fades in over 120 ms · hover on the button itself: background pinkLight `#FFF4F7`. It sits outside the bubble so it never covers the message text, and the bubble's size never changes.
 
@@ -949,6 +958,9 @@ JUMP_HIGHLIGHT_FADE_MS      = 400
 JUMP_MAX_EXTRA_PAGES        = 5
 COPY_TOAST_MS               = 1500
 DELETE_FOR_EVERYONE_MINUTES = 60     // the database enforces this; apps only decide what to show
+PRESS_FEEDBACK_DELAY_MS     = 100    // §10.12; touch only
+PRESS_FEEDBACK_IN_MS        = 60     // §10.12
+PRESS_FEEDBACK_OUT_MS       = 220    // §10.12 (the web writes it in Messages.module.css)
 ```
 
 Mobile keeps them in `mobile/src/lib/messageActions.ts`; web in `frontend/src/utils/messageActions.js`. Change both in the same commit, and the SQL function `delete_message_for_everyone` too if the 60 changes.
@@ -966,3 +978,16 @@ Mobile keeps them in `mobile/src/lib/messageActions.ts`; web in `frontend/src/ut
 - **Copy** puts the texts on the clipboard **oldest first, one per line**, and toasts `Copied` (§10.7 rules).
 - **Delete** opens §10.8's dialog for all of them; each message is its own request, all sent together. Any refusal: `It's too late to delete this for everyone` / `Couldn't delete. Try again.` for one message; `Some were too old to delete for everyone` / `Couldn't delete some messages. Try again.` for several.
 - A selected message that is hidden or leaves the thread leaves the selection; one deleted for everyone while selected stays selected but takes Copy and Reply away.
+
+### 10.12 Touch feedback on a bubble (WhatsApp's pressed state)
+
+*Added 25 Oct 2026 (owner's call): a tap on a message gave no sign it had landed.*
+
+A finger on a bubble lights it, the way WhatsApp's bubbles do:
+
+- **When:** after the finger has rested **100 ms** (`PRESS_FEEDBACK_DELAY_MS`, Android's tap timeout) without moving more than 10 dp/px. A finger that starts a scroll or a swipe within that time never lights it.
+- **Look:** an overlay in the bubble's own shape (its corners and tail), over the text: `chatBubblePressMine` / `--chat-bubble-press-mine` (white 22%) on a sent bubble; `chatBubblePressTheirs` / `--chat-bubble-press-theirs` (purple 7%) on a received one, because white doesn't show on white.
+- **Motion:** up in **60 ms**, held while the finger stays down (a long-press keeps it lit under the menu's arrival), faded in **220 ms** on release. A tap quicker than 100 ms flashes once: up in 60, then the fade. A scroll, a swipe or a cancelled touch fades it at once.
+- **Where:** the bubble only. The empty part of the row still takes long-presses and selection taps (§10.2, §10.11) but shows nothing, as in WhatsApp. Only messages with actions (not sending, not failed).
+- **Platforms:** the app always; the **website only for touch**. WhatsApp Web shows nothing for a mouse click, and the website already has hover.
+- **Reduced motion:** the overlay switches on and off with no fade.

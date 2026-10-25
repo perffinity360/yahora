@@ -49,6 +49,8 @@ import {
   JUMP_HIGHLIGHT_HOLD_MS,
   JUMP_MAX_EXTRA_PAGES,
   LONG_PRESS_MS,
+  PRESS_FEEDBACK_DELAY_MS,
+  PRESS_FEEDBACK_IN_MS,
   REPLY_MIN_BUBBLE_WIDTH,
   SWIPE_REPLY_MAX,
   SWIPE_REPLY_TRIGGER,
@@ -2305,6 +2307,53 @@ export default function Messages() {
   };
   useEffect(() => () => clearTimeout(longPressRef.current?.timer), []);
 
+  /* §10.12 Touch feedback, WhatsApp's pressed bubble. On a touch screen the
+     bubble lights once the finger has rested PRESS_FEEDBACK_DELAY_MS (so a
+     scroll or a swipe never lights it), stays lit while held, and fades on
+     release; a tap quicker than that flashes once. Touch only: WhatsApp Web
+     shows nothing for a mouse click. A data attribute, not state or a class:
+     state would re-render the thread twice per touch, and React rewrites
+     className on every render, which would drop a class it didn't set. */
+  const pressRef = useRef(null);
+  const clearPressFeedback = () => {
+    const press = pressRef.current;
+    if (!press) return;
+    pressRef.current = null;
+    clearTimeout(press.timer);
+    delete press.el.dataset.pressed;
+  };
+  const beginPressFeedback = (e) => {
+    clearPressFeedback();
+    if (e.pointerType !== "touch" || !e.isPrimary) return;
+    const el = e.currentTarget;
+    const press = { el, x0: e.clientX, y0: e.clientY, lit: false, timer: null };
+    press.timer = setTimeout(() => {
+      press.lit = true;
+      el.dataset.pressed = "";
+    }, PRESS_FEEDBACK_DELAY_MS);
+    pressRef.current = press;
+  };
+  const movePressFeedback = (e) => {
+    const press = pressRef.current;
+    if (!press || press.el !== e.currentTarget) return;
+    if (Math.hypot(e.clientX - press.x0, e.clientY - press.y0) > SWIPE_CANCEL_PX) {
+      clearPressFeedback();
+    }
+  };
+  const releasePressFeedback = () => {
+    const press = pressRef.current;
+    if (!press) return;
+    if (press.lit) {
+      clearPressFeedback();
+      return;
+    }
+    // Quicker than the delay: light it now, and fade once it is up.
+    clearTimeout(press.timer);
+    press.el.dataset.pressed = "";
+    press.timer = setTimeout(clearPressFeedback, PRESS_FEEDBACK_IN_MS);
+  };
+  useEffect(() => () => clearTimeout(pressRef.current?.timer), []);
+
   /* `unsentRef` (declared with the other refs) is threadKey → (client_tag →
      message). */
   const keepUnsent = (msg) => {
@@ -3151,10 +3200,20 @@ export default function Messages() {
                                   onPointerDown: (e) => {
                                     lastPointerTypeRef.current = e.pointerType;
                                     beginSwipe(e, swipeable ? msg : null);
+                                    beginPressFeedback(e);
                                   },
-                                  onPointerMove: moveSwipe,
-                                  onPointerUp: (e) => endSwipe(e, false),
-                                  onPointerCancel: (e) => endSwipe(e, true),
+                                  onPointerMove: (e) => {
+                                    moveSwipe(e);
+                                    movePressFeedback(e);
+                                  },
+                                  onPointerUp: (e) => {
+                                    endSwipe(e, false);
+                                    releasePressFeedback();
+                                  },
+                                  onPointerCancel: (e) => {
+                                    endSwipe(e, true);
+                                    clearPressFeedback();
+                                  },
                                   // Touch: a tap shows this row's button, and
                                   // a second tap hides it. Not a tap on a
                                   // link in the text, and not the click that
