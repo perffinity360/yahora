@@ -58,6 +58,7 @@ import {
 import { copyText } from "../../utils/share";
 import AppToast, { useToast } from "../../components/AppToast/AppToast";
 import MessageMenu from "../../components/MessageMenu/MessageMenu";
+import AvatarImg from "../../components/AvatarImg/AvatarImg";
 import {
   formatClockTime,
   formatDayLabel,
@@ -445,54 +446,6 @@ const MessageText = memo(function MessageText({ content }) {
     </p>
   );
 });
-
-function AvatarImg({ src, name, size = 40, className }) {
-  const [err, setErr] = useState(false);
-  const displayName = name || "User";
-  const initials = displayName
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  const hue =
-    displayName.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
-
-  if (!src || err) {
-    return (
-      <div
-        className={className}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          flexShrink: 0,
-          background: `linear-gradient(135deg, hsl(${hue},55%,50%), hsl(${hue + 40},55%,40%))`,
-          color: "#fff",
-          fontWeight: 700,
-          fontSize: size * 0.36,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          userSelect: "none",
-          border: "2px solid rgba(255,255,255,0.12)",
-        }}
-      >
-        {initials}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={name}
-      className={className}
-      onError={() => setErr(true)}
-    />
-  );
-}
 
 export default function Messages() {
   const { sessionReady } = useAuth();

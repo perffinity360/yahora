@@ -21,7 +21,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Heart,
+  Bookmark,
   Tag,
   Banknote,
   Star,
@@ -1347,7 +1347,8 @@ export default function Marketplace() {
           </div>
         </FilterSection>
 
-        <FilterSection icon={<Heart size={16} />} title="My Wishlist">
+        {/* Saved items: a bookmark, as on the cards — Heart means Like. */}
+        <FilterSection icon={<Bookmark size={16} />} title="My Wishlist">
           <button
             className={`${styles.toggleFilter} ${showWishlist ? styles.toggleFilterActive : ""}`}
             onClick={() => {

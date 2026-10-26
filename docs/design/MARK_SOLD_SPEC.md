@@ -110,8 +110,17 @@ needs 4.5:1 (5.39 at that end; 3.64 at `#EB487F`).
 
 | Who is looking | What changes |
 |---|---|
-| **Anyone except the seller** | The SOLD stamp (mobile already has one; web adds the same: Bree Serif 400 22, white, 2px white border, radius 8, padding 2/12, rotated −8°, 16 from the image's top-right). Under the price, a **banner**: background `#F3F0EF`, radius 12, padding 10/12, gap 8, `check-circle` 16 mutedText, text `This item has been sold.` Inter 600 13 `#1A1A1A`. **Hidden:** Message seller, like, save, and the "ask a question" composer. Existing questions and answers stay readable. |
-| **The seller** | The same stamp and banner, but the banner reads `You marked this as sold on <date>.` with a second line, Inter 400 12 mutedText: `Buyer: <full name>` or `Buyer: someone not on Yahora`. |
+| **Anyone except the seller** | The SOLD stamp (mobile already has one; web adds the same: Bree Serif 400 22, white, 2px white border, radius 8, padding 2/12, rotated −8°, 16 from the image's top-right). Under the price, a **banner**: background `#F3F0EF`, radius 12, padding 10/12, gap 8, `check-circle` 16 mutedText, text `This item has been sold.` Inter 600 13 `#1A1A1A`. **Hidden:** Message seller. |
+| **The seller** | The same stamp and banner, but the banner reads `You marked this as sold on <date>.` with a second line, Inter 400 12 mutedText: `Buyer: <full name>` or `Buyer: someone not on Yahora`. The seller keeps their `Your listing` marker in place of Message seller. |
+
+**A sold listing is closed for everyone — the seller too, and logged-out or demo viewers.**
+
+- **No like:** the like count stays, as a plain stat like the views count; nothing happens on a tap.
+- **No save:** the Save button is gone.
+- **No new questions:** the "ask a question" composer is gone. Existing questions and answers stay
+  visible and readable. With none, the "be the first to ask" line is replaced by `Questions are
+  closed — this item has been sold.` (mutedText, centred).
+- **Kept:** the stamp, the banner, Share and the seller card.
 
 `<date>` uses the MESSAGES_SPEC §1 time-format table's date forms: `3 Oct`, or `3 Oct 2025` in
 an earlier year. It is the listing's `sold_at`.
@@ -125,9 +134,16 @@ has today and adds, under the price:
 
 - one line, Inter 500 12 mutedText: `Sold to <full name> · <date>` — or `Sold · buyer not on
   Yahora · <date>`;
-- two text buttons, Inter 600 12 purple, gap 14: **`Change buyer`** (opens §1 with the current
-  choice selected) and **`Relist`** (the existing Mark-available action, now with the dialog
-  below).
+- 8 below it, two **pill buttons**, gap 8, left-aligned, wrapping onto a second line on a
+  card too narrow for both: **`Change buyer`** (`users` 14; opens §1 with the current choice
+  selected) and **`Relist`** (`rotate-ccw` 14; the existing Mark-available action, now with the
+  dialog below). Each: icon (Feather on mobile, lucide on web), gap 6, label Inter 600 12 ·
+  purple `#800080` for both · background `rgba(128,0,128,0.06)` · border 1px
+  `rgba(128,0,128,0.12)` · radius 999 · padding 4 vertical, 10 horizontal · at least **28**
+  tall · pressed (mobile), hover and pressed (web): background `rgba(128,0,128,0.12)`, 150 ms ·
+  web keyboard focus: 2px purple outline, offset 2. The same shape and size as §4's `That
+  wasn't me` pill, in a stronger purple because these are the seller's normal actions. The
+  same on every screen size.
 
 **Relist dialog** — title `Relist this item?` · body `“<title>” goes back on the marketplace.`
 and, when there is a buyer, ` <first name> will no longer be shown as its buyer.` · buttons
@@ -145,7 +161,12 @@ the price:
 
 - one line, Inter 500 12 mutedText: `From <seller full name> · <date>` (`<date>` = when it was
   marked sold);
-- a text button, Inter 600 12 mutedText, underlined: **`That wasn't me`**.
+- 8 below it, a quiet **pill button** **`That wasn't me`**: `user-x` 14 (Feather on mobile,
+  lucide on web), gap 6, label Inter 600 12 · mutedText for both, no underline · border 1px
+  `rgba(128,0,128,0.15)` · radius 999 · padding 4 vertical, 10 horizontal · transparent
+  background · left-aligned · at least **28** tall, so it is easy to tap · pressed (mobile),
+  hover and pressed (web): background pinkLight `#FFF4F7`, label and icon purple `#800080`,
+  150 ms · web keyboard focus: 2px purple outline, offset 2. The same on every screen size.
 
 **That wasn't me dialog** — title `Remove this purchase?` · body `<seller first name> marked
 “<title>” as sold to you. If that's wrong, remove it. The listing stays sold; you just won't be

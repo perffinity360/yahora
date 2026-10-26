@@ -1,12 +1,19 @@
 // frontend/src/pages/dashboard/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { UserX } from "lucide-react";
 import styles from "./Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import SmartImage from "../../components/SmartImage/SmartImage";
+import cardStyles from "../../components/ProductCard/ProductCard.module.css";
 import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar";
 import { API_BASE_URL } from '../../config/urls';
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
+import BuyerPicker from "../../components/BuyerPicker/BuyerPicker";
+// Renamed: the component has its own `firstName` (the greeting's), which
+// shadowed the helper and made the Relist dialog call a string.
+import { firstName as getFirstName } from "../../utils/messageActions";
+import { formatShortDate } from "../../utils/messageFormat";
 
 /* ─────────────────────────────────────────────
  CONSTANTS
@@ -85,22 +92,6 @@ const GearIcon = ({ size = 18 }) => (
  </svg>
 );
 
-const ClockIcon = ({ size = 14 }) => (
- <svg
-   width={size}
-   height={size}
-   viewBox="0 0 24 24"
-   fill="none"
-   stroke="currentColor"
-   strokeWidth="2"
-   strokeLinecap="round"
-   strokeLinejoin="round"
- >
-   <circle cx="12" cy="12" r="10" />
-   <polyline points="12 6 12 12 16 14" />
- </svg>
-);
-
 const PlusIcon = ({ size = 20 }) => (
  <svg
    width={size}
@@ -159,38 +150,6 @@ const TrashIcon = ({ size = 18 }) => (
  >
    <polyline points="3 6 5 6 21 6"></polyline>
    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
- </svg>
-);
-
-const CheckCircleIcon = ({ size = 18 }) => (
- <svg
-   width={size}
-   height={size}
-   viewBox="0 0 24 24"
-   fill="none"
-   stroke="currentColor"
-   strokeWidth="2.5"
-   strokeLinecap="round"
-   strokeLinejoin="round"
- >
-   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-   <polyline points="22 4 12 14.01 9 11.01"></polyline>
- </svg>
-);
-
-const UserIcon = ({ size = 18 }) => (
- <svg
-   width={size}
-   height={size}
-   viewBox="0 0 24 24"
-   fill="none"
-   stroke="currentColor"
-   strokeWidth="2"
-   strokeLinecap="round"
-   strokeLinejoin="round"
- >
-   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-   <circle cx="12" cy="7" r="4" />
  </svg>
 );
 
@@ -367,40 +326,60 @@ function EditableField({ label, value, onSave, textarea, placeholder }) {
  );
 }
 
-function PurchaseCard({ item }) {
+/* A Bought Items card. Drawn with ProductCard's own styles (card, the square
+   photo frame, price, title) so it matches the My Items cards at every width,
+   without ProductCard's owner and like/save controls — a purchase has none.
+   Until Block N-H it used class names this file never defined, so the photo
+   rendered at its natural size. Then MARK_SOLD_SPEC §4: who sold it to you
+   and when it was marked sold, and "That wasn't me". */
+function PurchaseCard({ item, onOpen, onRemove }) {
  const p = item.product;
  const imageUrl =
-   p.image_urls?.[0] || "https://via.placeholder.com/300?text=No+Image";
+   p.image_urls?.[0] || "https://via.placeholder.com/600x400?text=No+Image";
+ const sellerName =
+   p.seller?.full_name ||
+   (p.seller?.username ? `@${p.seller.username}` : "a Yahora student");
  return (
-   <div className={styles.card}>
-     <div className={styles.cardImgWrap}>
-       <img src={imageUrl} alt={p.title} className={styles.cardImg} />
-       <span
-         className={styles.cardBadge}
-         style={{ background: "#1a1a2e", color: "#60a5fa" }}
+   <article
+     className={cardStyles.card}
+     onClick={() => onOpen(p.id)}
+     style={{ cursor: "pointer" }}
+   >
+     <div className={cardStyles.imageWrap}>
+       <SmartImage
+         src={imageUrl}
+         alt={p.title}
+         className={cardStyles.image}
+         loading="lazy"
+         draggable={false}
+         onError={(e) => {
+           // As on ProductCard: a broken photo shows the grey frame instead.
+           e.currentTarget.style.visibility = "hidden";
+         }}
+       />
+     </div>
+     <div className={cardStyles.infoWrap}>
+       <div className={cardStyles.metaRow}>
+         <span />
+         <span className={cardStyles.price}>{fmt(p.price)}</span>
+       </div>
+       <h3 className={cardStyles.title}>{p.title}</h3>
+       <p className={styles.purchaseFrom}>
+         From {sellerName} · {formatShortDate(p.sold_at || item.created_at)}
+       </p>
+       <button
+         type="button"
+         className={styles.purchaseRemoveBtn}
+         onClick={(e) => {
+           e.stopPropagation();
+           onRemove(item);
+         }}
        >
-         BOUGHT
-       </span>
+         <UserX size={14} aria-hidden="true" />
+         That wasn't me
+       </button>
      </div>
-     <div className={styles.cardBody}>
-       <div className={styles.cardHead}>
-         <h3 className={styles.cardTitle}>{p.title}</h3>
-         <span className={styles.cardPrice} style={{ color: "var(--blue)" }}>
-           {fmt(p.price)}
-         </span>
-       </div>
-       <div className={styles.cardFoot}>
-         <span className={styles.cardViews}>
-           <ClockIcon />{" "}
-           {new Date(item.created_at).toLocaleDateString("en-IN", {
-             day: "numeric",
-             month: "short",
-             year: "numeric",
-           })}
-         </span>
-       </div>
-     </div>
-   </div>
+   </article>
  );
 }
 
@@ -424,13 +403,15 @@ export default function Dashboard() {
  const [itemToDelete, setItemToDelete] = useState(null);
  const [isDeleting, setIsDeleting] = useState(false);
 
- // The Sold Modal state
- const [soldModal, setSoldModal] = useState({
-   isOpen: false,
-   product: null,
-   buyers: [],
-   loading: false,
- });
+ /* MARK_SOLD_SPEC §1 and §3. `buyerPicker`: the open "Who bought it?" —
+    { product, mode: "sell" | "change", initialBuyerId }. `relistTarget`: the
+    sold listing in the Relist dialog. */
+ const [buyerPicker, setBuyerPicker] = useState(null);
+ const [relistTarget, setRelistTarget] = useState(null);
+ /* MARK_SOLD_SPEC §4: the purchase in the "That wasn't me" dialog. */
+ const [purchaseToRemove, setPurchaseToRemove] = useState(null);
+ const [isRemovingPurchase, setIsRemovingPurchase] = useState(false);
+ const [removePurchaseError, setRemovePurchaseError] = useState(null);
 
  const [isDashboard, setIsDashboard] = useHistoryEntryState("isDashboard", false);
 
@@ -645,106 +626,71 @@ export default function Dashboard() {
 
  /* ── Dashboard Product Card Actions ── */
 
- /* 📄 Phase 5 Block N-C. How far this will walk the inbox looking for the
-    buyer: 10 pages of 50 is 500 conversations. A bound is needed because the
-    loop below is driven by a cursor the server issues, and an unbounded
-    client-side "keep going until it says stop" is a request storm waiting for
-    a bad day. Reaching it would mean a seller with 500 conversations none of
-    which are about this listing — at which point the honest fix is the
-    server-side product filter noted below, not a bigger number here. */
- const BUYER_LOOKUP_MAX_PAGES = 10;
-
- const handleMarkSoldClick = async (product) => {
-   setSoldModal({ isOpen: true, product, buyers: [], loading: true });
-   try {
-     const userId = localStorage.getItem("yahora_user_id");
-     // 🔒 requireAuth since Block V-A — without the token this was a silent 401
-     // and the buyer list came back empty, which reads as "nobody messaged me".
-     const token = localStorage.getItem("yahora_session");
-
-     /* 📄 `{ items, next_cursor }` since Block N-C; the key was `inbox`.
-        This is NOT an infinite-scroll list — nobody scrolls it, it is a
-        picker that shows conversations about ONE listing — so it does not get
-        a sentinel. What it does get is the rest of the pages.
-
-        Before Block N-C it read one page of 50 and filtered that down to the
-        listing, which meant a seller with more than 50 conversations could be
-        told nobody had enquired about an item somebody had definitely asked
-        about. `next_cursor` is followed to the end (or to the page bound
-        above) and every page is filtered the same way, so the buyer is found
-        wherever they are in the list.
-
-        A server-side `?product_id=` filter would make all of this one request.
-        That is a backend change, it is Vishwajeet's module, and it is not in
-        this block. */
-     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-     const productChats = [];
-     let cursor = null;
-
-     for (let page = 0; page < BUYER_LOOKUP_MAX_PAGES; page += 1) {
-       const params = new URLSearchParams({ limit: "50" });
-       // Verbatim, never rebuilt — the value is the server's to define.
-       if (cursor) params.append("cursor", cursor);
-
-       const res = await fetch(
-         `${API_BASE_URL}/messages/inbox/${userId}?${params.toString()}`,
-         { headers },
-       );
-       if (!res.ok) throw new Error(`inbox ${res.status}`);
-
-       const result = await res.json();
-       productChats.push(
-         ...(result.items || []).filter(
-           (chat) => chat.product_id === product.id,
-         ),
-       );
-
-       // null is the ONLY end-of-list signal: not an empty page, and not a
-       // page shorter than the limit.
-       cursor = result.next_cursor ?? null;
-       if (cursor === null) break;
-     }
-
-     setSoldModal({
-       isOpen: true,
-       product,
-       buyers: productChats,
-       loading: false,
-     });
-   } catch (error) {
-     console.error("Failed to fetch buyers", error);
-     setSoldModal({ isOpen: true, product, buyers: [], loading: false });
-   }
- };
-
- const executeMarkSold = async (buyerId = null) => {
-   const productId = soldModal.product.id;
-
+ /* The picker saved (POST /sold returned 200): the card shows SOLD, the
+    buyer and the date at once. The first sold_at is kept on a Change buyer,
+    and the server's row says so. */
+ const handleBuyerSaved = useCallback((row, buyer) => {
    setData((prev) => ({
      ...prev,
      listings: prev.listings.map((p) =>
-       p.id === productId ? { ...p, status: "sold" } : p,
+       p.id === row.id || p.id === buyerPicker?.product.id
+         ? {
+             ...p,
+             status: "sold",
+             sold_at: row.sold_at ?? p.sold_at ?? new Date().toISOString(),
+             buyer: buyer
+               ? {
+                   id: buyer.id,
+                   username: buyer.username,
+                   full_name: buyer.full_name,
+                   avatar_url: buyer.avatar_url,
+                 }
+               : null,
+           }
+         : p,
      ),
    }));
+   setBuyerPicker(null);
+ }, [buyerPicker]);
 
-   setSoldModal({ isOpen: false, product: null, buyers: [], loading: false });
+ const closeBuyerPicker = useCallback(() => setBuyerPicker(null), []);
 
+ /* "That wasn't me" (§4): DELETE /api/products/:id/purchase. The listing
+    stays sold for the seller, with no buyer; here the card leaves the list.
+    PURCHASE_NOT_FOUND means it is already gone (a retry), so that counts as
+    done too. */
+ const executeRemovePurchase = async () => {
+   const item = purchaseToRemove;
+   if (!item || isRemovingPurchase) return;
+   setIsRemovingPurchase(true);
+   setRemovePurchaseError(null);
    try {
      const token = localStorage.getItem("yahora_session");
-     await fetch(
-       `${API_BASE_URL}/products/${productId}/sold`,
-       {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json",
-           Authorization: `Bearer ${token}`,
-         },
-         body: JSON.stringify({ buyer_id: buyerId }),
-       },
+     const res = await fetch(
+       `${API_BASE_URL}/products/${item.product.id}/purchase`,
+       { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
      );
+     const body = await res.json().catch(() => ({}));
+     if (!res.ok && body?.error !== "PURCHASE_NOT_FOUND") {
+       throw new Error(body?.error || `purchase ${res.status}`);
+     }
+     setData((prev) => ({
+       ...prev,
+       purchases: prev.purchases.filter((p) => p.id !== item.id),
+     }));
+     setPurchaseToRemove(null);
    } catch (e) {
-     console.error("Failed to mark as sold:", e);
+     console.error("Failed to remove purchase:", e);
+     setRemovePurchaseError("Couldn't remove it. Check your connection and try again.");
+   } finally {
+     setIsRemovingPurchase(false);
    }
+ };
+
+ const closeRemovePurchase = () => {
+   if (isRemovingPurchase) return;
+   setPurchaseToRemove(null);
+   setRemovePurchaseError(null);
  };
 
  const executeMarkAvailable = async (productId) => {
@@ -752,7 +698,10 @@ export default function Dashboard() {
    setData((prev) => ({
      ...prev,
      listings: prev.listings.map((p) =>
-       p.id === productId ? { ...p, status: "available" } : p,
+       // Relisting removes the buyer and sold_at too (POST /available).
+       p.id === productId
+         ? { ...p, status: "available", sold_at: null, buyer: null }
+         : p,
      ),
    }));
 
@@ -972,162 +921,99 @@ export default function Dashboard() {
        </div>
      )}
 
-     {/* ── Mark as Sold Confirmation Popup Modal ── */}
-     {soldModal.isOpen && (
+     {/* ── Who bought it? (MARK_SOLD_SPEC §1) ── */}
+     {buyerPicker && (
+       <BuyerPicker
+         product={buyerPicker.product}
+         mode={buyerPicker.mode}
+         initialBuyerId={buyerPicker.initialBuyerId}
+         onClose={closeBuyerPicker}
+         onSaved={handleBuyerSaved}
+       />
+     )}
+
+     {/* ── Relist dialog (MARK_SOLD_SPEC §3) ── */}
+     {relistTarget && (
        <div
          className={styles.modalOverlay}
-         onClick={() =>
-           setSoldModal({
-             isOpen: false,
-             product: null,
-             buyers: [],
-             loading: false,
-           })
-         }
+         onClick={() => setRelistTarget(null)}
        >
          <div
            className={styles.modalContent}
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="relist-title"
            onClick={(e) => e.stopPropagation()}
          >
-           <div
-             className={styles.modalIconWrap}
-             style={{
-               background: "rgba(74, 222, 128, 0.1)",
-               color: "#4ade80",
-             }}
-           >
-             <CheckCircleIcon size={24} />
-           </div>
-           <h3 className={styles.modalTitle}>Mark as Sold</h3>
-           <p className={styles.modalText} style={{ marginBottom: "1.5rem" }}>
-             Who did you sell <strong>{soldModal.product?.title}</strong> to?
-             Select from your active chats to build their purchase history.
+           <h3 id="relist-title" className={styles.modalTitle}>
+             Relist this item?
+           </h3>
+           <p className={styles.modalText}>
+             “{relistTarget.title}” goes back on the marketplace.
+             {relistTarget.buyer
+               ? ` ${getFirstName(relistTarget.buyer.full_name)} will no longer be shown as its buyer.`
+               : ""}
            </p>
-
-           <div
-             style={{
-               display: "flex",
-               flexDirection: "column",
-               gap: "8px",
-               maxHeight: "220px",
-               overflowY: "auto",
-             }}
-           >
-             {soldModal.loading ? (
-               <div
-                 style={{
-                   textAlign: "center",
-                   padding: "1rem",
-                   color: "#888",
-                 }}
-               >
-                 Loading active chats...
-               </div>
-             ) : (
-               <>
-                 {soldModal.buyers.map((chat) => (
-                   <button
-                     key={chat.contact_id}
-                     style={{
-                       display: "flex",
-                       alignItems: "center",
-                       gap: "12px",
-                       width: "100%",
-                       padding: "10px 14px",
-                       borderRadius: "8px",
-                       border: "1px solid #eaeaea",
-                       background: "#fff",
-                       cursor: "pointer",
-                       textAlign: "left",
-                     }}
-                     onClick={() => executeMarkSold(chat.contact_id)}
-                   >
-                     <img
-                       src={
-                         chat.contact_avatar ||
-                         "https://via.placeholder.com/32"
-                       }
-                       alt="Buyer"
-                       style={{
-                         width: "36px",
-                         height: "36px",
-                         borderRadius: "50%",
-                         objectFit: "cover",
-                       }}
-                     />
-                     <div
-                       style={{
-                         flex: 1,
-                         fontWeight: "600",
-                         color: "#1a1a2e",
-                         fontSize: "0.95rem",
-                       }}
-                     >
-                       {chat.contact_name}
-                     </div>
-                   </button>
-                 ))}
-                 <button
-                   style={{
-                     display: "flex",
-                     alignItems: "center",
-                     gap: "12px",
-                     width: "100%",
-                     padding: "10px 14px",
-                     borderRadius: "8px",
-                     border: "1px dashed #ccc",
-                     background: "#fafafa",
-                     cursor: "pointer",
-                     textAlign: "left",
-                     marginTop: "0.5rem",
-                   }}
-                   onClick={() => executeMarkSold(null)}
-                 >
-                   <div
-                     style={{
-                       width: "36px",
-                       height: "36px",
-                       borderRadius: "50%",
-                       background: "#eee",
-                       display: "flex",
-                       alignItems: "center",
-                       justifyContent: "center",
-                       color: "#888",
-                     }}
-                   >
-                     <UserIcon size={18} />
-                   </div>
-                   <div
-                     style={{
-                       flex: 1,
-                       fontWeight: "500",
-                       color: "#666",
-                       fontSize: "0.95rem",
-                     }}
-                   >
-                     Someone else (Off-platform)
-                   </div>
-                 </button>
-               </>
-             )}
-           </div>
-
-           <div
-             className={styles.modalActions}
-             style={{ marginTop: "1.5rem" }}
-           >
+           <div className={styles.modalActions}>
              <button
                className={styles.btnCancel}
-               onClick={() =>
-                 setSoldModal({
-                   isOpen: false,
-                   product: null,
-                   buyers: [],
-                   loading: false,
-                 })
-               }
+               onClick={() => setRelistTarget(null)}
              >
                Cancel
+             </button>
+             <button
+               className={styles.btnRelist}
+               onClick={() => {
+                 const id = relistTarget.id;
+                 setRelistTarget(null);
+                 executeMarkAvailable(id);
+               }}
+             >
+               Relist
+             </button>
+           </div>
+         </div>
+       </div>
+     )}
+
+     {/* ── That wasn't me (MARK_SOLD_SPEC §4) ── */}
+     {purchaseToRemove && (
+       <div className={styles.modalOverlay} onClick={closeRemovePurchase}>
+         <div
+           className={styles.modalContent}
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="remove-purchase-title"
+           onClick={(e) => e.stopPropagation()}
+         >
+           <h3 id="remove-purchase-title" className={styles.modalTitle}>
+             Remove this purchase?
+           </h3>
+           <p className={styles.modalText}>
+             {getFirstName(purchaseToRemove.product.seller?.full_name)} marked “
+             {purchaseToRemove.product.title}” as sold to you. If that's wrong,
+             remove it. The listing stays sold; you just won't be shown as its
+             buyer.
+           </p>
+           {removePurchaseError && (
+             <p className={styles.modalError} role="alert">
+               {removePurchaseError}
+             </p>
+           )}
+           <div className={styles.modalActions}>
+             <button
+               className={styles.btnCancel}
+               onClick={closeRemovePurchase}
+               disabled={isRemovingPurchase}
+             >
+               Cancel
+             </button>
+             <button
+               className={styles.btnRemove}
+               onClick={executeRemovePurchase}
+               disabled={isRemovingPurchase}
+             >
+               {isRemovingPurchase ? "Removing..." : "Remove"}
              </button>
            </div>
          </div>
@@ -1430,8 +1316,17 @@ export default function Dashboard() {
                    currentUserId={localStorage.getItem("yahora_user_id")}
                    onEdit={() => handleEditProduct(item)}
                    onDelete={() => confirmDelete(item.id)}
-                   onMarkSold={() => handleMarkSoldClick(item)}
-                   onMarkAvailable={() => executeMarkAvailable(item.id)}
+                   onMarkSold={() =>
+                     setBuyerPicker({ product: item, mode: "sell" })
+                   }
+                   onChangeBuyer={() =>
+                     setBuyerPicker({
+                       product: item,
+                       mode: "change",
+                       initialBuyerId: item.buyer?.id ?? null,
+                     })
+                   }
+                   onMarkAvailable={() => setRelistTarget(item)}
                    onToggleLike={() =>
                      handleToggleGridLike(item.id, item.is_liked)
                    }
@@ -1453,7 +1348,15 @@ export default function Dashboard() {
            {tab === "purchases" &&
              (purchases.length ? (
                purchases.map((item) => (
-                 <PurchaseCard key={item.id} item={item} />
+                 <PurchaseCard
+                   key={item.id}
+                   item={item}
+                   onOpen={(id) => navigate(`/product/${id}`)}
+                   onRemove={(purchase) => {
+                     setRemovePurchaseError(null);
+                     setPurchaseToRemove(purchase);
+                   }}
+                 />
                ))
              ) : (
                <div className={styles.emptyState}>
