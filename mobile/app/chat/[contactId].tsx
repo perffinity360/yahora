@@ -71,7 +71,6 @@ import {
 } from '../../src/components/MessageActionMenu';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
-import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { Skeleton } from '../../src/components/Skeleton';
@@ -88,6 +87,7 @@ import {
   useServerBack,
 } from '../../src/hooks/useMessages';
 import type { ApiError } from '../../src/lib/api';
+import { useLeaveOnce } from '../../src/hooks/useLeaveOnce';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import {
   chatRowKey,
@@ -475,7 +475,8 @@ export default function ChatScreen() {
   }, [selecting]);
 
   const clearSelection = useCallback(() => {
-    setSelectedIds([]);
+    // Same array when nothing is selected: every focus of the composer calls this.
+    setSelectedIds((prev) => (prev.length ? [] : prev));
     setMenu(null);
   }, []);
 
@@ -509,7 +510,8 @@ export default function ChatScreen() {
      the SafeAreaView's onTouchStart) and whenever the keyboard comes or goes:
      the keyboard moves the thread from under it, and a menu left behind
      floats over the wrong message. The selection and the header's actions
-     stay. */
+     stay, except for a tap on the composer, which ends the selection (see
+     the input's onPressIn / onFocus). */
   useEffect(() => {
     if (!menu) return;
     const events: KeyboardEventName[] =
@@ -679,11 +681,14 @@ export default function ChatScreen() {
     list.filter((m) => m.failed && m.auto_retry).forEach((m) => retryRef.current(m));
   });
 
-  const goBack = () => {
-    if (fromParam) router.replace(fromParam);
-    else if (router.canGoBack()) router.back();
-    else router.replace(MESSAGES_HREF);
-  };
+  // Sent once: a second back before the first has run pops the screen underneath too.
+  const leaveOnce = useLeaveOnce();
+  const goBack = () =>
+    leaveOnce(() => {
+      if (fromParam) router.replace(fromParam);
+      else if (router.canGoBack()) router.back();
+      else router.replace(MESSAGES_HREF);
+    });
 
   /* ── "N unread messages" divider (web parity: Messages.jsx unreadMarker) ──
      Pinned at open time, NOT derived from is_read on every render. Opening the
@@ -1265,7 +1270,6 @@ export default function ChatScreen() {
               see WholePixelHeight. */}
           <WholePixelHeight>
             <View style={{ height: insets.top }} />
-            <ConnectionBanner />
 
             {/* ── Header ── */}
             <View style={styles.header}>
@@ -1611,10 +1615,14 @@ export default function ChatScreen() {
                 ref={inputRef}
                 value={draft}
                 onChangeText={handleChangeText}
+                /* WhatsApp: starting to type ends the selection, one message
+                   or several, and its menu with it. onPressIn covers an input
+                   that already had focus (the keyboard was up during the
+                   long-press), where a tap brings no new focus event. */
+                onPressIn={selecting ? clearSelection : undefined}
                 onFocus={() => {
                   setShowEmoji(false);
-                  // The keyboard is about to move the thread from under it.
-                  setMenu(null);
+                  clearSelection();
                 }}
                 placeholder="Message"
                 placeholderTextColor={colors.mutedPlaceholder}
@@ -1760,10 +1768,13 @@ function ChatWallpaper() {
    itself moving the gesture to a new state; a second state change inside the
    first cleans the gesture up, and the first then trips the library's check
    "Manually handled gesture had not been assigned to any detector". Never
-   call a state manager from these callbacks. */
-function watchOnlyGesture() {
-  return Gesture.Pan().manualActivation(true);
-}
+   call a state manager from these callbacks.
+
+   Written out as `Gesture.Pan().manualActivation(true)` at each use, never
+   behind a helper: the worklets Babel plugin only makes a gesture's callbacks
+   worklets when the chain starts with `Gesture.X()` itself. Behind a helper
+   (26 Oct) they ran on the JS thread, and gesture-handler warned "None of the
+   callbacks in the gesture are worklets" for every row it mounted. */
 
 /* ────────────────────────── Bubble ──────────────────────────
    MESSAGES_SPEC.md §2 "Bubbles". Memoised: every prop is either a message from
@@ -1906,7 +1917,8 @@ const MessageBubble = memo(function MessageBubble({
        old one had to be rebuilt each time selection began. See WATCH-ONLY
        GESTURES above the component for why it is a Pan and never calls its
        state manager. */
-    const tap = watchOnlyGesture()
+    const tap = Gesture.Pan()
+      .manualActivation(true)
       .enabled(actionable)
       .onTouchesDown((event) => {
         const touch = event.changedTouches[0];
@@ -1957,7 +1969,8 @@ const MessageBubble = memo(function MessageBubble({
   const pressMoved = useSharedValue(false);
   const feedback = useMemo(
     () =>
-      watchOnlyGesture()
+      Gesture.Pan()
+        .manualActivation(true)
         .enabled(actionable)
         .onTouchesDown((event) => {
           const touch = event.changedTouches[0];
