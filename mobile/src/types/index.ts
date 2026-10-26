@@ -172,6 +172,27 @@ export interface ProductListing {
   comments_count: number;
   is_liked?: boolean;
   is_saved?: boolean;
+  /** When it was marked sold (Phase 6B N-E); `null` unless sold. */
+  sold_at?: string | null;
+  /**
+   * Dashboard only: who bought it. `null` when it isn't sold, was sold to
+   * someone not on Yahora, or the buyer said "That wasn't me".
+   */
+  buyer?: SoldBuyer | null;
+}
+
+/** A buyer as the seller sees them (MARK_SOLD_SPEC §3). Never shown to anyone else. */
+export interface SoldBuyer {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
+/** A row of `GET /api/products/:id/buyer-candidates` (MARK_SOLD_SPEC §1). */
+export interface BuyerCandidate extends SoldBuyer {
+  /** True in the no-`q` list (they messaged about this listing); false in a search. */
+  messaged: boolean;
 }
 
 /**

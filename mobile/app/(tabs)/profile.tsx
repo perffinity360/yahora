@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '../../src/components/AppText';
 import { AvatarSheet } from '../../src/components/AvatarSheet';
+import { BuyerPickerSheet } from '../../src/components/BuyerPickerSheet';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { formatPrice, ProductCard } from '../../src/components/ProductCard';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
@@ -72,6 +73,8 @@ export default function ProfileScreen() {
   const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  /** The listing the "Who bought it?" picker is open for (MARK_SOLD_SPEC §1). */
+  const [soldTarget, setSoldTarget] = useState<ProductListing | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
@@ -131,11 +134,8 @@ export default function ProfileScreen() {
     }
   }, [removeAvatar]);
 
-  const confirmSold = (item: ProductListing) =>
-    Alert.alert('Mark as sold?', `"${item.title}" will move to your sold items.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Mark sold', onPress: () => actions.markSold.mutate({ id: item.id }) },
-    ]);
+  // The picker replaces the old Alert: it asks who bought it (or no one on Yahora).
+  const confirmSold = (item: ProductListing) => setSoldTarget(item);
 
   const confirmAvailable = (item: ProductListing) =>
     Alert.alert('Relist item?', `"${item.title}" will be available on the marketplace again.`, [
@@ -320,6 +320,17 @@ export default function ProfileScreen() {
           onRemovePhoto={handleRemovePhoto}
           onClose={() => setAvatarSheetOpen(false)}
         />
+
+        {/* Mounted only while open, so each open starts fresh. */}
+        {soldTarget ? (
+          <BuyerPickerSheet
+            visible
+            onClose={() => setSoldTarget(null)}
+            product={soldTarget}
+            initialBuyerId={undefined}
+            mode="sell"
+          />
+        ) : null}
 
         {/* Pinch, drag, double-tap. The viewer owns its own gesture root —
             see the note in ZoomableImageViewer about Modals on Android. */}
