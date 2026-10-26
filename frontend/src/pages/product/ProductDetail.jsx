@@ -13,6 +13,7 @@ import { supabase } from "../../config/supabaseClient";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   Heart,
+  Bookmark,
   Share2,
   MessageSquare,
   MessageCircle,
@@ -30,8 +31,10 @@ import {
   ShieldCheck,
   User,
   UserCheck,
+  CheckCircle,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
+import { formatShortDate } from "../../utils/messageFormat";
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
 
@@ -290,6 +293,9 @@ export default function ProductDetail() {
 
   /* ── Handlers ── */
   const handleToggleLike = async () => {
+    // A sold listing is closed to everyone (MARK_SOLD_SPEC §2); no button
+    // calls this then, and this makes sure nothing else can.
+    if (product?.status === "sold") return;
     if (!currentUserId) return alert("Please log in to like items.");
     setLikeAnim(true);
     setTimeout(() => setLikeAnim(false), 500);
@@ -331,6 +337,7 @@ export default function ProductDetail() {
   };
 
   const handleToggleSave = async () => {
+    if (product?.status === "sold") return; // closed, as above
     if (!currentUserId) return alert("Please log in to save items.");
     setSavedAnim(true);
     setTimeout(() => setSavedAnim(false), 400);
@@ -614,6 +621,12 @@ export default function ProductDetail() {
     !!currentUserId && product.seller?.id === currentUserId;
   const isForeignCampus =
     actualHomeUniId && product.university_id !== actualHomeUniId;
+  /* MARK_SOLD_SPEC §2. A sold listing is closed for everyone, the seller
+     included: no like, no save, no new questions (existing ones stay
+     readable). Only someone other than the seller loses Message seller — the
+     seller keeps the "Your listing" pill. */
+  const isSold = product.status === "sold";
+  const soldLocked = isSold && !isOwnListing;
   const condCfg =
     CONDITION_CONFIG[product.condition] ?? CONDITION_CONFIG["Good"];
   const totalComments = product.comments?.items?.length || 0;
@@ -634,6 +647,9 @@ export default function ProductDetail() {
               >
                 {condCfg.label}
               </span>
+
+              {/* §2: the SOLD stamp, for everyone, the seller too. */}
+              {isSold && <span className={styles.soldStamp}>SOLD</span>}
 
               <img
                 key={activeImageIndex}
@@ -761,8 +777,8 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* ── Main Question Input ── */}
-            {isForeignCampus ? (
+            {/* ── Main Question Input ── (none on a sold listing, for anyone, §2) */}
+            {isSold ? null : isForeignCampus ? (
               <div className={styles.lockedBox}>
                 <ShieldCheck size={18} />
                 <span>
@@ -825,10 +841,17 @@ export default function ProductDetail() {
             {/* ── Comment Threads ── */}
             <div className={styles.commentList}>
               {topLevelComments.length === 0 ? (
-                <div className={styles.emptyComments}>
-                  <MessageCircle size={28} strokeWidth={1.5} />
-                  <p>No questions yet. Be the first to ask!</p>
-                </div>
+                isSold ? (
+                  // Nobody can ask any more, so no "be the first" invite.
+                  <p className={styles.questionsClosed}>
+                    Questions are closed — this item has been sold.
+                  </p>
+                ) : (
+                  <div className={styles.emptyComments}>
+                    <MessageCircle size={28} strokeWidth={1.5} />
+                    <p>No questions yet. Be the first to ask!</p>
+                  </div>
+                )
               ) : (
                 topLevelComments.map((comment, idx) => {
                   const replies = getReplies(comment.id);
@@ -1069,6 +1092,30 @@ export default function ProductDetail() {
               </button>
             </div>
 
+            {/* §2: under the price. The seller also sees when, and who —
+                `product.buyer` is only ever sent to the seller. */}
+            {isSold && (
+              <div className={styles.soldBanner}>
+                <CheckCircle size={16} className={styles.soldBannerIcon} aria-hidden="true" />
+                <div className={styles.soldBannerBody}>
+                  <p className={styles.soldBannerText}>
+                    {!isOwnListing
+                      ? "This item has been sold."
+                      : product.sold_at
+                        ? `You marked this as sold on ${formatShortDate(product.sold_at)}.`
+                        : "You marked this as sold."}
+                  </p>
+                  {isOwnListing && product.buyer !== undefined && (
+                    <p className={styles.soldBannerSub}>
+                      {product.buyer
+                        ? `Buyer: ${product.buyer.full_name || `@${product.buyer.username}`}`
+                        : "Buyer: someone not on Yahora"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Status */}
             <div className={styles.statusRow}>
               <span
@@ -1090,7 +1137,13 @@ export default function ProductDetail() {
               {/* Visitor mode: the API refuses a like on another campus's
                   listing (CROSS_CAMPUS_INTERACTION_BLOCKED), so the heart is a
                   plain count, not a button that lights up and goes out again. */}
-              {isForeignCampus ? (
+              {/* Sold, for everyone: a plain count like the views chip. */}
+              {isSold ? (
+                <span className={styles.statChip} aria-label={`${product.likes_count || 0} likes`}>
+                  <Heart size={12} />
+                  {product.likes_count || 0}
+                </span>
+              ) : isForeignCampus ? (
                 <span
                   className={`${styles.statChip} ${product.is_liked ? styles.likeChipActive : ""}`}
                 >
@@ -1121,7 +1174,7 @@ export default function ProductDetail() {
                   <UserCheck size={16} />
                   Your listing
                 </div>
-              ) : isForeignCampus ? (
+              ) : soldLocked ? null : isForeignCampus ? (
                 <button className={styles.disabledBtn} disabled>
                   Campus-exclusive listing
                 </button>
@@ -1139,13 +1192,15 @@ export default function ProductDetail() {
                 </button>
               )}
 
-              {/* Refused on another campus too; see the like chip above. */}
-              {!isForeignCampus && (
+              {/* Refused on another campus too; see the like chip above.
+                  Not on a sold listing either, for anyone (§2). */}
+              {!isForeignCampus && !isSold && (
                 <button
                   className={`${styles.secondaryBtn} ${product.is_saved ? styles.savedActive : ""} ${savedAnim ? styles.savedAnim : ""}`}
                   onClick={handleToggleSave}
                 >
-                  <Heart
+                  {/* Save is a bookmark, as on the cards; Heart is Like. */}
+                  <Bookmark
                     size={16}
                     fill={product.is_saved ? "currentColor" : "none"}
                   />

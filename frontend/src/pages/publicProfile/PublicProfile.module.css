@@ -206,3 +206,17 @@
     font-size: 1.4rem;
   }
 }
+
+/* ── Sold (MARK_SOLD_SPEC §5) ──
+   Under the active listings, with the same header style (Dashboard's .tab).
+   The heading is an h2, so its browser margin, cursor and line-height are
+   reset to match the button beside it in Active Listings. */
+.soldSection {
+  margin-top: 40px;
+}
+.soldHeading {
+  margin: 0;
+  cursor: default;
+  line-height: inherit;
+  font-family: inherit;
+}

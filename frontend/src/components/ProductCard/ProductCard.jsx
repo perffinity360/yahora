@@ -6,10 +6,11 @@
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { supabase } from "../../config/supabaseClient";
-import { User } from "lucide-react";
+import { RotateCcw, User, Users } from "lucide-react";
 import styles from "./ProductCard.module.css";
 import SmartImage from "../SmartImage/SmartImage";
 import ShareSheet from "../ShareSheet/ShareSheet";
+import { formatShortDate } from "../../utils/messageFormat";
 
 const CONDITION_CONFIG = {
   Mint: { label: "MINT CONDITION", bg: "#2BB7FF", color: "#fff" },
@@ -157,6 +158,8 @@ const ProductCard = memo(function ProductCard({
   onDelete = null,
   onMarkSold = null,
   onMarkAvailable = null,
+  /* MARK_SOLD_SPEC §3: "Change buyer" on the owner's sold card (Dashboard). */
+  onChangeBuyer = null,
   onToggleLike = null,
   onToggleSave = null,
   /* False on another campus's listing (Marketplace, visitor mode). The API
@@ -190,6 +193,9 @@ const ProductCard = memo(function ProductCard({
   const totalImages = images.length;
   const condCfg =
     CONDITION_CONFIG[product.condition] ?? CONDITION_CONFIG["Good"];
+  /* MARK_SOLD_SPEC §5: someone else's sold listing (the public profile's
+     Sold section) has no like or save — and the API sends no counts for it. */
+  const soldToViewer = product.status === "sold" && !isOwner;
   const displayPrice =
     typeof product.price === "string" && product.price.includes("₹")
       ? product.price
@@ -355,7 +361,7 @@ const ProductCard = memo(function ProductCard({
           </>
         )}
 
-        {canInteract && (
+        {canInteract && !soldToViewer && (
           <button
             className={`${styles.overlayHeart} ${product.is_liked ? styles.overlayHeartLiked : ""}`}
             onClick={handleLike}
@@ -388,6 +394,53 @@ const ProductCard = memo(function ProductCard({
         )}
         <h3 className={styles.title}>{product.title}</h3>
 
+        {/* MARK_SOLD_SPEC §3: the owner's sold card says who bought it and
+            when, then Change buyer · Relist. The buyer is only ever sent to
+            the seller (the dashboard's `listings[].buyer`); where a page has
+            no `buyer` key at all, the line is left out rather than guessed. */}
+        {isOwner && product.status === "sold" && (
+          <div className={styles.soldInfo}>
+            {product.buyer !== undefined && (
+              <p className={styles.soldLine}>
+                {product.buyer
+                  ? `Sold to ${product.buyer.full_name || `@${product.buyer.username}`}`
+                  : "Sold · buyer not on Yahora"}
+                {product.sold_at ? ` · ${formatShortDate(product.sold_at)}` : ""}
+              </p>
+            )}
+            {(onChangeBuyer || onMarkAvailable) && (
+              <div className={styles.soldActions}>
+                {onChangeBuyer && (
+                  <button
+                    type="button"
+                    className={styles.soldActionBtn}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChangeBuyer();
+                    }}
+                  >
+                    <Users size={14} aria-hidden="true" />
+                    Change buyer
+                  </button>
+                )}
+                {onMarkAvailable && (
+                  <button
+                    type="button"
+                    className={styles.soldActionBtn}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkAvailable();
+                    }}
+                  >
+                    <RotateCcw size={14} aria-hidden="true" />
+                    Relist
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── THE CARD SHOWS ONE NUMBER, NOT THREE (Phase 5, Block V-C) ──
             The view count and the comment count were removed on 2026-09-20 to
             match the mobile card, which lost them in the same block. They are
@@ -401,7 +454,7 @@ const ProductCard = memo(function ProductCard({
             detail page; it just lands at the top. */}
         <div className={styles.footerRow}>
           <div className={styles.stats}>
-            {canInteract ? (
+            {soldToViewer ? null : canInteract ? (
               <>
                 <button
                   className={`${styles.statBtn} ${styles.statBtnHeart} ${product.is_liked ? styles.statBtnLiked : ""}`}
@@ -446,43 +499,10 @@ const ProductCard = memo(function ProductCard({
             <div className={styles.ownerActions}>
               {product.status === "sold" ? (
                 <>
-                  <span
-                    className={styles.cardSoldTo}
-                    style={{
-                      marginRight: "auto",
-                      fontWeight: "bold",
-                      color: "#f87171",
-                    }}
-                  >
-                    {product.sold_to ? `SOLD TO @${product.sold_to}` : "SOLD"}
-                  </span>
-
-                  {onMarkAvailable && (
-                    <button
-                      className={styles.cardBtn}
-                      title="Mark as Available"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMarkAvailable();
-                      }}
-                      style={{ color: "#2BB7FF" }}
-                    >
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                        <polyline points="3 3 3 8 8 8"></polyline>
-                      </svg>
-                    </button>
-                  )}
-
+                  {/* The old "SOLD TO @<name>" label read a column nothing
+                      wrote, and Relist is a text button under the title
+                      now (MARK_SOLD_SPEC §3). The photo keeps its SOLD
+                      badge. */}
                   <button
                     className={`${styles.cardBtn} ${styles.cardBtnDelete}`}
                     title="Delete listing"

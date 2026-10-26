@@ -801,6 +801,118 @@
 .btnDelete:hover {
   background: #dc2626;
 }
+/* That wasn't me (MARK_SOLD_SPEC §4): the dialog's confirm, in the danger red
+   (#B91C1C — the site's --error-text; there is no separate --danger-text). */
+.btnRemove {
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: var(--error-text);
+  color: var(--white);
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+.btnRemove:hover:not(:disabled) { filter: brightness(0.92); }
+.btnRemove:active:not(:disabled) { transform: scale(0.98); }
+.btnRemove:disabled { opacity: 0.6; cursor: default; }
+.btnRemove:focus-visible { outline: 2px solid var(--error-text); outline-offset: 2px; }
+.modalError {
+  margin: -12px 0 16px;
+  font-size: 0.85rem;
+  color: var(--error-text);
+}
+
+/* The buyer's purchase card (MARK_SOLD_SPEC §4) — inside ProductCard's
+   .infoWrap, which spaces its rows 4 apart (7 at ≤768px): "From <seller> ·
+   <date>", Inter 500 12 muted; then the quiet "That wasn't me" pill. */
+.purchaseFrom {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-text);
+  /* Two lines at most, not one: in the two-column phone grid (≤480px) a
+     single line cut the date off a long name. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.purchaseRemoveBtn {
+  /* Spec values the site has no token for: the pill's hairline, and the
+     spec's pinkLight (global --pink-light is a different #f4e0e4). */
+  --pill-border: rgba(128, 0, 128, 0.15);
+  --pill-hover-bg: #FFF4F7;
+
+  /* ProductCard's .infoWrap is a flex column: don't stretch to full width. */
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  /* 8 under the "From" line: 4 here + the column's gap of 4. */
+  margin-top: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: transparent;
+  font-family: Inter, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-text);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.purchaseRemoveBtn svg { flex-shrink: 0; }
+/* Mouse hover only (a touch screen's :hover sticks); :active gives touch the
+   same feedback while pressed. The icon follows via currentColor. */
+@media (hover: hover) {
+  .purchaseRemoveBtn:hover {
+    background: var(--pill-hover-bg);
+    color: var(--purple);
+  }
+}
+.purchaseRemoveBtn:active {
+  background: var(--pill-hover-bg);
+  color: var(--purple);
+}
+.purchaseRemoveBtn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+@media (max-width: 768px) {
+  /* ProductCard's .infoWrap gap is 7 here: 1 + 7 keeps the 8. */
+  .purchaseRemoveBtn { margin-top: 1px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .purchaseRemoveBtn { transition: none; }
+}
+
+/* Relist (MARK_SOLD_SPEC §3): the dialog's confirm, in the brand purple. */
+.btnRelist {
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: var(--purple);
+  color: var(--white);
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.15s;
+}
+.btnRelist:hover { background: var(--purple-dark); }
+.btnRelist:active { transform: scale(0.98); }
+.btnRelist:focus-visible,
+.btnCancel:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 
 @keyframes fadeIn {
   from {
@@ -1247,18 +1359,4 @@
   .grid {
     grid-template-columns: 1fr;
   }
-}
-
-/* The purchase card's price (PurchaseCard in Dashboard.jsx).
-   Every price on the site is Bree Serif 400 — it ships no other weight.
-
-   ⚠️ Neeraj: this rule is new, and it is the ONLY one of PurchaseCard's ten
-   class names that exists in this file. `card`, `cardImgWrap`, `cardImg`,
-   `cardBadge`, `cardBody`, `cardHead`, `cardTitle`, `cardFoot` and `cardViews`
-   are all referenced from the JSX and defined nowhere, so that card currently
-   renders unstyled. That is a layout bug, not a font one, so this font-only
-   pass deliberately did not touch it. */
-.cardPrice {
-  font-family: "Bree Serif", serif;
-  font-weight: 400;
 }

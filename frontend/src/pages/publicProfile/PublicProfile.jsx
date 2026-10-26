@@ -334,6 +334,10 @@ export default function PublicProfile() {
   if (!data) return null;
 
   const { profile, listings } = data;
+  /* MARK_SOLD_SPEC §5: at most 12 sold listings, newest sold first, and the
+     total. Never a buyer — the API sends none. */
+  const soldListings = data.sold_listings || [];
+  const soldCount = data.sold_count || 0;
   const firstName = (profile.full_name || "User").split(" ")[0];
 
   return (
@@ -587,6 +591,31 @@ export default function PublicProfile() {
               </div>
             )}
           </div>
+
+          {/* ── Sold (MARK_SOLD_SPEC §5) — left out when there are none ── */}
+          {soldCount > 0 && (
+            <section className={gateStyles.soldSection} aria-labelledby="sold-heading">
+              <div className={styles.tabs}>
+                <h2
+                  id="sold-heading"
+                  className={`${styles.tab} ${styles.tabActive} ${gateStyles.soldHeading}`}
+                >
+                  Sold · {soldCount}
+                </h2>
+              </div>
+              <div className={styles.grid}>
+                {soldListings.map((item) => (
+                  <ProductCard
+                    key={item.id}
+                    product={{ ...item, status: "sold", seller: profile }}
+                    isOwner={false}
+                    currentUserId={currentUserId}
+                    onCardClick={() => navigate(`/product/${item.id}`)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
 
