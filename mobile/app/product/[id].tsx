@@ -40,6 +40,7 @@ import { PinchLiftOverlay, PinchToZoom, usePinchLift, type PinchLift } from '../
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useAddComment } from '../../src/hooks/useComments';
+import { useLeaveOnce } from '../../src/hooks/useLeaveOnce';
 import { useProductDetail } from '../../src/hooks/useProductDetail';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
 import { hrefWithFrom } from '../../src/lib/nav';
@@ -118,26 +119,34 @@ export default function ProductDetailScreen() {
    *
    * `from` is used only when there is no history to go back to: a listing
    * opened cold from a shared link.
+   *
+   * Sent once (useLeaveOnce): a second back before the first has run would
+   * pop the screen underneath as well.
    */
-  const goBack = useCallback(() => {
-    const { routes, index } = navigation.getState() ?? { routes: [], index: 0 };
-    let copies = 0;
-    for (let i = index - 1; i >= 0; i--) {
-      const r = routes[i];
-      const sameListing =
-        r.name === 'product/[id]' && (r.params as { id?: string } | undefined)?.id === productId;
-      if (!sameListing) break;
-      copies += 1;
-    }
-    // canGoBack(): the state read above can be a render old, and a back sent
-    // with nothing to go back to is the "GO_BACK was not handled" error.
-    if (index - copies > 0 && router.canGoBack()) {
-      if (copies === 0) router.back();
-      else router.dismiss(copies + 1);
-    } else {
-      router.replace(fromParam ?? '/(tabs)');
-    }
-  }, [navigation, router, productId, fromParam]);
+  const leaveOnce = useLeaveOnce();
+  const goBack = useCallback(
+    () =>
+      leaveOnce(() => {
+        const { routes, index } = navigation.getState() ?? { routes: [], index: 0 };
+        let copies = 0;
+        for (let i = index - 1; i >= 0; i--) {
+          const r = routes[i];
+          const sameListing =
+            r.name === 'product/[id]' && (r.params as { id?: string } | undefined)?.id === productId;
+          if (!sameListing) break;
+          copies += 1;
+        }
+        // canGoBack(): the state read above can be a render old, and a back sent
+        // with nothing to go back to is the "GO_BACK was not handled" error.
+        if (index - copies > 0 && router.canGoBack()) {
+          if (copies === 0) router.back();
+          else router.dismiss(copies + 1);
+        } else {
+          router.replace(fromParam ?? '/(tabs)');
+        }
+      }),
+    [leaveOnce, navigation, router, productId, fromParam],
+  );
 
   // Android's system back takes the same path, so it can never land on one of
   // those copies. Registered only while this screen is on top: a listing left

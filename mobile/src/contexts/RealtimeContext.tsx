@@ -42,7 +42,8 @@ interface RealtimeValue {
   /** The chat being read live at its newest message registers here, so its arrivals do not raise the inbox badge. */
   setActiveChat: (chat: ActiveChat) => void;
   connection: ConnectionState;
-  /** Device has no network (NetInfo). Drives the "Connecting…" strip. */
+  /** Device has no network (NetInfo). Pauses work that needs the server (the chat's
+   *  auto-resend). Never shown: there is no offline banner (owner's call, 26 Oct). */
   isOffline: boolean;
 }
 
@@ -305,7 +306,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [userId, resync]);
 
-  /* ── Connectivity, for the "Connecting…" strip ─────────────────────────
+  /* ── Connectivity ────────────────────────────────────────────────────
      NetInfo is a native module. If the runtime doesn't have it linked, treat
      the device as online rather than taking the whole app down — the channel
      status already covers the case that actually matters. */

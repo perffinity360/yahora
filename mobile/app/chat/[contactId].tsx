@@ -63,6 +63,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CircleButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
 import { AppToast, useToast } from '../../src/components/AppToast';
+import { CHAT_PATTERN, CHAT_TILE } from '../../src/components/ChatWallpaperPreload';
 import { DeleteMessagesDialog } from '../../src/components/DeleteMessagesDialog';
 import {
   MessageActionMenu,
@@ -71,7 +72,6 @@ import {
 } from '../../src/components/MessageActionMenu';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
-import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { Skeleton } from '../../src/components/Skeleton';
@@ -88,6 +88,7 @@ import {
   useServerBack,
 } from '../../src/hooks/useMessages';
 import type { ApiError } from '../../src/lib/api';
+import { useLeaveOnce } from '../../src/hooks/useLeaveOnce';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import {
   chatRowKey,
@@ -176,10 +177,8 @@ const THREAD_PAD = 12;
 const BUBBLE_MAX = 520;
 const MESSAGES_HREF = '/(tabs)/messages';
 const MAX_MESSAGE_LENGTH = 2000;
-/** Seamless 420×420 doodle tile; copies of docs/design/assets/. Never edit the PNGs. */
-const CHAT_PATTERN = require('../../assets/chat-pattern.png');
-/** The tile's size in dp — the web tiles the same artwork at 420 px. */
-const TILE = 420;
+/** The doodle tile and its size; loaded at app start (ChatWallpaperPreload). */
+const TILE = CHAT_TILE;
 
 /** Broadcast at most one typing ping every 2s, and hide theirs after 3s of silence. */
 const TYPING_THROTTLE_MS = 2000;
@@ -475,7 +474,8 @@ export default function ChatScreen() {
   }, [selecting]);
 
   const clearSelection = useCallback(() => {
-    setSelectedIds([]);
+    // Same array when nothing is selected: every focus of the composer calls this.
+    setSelectedIds((prev) => (prev.length ? [] : prev));
     setMenu(null);
   }, []);
 
@@ -509,7 +509,8 @@ export default function ChatScreen() {
      the SafeAreaView's onTouchStart) and whenever the keyboard comes or goes:
      the keyboard moves the thread from under it, and a menu left behind
      floats over the wrong message. The selection and the header's actions
-     stay. */
+     stay, except for a tap on the composer, which ends the selection (see
+     the input's onPressIn / onFocus). */
   useEffect(() => {
     if (!menu) return;
     const events: KeyboardEventName[] =
@@ -679,11 +680,14 @@ export default function ChatScreen() {
     list.filter((m) => m.failed && m.auto_retry).forEach((m) => retryRef.current(m));
   });
 
-  const goBack = () => {
-    if (fromParam) router.replace(fromParam);
-    else if (router.canGoBack()) router.back();
-    else router.replace(MESSAGES_HREF);
-  };
+  // Sent once: a second back before the first has run pops the screen underneath too.
+  const leaveOnce = useLeaveOnce();
+  const goBack = () =>
+    leaveOnce(() => {
+      if (fromParam) router.replace(fromParam);
+      else if (router.canGoBack()) router.back();
+      else router.replace(MESSAGES_HREF);
+    });
 
   /* ── "N unread messages" divider (web parity: Messages.jsx unreadMarker) ──
      Pinned at open time, NOT derived from is_read on every render. Opening the
@@ -1265,7 +1269,6 @@ export default function ChatScreen() {
               see WholePixelHeight. */}
           <WholePixelHeight>
             <View style={{ height: insets.top }} />
-            <ConnectionBanner />
 
             {/* ── Header ── */}
             <View style={styles.header}>
@@ -1611,10 +1614,14 @@ export default function ChatScreen() {
                 ref={inputRef}
                 value={draft}
                 onChangeText={handleChangeText}
+                /* WhatsApp: starting to type ends the selection, one message
+                   or several, and its menu with it. onPressIn covers an input
+                   that already had focus (the keyboard was up during the
+                   long-press), where a tap brings no new focus event. */
+                onPressIn={selecting ? clearSelection : undefined}
                 onFocus={() => {
                   setShowEmoji(false);
-                  // The keyboard is about to move the thread from under it.
-                  setMenu(null);
+                  clearSelection();
                 }}
                 placeholder="Message"
                 placeholderTextColor={colors.mutedPlaceholder}
@@ -1718,32 +1725,53 @@ function WholePixelHeight({ children }: { children: ReactNode }) {
   );
 }
 
-function ChatWallpaper() {
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  const cols = Math.ceil(box.w / TILE);
-  const rows = Math.ceil(box.h / TILE);
+/* Drawn in the screen's FIRST render, never after a measurement. It used to
+   wait for its own onLayout, and that second render queued behind the first
+   batches of message rows, so in a long chat the wallpaper came up a visible
+   moment after the bubbles (26 Oct). The window is known at once and the
+   thread is never bigger than it; tiles past the thread's edge are clipped.
+   fadeDuration 0: Android fades every Image in over 300 ms by default. */
+const ChatWallpaper = memo(function ChatWallpaper() {
+  const { width, height } = useWindowDimensions();
+  const cols = Math.ceil(width / TILE);
+  const rows = Math.ceil(height / TILE);
   return (
     // RN's Image takes no pointerEvents prop, so the wrapper carries it.
-    <View
-      style={[StyleSheet.absoluteFill, styles.wallpaper]}
-      pointerEvents="none"
-      onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout;
-        // The keyboard resizes the thread; a layout pass at the same size
-        // must not re-render.
-        setBox((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
-      }}
-    >
+    <View style={[StyleSheet.absoluteFill, styles.wallpaper]} pointerEvents="none">
       {Array.from({ length: rows * cols }, (_, i) => (
         <RNImage
           key={i}
           source={CHAT_PATTERN}
+          fadeDuration={0}
           style={[styles.wallpaperTile, { left: (i % cols) * TILE, top: Math.floor(i / cols) * TILE }]}
         />
       ))}
     </View>
   );
-}
+});
+
+/* ── WATCH-ONLY GESTURES ──
+   The selection tap and the touch feedback only watch a finger; they must
+   never take the touch from the list, a link or the quote. A Pan with manual
+   activation does exactly that: it never activates, and gesture-handler
+   fails it by itself when the finger lifts (after onTouchesUp has run) or
+   cancels it when a scroll takes over.
+
+   Not Gesture.Manual: a Manual gesture has to be ended by hand, and the
+   version that did so from its touch callbacks closed the app on Android
+   (25 Oct, two phones: a scroll that started on a bubble, and taps in
+   selection mode). The likely mechanism, from gesture-handler's source (no
+   crash log was taken): a cancel runs the callback while the library is
+   itself moving the gesture to a new state; a second state change inside the
+   first cleans the gesture up, and the first then trips the library's check
+   "Manually handled gesture had not been assigned to any detector". Never
+   call a state manager from these callbacks.
+
+   Written out as `Gesture.Pan().manualActivation(true)` at each use, never
+   behind a helper: the worklets Babel plugin only makes a gesture's callbacks
+   worklets when the chain starts with `Gesture.X()` itself. Behind a helper
+   (26 Oct) they ran on the JS thread, and gesture-handler warned "None of the
+   callbacks in the gesture are worklets" for every row it mounted. */
 
 /* ────────────────────────── Bubble ──────────────────────────
    MESSAGES_SPEC.md §2 "Bubbles". Memoised: every prop is either a message from
@@ -1880,14 +1908,18 @@ const MessageBubble = memo(function MessageBubble({
       .onFinalize(() => {
         swipeX.value = withSpring(0, SWIPE_SPRING);
       });
-    /* The tap that picks or unpicks a message in selection mode. A Manual
-       gesture that only watches and never activates: an activated Tap would
-       take the touch from a link or the quote outside selection mode, which
-       is why the old one had to be rebuilt each time selection began. */
-    const tap = Gesture.Manual()
+    /* The tap that picks or unpicks a message in selection mode. A gesture
+       that only watches and never activates: an activated Tap would take the
+       touch from a link or the quote outside selection mode, which is why the
+       old one had to be rebuilt each time selection began. See WATCH-ONLY
+       GESTURES above the component for why it is a Pan and never calls its
+       state manager. */
+    const tap = Gesture.Pan()
+      .manualActivation(true)
       .enabled(actionable)
       .onTouchesDown((event) => {
         const touch = event.changedTouches[0];
+        if (!touch) return;
         touchX.value = touch.absoluteX;
         touchY.value = touch.absoluteY;
         touchMoved.value = false;
@@ -1895,18 +1927,15 @@ const MessageBubble = memo(function MessageBubble({
       })
       .onTouchesMove((event) => {
         const touch = event.changedTouches[0];
+        if (!touch) return;
         const dx = touch.absoluteX - touchX.value;
         const dy = touch.absoluteY - touchY.value;
         if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) touchMoved.value = true;
       })
-      .onTouchesUp((_event, manager) => {
+      .onTouchesUp(() => {
         if (selectingSV.value && !touchMoved.value && !longPressed.value) {
           runOnJS(onTap)(messageId);
         }
-        manager.fail();
-      })
-      .onTouchesCancelled((_event, manager) => {
-        manager.fail();
       });
     return Gesture.Simultaneous(tap, Gesture.Race(pan, longPress));
   }, [
@@ -1937,10 +1966,12 @@ const MessageBubble = memo(function MessageBubble({
   const pressMoved = useSharedValue(false);
   const feedback = useMemo(
     () =>
-      Gesture.Manual()
+      Gesture.Pan()
+        .manualActivation(true)
         .enabled(actionable)
         .onTouchesDown((event) => {
           const touch = event.changedTouches[0];
+          if (!touch) return;
           pressX.value = touch.absoluteX;
           pressY.value = touch.absoluteY;
           pressMoved.value = false;
@@ -1952,6 +1983,7 @@ const MessageBubble = memo(function MessageBubble({
         .onTouchesMove((event) => {
           if (pressMoved.value) return;
           const touch = event.changedTouches[0];
+          if (!touch) return;
           const dx = touch.absoluteX - pressX.value;
           const dy = touch.absoluteY - pressY.value;
           if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) {
@@ -1959,18 +1991,17 @@ const MessageBubble = memo(function MessageBubble({
             press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
           }
         })
-        .onTouchesUp((_event, manager) => {
+        .onTouchesUp(() => {
           if (!pressMoved.value) {
             press.value = withSequence(
               withTiming(1, { duration: PRESS_FEEDBACK_IN_MS }),
               withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS }),
             );
           }
-          manager.fail();
         })
-        .onTouchesCancelled((_event, manager) => {
+        // A scroll took the touch.
+        .onTouchesCancelled(() => {
           press.value = withTiming(0, { duration: PRESS_FEEDBACK_OUT_MS });
-          manager.fail();
         }),
     [actionable, press, pressX, pressY, pressMoved],
   );

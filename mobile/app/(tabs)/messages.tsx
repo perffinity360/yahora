@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '../../src/components/AppText';
 import { AppTextInput } from '../../src/components/AppTextInput';
 import { Avatar } from '../../src/components/Avatar';
-import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -97,8 +96,6 @@ export default function MessagesScreen() {
     <View style={styles.root}>
       <ScreenGradient variant="app" />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ConnectionBanner />
-
       <View style={styles.header}>
         <AppText style={styles.title}>Messages</AppText>
         {unreadConversations > 0 ? (

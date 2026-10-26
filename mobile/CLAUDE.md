@@ -168,6 +168,20 @@ mobile/
   `Skeleton` still uses core `Animated` (fine to keep). Gesture-handler is v3: the `Gesture.Pan()`-style builder
   still works but is deprecated in favour of hooks (`usePanGesture`, …). New code may use either;
   migrating the existing gestures is its own task.
+- **A gesture that only watches touches is `Gesture.Pan().manualActivation(true)`, never
+  `Gesture.Manual()`.** Ending a Manual gesture with its state manager (`manager.fail()`/`end()`)
+  from inside `onTouches*` closed the app on Android (chat screen, 25 Oct). A never-activated Pan
+  is failed by gesture-handler itself on finger up and cancelled by a scroll. See WATCH-ONLY
+  GESTURES in `app/chat/[contactId].tsx`.
+- **Every gesture chain starts with `Gesture.X()` written out at the call site, never a helper
+  that returns one.** The worklets Babel plugin only turns the callbacks into worklets when it
+  can see `Gesture.Pan()` (etc.) at the head of the chain. Behind `watchOnlyGesture()` they ran
+  on the JS thread, and gesture-handler logged "None of the callbacks in the gesture are
+  worklets" once per mounted chat row, which made the phone lag (26 Oct).
+- **Leave a screen through `useLeaveOnce()`** (`src/hooks/useLeaveOnce.ts`) when its back calls
+  `router.back()` / `dismiss()`. Those calls are queued, so a second back before the first
+  runs passes `canGoBack()` and sends a second GO_BACK ("not handled by any navigator", or it
+  pops the screen underneath).
 - **Root navigation is a `<Slot/>`** which unmounts inactive screens, so `router.back()` from a
   detail screen resets the tabs to Marketplace. Navigate to a tab explicitly
   (`router.replace('/(tabs)/profile')`) instead of relying on `back()`.
