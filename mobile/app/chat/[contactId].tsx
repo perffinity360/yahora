@@ -63,6 +63,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CircleButton } from '../../src/components/CircleButton';
 import { AppText } from '../../src/components/AppText';
 import { AppToast, useToast } from '../../src/components/AppToast';
+import { CHAT_PATTERN, CHAT_TILE } from '../../src/components/ChatWallpaperPreload';
 import { DeleteMessagesDialog } from '../../src/components/DeleteMessagesDialog';
 import {
   MessageActionMenu,
@@ -176,10 +177,8 @@ const THREAD_PAD = 12;
 const BUBBLE_MAX = 520;
 const MESSAGES_HREF = '/(tabs)/messages';
 const MAX_MESSAGE_LENGTH = 2000;
-/** Seamless 420×420 doodle tile; copies of docs/design/assets/. Never edit the PNGs. */
-const CHAT_PATTERN = require('../../assets/chat-pattern.png');
-/** The tile's size in dp — the web tiles the same artwork at 420 px. */
-const TILE = 420;
+/** The doodle tile and its size; loaded at app start (ChatWallpaperPreload). */
+const TILE = CHAT_TILE;
 
 /** Broadcast at most one typing ping every 2s, and hide theirs after 3s of silence. */
 const TYPING_THROTTLE_MS = 2000;

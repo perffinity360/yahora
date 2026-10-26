@@ -18,6 +18,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ChatWallpaperPreload } from '../src/components/ChatWallpaperPreload';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { RealtimeProvider } from '../src/contexts/RealtimeContext';
 import { updateEveryPage, type ChatCache } from '../src/lib/messages';
@@ -190,6 +191,8 @@ export default function RootLayout() {
           </AuthProvider>
         </PersistQueryClientProvider>
       </SafeAreaProvider>
+      {/* The chat wallpaper, decoded before any chat opens. */}
+      <ChatWallpaperPreload />
     </GestureHandlerRootView>
   );
 }
