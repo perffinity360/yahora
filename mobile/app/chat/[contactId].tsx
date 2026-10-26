@@ -1726,32 +1726,30 @@ function WholePixelHeight({ children }: { children: ReactNode }) {
   );
 }
 
-function ChatWallpaper() {
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  const cols = Math.ceil(box.w / TILE);
-  const rows = Math.ceil(box.h / TILE);
+/* Drawn in the screen's FIRST render, never after a measurement. It used to
+   wait for its own onLayout, and that second render queued behind the first
+   batches of message rows, so in a long chat the wallpaper came up a visible
+   moment after the bubbles (26 Oct). The window is known at once and the
+   thread is never bigger than it; tiles past the thread's edge are clipped.
+   fadeDuration 0: Android fades every Image in over 300 ms by default. */
+const ChatWallpaper = memo(function ChatWallpaper() {
+  const { width, height } = useWindowDimensions();
+  const cols = Math.ceil(width / TILE);
+  const rows = Math.ceil(height / TILE);
   return (
     // RN's Image takes no pointerEvents prop, so the wrapper carries it.
-    <View
-      style={[StyleSheet.absoluteFill, styles.wallpaper]}
-      pointerEvents="none"
-      onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout;
-        // The keyboard resizes the thread; a layout pass at the same size
-        // must not re-render.
-        setBox((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
-      }}
-    >
+    <View style={[StyleSheet.absoluteFill, styles.wallpaper]} pointerEvents="none">
       {Array.from({ length: rows * cols }, (_, i) => (
         <RNImage
           key={i}
           source={CHAT_PATTERN}
+          fadeDuration={0}
           style={[styles.wallpaperTile, { left: (i % cols) * TILE, top: Math.floor(i / cols) * TILE }]}
         />
       ))}
     </View>
   );
-}
+});
 
 /* ── WATCH-ONLY GESTURES ──
    The selection tap and the touch feedback only watch a finger; they must
