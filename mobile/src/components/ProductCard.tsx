@@ -122,6 +122,19 @@ export interface ProductCardProps {
   /** When true, render the owner toolbar (sold / available / edit / delete). */
   showManageActions?: boolean;
   /**
+   * Owner's sold card only (with `showManageActions`), MARK_SOLD_SPEC §3: the
+   * line under the price, "Sold to <name> · <date>". The screen writes it, so
+   * the card never learns who bought anything. With it come the text buttons
+   * Change buyer (`onChangeBuyer`) and Relist (`onMarkAvailable`).
+   */
+  soldLine?: string;
+  onChangeBuyer?: () => void;
+  /**
+   * No heart and no count. The public profile's sold listings (§5): a sold
+   * listing takes no likes, and that list carries no like count to show.
+   */
+  hideLikes?: boolean;
+  /**
    * SWIPE DECK ONLY. The card fills whatever height its parent gives it and the
    * PHOTO takes the slack, instead of being square: every row under the photo
    * keeps its natural height, so they are always fully visible and every card
@@ -179,6 +192,9 @@ function ProductCardBase({
   sellerName,
   sellerAvatarUrl,
   showManageActions,
+  soldLine,
+  onChangeBuyer,
+  hideLikes,
   fillPhoto,
   swipePhotos = true,
 }: ProductCardProps) {
@@ -273,6 +289,7 @@ function ProductCardBase({
                 {condLabel}
               </AppText>
             </View>
+            {hideLikes ? null : (
             <Pressable
               onPress={onLike}
               disabled={!onLike}
@@ -297,6 +314,7 @@ function ProductCardBase({
                 {product.likes_count ?? 0}
               </AppText>
             </Pressable>
+            )}
           </View>
 
           {/* Row 2 — the price owns its own row and is the largest element on
@@ -306,6 +324,30 @@ function ProductCardBase({
           <AppText style={styles.price} numberOfLines={1}>
             {formatPrice(product.price)}
           </AppText>
+
+          {/* Owner's sold card (MARK_SOLD_SPEC §3): who bought it and when,
+              then Change buyer and Relist. */}
+          {showManageActions && sold && soldLine ? (
+            <View style={styles.sale}>
+              <AppText style={styles.saleLine} numberOfLines={2}>
+                {soldLine}
+              </AppText>
+              <View style={styles.saleActions}>
+                <Pressable onPress={onChangeBuyer} hitSlop={8} accessibilityRole="button">
+                  {({ pressed }) => (
+                    <AppText style={[styles.saleAction, pressed && styles.saleActionPressed]}>
+                      Change buyer
+                    </AppText>
+                  )}
+                </Pressable>
+                <Pressable onPress={onMarkAvailable} hitSlop={8} accessibilityRole="button">
+                  {({ pressed }) => (
+                    <AppText style={[styles.saleAction, pressed && styles.saleActionPressed]}>Relist</AppText>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
 
           {/* Row 3 — location. Always rendered, even when empty: the blank line
               is what keeps a listing with no location the same height as one
@@ -372,7 +414,8 @@ function ProductCardBase({
               carry: those two ARE on the detail screen. */}
           {showManageActions ? (
             <View style={styles.manageRow}>
-              {sold ? (
+              {/* Sold with its sale line: Relist is the text button above. */}
+              {sold && soldLine ? null : sold ? (
                 <IconBtn
                   icon="rotate-ccw"
                   onPress={onMarkAvailable}
@@ -537,6 +580,21 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.headline,
     color: colors.purple,
   },
+
+  /* Owner's sold card: sale line + Change buyer / Relist (MARK_SOLD_SPEC §3) */
+  sale: { gap: 4 },
+  saleLine: {
+    fontFamily: font.family.medium,
+    fontSize: font.sizes.caption,
+    color: colors.mutedText,
+  },
+  saleActions: { flexDirection: 'row', gap: 14 },
+  saleAction: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.caption,
+    color: colors.purple,
+  },
+  saleActionPressed: { opacity: 0.6 },
 
   /* Row 3 — location (one reserved line) */
   location: {

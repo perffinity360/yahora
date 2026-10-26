@@ -16,7 +16,7 @@ import { useBuyerCandidates } from '../hooks/useBuyerCandidates';
 import { useDashboardActions } from '../hooks/useDashboardActions';
 import type { ApiError } from '../lib/api';
 import { colors, font } from '../theme';
-import type { BuyerCandidate, SoldBuyer } from '../types';
+import type { BuyerCandidate, SaleParty } from '../types';
 
 /** Same entrance as AvatarSheet: only the sheet rises; the scrim is there at once. */
 const SHEET_ENTER = SlideInDown.duration(280).easing(Easing.out(Easing.cubic));
@@ -73,7 +73,7 @@ export function BuyerPickerSheet({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null | undefined>(initialBuyerId);
   // The picked person, so the card can show their name before the server answers.
-  const [selectedPerson, setSelectedPerson] = useState<SoldBuyer | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<SaleParty | null>(null);
 
   const candidates = useBuyerCandidates(product.id, query, visible);
   const { errorUpdatedAt, isError } = candidates;

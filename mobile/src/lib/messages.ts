@@ -240,6 +240,15 @@ function pastDayLabel(d: Date, now: Date): string | null {
   return d.getFullYear() === now.getFullYear() ? date : `${date} ${d.getFullYear()}`;
 }
 
+/** `3 Oct` · `3 Oct 2025` in an earlier year — the date forms of the table
+ *  above, for a sale's date (MARK_SOLD_SPEC §2–§4). Never "Today" or a weekday. */
+export function formatShortDate(iso?: string | null): string {
+  const d = parse(iso);
+  if (!d) return '';
+  const date = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === new Date().getFullYear() ? date : `${date} ${d.getFullYear()}`;
+}
+
 /** `4:41 PM` — the time inside every bubble, and the inbox time on the same day. */
 export function formatClockTime(iso?: string | null): string {
   const d = parse(iso);

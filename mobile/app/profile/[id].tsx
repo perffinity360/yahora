@@ -95,6 +95,8 @@ export default function PublicProfileScreen() {
 
   const profile = data?.profile;
   const listings = data?.listings ?? [];
+  const soldListings = data?.sold_listings ?? [];
+  const soldCount = data?.sold_count ?? 0;
   const firstName = (profile?.full_name || 'User').split(' ')[0];
   const showSkeleton = isLoading && !profile;
 
@@ -183,6 +185,44 @@ export default function PublicProfileScreen() {
                   </Text>
                 </View>
               )}
+
+              {/* MARK_SOLD_SPEC §5: the seller's finished sales, newest first,
+                  at most 12. Listings only: never who bought them. */}
+              {soldCount > 0 && soldListings.length ? (
+                <>
+                  <View style={styles.listingsHead}>
+                    <AppText style={styles.listingsTitle}>Sold · {soldCount}</AppText>
+                  </View>
+                  <View style={styles.grid}>
+                    {soldListings.map((item) => (
+                      <ProductCard
+                        key={item.id}
+                        // The sold rows carry only what a sold card shows; the
+                        // footer's time is when it sold.
+                        product={{
+                          ...item,
+                          status: 'sold',
+                          created_at: item.sold_at ?? '',
+                          likes_count: 0,
+                          views: 0,
+                        }}
+                        style={{ width: cardWidth }}
+                        hideLikes
+                        sellerName={profile.full_name}
+                        sellerAvatarUrl={profile.avatar_url}
+                        onPress={() =>
+                          router.push(
+                            hrefWithFrom(
+                              `/product/${item.id}`,
+                              hrefWithFrom(`/profile/${profileUserId}`, fromParam),
+                            ),
+                          )
+                        }
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
             </>
           ) : null}
         </ScrollView>

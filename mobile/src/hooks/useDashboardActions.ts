@@ -1,7 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 
 import { api, type ApiError } from '../lib/api';
-import type { DashboardData, ProductListing, SoldBuyer } from '../types';
+import type { DashboardData, Paged, ProductListing, SaleParty } from '../types';
 import { syncListingEverywhere } from './useProductActions';
 
 /**
@@ -75,17 +75,38 @@ export function useDashboardActions(userId: string | null | undefined) {
 
   /* A sale shows in more places than the dashboard: the product page (the
      seller's banner, MARK_SOLD_SPEC §2) and the seller's public profile (§5).
-     Marked stale, they fetch again the next time they are on screen. */
-  const refreshSaleEverywhere = (id: string) => {
+     Marked stale, they fetch again the next time they are on screen.
+
+     The marketplace feed holds available listings only (§6). A sold one is
+     taken out of every cached page at once, with no request: refetching the
+     whole loaded feed would move the grid under the student. A relisted one
+     comes back with the feed's next refresh. */
+  const refreshSaleEverywhere = (id: string, sold: boolean) => {
     queryClient.invalidateQueries({ queryKey: ['product', id] });
     queryClient.invalidateQueries({ queryKey: ['publicProfile', userId] });
+    if (sold) {
+      queryClient.setQueriesData<InfiniteData<Paged<{ id: string }>>>(
+        { queryKey: ['marketplace'] },
+        (data) =>
+          data?.pages.some((page) => page?.items?.some((p) => p.id === id))
+            ? {
+                ...data,
+                pages: data.pages.map((page) =>
+                  page?.items ? { ...page, items: page.items.filter((p) => p.id !== id) } : page,
+                ),
+              }
+            : data,
+      );
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['marketplace'], refetchType: 'none' });
+    }
   };
 
   /* Mark as sold, and Change buyer (calling it again changes the buyer and
      keeps the first sold_at). `buyerId` null = "Someone not on Yahora".
      `buyer` is only for the card to show the name before the server answers. */
   const markSold = useMutation({
-    mutationFn: (vars: { id: string; buyerId: string | null; buyer?: SoldBuyer | null }) =>
+    mutationFn: (vars: { id: string; buyerId: string | null; buyer?: SaleParty | null }) =>
       api.post(`/api/products/${vars.id}/sold`, { buyer_id: vars.buyerId }),
     onMutate: async (vars) => {
       const ctx = await begin();
@@ -97,7 +118,7 @@ export function useDashboardActions(userId: string | null | undefined) {
       }));
       return ctx;
     },
-    onSuccess: (_result, vars) => refreshSaleEverywhere(vars.id),
+    onSuccess: (_result, vars) => refreshSaleEverywhere(vars.id, true),
     onError: rollback,
     onSettled: reconcile,
   });
@@ -109,7 +130,7 @@ export function useDashboardActions(userId: string | null | undefined) {
       patchListing(vars.id, (p) => ({ ...p, status: 'available', sold_at: null, buyer: null }));
       return ctx;
     },
-    onSuccess: (_result, vars) => refreshSaleEverywhere(vars.id),
+    onSuccess: (_result, vars) => refreshSaleEverywhere(vars.id, false),
     onError: rollback,
     onSettled: reconcile,
   });
