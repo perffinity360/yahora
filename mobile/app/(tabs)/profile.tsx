@@ -20,8 +20,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '../../src/components/AppText';
 import { AvatarSheet } from '../../src/components/AvatarSheet';
 import { BuyerPickerSheet } from '../../src/components/BuyerPickerSheet';
+import { ConfirmDialog, type ConfirmDialogContent } from '../../src/components/ConfirmDialog';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
-import { formatPrice, ProductCard } from '../../src/components/ProductCard';
+import { formatPrice, ProductCard, type SaleSummary } from '../../src/components/ProductCard';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { ZoomableImageViewer } from '../../src/components/ZoomableImageViewer';
@@ -56,11 +57,29 @@ function partyName(party?: { full_name: string | null; username: string | null }
   return party?.full_name || party?.username || 'a Yahora student';
 }
 
-/** "Sold to Arjun Mehta · 3 Oct", or "Sold · buyer not on Yahora · 1 Oct" (spec §3). */
-function soldLineFor(item: ProductListing): string {
-  const head = item.buyer ? `Sold to ${partyName(item.buyer)}` : 'Sold · buyer not on Yahora';
-  const date = formatShortDate(item.sold_at);
-  return date ? `${head} · ${date}` : head;
+/** The seller's sold card: who bought it (null = not on Yahora) and when (spec §3). */
+function saleFor(item: ProductListing): SaleSummary {
+  return {
+    buyer: item.buyer ? { name: partyName(item.buyer), avatarUrl: item.buyer.avatar_url } : null,
+    date: formatShortDate(item.sold_at),
+  };
+}
+
+/** MARK_SOLD_SPEC §3 "Relist dialog": the words, for ConfirmDialog. */
+function relistDialogFor(item: ProductListing): ConfirmDialogContent {
+  const buyerFirst = item.buyer ? partyName(item.buyer).split(' ')[0] : null;
+  return {
+    title: 'Relist this item?',
+    message: (
+      <>
+        <ConfirmDialog.Strong>{item.title}</ConfirmDialog.Strong> goes back on the marketplace.
+        {buyerFirst ? ` ${buyerFirst} will no longer be shown as its buyer.` : ''}
+      </>
+    ),
+    confirmLabel: 'Relist',
+    icon: 'rotate-ccw',
+    imageUri: item.image_urls?.[0],
+  };
 }
 
 function initialsOf(name?: string | null): string {
@@ -91,6 +110,8 @@ export default function ProfileScreen() {
     item: ProductListing;
     mode: 'sell' | 'change';
   } | null>(null);
+  /** The sold listing the Relist dialog is asking about. */
+  const [relistTarget, setRelistTarget] = useState<ProductListing | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
@@ -155,18 +176,11 @@ export default function ProfileScreen() {
   // Opens on the current choice: the buyer, or "Someone not on Yahora".
   const changeBuyer = (item: ProductListing) => setSoldTarget({ item, mode: 'change' });
 
-  // MARK_SOLD_SPEC §3 "Relist dialog".
-  const confirmAvailable = (item: ProductListing) => {
-    const buyerFirst = item.buyer ? partyName(item.buyer).split(' ')[0] : null;
-    Alert.alert(
-      'Relist this item?',
-      `“${item.title}” goes back on the marketplace.` +
-        (buyerFirst ? ` ${buyerFirst} will no longer be shown as its buyer.` : ''),
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Relist', onPress: () => actions.markAvailable.mutate({ id: item.id }) },
-      ],
-    );
+  // MARK_SOLD_SPEC §3 "Relist dialog": the app's own dialog, not the phone's Alert.
+  const confirmAvailable = (item: ProductListing) => setRelistTarget(item);
+  const relist = () => {
+    if (relistTarget) actions.markAvailable.mutate({ id: relistTarget.id });
+    setRelistTarget(null);
   };
 
   // MARK_SOLD_SPEC §4 "That wasn't me dialog".
@@ -283,7 +297,6 @@ export default function ProfileScreen() {
                           product={item}
                           style={{ width: cardWidth }}
                           showManageActions
-                          isLiked={item.is_liked}
                           // The dashboard endpoint returns the signed-in
                           // student's own listings with no seller joined onto
                           // them. The card names the seller on EVERY surface,
@@ -293,13 +306,15 @@ export default function ProfileScreen() {
                           onPress={() =>
                             router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
                           }
-                          onLike={() =>
-                            actions.toggleLike.mutate({ id: item.id, isLiked: !!item.is_liked })
-                          }
+                          // No onLike: the heart is a plain count of who
+                          // likes it. You don't like your own listing (as on
+                          // Depop and Vinted), and this endpoint can't say
+                          // whether you had, so a toggle here counted every
+                          // tap as a new like.
                           onEdit={() => router.push(`/sell?edit=${item.id}`)}
                           onMarkSold={() => confirmSold(item)}
                           onMarkAvailable={() => confirmAvailable(item)}
-                          soldLine={item.status === 'sold' ? soldLineFor(item) : undefined}
+                          sale={item.status === 'sold' ? saleFor(item) : undefined}
                           onChangeBuyer={() => changeBuyer(item)}
                           onDelete={() => confirmDelete(item)}
                         />
@@ -384,6 +399,12 @@ export default function ProfileScreen() {
             mode={soldTarget.mode}
           />
         ) : null}
+
+        <ConfirmDialog
+          content={relistTarget ? relistDialogFor(relistTarget) : null}
+          onConfirm={relist}
+          onCancel={() => setRelistTarget(null)}
+        />
 
         {/* Pinch, drag, double-tap. The viewer owns its own gesture root —
             see the note in ZoomableImageViewer about Modals on Android. */}

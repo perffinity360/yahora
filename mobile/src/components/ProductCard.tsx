@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { AppText } from './AppText';
+import { Avatar } from './Avatar';
 import { CardPhotoPager } from './CardPhotoPager';
 import { resolveMediaUrl } from '../lib/config';
 import { colors, conditionColors, font, MAX_FONT_SCALE, radius } from '../theme';
@@ -122,12 +123,13 @@ export interface ProductCardProps {
   /** When true, render the owner toolbar (sold / available / edit / delete). */
   showManageActions?: boolean;
   /**
-   * Owner's sold card only (with `showManageActions`), MARK_SOLD_SPEC §3: the
-   * line under the price, "Sold to <name> · <date>". The screen writes it, so
-   * the card never learns who bought anything. With it come the text buttons
-   * Change buyer (`onChangeBuyer`) and Relist (`onMarkAvailable`).
+   * Owner's sold card only (with `showManageActions`), MARK_SOLD_SPEC §3: who
+   * bought it and when. The screen passes it, so no other surface can show a
+   * buyer by accident. `buyer` null = someone not on Yahora. With it the card
+   * shows the buyer box (tap = `onChangeBuyer`) and a Relist button
+   * (`onMarkAvailable`).
    */
-  soldLine?: string;
+  sale?: SaleSummary;
   onChangeBuyer?: () => void;
   /**
    * No heart and no count. The public profile's sold listings (§5): a sold
@@ -151,6 +153,12 @@ export interface ProductCardProps {
    * gesture.
    */
   swipePhotos?: boolean;
+}
+
+/** What the seller's own sold card says about the sale. `date` is already formatted. */
+export interface SaleSummary {
+  buyer: { name: string; avatarUrl?: string | null } | null;
+  date: string;
 }
 
 /** Compact round icon button, used only by the owner toolbar. */
@@ -192,7 +200,7 @@ function ProductCardBase({
   sellerName,
   sellerAvatarUrl,
   showManageActions,
-  soldLine,
+  sale,
   onChangeBuyer,
   hideLikes,
   fillPhoto,
@@ -207,6 +215,9 @@ function ProductCardBase({
     FALLBACK_CONDITION;
   const condLabel = (product.condition ?? 'Good').toUpperCase();
   const sold = product.status === 'sold';
+  // The seller's own sold card (MARK_SOLD_SPEC §3): the sale replaces the
+  // location and the time/seller footer, which say nothing once it is gone.
+  const ownerSale = showManageActions && sold && sale ? sale : null;
   const liked = isLiked ?? product.is_liked ?? false;
   const imageCount = product.image_urls?.length ?? 0;
   // The photos to swipe through, or null for the single still photo.
@@ -325,40 +336,18 @@ function ProductCardBase({
             {formatPrice(product.price)}
           </AppText>
 
-          {/* Owner's sold card (MARK_SOLD_SPEC §3): who bought it and when,
-              then Change buyer and Relist. */}
-          {showManageActions && sold && soldLine ? (
-            <View style={styles.sale}>
-              <AppText style={styles.saleLine} numberOfLines={2}>
-                {soldLine}
-              </AppText>
-              <View style={styles.saleActions}>
-                <Pressable onPress={onChangeBuyer} hitSlop={8} accessibilityRole="button">
-                  {({ pressed }) => (
-                    <AppText style={[styles.saleAction, pressed && styles.saleActionPressed]}>
-                      Change buyer
-                    </AppText>
-                  )}
-                </Pressable>
-                <Pressable onPress={onMarkAvailable} hitSlop={8} accessibilityRole="button">
-                  {({ pressed }) => (
-                    <AppText style={[styles.saleAction, pressed && styles.saleActionPressed]}>Relist</AppText>
-                  )}
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
-
           {/* Row 3 — location. Always rendered, even when empty: the blank line
               is what keeps a listing with no location the same height as one
               with it, so the dividers line up across the two columns. */}
-          <AppText
-            style={[styles.location, { minHeight: locationBox }]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {locationLabel}
-          </AppText>
+          {ownerSale ? null : (
+            <AppText
+              style={[styles.location, { minHeight: locationBox }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {locationLabel}
+            </AppText>
+          )}
 
           {/* Row 4 — title, one line or two as it needs. The grid row, not
               this box, keeps the footers level — see the note at the top. */}
@@ -370,40 +359,72 @@ function ProductCardBase({
             {product.title}
           </AppText>
 
-          {/* Row 5 — timestamp left, seller right. `marginTop: 'auto'` is belt
-              and braces on top of the reserved boxes above: if anything in a
-              row does end up taller, the footers still sit on one line. */}
-          <View style={styles.footer}>
-            <View style={styles.divider} />
-            <View style={styles.footerRow}>
-              <AppText style={styles.time} numberOfLines={1}>
-                {timeAgo(product.created_at)}
-              </AppText>
-              {seller ? (
-                <View style={styles.seller}>
-                  {sellerAvatar ? (
-                    <Image
-                      source={{ uri: sellerAvatar }}
-                      style={styles.sellerAvatar}
-                      contentFit="cover"
-                      transition={200}
-                    />
-                  ) : (
-                    <View style={styles.sellerAvatarFallback}>
-                      {sellerHidden ? (
-                        <Feather name="user" size={SELLER_AVATAR / 2} color={colors.white} />
-                      ) : (
-                        <AppText style={styles.sellerInitials}>{sellerInitials}</AppText>
-                      )}
-                    </View>
-                  )}
-                  <AppText style={styles.sellerName} numberOfLines={1} ellipsizeMode="tail">
-                    {seller}
-                  </AppText>
+          {/* The seller's sold card: who bought it and when, in one box that is
+              also the way to change it (a pencil says so). Pinned to the
+              bottom with the toolbar, like the footer it replaces. */}
+          {ownerSale ? (
+            <Pressable
+              onPress={onChangeBuyer}
+              disabled={!onChangeBuyer}
+              accessibilityRole="button"
+              accessibilityLabel={`Change buyer. Sold to ${ownerSale.buyer?.name ?? 'someone not on Yahora'}, ${ownerSale.date}`}
+              style={({ pressed }) => [styles.saleBox, pressed && styles.saleBoxPressed]}
+            >
+              {ownerSale.buyer ? (
+                <Avatar name={ownerSale.buyer.name} uri={ownerSale.buyer.avatarUrl} size={26} />
+              ) : (
+                <View style={styles.saleNoBuyer}>
+                  <Feather name="user-x" size={13} color={colors.mutedText} />
                 </View>
-              ) : null}
-            </View>
-          </View>
+              )}
+              <View style={styles.saleText}>
+                <AppText style={styles.saleName} numberOfLines={1}>
+                  {ownerSale.buyer?.name ?? 'Not on Yahora'}
+                </AppText>
+                <AppText style={styles.saleMeta} numberOfLines={1}>
+                  {ownerSale.date ? `Buyer · ${ownerSale.date}` : 'Buyer'}
+                </AppText>
+              </View>
+              <Feather name="edit-2" size={13} color={colors.purple} />
+            </Pressable>
+          ) : (
+            <>
+              {/* Row 5 — timestamp left, seller right. `marginTop: 'auto'` is belt
+                  and braces on top of the reserved boxes above: if anything in a
+                  row does end up taller, the footers still sit on one line. */}
+              <View style={styles.footer}>
+                <View style={styles.divider} />
+                <View style={styles.footerRow}>
+                  <AppText style={styles.time} numberOfLines={1}>
+                    {timeAgo(product.created_at)}
+                  </AppText>
+                  {seller ? (
+                    <View style={styles.seller}>
+                      {sellerAvatar ? (
+                        <Image
+                          source={{ uri: sellerAvatar }}
+                          style={styles.sellerAvatar}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      ) : (
+                        <View style={styles.sellerAvatarFallback}>
+                          {sellerHidden ? (
+                            <Feather name="user" size={SELLER_AVATAR / 2} color={colors.white} />
+                          ) : (
+                            <AppText style={styles.sellerInitials}>{sellerInitials}</AppText>
+                          )}
+                        </View>
+                      )}
+                      <AppText style={styles.sellerName} numberOfLines={1} ellipsizeMode="tail">
+                        {seller}
+                      </AppText>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </>
+          )}
 
           {/* ── THE OWNER TOOLBAR IS NOT PART OF THE FOUNDERS' CARD, AND STAYS ──
               Mark sold / mark available / edit / delete exist nowhere else in
@@ -413,9 +434,20 @@ function ProductCardBase({
               footer, and without the bookmark and share buttons it used to
               carry: those two ARE on the detail screen. */}
           {showManageActions ? (
-            <View style={styles.manageRow}>
-              {/* Sold with its sale line: Relist is the text button above. */}
-              {sold && soldLine ? null : sold ? (
+            <View style={[styles.manageRow, ownerSale && styles.manageRowSold]}>
+              {/* The seller's sold card: Relist as a labelled button, so it
+                  reads as an action and not as a caption. */}
+              {ownerSale ? (
+                <Pressable
+                  onPress={onMarkAvailable}
+                  disabled={!onMarkAvailable}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.relist, pressed && styles.relistPressed]}
+                >
+                  <Feather name="rotate-ccw" size={13} color={colors.purple} />
+                  <AppText style={styles.relistText}>Relist</AppText>
+                </Pressable>
+              ) : sold ? (
                 <IconBtn
                   icon="rotate-ccw"
                   onPress={onMarkAvailable}
@@ -581,20 +613,41 @@ const styles = StyleSheet.create({
     color: colors.purple,
   },
 
-  /* Owner's sold card: sale line + Change buyer / Relist (MARK_SOLD_SPEC §3) */
-  sale: { gap: 4 },
-  saleLine: {
-    fontFamily: font.family.medium,
-    fontSize: font.sizes.caption,
-    color: colors.mutedText,
+  /* Owner's sold card: the buyer box (MARK_SOLD_SPEC §3) */
+  saleBox: {
+    marginTop: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 7,
+    paddingLeft: 7,
+    paddingRight: 9,
+    borderRadius: 12,
+    backgroundColor: colors.pickerRowSelected,
   },
-  saleActions: { flexDirection: 'row', gap: 14 },
-  saleAction: {
+  saleBoxPressed: {
+    backgroundColor: colors.saleBoxPressed,
+    transform: [{ scale: 0.98 }],
+  },
+  saleNoBuyer: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.inputBg,
+  },
+  saleText: { flex: 1, minWidth: 0 },
+  saleName: {
     fontFamily: font.family.semibold,
     fontSize: font.sizes.caption,
-    color: colors.purple,
+    color: colors.blackSoft,
   },
-  saleActionPressed: { opacity: 0.6 },
+  saleMeta: {
+    fontFamily: font.family.medium,
+    fontSize: font.sizes.micro,
+    color: colors.mutedText,
+  },
 
   /* Row 3 — location (one reserved line) */
   location: {
@@ -695,6 +748,32 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: colors.hairline,
+  },
+  /** On the sold card the buyer box above is the divider's job. */
+  manageRowSold: {
+    gap: 8,
+    borderTopWidth: 0,
+    paddingTop: 0,
+  },
+  relist: {
+    flex: 1,
+    height: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: colors.relistBorder,
+  },
+  relistPressed: {
+    backgroundColor: colors.pickerRowSelected,
+    transform: [{ scale: 0.97 }],
+  },
+  relistText: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.caption,
+    color: colors.purple,
   },
   iconBtn: {
     width: 26,

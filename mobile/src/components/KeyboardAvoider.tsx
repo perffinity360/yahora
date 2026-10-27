@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Dimensions,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -79,12 +80,33 @@ export function dismissKeyboard() {
   Keyboard.dismiss();
 }
 
+/**
+ * ── INSIDE A MODAL ──
+ *
+ * A `statusBarTranslucent` Modal is its own Android window, and it starts at
+ * the very top of the screen. `useWindowDimensions()` describes the APP's
+ * window, which on some phones leaves the status bar out. Measured against
+ * that, the buyer picker's bottom edge looked a status bar higher than it was,
+ * so it was lifted a status bar too far, and the screen behind showed through
+ * a gap above the keyboard (27 Oct, ~34dp on the owner's phone).
+ *
+ * With `fillsModal` the avoider must BE the Modal's root (flex: 1, filling it).
+ * Its bottom edge is then the Modal window's bottom, and the distance from
+ * there to the bottom of the PHYSICAL screen is `screen height - its height`:
+ * 0 when the Modal runs under the navigation bar, the bar's height when it
+ * stops above it. No window metrics are involved, so it is right either way,
+ * and if Android does resize the Modal for the keyboard the overlap comes out
+ * 0, as it should.
+ */
 export function KeyboardAvoider({
   style,
   children,
+  fillsModal = false,
 }: {
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
+  /** This avoider is the root of a `statusBarTranslucent` Modal. See INSIDE A MODAL. */
+  fillsModal?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -130,12 +152,21 @@ export function KeyboardAvoider({
   const measure = useCallback(() => {
     const node = viewRef.current;
     if (!node) return;
+    if (fillsModal) {
+      // See INSIDE A MODAL. Read at call time: the screen can rotate.
+      node.measureInWindow((_x, _y, _w, height) => {
+        if (!Number.isFinite(height)) return;
+        gapBelow.current = Math.max(Dimensions.get('screen').height - height, 0);
+        recompute();
+      });
+      return;
+    }
     node.measureInWindow((_x, y, _w, height) => {
       if (!Number.isFinite(y) || !Number.isFinite(height)) return;
       gapBelow.current = Math.max(windowHeight - (y + height), 0);
       recompute();
     });
-  }, [windowHeight, recompute]);
+  }, [windowHeight, recompute, fillsModal]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;

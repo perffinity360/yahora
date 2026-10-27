@@ -1,8 +1,22 @@
 import Feather from '@expo/vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Reanimated, { Easing, SlideInDown } from 'react-native-reanimated';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import Reanimated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from './AppText';
@@ -18,8 +32,29 @@ import type { ApiError } from '../lib/api';
 import { colors, font } from '../theme';
 import type { BuyerCandidate, SaleParty } from '../types';
 
-/** Same entrance as AvatarSheet: only the sheet rises; the scrim is there at once. */
-const SHEET_ENTER = SlideInDown.duration(280).easing(Easing.out(Easing.cubic));
+/**
+ * ── A SMOOTH ENTRANCE ──
+ *
+ * The sheet used to rise with Reanimated's `SlideInDown`, then jump (owner, 27
+ * Oct). Two things moved it:
+ *
+ *   1. A layout animation starts a frame after the view is first drawn, so in
+ *      a freshly opened Modal the sheet could show for a frame in its final
+ *      place before being moved down to start rising.
+ *   2. Its height changed under it. It opens on three skeleton rows, then the
+ *      "Messaged you about this" list arrives with one row, and a sheet pinned
+ *      to the bottom of the screen moves its TOP edge when its height changes.
+ *      Every search result did the same while typing.
+ *
+ * So the rise is our own: `rise` starts a whole screen down, in the very first
+ * frame, and eases to 0. And the list's height is animated too (`listHeight`):
+ * when its content changes size, the list grows or shrinks over LIST_RESIZE
+ * instead of at once, and the sheet's top edge glides with it.
+ *
+ * Only the sheet moves; the scrim is there at once (same as AvatarSheet).
+ */
+const SHEET_RISE = { duration: 320, easing: Easing.out(Easing.cubic) };
+const LIST_RESIZE = { duration: 220, easing: Easing.out(Easing.cubic) };
 const BUTTON_HEIGHT = 48;
 
 /** MARK_SOLD_SPEC §1 "Errors from the server → toast text". */
@@ -42,9 +77,9 @@ function saveErrorText(error: unknown): string {
  *
  * Opens from Mark as sold (`mode` 'sell') and from Change buyer ('change', the
  * current choice already selected). Under 2 characters it lists the people who
- * messaged you about the listing; from 2 it searches your campus. Exactly one
+ * messaged you about the listing; from 2 it searches your campus. At most one
  * row is selected: a person, or "Someone not on Yahora" (`null`, no one is
- * tagged). Saving waits for the server, then closes; the listing card has
+ * tagged); tapping it again clears it. Saving waits for the server, then closes; the listing card has
  * already changed underneath (useDashboardActions' optimistic patch).
  *
  * Mount it only while it is open: each open starts from `initialBuyerId` with
@@ -84,10 +119,37 @@ export function BuyerPickerSheet({
   const saving = markSold.isPending;
   const canSave = selected !== undefined && !saving;
 
+  // Tapping the selected row again clears it, so a wrong tap can be taken back
+  // without closing the sheet (owner, 27 Oct). Nothing selected disables the
+  // button again.
   const pick = (person: BuyerCandidate | null) => {
-    setSelected(person ? person.id : null);
+    const id = person ? person.id : null;
+    if (selected === id) {
+      setSelected(undefined);
+      setSelectedPerson(null);
+      return;
+    }
+    setSelected(id);
     setSelectedPerson(person);
   };
+
+  // See A SMOOTH ENTRANCE. A whole screen down in the first frame, whatever the
+  // sheet's height turns out to be.
+  const rise = useSharedValue(Dimensions.get('screen').height);
+  useEffect(() => {
+    rise.value = withTiming(0, SHEET_RISE);
+  }, [rise]);
+  const riseStyle = useAnimatedStyle(() => ({ transform: [{ translateY: rise.value }] }));
+
+  // -1 until the list has been measured once: the first size is taken as it
+  // is, every later one is animated to.
+  const listHeight = useSharedValue(-1);
+  const onListContentSize = (_w: number, h: number) => {
+    listHeight.value = listHeight.value < 0 ? h : withTiming(h, LIST_RESIZE);
+  };
+  const listStyle = useAnimatedStyle(() =>
+    listHeight.value < 0 ? {} : { height: listHeight.value },
+  );
 
   const save = async () => {
     if (!canSave) return;
@@ -155,12 +217,11 @@ export function BuyerPickerSheet({
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
-      <KeyboardAvoider style={styles.overlay}>
+      <KeyboardAvoider style={styles.overlay} fillsModal>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
 
         <Reanimated.View
-          entering={SHEET_ENTER}
-          style={[styles.sheet, { maxHeight: windowHeight * 0.85, paddingBottom: bottomPad }]}
+          style={[styles.sheet, { maxHeight: windowHeight * 0.85, paddingBottom: bottomPad }, riseStyle]}
         >
           <View style={styles.handle} />
           <AppText style={styles.title}>Who bought it?</AppText>
@@ -188,15 +249,18 @@ export function BuyerPickerSheet({
             ) : null}
           </View>
 
-          {list ? (
+          {/* Always mounted, empty or not, so its height can be animated
+              between any two states (A SMOOTH ENTRANCE). */}
+          <Reanimated.View style={[styles.list, listStyle]}>
             <ScrollView
-              style={styles.list}
+              style={styles.listScroll}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              onContentSizeChange={onListContentSize}
             >
               {list}
             </ScrollView>
-          ) : null}
+          </Reanimated.View>
 
           <View style={styles.divider} />
 
@@ -340,7 +404,10 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.body,
     color: colors.blackSoft,
   },
-  list: { flexShrink: 1 },
+  // Gives way to the keyboard: with too little room it shrinks below the
+  // height it is animating to, and the rows scroll.
+  list: { flexShrink: 1, overflow: 'hidden' },
+  listScroll: { flex: 1 },
   sectionLabel: {
     marginTop: 12,
     marginBottom: 4,

@@ -2,11 +2,12 @@ import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-
 
 import { api, type ApiError } from '../lib/api';
 import type { DashboardData, Paged, ProductListing, SaleParty } from '../types';
-import { syncListingEverywhere } from './useProductActions';
 
 /**
- * Owner-side listing mutations for the dashboard (like / save / mark sold /
- * mark available / delete), plus the buyer's "That wasn't me". Each cancels in-flight dashboard fetches,
+ * Owner-side listing mutations for the dashboard (mark sold / mark available /
+ * delete), plus the buyer's "That wasn't me". There is no like or save here:
+ * the dashboard's own listings show their like count only (see the note at
+ * the card in app/(tabs)/profile.tsx). Each cancels in-flight dashboard fetches,
  * optimistically patches the cached `['dashboard', userId]` payload, rolls
  * back on error, and reconciles with the server on settle — so the grid feels
  * instant on slow campus networks but never drifts from the backend.
@@ -38,40 +39,6 @@ export function useDashboardActions(userId: string | null | undefined) {
   };
 
   const reconcile = () => queryClient.invalidateQueries({ queryKey: key });
-
-  const toggleLike = useMutation({
-    mutationFn: (vars: { id: string; isLiked: boolean }) =>
-      api.post(`/api/products/${vars.id}/like`, { user_id: userId }),
-    onMutate: async (vars) => {
-      const ctx = await begin();
-      patchListing(vars.id, (p) => ({
-        ...p,
-        is_liked: !vars.isLiked,
-        likes_count: Math.max(0, (p.likes_count ?? 0) + (vars.isLiked ? -1 : 1)),
-      }));
-      return ctx;
-    },
-    // The same listing may be cached by the marketplace or a detail screen;
-    // see syncListingEverywhere for why they must all hear the answer.
-    onSuccess: (result, vars) =>
-      syncListingEverywhere(queryClient, vars.id, 'like', result as { is_liked?: boolean }),
-    onError: rollback,
-    onSettled: reconcile,
-  });
-
-  const toggleSave = useMutation({
-    mutationFn: (vars: { id: string; isSaved: boolean }) =>
-      api.post(`/api/products/${vars.id}/save`, { user_id: userId }),
-    onMutate: async (vars) => {
-      const ctx = await begin();
-      patchListing(vars.id, (p) => ({ ...p, is_saved: !vars.isSaved }));
-      return ctx;
-    },
-    onSuccess: (result, vars) =>
-      syncListingEverywhere(queryClient, vars.id, 'save', result as { is_saved?: boolean }),
-    onError: rollback,
-    onSettled: reconcile,
-  });
 
   /* A sale shows in more places than the dashboard: the product page (the
      seller's banner, MARK_SOLD_SPEC §2) and the seller's public profile (§5).
@@ -166,5 +133,5 @@ export function useDashboardActions(userId: string | null | undefined) {
     onSettled: reconcile,
   });
 
-  return { toggleLike, toggleSave, markSold, markAvailable, deleteProduct, removePurchase };
+  return { markSold, markAvailable, deleteProduct, removePurchase };
 }

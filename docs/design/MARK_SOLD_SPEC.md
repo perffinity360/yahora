@@ -1,6 +1,6 @@
-# Mark as Sold — Design Spec v1
+# Mark as Sold — Design Spec v1.1
 
-**Phase 6B · v1 · 11 October 2026 · the single source of truth for marking a listing sold,
+**Phase 6B · v1 · 11 October 2026 · v1.1 · 27 October 2026 · the single source of truth for marking a listing sold,
 on BOTH platforms.**
 
 Picture: `docs/design/mark_sold.png` (source `mark-sold-mockup.html`). Where the picture and
@@ -74,8 +74,21 @@ Inter 400 12 mutedText, 1 line. **Selected:** background `rgba(128,0,128,0.08)` 
 in place of the avatar · title `Someone not on Yahora` Inter 600 14 · subtitle `No one will
 be tagged` Inter 400 12 mutedText.
 
-Exactly **one** row is selected at a time. When the picker opens for **Change buyer**, the
-current buyer's row (or the off-platform row) starts selected.
+At most **one** row is selected at a time. **Tapping the selected row again clears it** (v1.1,
+27 Oct, owner's request: a wrong tap is taken back without closing the picker), and the
+button is disabled again. When the picker opens for **Change buyer**, the current buyer's row
+(or the off-platform row) starts selected.
+
+**Motion (mobile, v1.1).** The sheet rises from below the screen over 320 ms (ease-out cubic);
+its first frame is already off-screen, so it never shows in place first. When the list's
+content changes size (rows arriving, search results changing), the list's height eases to the
+new size over 220 ms, so the sheet's top edge glides instead of jumping. Web: the modal is
+centred, so only the second rule applies, and only if the jump shows there.
+
+**Search (v1.1).** `On your campus` finds a student when the term is any piece of their
+@username (`ver`, `.ver`), or the start of any word of their name (`ver` → Rahul Verma). A
+leading `@` is ignored. This is the server's rule (`search_users()`), so both platforms get it
+with no client change.
 
 **Confirm button:** full width · height 48 · radius 24 · 135° gradient `#800080 → #C02B7F` ·
 label `Mark as sold` (Change buyer: `Save`) Inter 700 15 white · margin 12 above · **disabled
@@ -120,18 +133,57 @@ an earlier year. It is the listing's `sold_at`.
 
 ## 3. The seller's own listing cards
 
-Web: Dashboard → listings. Mobile: Profile tab → Listings. A sold card keeps the SOLD badge it
-has today and adds, under the price:
+Web: Dashboard → listings. Mobile: Profile tab → Listings.
 
-- one line, Inter 500 12 mutedText: `Sold to <full name> · <date>` — or `Sold · buyer not on
-  Yahora · <date>`;
-- two text buttons, Inter 600 12 purple, gap 14: **`Change buyer`** (opens §1 with the current
-  choice selected) and **`Relist`** (the existing Mark-available action, now with the dialog
-  below).
+**v1.1 (27 Oct, owner's review on the phone).** v1 put a caption (`Sold to <name> · <date>`)
+and two purple text links (`Change buyer`, `Relist`) under the price, above the location. On a
+two-column card that was crowded, and the links didn't read as buttons. A sold card on the
+seller's own dashboard is now:
 
-**Relist dialog** — title `Relist this item?` · body `“<title>” goes back on the marketplace.`
+1. the photo with the SOLD stamp, the condition badge and like count, the price and the
+   title, as on every card;
+2. **no location line and no time/seller footer** (they say nothing once it is sold);
+3. pinned to the bottom, the **buyer box**, which is also the Change buyer button:
+   - background `rgba(128,0,128,0.08)`, radius 12, padding 7 (9 on the right), gap 8;
+     pressed `rgba(128,0,128,0.14)` and scale 0.98;
+   - the buyer's avatar, 26 (initials fallback), or for a buyer not on Yahora a 26 circle
+     `#F3F0EF` holding `user-x` 13 mutedText;
+   - line 1: the buyer's full name (else @username, else `a Yahora student`), or `Not on
+     Yahora`, in Inter 600 12 `#1A1A1A`, 1 line;
+   - line 2: `Buyer · <date>`, in Inter 500 11 mutedText (`<date>` = `sold_at`, §2's format);
+   - at the right, an `edit-2` 13 purple pencil;
+   - tapping it opens §1 with the current choice selected;
+4. the toolbar: a **`Relist`** pill (flex 1, height 26, radius 13, 1px `rgba(128,0,128,0.28)`
+   border, `rotate-ccw` 13 + `Relist` Inter 600 12 purple, gap 5; pressed: background
+   `rgba(128,0,128,0.08)`, scale 0.97), then the round delete button, gap 8. No divider
+   line above it: the box does that job.
+
+**Likes on your own listings.** The heart on the seller's own dashboard cards is a **count,
+not a button**: a seller doesn't like their own listing (Depop and Vinted work the same way).
+Also, `GET /api/user/:userId/dashboard` sends no `is_liked`, so a toggle there treated every
+tap as a new like (owner's report: 1, 2, then back to 1, then 0).
+
+**Relist dialog** — title `Relist this item?` · body `<title> goes back on the marketplace.`
 and, when there is a buyer, ` <first name> will no longer be shown as its buyer.` · buttons
-`Cancel` · `Relist`. Mobile: the phone's `Alert`. Web: the site's modal.
+`Cancel` · `Relist`.
+
+**v1.1:** both platforms draw their own dialog, not the phone's `Alert` (the owner found the
+Android one out of place):
+- the card is white, radius 28, max width 340, padding 26 top / 22 sides / 20 bottom, on the
+  0.55 scrim. Everything in it is centred;
+- the listing's first photo, 72 × 72, radius 20, 1px hairline border. On its bottom-right
+  corner (offset −8, −8) sits a 28 badge with a 2.5px white ring, filled with the 135°
+  gradient `#800080 → #C02B7F` and holding `rotate-ccw` 14 white. With no photo, a 60
+  gradient circle holding `rotate-ccw` 24;
+- the title, Bree Serif 21 `#1A1A1A`, 16 below the photo;
+- the body, Inter 400 14/20 mutedText, 8 below the title. The listing's title is in Inter
+  600 `#1A1A1A`, with no quote marks;
+- two buttons side by side, 22 below the body, gap 10, each flex 1, height 46, radius 23:
+  - `Cancel`: `#F3F0EF`, Inter 600 15 `#1A1A1A`;
+  - `Relist`: the same gradient, Inter 700 15 white;
+  - both scale 0.97 when pressed;
+- entrance: the scrim fades in, and the card goes from 0.92 scale, 12 lower and transparent to
+  its place in 240 ms (ease-out cubic). A tap on the scrim, or back, is Cancel.
 
 The web card's old label `SOLD TO @<name>` goes away: it read a column (`sold_to`) that nothing
 ever wrote, and the buyer is never shown on public cards. Every sold card says **`SOLD`**.

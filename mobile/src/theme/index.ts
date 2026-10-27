@@ -105,6 +105,9 @@ export const colors = {
   pickerRowSelected: 'rgba(128,0,128,0.08)',
   pickerRowPressed: 'rgba(128,0,128,0.05)',
   pickerDivider: 'rgba(128,0,128,0.08)',
+  // §3 — the seller's sold card: the buyer box (pickerRowSelected at rest) and the Relist pill.
+  saleBoxPressed: 'rgba(128,0,128,0.14)',
+  relistBorder: 'rgba(128,0,128,0.28)',
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',

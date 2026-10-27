@@ -1,0 +1,48 @@
+diff --git a/node_modules/@shopify/flash-list/dist/recyclerview/layout-managers/GridLayoutManager.js b/node_modules/@shopify/flash-list/dist/recyclerview/layout-managers/GridLayoutManager.js
+index fa0718e..32d04cb 100644
+--- a/node_modules/@shopify/flash-list/dist/recyclerview/layout-managers/GridLayoutManager.js
++++ b/node_modules/@shopify/flash-list/dist/recyclerview/layout-managers/GridLayoutManager.js
+@@ -151,6 +151,19 @@ export class RVGridLayoutManagerImpl extends RVLayoutManager {
+             if (maxHeight - tallestItem.height > 1) {
+                 targetHeight = 0;
+                 this.requiresRepaint = true;
++                // YAHORA PATCH (grid overlap after a data change): an item whose
++                // measured height equals the minHeight it inherited from this
++                // slot's previous item is skipped above, so `tallestItem` can be
++                // a SHORTER neighbour and the next row was placed under it,
++                // overlapping. Place the next row under the real tallest, and
++                // mark the row unmeasured so the repaint's measurement is always
++                // treated as a change and the row gets normalised again.
++                for (let j = startIndex; j <= endIndex && j < this.layouts.length; j++) {
++                    if (this.layouts[j].height >= maxHeight) {
++                        tallestItem = this.layouts[j];
++                    }
++                    this.layouts[j].isHeightMeasured = false;
++                }
+             }
+             i = startIndex;
+             while (i <= endIndex) {
+diff --git a/node_modules/@shopify/flash-list/src/recyclerview/layout-managers/GridLayoutManager.ts b/node_modules/@shopify/flash-list/src/recyclerview/layout-managers/GridLayoutManager.ts
+index c951756..467b6e9 100644
+--- a/node_modules/@shopify/flash-list/src/recyclerview/layout-managers/GridLayoutManager.ts
++++ b/node_modules/@shopify/flash-list/src/recyclerview/layout-managers/GridLayoutManager.ts
+@@ -183,6 +183,19 @@ export class RVGridLayoutManagerImpl extends RVLayoutManager {
+       if (maxHeight - tallestItem.height > 1) {
+         targetHeight = 0;
+         this.requiresRepaint = true;
++        // YAHORA PATCH (grid overlap after a data change): an item whose
++        // measured height equals the minHeight it inherited from this slot's
++        // previous item is skipped above, so `tallestItem` can be a SHORTER
++        // neighbour and the next row was placed under it, overlapping. Place
++        // the next row under the real tallest, and mark the row unmeasured so
++        // the repaint's measurement is always treated as a change and the row
++        // gets normalised again.
++        for (let j = startIndex; j <= endIndex && j < this.layouts.length; j++) {
++          if (this.layouts[j].height >= maxHeight) {
++            tallestItem = this.layouts[j];
++          }
++          this.layouts[j].isHeightMeasured = false;
++        }
+       }
+       i = startIndex;
+       while (i <= endIndex) {

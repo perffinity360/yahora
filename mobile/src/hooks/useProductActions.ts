@@ -94,10 +94,9 @@ const setSaved =
 
 /**
  * Write the server's post-toggle state into EVERY cached copy of the listing —
- * see the header. Exported for the dashboard's owner-side toggles, which keep
- * their own mutation but must leave the other screens just as consistent.
+ * see the header.
  */
-export function syncListingEverywhere(
+function syncListingEverywhere(
   queryClient: QueryClient,
   productId: string,
   kind: ToggleKind,

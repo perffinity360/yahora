@@ -158,6 +158,16 @@ mobile/
   `api.uploadForm` call (Sell images, avatar).
 - **Feed list:** `@shopify/flash-list` v2 (auto-sized, no `estimatedItemSize`); it needs the New
   Architecture, which SDK 58 enables by default.
+- **FlashList is patched** (`patches/@shopify+flash-list+2.3.2.patch`, applied by `patch-package`
+  on `postinstall`). In a 2-column grid, after a data change (a relisted item arriving at the
+  top), a card that inherited its slot's old row height was skipped as "tallest", so the next row
+  was placed under its shorter neighbour and overlapped it (27 Oct). Unfixed upstream as of
+  2.3.3. **When upgrading flash-list, re-check `processAndReturnTallestItemInRow` in
+  `GridLayoutManager` and regenerate or drop the patch** (`npx patch-package @shopify/flash-list`).
+- **Keyboard inside a Modal:** wrap the Modal's content in `<KeyboardAvoider fillsModal>`, as its
+  root. A `statusBarTranslucent` Modal is its own window starting at the screen's top, so the
+  plain avoider (measured against the app window) lifted the buyer picker a status bar too far
+  and left a gap above the keyboard.
 - **RN 0.88 strict types (SDK 58):** a ref is typed by its *instance*, not the component:
   `useRef<ViewInstance>`, `ScrollViewInstance`, `TextInputInstance` (type imports from
   `react-native`), never `useRef<View>`. List tokens are `ListViewToken` (not generic). Deep imports
