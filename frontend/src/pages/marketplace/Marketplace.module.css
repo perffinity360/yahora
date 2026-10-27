@@ -270,6 +270,49 @@
   color: #fff;
 }
 
+/* ── Sort, in the phone drawer only ──
+   The desktop sidebar has the top bar's Sort by next to it; below 768px that
+   bar is hidden and the drawer carries the same choices (see .drawerOnly in
+   the drawer rules). A list like the app's sort menu: the chosen one in
+   purple with a check. */
+.drawerOnly {
+  display: none;
+}
+.sortList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sortOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s, color 0.16s;
+}
+.sortOption:active {
+  background: rgba(128, 0, 128, 0.06);
+}
+.sortOption:focus-visible {
+  outline: 2px solid var(--purple, #800080);
+  outline-offset: 2px;
+}
+.sortOptionActive {
+  background: rgba(128, 0, 128, 0.06);
+  color: var(--purple, #800080);
+  font-weight: 700;
+}
+
 /* ── Toggle filters (wishlist, my listings) ── */
 .toggleFilter {
   width: 100%;
@@ -1632,6 +1675,9 @@
 .mobileDrawer .sidebarUni {
   display: flex;
   padding: 0 4px 14px;
+}
+.mobileDrawer .drawerOnly {
+  display: block;
 }
 
 /* Visitor Disclaimer Card */

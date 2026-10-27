@@ -155,16 +155,20 @@
   z-index: 4;
 }
 
-.overlayHeart:hover {
-  background: rgba(235, 72, 127, 0.85);
-  transform: scale(1.1);
+/* Hover only with a real mouse: on a touch screen :hover sticks to the
+   tapped button, so an unliked heart stayed pink until the next tap
+   elsewhere. Touch gets the liked/unliked colour straight away instead. */
+@media (hover: hover) {
+  .overlayHeart:hover {
+    background: rgba(235, 72, 127, 0.85);
+    transform: scale(1.1);
+  }
 }
 
 .overlayHeart svg {
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.overlayHeart:hover svg,
 .overlayHeartLiked svg {
   transform: scale(1);
 }
@@ -378,20 +382,24 @@
   line-height: 1;
 }
 
-.statBtn:hover {
-  color: var(--purple, #800080);
-  transform: scale(1.1);
-}
+/* Hover only with a real mouse, as on .overlayHeart: on a phone a sticky
+   :hover kept the footer heart red and filled after an unlike (count 0). */
+@media (hover: hover) {
+  .statBtn:hover {
+    color: var(--purple, #800080);
+    transform: scale(1.1);
+  }
 
-/* Footer heart — red on hover, back to its normal colour on leave. */
-.statBtnHeart:hover {
-  color: #ef4444;
-}
+  /* Footer heart — red on hover, back to its normal colour on leave. */
+  .statBtnHeart:hover {
+    color: #ef4444;
+  }
 
-/* Fill the outline heart on hover. CSS beats the SVG's fill="none" attribute,
-   so it fills while hovered and returns to an outline on leave. */
-.statBtnHeart:hover svg {
-  fill: currentColor;
+  /* Fill the outline heart on hover. CSS beats the SVG's fill="none"
+     attribute, so it fills while hovered and returns to an outline on leave. */
+  .statBtnHeart:hover svg {
+    fill: currentColor;
+  }
 }
 
 /* The heart as a count, not a button: another campus's listing, where the

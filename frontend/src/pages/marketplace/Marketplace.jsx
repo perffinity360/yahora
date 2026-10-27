@@ -18,6 +18,7 @@ import {
   Layers,
   ArrowRightLeft,
   SlidersHorizontal,
+  ArrowUpDown,
   X,
   ChevronDown,
   ChevronUp,
@@ -1286,6 +1287,40 @@ export default function Marketplace() {
       </div>
 
       <div className={styles.filterList}>
+        {/* Sort in the phone drawer. Below 768px the top bar has no room for
+            the Sort by buttons, so this puts the same three choices here;
+            `.drawerOnly` keeps it out of the desktop sidebar, which sits next
+            to the top bar's own Sort by. Same feature at every width, only
+            in a different place. */}
+        <div className={styles.drawerOnly}>
+          <FilterSection
+            icon={<ArrowUpDown size={16} />}
+            title="Sort by"
+          >
+            <div className={styles.sortList} role="radiogroup" aria-label="Sort by">
+              {SORT_OPTIONS.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={activeSort === s.key}
+                  className={`${styles.sortOption} ${activeSort === s.key ? styles.sortOptionActive : ""}`}
+                  onClick={() => {
+                    setActiveSort(s.key);
+                    /* As with My Wishlist: the swipe deck is built from the
+                       raw feed and isn't sorted, so show the grid, which is. */
+                    if (viewMode === "swipe") setViewMode("grid");
+                    setShowMobileFilter(false);
+                  }}
+                >
+                  {s.label}
+                  {activeSort === s.key && <Check size={16} aria-hidden="true" />}
+                </button>
+              ))}
+            </div>
+          </FilterSection>
+        </div>
+
         <FilterSection icon={<Tag size={16} />} title="Categories">
           <div className={styles.categoryGrid}>
             {CATEGORIES.map((cat) => (
