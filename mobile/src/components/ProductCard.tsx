@@ -125,7 +125,7 @@ export interface ProductCardProps {
   /**
    * Owner's sold card only (with `showManageActions`), MARK_SOLD_SPEC §3: who
    * bought it and when. The screen passes it, so no other surface can show a
-   * buyer by accident. `buyer` null = someone not on Yahora. With it the card
+   * buyer by accident. `buyer` null = someone off Yahora. With it the card
    * shows the buyer box (tap = `onChangeBuyer`) and a Relist button
    * (`onMarkAvailable`).
    */
@@ -367,11 +367,11 @@ function ProductCardBase({
               onPress={onChangeBuyer}
               disabled={!onChangeBuyer}
               accessibilityRole="button"
-              accessibilityLabel={`Change buyer. Sold to ${ownerSale.buyer?.name ?? 'someone not on Yahora'}, ${ownerSale.date}`}
+              accessibilityLabel={`Change buyer. Sold to ${ownerSale.buyer?.name ?? 'someone off Yahora'}, ${ownerSale.date}`}
               style={({ pressed }) => [styles.saleBox, pressed && styles.saleBoxPressed]}
             >
               {ownerSale.buyer ? (
-                <Avatar name={ownerSale.buyer.name} uri={ownerSale.buyer.avatarUrl} size={26} ringed />
+                <Avatar name={ownerSale.buyer.name} uri={ownerSale.buyer.avatarUrl} size={26} />
               ) : (
                 <View style={styles.saleNoBuyer}>
                   <Feather name="user-x" size={13} color={colors.mutedText} />
@@ -379,7 +379,7 @@ function ProductCardBase({
               )}
               <View style={styles.saleText}>
                 <AppText style={styles.saleName} numberOfLines={1}>
-                  {ownerSale.buyer?.name ?? 'Not on Yahora'}
+                  {ownerSale.buyer?.name ?? 'Off Yahora'}
                 </AppText>
                 <AppText style={styles.saleMeta} numberOfLines={1}>
                   {ownerSale.date ? `Buyer · ${ownerSale.date}` : 'Buyer'}
@@ -710,8 +710,7 @@ const styles = StyleSheet.create({
     // (`.sellerAvatar` in frontend/.../ProductCard.module.css: 1.5px solid
     // --purple-emphasis). It is what stops a light or washed-out photo from
     // dissolving into the card surface at 20dp. The initials fallback below
-    // does NOT get one — it is already a solid purple disc, and the web
-    // fallback has no border either.
+    // wears it too: every avatar has the ring (owner, 27 Oct).
     borderWidth: 1.5,
     borderColor: colors.purpleDark,
   },
@@ -722,6 +721,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.purple,
+    borderWidth: 1.5,
+    borderColor: colors.purpleDark,
   },
   // `nano` (9), the second of its two call sites: one or two capitals on a
   // solid 20dp disc read as a chip, not as text — the same case as the

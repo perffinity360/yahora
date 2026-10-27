@@ -2,11 +2,18 @@ import Feather from '@expo/vector-icons/Feather';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import {
+  useFocusEffect,
+  useIsFocused,
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
+} from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   BackHandler,
   FlatList,
   Keyboard,
@@ -72,6 +79,15 @@ export default function ProductDetailScreen() {
   const myUserId = profile?.id;
   const myUniversityId = profile?.university_id;
 
+  // On top of the stack and the app open: the page keeps itself current
+  // (useProductDetail's LIVE_REFRESH_MS). A listing left underneath a chat
+  // stays mounted, and must not keep polling there.
+  const isFocused = useIsFocused();
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => setAppActive(next === 'active'));
+    return () => sub.remove();
+  }, []);
   const {
     data: product,
     isLoading,
@@ -80,10 +96,21 @@ export default function ProductDetailScreen() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useProductDetail(productId);
+  } = useProductDetail(productId, { live: isFocused && appActive });
+
+  // Back on top (from the chat or the seller's profile), or the app back in
+  // the foreground: ask again at once, rather than wait for the next tick.
+  // The first focus is the mount, which refetches by itself.
+  const wasLiveRef = useRef(true);
+  useEffect(() => {
+    const live = isFocused && appActive;
+    if (live && !wasLiveRef.current) refetch();
+    wasLiveRef.current = live;
+  }, [isFocused, appActive, refetch]);
 
   // Bind the like/save toggles to this product's cache; `false` skips the
-  // on-settle refetch — a GET here would re-increment the server view counter.
+  // on-settle refetch — the toggle's answer is already written into the
+  // cache, and the page refreshes itself (above).
   const productKey = ['product', productId];
   const toggleLike = useToggleLike(productKey, false);
   const toggleSave = useToggleSave(productKey, false);
@@ -482,17 +509,20 @@ function Content({
             </View>
           )}
 
+          {/* SOLD across a dimmed photo, as on the card (MARK_SOLD_SPEC §2
+              v1.3). Never takes a touch: a tap still opens the viewer, and a
+              pinch or a swipe still reaches the photo under it. Below the
+              condition badge and the dots, so those stay bright. */}
+          {sold ? (
+            <View style={styles.soldOverlay} pointerEvents="none">
+              <AppText style={styles.soldText}>SOLD</AppText>
+            </View>
+          ) : null}
+
           {/* Condition badge */}
           <View style={[styles.condBadge, { backgroundColor: cond.bg }]}>
             <AppText style={[styles.condText, { color: cond.text }]}>{condLabel}</AppText>
           </View>
-
-          {/* Sold badge */}
-          {sold ? (
-            <View style={styles.soldBadge}>
-              <AppText style={styles.soldText}>SOLD</AppText>
-            </View>
-          ) : null}
 
           {/* Paging dots */}
           {product.image_urls?.length > 1 ? (
@@ -569,7 +599,7 @@ function Content({
                 accessibilityLabel={`View ${seller.full_name ?? 'seller'}'s profile`}
                 style={({ pressed }) => [styles.sellerRow, pressed && styles.sellerRowPressed]}
               >
-                <Avatar name={seller.full_name} uri={seller.avatar_url} size={48} ringed />
+                <Avatar name={seller.full_name} uri={seller.avatar_url} size={48} />
                 <View style={styles.sellerInfo}>
                   <AppText style={styles.sellerName} numberOfLines={1}>
                     {seller.full_name || 'Yahora student'}
@@ -774,7 +804,7 @@ function SoldBanner({ product, isSeller }: { product: ProductDetailData; isSelle
       ? null
       : product.buyer
         ? `Buyer: ${product.buyer.full_name || product.buyer.username || 'a Yahora student'}`
-        : 'Buyer: someone not on Yahora';
+        : 'Buyer: someone off Yahora';
   return (
     <View style={styles.soldBanner}>
       <Feather name="check-circle" size={16} color={colors.mutedText} style={styles.soldBannerIcon} />
@@ -934,24 +964,19 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.micro,
     letterSpacing: 0.6,
   },
-  soldBadge: {
-    position: 'absolute',
-    top: spacing.md,
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: colors.swipePass,
-    shadowColor: colors.black,
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+  // The card's sold overlay (ProductCard.tsx `soldOverlay`), page-sized: the
+  // same scrim, and SOLD in Bree Serif with the card's tracking.
+  soldOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.scrim,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   soldText: {
-    fontFamily: font.family.extrabold,
-    fontSize: font.sizes.body,
-    letterSpacing: 2,
+    fontFamily: font.family.serif,
+    fontSize: 60,
+    lineHeight: 70,
+    letterSpacing: 8,
     color: colors.white,
   },
   dots: {

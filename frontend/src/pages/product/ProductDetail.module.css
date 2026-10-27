@@ -237,21 +237,25 @@
    The stamp: Bree Serif 400 22, white, 2px white border, radius 8, padding
    2/12, rotated −8°, 16 from the image's top-right. The scrim fill is not in
    the spec: white on white would vanish on a light photo. */
+/* SOLD across a dimmed photo, as on the card (ProductCard .soldBanner) and
+   on the app's product page (MARK_SOLD_SPEC §2 v1.3, owner, 27 Oct: the old
+   corner stamp was easy to miss). Above the photo, below the condition badge,
+   the arrows and the dots (z 2–3), which stay bright and clickable. Takes no
+   clicks, so a click still opens the full-screen viewer. */
 .soldStamp {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-  padding: 2px 12px;
-  border: 2px solid var(--white);
-  border-radius: 8px;
-  background: var(--scrim);
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.48);
   color: var(--white);
   font-family: "Bree Serif", serif;
   font-weight: 400;
-  font-size: 22px;
-  line-height: 28px;
-  transform: rotate(-8deg);
+  font-size: 4rem;
+  line-height: 1;
+  letter-spacing: 0.12em;
   pointer-events: none;
   user-select: none;
 }
@@ -430,6 +434,7 @@
   height: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #EB487F));
+  border: 1.5px solid var(--purple-emphasis); /* the site-wide avatar ring */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -442,6 +447,7 @@
   height: 26px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--purple, #800080), var(--pink-dark, #EB487F));
+  border: 1.5px solid var(--purple-emphasis); /* the site-wide avatar ring */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1005,7 +1011,7 @@
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #f0eaff;
+  border: 2px solid var(--purple-emphasis); /* the site-wide avatar ring */
   flex-shrink: 0;
 }
 .sellerInfo { flex: 1; min-width: 0; }

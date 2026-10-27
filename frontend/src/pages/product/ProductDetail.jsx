@@ -37,6 +37,8 @@ import { API_BASE_URL } from '../../config/urls';
 import { formatShortDate } from "../../utils/messageFormat";
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
+// The site-wide avatar ring (see components/AvatarImg).
+import { avatarRing } from "../../components/AvatarImg/AvatarImg";
 
 
 /* Appends a page of comments onto the ones already on screen, skipping any id
@@ -94,6 +96,7 @@ function AvatarImg({ src, name, size = 36, className }) {
           alignItems: "center",
           justifyContent: "center",
           userSelect: "none",
+          border: avatarRing(size),
         }}
       >
         {initials}
@@ -105,6 +108,7 @@ function AvatarImg({ src, name, size = 36, className }) {
       src={src}
       alt={name}
       className={className}
+      style={{ border: avatarRing(size) }}
       onError={() => setErr(true)}
     />
   );
@@ -128,6 +132,7 @@ function HiddenAvatar({ size = 36, className }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        border: avatarRing(size),
       }}
     >
       <User size={Math.round(size * 0.45)} />
@@ -648,7 +653,7 @@ export default function ProductDetail() {
                 {condCfg.label}
               </span>
 
-              {/* §2: the SOLD stamp, for everyone, the seller too. */}
+              {/* §2 v1.3: SOLD across the dimmed photo, as on the card, for everyone. */}
               {isSold && <span className={styles.soldStamp}>SOLD</span>}
 
               <img
@@ -1109,7 +1114,7 @@ export default function ProductDetail() {
                     <p className={styles.soldBannerSub}>
                       {product.buyer
                         ? `Buyer: ${product.buyer.full_name || `@${product.buyer.username}`}`
-                        : "Buyer: someone not on Yahora"}
+                        : "Buyer: someone off Yahora"}
                     </p>
                   )}
                 </div>

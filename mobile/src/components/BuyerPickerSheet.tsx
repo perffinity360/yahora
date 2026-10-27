@@ -83,7 +83,7 @@ function saveErrorText(error: unknown): string {
  * Opens from Mark as sold (`mode` 'sell') and from Change buyer ('change', the
  * current choice already selected). Under 2 characters it lists the people who
  * messaged you about the listing; from 2 it searches your campus. At most one
- * row is selected: a person, or "Someone not on Yahora" (`null`, no one is
+ * row is selected: a person, or "Someone off Yahora" (`null`, no one is
  * tagged); tapping it again clears it. Saving waits for the server, then closes; the listing card has
  * already changed underneath (useDashboardActions' optimistic patch).
  *
@@ -100,7 +100,7 @@ export function BuyerPickerSheet({
   visible: boolean;
   onClose: () => void;
   product: { id: string; title: string };
-  /** undefined = nothing selected; null = "Someone not on Yahora" selected. */
+  /** undefined = nothing selected; null = "Someone off Yahora" selected. */
   initialBuyerId: string | null | undefined;
   mode: 'sell' | 'change';
 }) {
@@ -293,7 +293,7 @@ export function BuyerPickerSheet({
             </View>
             <View style={styles.rowText}>
               <AppText style={styles.name} numberOfLines={1}>
-                Someone not on Yahora
+                Someone off Yahora
               </AppText>
               <AppText style={styles.handleText} numberOfLines={1}>
                 No one will be tagged

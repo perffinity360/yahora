@@ -684,7 +684,10 @@
      preventing cards from expanding massive widths ✨ */
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 16px;
-  align-items: start;
+  /* Every card in a row as tall as the tallest: a sold card (buyer box +
+     Relist) is taller than an available one, and with `start` the cards
+     beside it stopped short. ProductCard pins its bottom row to the edge. */
+  align-items: stretch;
   animation: gridIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -717,111 +720,6 @@
   color: #bbb;
   font-size: 1.1rem;
   line-height: 1.6;
-}
-
-/* ══════════════════════════════════════════════
-   DELETE CONFIRMATION MODAL POPUP
-══════════════════════════════════════════════ */
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  animation: fadeIn 0.2s ease;
-}
-.modalContent {
-  background: white;
-  border-radius: 20px;
-  padding: 24px;
-  width: 100%;
-  max-width: 400px;
-  text-align: center;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-  animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.modalIconWrap {
-  width: 56px;
-  height: 56px;
-  background: #fee2e2;
-  color: #ef4444;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px auto;
-}
-.modalTitle {
-  font-family: "Bree Serif", serif;
-  /* Bree Serif ships one weight (400). */
-  font-weight: 400;
-  font-size: 1.25rem;
-  color: var(--black-soft);
-  margin-bottom: 8px;
-}
-.modalText {
-  font-size: 0.95rem;
-  color: #666;
-  margin-bottom: 24px;
-  line-height: 1.5;
-}
-.modalActions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
-.btnCancel,
-.btnDelete {
-  padding: 10px 20px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.btnCancel {
-  background: #f0f0f0;
-  color: #555;
-}
-.btnCancel:hover {
-  background: #e4e4e4;
-}
-.btnDelete {
-  background: #ef4444;
-  color: white;
-  gap: 8px;
-}
-.btnDelete:hover {
-  background: #dc2626;
-}
-/* That wasn't me (MARK_SOLD_SPEC §4): the dialog's confirm, in the danger red
-   (#B91C1C — the site's --error-text; there is no separate --danger-text). */
-.btnRemove {
-  padding: 10px 20px;
-  border-radius: 12px;
-  border: none;
-  font-weight: 600;
-  font-size: 0.95rem;
-  background: var(--error-text);
-  color: var(--white);
-  cursor: pointer;
-  transition: filter 0.2s, transform 0.15s;
-}
-.btnRemove:hover:not(:disabled) { filter: brightness(0.92); }
-.btnRemove:active:not(:disabled) { transform: scale(0.98); }
-.btnRemove:disabled { opacity: 0.6; cursor: default; }
-.btnRemove:focus-visible { outline: 2px solid var(--error-text); outline-offset: 2px; }
-.modalError {
-  margin: -12px 0 16px;
-  font-size: 0.85rem;
-  color: var(--error-text);
 }
 
 /* The buyer's purchase card (MARK_SOLD_SPEC §4) — inside ProductCard's
@@ -897,22 +795,7 @@
   .purchaseRemoveBtn { transition: none; }
 }
 
-/* Relist (MARK_SOLD_SPEC §3): the dialog's confirm, in the brand purple. */
-.btnRelist {
-  padding: 10px 20px;
-  border-radius: 12px;
-  border: none;
-  font-weight: 600;
-  font-size: 0.95rem;
-  background: var(--purple);
-  color: var(--white);
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.15s;
-}
-.btnRelist:hover { background: var(--purple-dark); }
-.btnRelist:active { transform: scale(0.98); }
-.btnRelist:focus-visible,
-.btnCancel:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+/* The Delete, Relist and That wasn't me dialogs are components/ConfirmDialog. */
 
 @keyframes fadeIn {
   from {

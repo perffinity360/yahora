@@ -870,7 +870,7 @@ Tapping a quote scrolls to the original message and flashes it.
 
 | | Value |
 |---|---|
-| Position | the original is placed **35%** down the thread — the same placement the unread band uses (§2 Unread behaviour), with the same function |
+| Position | the original is placed **35%** down the thread — the same placement the unread band uses (§2 Unread behaviour), with the same function. **A message taller than the thread** (27 Oct, owner): its **start** lands **16** below the top of the thread, never its middle. The web already does this (it places the row's top edge at 35%); the app's `scrollToIndex` placement centred a tall row, so the app places a quoted row by its top whenever it is taller than the thread less 32 |
 | Flash | a band `rgba(128,0,128,0.12)` behind the whole row (full thread width), held **1200 ms**, then fading out over **400 ms** |
 | Not loaded yet | load older pages with the same call scrolling up uses, at most **5** extra pages (`JUMP_MAX_EXTRA_PAGES`), then jump |
 | Still not found | toast `Couldn't find the original message` (§10.7 toast) |

@@ -1,7 +1,7 @@
 // frontend/src/pages/dashboard/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserX } from "lucide-react";
+import { RotateCcw, Trash2, UserX } from "lucide-react";
 import styles from "./Dashboard.module.css";
 import ProductCard from "../../components/ProductCard/ProductCard";
 import SmartImage from "../../components/SmartImage/SmartImage";
@@ -10,6 +10,7 @@ import { PROFILE_UPDATED_EVENT } from "../../components/navbar/navbar";
 import { API_BASE_URL } from '../../config/urls';
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 import BuyerPicker from "../../components/BuyerPicker/BuyerPicker";
+import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog";
 // Renamed: the component has its own `firstName` (the greeting's), which
 // shadowed the helper and made the Relist dialog call a string.
 import { firstName as getFirstName } from "../../utils/messageActions";
@@ -137,21 +138,6 @@ const XIcon = ({ size = 14 }) => (
  </svg>
 );
 
-const TrashIcon = ({ size = 18 }) => (
- <svg
-   width={size}
-   height={size}
-   viewBox="0 0 24 24"
-   fill="none"
-   stroke="currentColor"
-   strokeWidth="2"
-   strokeLinecap="round"
-   strokeLinejoin="round"
- >
-   <polyline points="3 6 5 6 21 6"></polyline>
-   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
- </svg>
-);
 
 /* ─────────────────────────────────────────────
  SUB-COMPONENTS
@@ -400,8 +386,11 @@ export default function Dashboard() {
  const fileInputRef = React.useRef(null);
  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
+ /* The listing in the Delete dialog (the whole row: the dialog shows its
+    photo and title, like the app's). */
  const [itemToDelete, setItemToDelete] = useState(null);
  const [isDeleting, setIsDeleting] = useState(false);
+ const [deleteError, setDeleteError] = useState(null);
 
  /* MARK_SOLD_SPEC §1 and §3. `buyerPicker`: the open "Who bought it?" —
     { product, mode: "sell" | "change", initialBuyerId }. `relistTarget`: the
@@ -813,18 +802,27 @@ export default function Dashboard() {
  };
 
  /* ── Product Management Logic ── */
- const confirmDelete = (productId) => {
-   setItemToDelete(productId);
+ const confirmDelete = (item) => {
+   setDeleteError(null);
+   setItemToDelete(item);
+ };
+
+ const closeDelete = () => {
+   if (isDeleting) return;
+   setItemToDelete(null);
+   setDeleteError(null);
  };
 
  const executeDelete = async () => {
    if (!itemToDelete) return;
+   const productId = itemToDelete.id;
    setIsDeleting(true);
+   setDeleteError(null);
 
    try {
      const token = localStorage.getItem("yahora_session");
      const res = await fetch(
-       `${API_BASE_URL}/products/${itemToDelete}`,
+       `${API_BASE_URL}/products/${productId}`,
        {
          method: "DELETE",
          headers: { Authorization: `Bearer ${token}` },
@@ -835,14 +833,15 @@ export default function Dashboard() {
 
      setData((prev) => ({
        ...prev,
-       listings: prev.listings.filter((item) => item.id !== itemToDelete),
+       listings: prev.listings.filter((item) => item.id !== productId),
      }));
+     setItemToDelete(null);
    } catch (e) {
      console.error("Failed to delete listing:", e);
-     alert("Failed to delete the listing. Please try again.");
+     // In the dialog, like "That wasn't me", not the browser's alert().
+     setDeleteError("Couldn't delete it. Check your connection and try again.");
    } finally {
      setIsDeleting(false);
-     setItemToDelete(null);
    }
  };
 
@@ -882,43 +881,26 @@ export default function Dashboard() {
        onChange={handleFileChange}
      />
 
-     {/* ── Delete Confirmation Popup Modal ── */}
+     {/* ── Delete dialog (MARK_SOLD_SPEC §3 v1.2): the app's, in the danger tone ── */}
      {itemToDelete && (
-       <div
-         className={styles.modalOverlay}
-         onClick={() => !isDeleting && setItemToDelete(null)}
-       >
-         <div
-           className={styles.modalContent}
-           onClick={(e) => e.stopPropagation()}
-         >
-           <div className={styles.modalIconWrap}>
-             <TrashIcon size={24} />
-           </div>
-           <h3 className={styles.modalTitle}>Delete Listing</h3>
-           <p className={styles.modalText}>
-             Are you sure you want to delete this item? This action cannot be
-             undone.
-           </p>
-           <div className={styles.modalActions}>
-             <button
-               className={styles.btnCancel}
-               onClick={() => setItemToDelete(null)}
-               disabled={isDeleting}
-             >
-               Cancel
-             </button>
-             <button
-               className={styles.btnDelete}
-               onClick={executeDelete}
-               disabled={isDeleting}
-             >
-               <TrashIcon size={16} />
-               {isDeleting ? "Deleting..." : "Delete"}
-             </button>
-           </div>
-         </div>
-       </div>
+       <ConfirmDialog
+         title="Delete this listing?"
+         message={
+           <>
+             <ConfirmDialog.Strong>{itemToDelete.title}</ConfirmDialog.Strong>{" "}
+             will be removed for good. This can't be undone.
+           </>
+         }
+         confirmLabel="Delete"
+         busyLabel="Deleting…"
+         Icon={Trash2}
+         imageUrl={itemToDelete.image_urls?.[0]}
+         tone="danger"
+         busy={isDeleting}
+         error={deleteError}
+         onConfirm={executeDelete}
+         onCancel={closeDelete}
+       />
      )}
 
      {/* ── Who bought it? (MARK_SOLD_SPEC §1) ── */}
@@ -932,92 +914,53 @@ export default function Dashboard() {
        />
      )}
 
-     {/* ── Relist dialog (MARK_SOLD_SPEC §3) ── */}
+     {/* ── Relist dialog (MARK_SOLD_SPEC §3 v1.1): the app's ConfirmDialog ── */}
      {relistTarget && (
-       <div
-         className={styles.modalOverlay}
-         onClick={() => setRelistTarget(null)}
-       >
-         <div
-           className={styles.modalContent}
-           role="dialog"
-           aria-modal="true"
-           aria-labelledby="relist-title"
-           onClick={(e) => e.stopPropagation()}
-         >
-           <h3 id="relist-title" className={styles.modalTitle}>
-             Relist this item?
-           </h3>
-           <p className={styles.modalText}>
-             “{relistTarget.title}” goes back on the marketplace.
+       <ConfirmDialog
+         title="Relist this item?"
+         message={
+           <>
+             <ConfirmDialog.Strong>{relistTarget.title}</ConfirmDialog.Strong>{" "}
+             goes back on the marketplace.
              {relistTarget.buyer
                ? ` ${getFirstName(relistTarget.buyer.full_name)} will no longer be shown as its buyer.`
                : ""}
-           </p>
-           <div className={styles.modalActions}>
-             <button
-               className={styles.btnCancel}
-               onClick={() => setRelistTarget(null)}
-             >
-               Cancel
-             </button>
-             <button
-               className={styles.btnRelist}
-               onClick={() => {
-                 const id = relistTarget.id;
-                 setRelistTarget(null);
-                 executeMarkAvailable(id);
-               }}
-             >
-               Relist
-             </button>
-           </div>
-         </div>
-       </div>
+           </>
+         }
+         confirmLabel="Relist"
+         Icon={RotateCcw}
+         imageUrl={relistTarget.image_urls?.[0]}
+         onConfirm={() => {
+           const id = relistTarget.id;
+           setRelistTarget(null);
+           executeMarkAvailable(id);
+         }}
+         onCancel={() => setRelistTarget(null)}
+       />
      )}
 
-     {/* ── That wasn't me (MARK_SOLD_SPEC §4) ── */}
+     {/* ── That wasn't me (MARK_SOLD_SPEC §4): the same dialog, danger tone ── */}
      {purchaseToRemove && (
-       <div className={styles.modalOverlay} onClick={closeRemovePurchase}>
-         <div
-           className={styles.modalContent}
-           role="dialog"
-           aria-modal="true"
-           aria-labelledby="remove-purchase-title"
-           onClick={(e) => e.stopPropagation()}
-         >
-           <h3 id="remove-purchase-title" className={styles.modalTitle}>
-             Remove this purchase?
-           </h3>
-           <p className={styles.modalText}>
-             {getFirstName(purchaseToRemove.product.seller?.full_name)} marked “
-             {purchaseToRemove.product.title}” as sold to you. If that's wrong,
-             remove it. The listing stays sold; you just won't be shown as its
-             buyer.
-           </p>
-           {removePurchaseError && (
-             <p className={styles.modalError} role="alert">
-               {removePurchaseError}
-             </p>
-           )}
-           <div className={styles.modalActions}>
-             <button
-               className={styles.btnCancel}
-               onClick={closeRemovePurchase}
-               disabled={isRemovingPurchase}
-             >
-               Cancel
-             </button>
-             <button
-               className={styles.btnRemove}
-               onClick={executeRemovePurchase}
-               disabled={isRemovingPurchase}
-             >
-               {isRemovingPurchase ? "Removing..." : "Remove"}
-             </button>
-           </div>
-         </div>
-       </div>
+       <ConfirmDialog
+         title="Remove this purchase?"
+         message={
+           <>
+             {getFirstName(purchaseToRemove.product.seller?.full_name)} marked{" "}
+             <ConfirmDialog.Strong>{purchaseToRemove.product.title}</ConfirmDialog.Strong>{" "}
+             as sold to you. If that's wrong, remove it. The listing stays sold;
+             you just won't be shown as its buyer.
+           </>
+         }
+         confirmLabel="Remove"
+         busyLabel="Removing…"
+         Icon={UserX}
+         imageUrl={purchaseToRemove.product.image_urls?.[0]}
+         tone="danger"
+         busy={isRemovingPurchase}
+         error={removePurchaseError}
+         onConfirm={executeRemovePurchase}
+         onCancel={closeRemovePurchase}
+       />
      )}
 
      {/* ══════════════════════════════════════
@@ -1315,7 +1258,7 @@ export default function Dashboard() {
                    isOwner={true}
                    currentUserId={localStorage.getItem("yahora_user_id")}
                    onEdit={() => handleEditProduct(item)}
-                   onDelete={() => confirmDelete(item.id)}
+                   onDelete={() => confirmDelete(item)}
                    onMarkSold={() =>
                      setBuyerPicker({ product: item, mode: "sell" })
                    }

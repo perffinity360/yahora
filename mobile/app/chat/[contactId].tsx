@@ -168,6 +168,12 @@ const READ_DEBOUNCE_MS = 300;
 const ANCHOR_SETTLE_MS = 600;
 /** scrollToIndex retries for a row that has not been measured yet. */
 const SCROLL_RETRY_MAX = 4;
+/** A quoted message too tall for UNREAD_VIEW_POSITION lands with its START
+ *  this far below the top of the thread (owner, 27 Oct): the 35% placement
+ *  centres a long message, so the jump showed its middle. */
+const JUMP_TOP_GAP = 16;
+/** How long after a jump a quoted row that only now measures is re-placed. */
+const JUMP_REPLACE_MS = 1500;
 /** New content at the newest end holds the reader in place, unless they were
  *  within this of the newest message (the web's BOTTOM_STICK_THRESHOLD). */
 const KEEP_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: JUMP_SHOW_AFTER };
@@ -1084,11 +1090,61 @@ export default function ChatScreen() {
 
   /** THE scroller for a row by index: the unread line, and the jump to a
    *  quoted message (§10.6) — the same placement (UNREAD_VIEW_POSITION, 35%
-   *  down the thread) and the same retries (onScrollToIndexFailed). */
-  const scrollToRow = (index: number, animated: boolean) => {
+   *  down the thread, except a tall quoted row: see below) and the same
+   *  retries (onScrollToIndexFailed). */
+  const scrollToRow = (index: number, animated: boolean, jump = false) => {
     scrollRetryRef.current = 0;
-    listRef.current?.scrollToIndex({ index, viewPosition: UNREAD_VIEW_POSITION, animated });
+    listRef.current?.scrollToIndex({ index, ...placementFor(index, jump), animated });
   };
+
+  /* ── A LONG QUOTED MESSAGE LANDS AT ITS START ──
+     scrollToIndex puts a row `viewPosition` of the way along the space the
+     row leaves free: (thread height − row height). A row taller than the
+     thread makes that negative, and the 35% placement showed the middle of a
+     long message. A jump to a quote places a tall row by its top edge
+     instead, JUMP_TOP_GAP below the top of the thread, as WhatsApp does.
+     Inverted list: viewPosition 1 is the top of the screen, and a negative
+     viewOffset moves the row down from it. Short rows, and the unread line,
+     keep UNREAD_VIEW_POSITION. Heights come from each message row's onLayout
+     into a ref: nothing re-renders. */
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const rowHeightsRef = useRef(new Map<string, number>());
+  const listHeightRef = useRef(0);
+  /** The quoted row the latest jump is heading for. */
+  const jumpTargetRef = useRef<{ key: string; at: number } | null>(null);
+
+  const placementFor = (
+    index: number,
+    jump: boolean,
+  ): { viewPosition: number; viewOffset?: number } => {
+    const row = rowsRef.current[index];
+    const height = row ? rowHeightsRef.current.get(row.key) : undefined;
+    const visible = listHeightRef.current;
+    const tall = jump && height !== undefined && visible > 0 && height + JUMP_TOP_GAP * 2 > visible;
+    return tall
+      ? { viewPosition: 1, viewOffset: -JUMP_TOP_GAP }
+      : { viewPosition: UNREAD_VIEW_POSITION };
+  };
+  const placementForRef = useRef(placementFor);
+  placementForRef.current = placementFor;
+
+  /** A quoted row that wasn't rendered yet is reached by estimate, with the
+   *  35% placement. Once it measures, a tall one is placed again by its top. */
+  const onRowLayout = useCallback((key: string, height: number) => {
+    const known = rowHeightsRef.current.has(key);
+    rowHeightsRef.current.set(key, height);
+    const target = jumpTargetRef.current;
+    if (known || target?.key !== key) return;
+    jumpTargetRef.current = null;
+    if (Date.now() - target.at > JUMP_REPLACE_MS) return;
+    const index = rowsRef.current.findIndex((row) => row.key === key);
+    if (index === -1) return;
+    const placement = placementForRef.current(index, true);
+    if (placement.viewPosition === 1) {
+      listRef.current?.scrollToIndex({ index, ...placement, animated: true });
+    }
+  }, []);
 
   /* ── JUMP TO THE ORIGINAL (spec §10.6) ──────────────────────────────────
      Pressing a quote scrolls to the message it quotes and flashes its row.
@@ -1102,7 +1158,11 @@ export default function ChatScreen() {
   const jumpToRow = (id: string): boolean => {
     const index = rows.findIndex((row) => row.kind === 'msg' && row.message.id === id);
     if (index === -1) return false;
-    scrollToRow(index, true);
+    const { key } = rows[index];
+    // Read by the not-rendered-yet retry (onScrollToIndexFailed), and by
+    // onRowLayout when the row has never been measured.
+    jumpTargetRef.current = { key, at: Date.now() };
+    scrollToRow(index, true, true);
     setFlash((prev) => ({ id, n: (prev?.n ?? 0) + 1 }));
     return true;
   };
@@ -1197,6 +1257,8 @@ export default function ChatScreen() {
       ) : item.kind === 'unread' ? (
         <UnreadDivider count={item.count} />
       ) : (
+        // Measured for the jump to a long quoted message (onRowLayout).
+        <View onLayout={(e) => onRowLayout(item.key, e.nativeEvent.layout.height)}>
         <MessageBubble
           message={item.message}
           mine={item.mine}
@@ -1220,6 +1282,7 @@ export default function ChatScreen() {
           onJumpToOriginal={onJumpToOriginal}
           onOpenLink={onOpenLink}
         />
+        </View>
       ),
     [
       contactName,
@@ -1235,6 +1298,7 @@ export default function ChatScreen() {
       onSwipeReply,
       onJumpToOriginal,
       onOpenLink,
+      onRowLayout,
     ],
   );
 
@@ -1435,7 +1499,10 @@ export default function ChatScreen() {
                 ref={listRef}
                 data={rows}
                 inverted
-                onLayout={() => setListLaidOut(true)}
+                onLayout={(e) => {
+                  listHeightRef.current = e.nativeEvent.layout.height;
+                  setListLaidOut(true);
+                }}
                 // Only the unread line scrolls by index. Rows differ in height and
                 // a row past the first render is not measured yet: go there by
                 // estimate, which renders it, then exactly on the next frame.
@@ -1450,7 +1517,10 @@ export default function ChatScreen() {
                   requestAnimationFrame(() =>
                     listRef.current?.scrollToIndex({
                       index: info.index,
-                      viewPosition: UNREAD_VIEW_POSITION,
+                      ...placementForRef.current(
+                        info.index,
+                        rowsRef.current[info.index]?.key === jumpTargetRef.current?.key,
+                      ),
                       animated: false,
                     }),
                   );

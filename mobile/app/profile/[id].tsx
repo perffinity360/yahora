@@ -190,8 +190,15 @@ export default function PublicProfileScreen() {
                   at most 12. Listings only: never who bought them. */}
               {soldCount > 0 && soldListings.length ? (
                 <>
-                  <View style={styles.listingsHead}>
-                    <AppText style={styles.listingsTitle}>Sold · {soldCount}</AppText>
+                  <SectionRule />
+                  <View style={[styles.listingsHead, styles.soldHead]}>
+                    {/* The listings header's look, count chip included (owner,
+                        27 Oct: "Sold · 1" beside "listings (4)" read as a
+                        mismatch). MARK_SOLD_SPEC §5 v1.3. */}
+                    <AppText style={styles.listingsTitle}>Sold</AppText>
+                    <View style={styles.countChip}>
+                      <AppText style={styles.countChipText}>{soldCount}</AppText>
+                    </View>
                   </View>
                   <View style={styles.grid}>
                     {soldListings.map((item) => (
@@ -458,6 +465,34 @@ function ListingsSkeleton({ cardWidth }: { cardWidth: number }) {
   );
 }
 
+/**
+ * Between the listings and the Sold section (MARK_SOLD_SPEC §5 v1.3, owner,
+ * 27 Oct: the two read as one list). A purple hairline that fades out toward
+ * both edges, broken in the middle by a small tag medallion: an end-of-list
+ * mark more than a table rule.
+ */
+function SectionRule() {
+  return (
+    <View style={styles.rule} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <LinearGradient
+        colors={[colors.sectionRuleFade, colors.sectionRule]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.ruleLine}
+      />
+      <View style={styles.ruleMark}>
+        <Feather name="tag" size={12} color={colors.purple} />
+      </View>
+      <LinearGradient
+        colors={[colors.sectionRule, colors.sectionRuleFade]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.ruleLine}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -640,6 +675,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: SCREEN_PAD,
     marginTop: spacing.xl,
     marginBottom: spacing.md,
+  },
+  /** The Sold header sits under SectionRule, which brings its own space. */
+  soldHead: { marginTop: spacing.lg },
+  rule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: SCREEN_PAD,
+    marginTop: 28,
+  },
+  ruleLine: { flex: 1, height: StyleSheet.hairlineWidth * 2 },
+  ruleMark: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.pinkLight,
+    borderWidth: 1,
+    borderColor: colors.notMeBorder,
   },
   listingsTitle: {
     fontFamily: font.family.serif,

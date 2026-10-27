@@ -110,6 +110,10 @@ export const colors = {
   relistBorder: 'rgba(128,0,128,0.28)',
   // §4 — the buyer's quiet "That wasn't me" pill.
   notMeBorder: 'rgba(128,0,128,0.15)',
+  // §5 — the rule between a public profile's listings and its Sold section:
+  // a purple hairline that fades out at both ends.
+  sectionRule: 'rgba(128,0,128,0.22)',
+  sectionRuleFade: 'rgba(128,0,128,0)',
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',

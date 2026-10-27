@@ -70,7 +70,7 @@ export function useDashboardActions(userId: string | null | undefined) {
   };
 
   /* Mark as sold, and Change buyer (calling it again changes the buyer and
-     keeps the first sold_at). `buyerId` null = "Someone not on Yahora".
+     keeps the first sold_at). `buyerId` null = "Someone off Yahora".
      `buyer` is only for the card to show the name before the server answers. */
   const markSold = useMutation({
     mutationFn: (vars: { id: string; buyerId: string | null; buyer?: SaleParty | null }) =>

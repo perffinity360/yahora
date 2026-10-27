@@ -1,6 +1,6 @@
-# Mark as Sold — Design Spec v1.2
+# Mark as Sold — Design Spec v1.3
 
-**Phase 6B · v1 · 11 October 2026 · v1.1 / v1.2 · 27 October 2026 · the single source of truth for marking a listing sold,
+**Phase 6B · v1 · 11 October 2026 · v1.1 / v1.2 / v1.3 · 27 October 2026 · the single source of truth for marking a listing sold,
 on BOTH platforms.**
 
 Picture: `docs/design/mark_sold.png` (source `mark-sold-mockup.html`). Where the picture and
@@ -20,7 +20,7 @@ offline. So:
 - marking sold works with **no conversation** ever having existed;
 - the seller finds the buyer by **searching their campus**, or picks from the people who
   messaged them about it;
-- **"Someone not on Yahora"** is a normal answer — no one is tagged;
+- **"Someone off Yahora"** is a normal answer — no one is tagged;
 - a student tagged by mistake can say **"That wasn't me"**;
 - the seller can **change the buyer** or **relist**;
 - a sold listing looks the same everywhere: the product page, the seller's listings, the
@@ -59,7 +59,7 @@ Inside, top to bottom:
      campus whose name or @username matches, at most 20, never you. Searching starts **300 ms**
      after typing stops.
 5. A **divider** — 1px `rgba(128,0,128,0.08)`, margin 8 vertical.
-6. The **off-platform row**: `Someone not on Yahora` / `No one will be tagged`.
+6. The **off-platform row**: `Someone off Yahora` / `No one will be tagged`.
 7. The **confirm button**.
 
 **Section label:** Inter 700 11, uppercase, letter-spacing 0.6, mutedText, margin 12 above,
@@ -71,7 +71,7 @@ Inter 400 12 mutedText, 1 line. **Selected:** background `rgba(128,0,128,0.08)` 
 `check-circle` 20 purple at the right. Pressed (mobile) / hover (web): `rgba(128,0,128,0.05)`.
 
 **Off-platform row:** the same row, with a 36 circle `#F3F0EF` holding `user-x` 18 mutedText
-in place of the avatar · title `Someone not on Yahora` Inter 600 14 · subtitle `No one will
+in place of the avatar · title `Someone off Yahora` Inter 600 14 · subtitle `No one will
 be tagged` Inter 400 12 mutedText.
 
 At most **one** row is selected at a time. **Tapping the selected row again clears it** (v1.1,
@@ -125,8 +125,8 @@ needs 4.5:1 (5.39 at that end; 3.64 at `#EB487F`).
 
 | Who is looking | What changes |
 |---|---|
-| **Anyone except the seller** | The SOLD stamp (mobile already has one; web adds the same: Bree Serif 400 22, white, 2px white border, radius 8, padding 2/12, rotated −8°, 16 from the image's top-right). Under the price, a **banner**: background `#F3F0EF`, radius 12, padding 10/12, gap 8, `check-circle` 16 mutedText, text `This item has been sold.` Inter 600 13 `#1A1A1A`. **Hidden:** Message seller. |
-| **The seller** | The same stamp and banner, but the banner reads `You marked this as sold on <date>.` with a second line, Inter 400 12 mutedText: `Buyer: <full name>` or `Buyer: someone not on Yahora`. The seller keeps their `Your listing` marker in place of Message seller. |
+| **Anyone except the seller** | The SOLD overlay (see **v1.3** below the table). Under the price, a **banner**: background `#F3F0EF`, radius 12, padding 10/12, gap 8, `check-circle` 16 mutedText, text `This item has been sold.` Inter 600 13 `#1A1A1A`. **Hidden:** Message seller. |
+| **The seller** | The same overlay and banner, but the banner reads `You marked this as sold on <date>.` with a second line, Inter 400 12 mutedText: `Buyer: <full name>` or `Buyer: someone off Yahora`. The seller keeps their `Your listing` marker in place of Message seller. |
 
 **A sold listing is closed for everyone — the seller too, and logged-out or demo viewers.**
 
@@ -136,6 +136,15 @@ needs 4.5:1 (5.39 at that end; 3.64 at `#EB487F`).
   visible and readable. With none, the "be the first to ask" line is replaced by `Questions are
   closed — this item has been sold.` (mutedText, centred).
 - **Kept:** the stamp, the banner, Share and the seller card.
+
+**The SOLD overlay (v1.3, owner, 27 Oct).** v1's stamp in the photo's corner (a pill on the
+app) was easy to miss. The photo is now drawn the way a sold **card** draws it, for everyone,
+the seller too: a scrim over the whole photo (app `colors.scrim`, 0.55; web
+`rgba(0,0,0,0.48)`, the card's values on each platform), and `SOLD` centred across it in Bree
+Serif 400 white, page-sized (60 on the app with tracking 8, 4rem on the web with 0.12em; v1.3
+started at 44 / 3rem, and the owner found it small on the phone). It
+takes no touch or click: tapping the photo still opens the full-screen viewer, and pinch and
+swipe still reach it. The condition badge, the arrows and the dots sit above it, undimmed.
 
 `<date>` uses the MESSAGES_SPEC §1 time-format table's date forms: `3 Oct`, or `3 Oct 2025` in
 an earlier year. It is the listing's `sold_at`.
@@ -159,9 +168,9 @@ didn't read as buttons. A sold card on the seller's own dashboard is now:
      pressed `rgba(128,0,128,0.14)` and scale 0.98;
    - the buyer's avatar, 26 (initials fallback). A photo gets the thin purple ring every
      seller photo has (v1.2; app `Avatar ringed`, web `1.5px solid var(--purple-emphasis)`).
-     For a buyer not on Yahora, a 26 circle
+     For a buyer off Yahora, a 26 circle
      `#F3F0EF` holding `user-x` 13 mutedText;
-   - line 1: the buyer's full name (else @username, else `a Yahora student`), or `Not on
+   - line 1: the buyer's full name (else @username, else `a Yahora student`), or `Off
      Yahora`, in Inter 600 12 `#1A1A1A`, 1 line;
    - line 2: `Buyer · <date>`, in Inter 500 11 mutedText (`<date>` = `sold_at`, §2's format);
    - at the right, an `edit-2` 13 purple pencil;
@@ -201,8 +210,14 @@ Android one out of place):
 **Delete dialog (v1.2)** — the Relist dialog's layout in a **danger tone**: title `Delete this
 listing?` · body `<title> will be removed for good. This can't be undone.` · buttons `Cancel` ·
 `Delete`. The badge (or the medallion) holds `trash-2`, and both it and the Delete button use
-the 135° gradient `#DC2626 → #B91C1C` instead of the brand one. The web's existing Delete
-modal is already drawn in-app (red icon, Bree Serif title, red button), so it stays as it is.
+the 135° gradient `#DC2626 → #B91C1C` instead of the brand one.
+
+**v1.3:** the web draws the Relist, Delete and That wasn't me dialogs with the same component
+as the app (`frontend/src/components/ConfirmDialog/`, the copy of
+`mobile/src/components/ConfirmDialog.tsx`): the listing's photo and badge, the gradient confirm
+button. Its old Delete modal (trash icon, `Delete Listing`, `Are you sure…`) is gone. While a
+request runs, the web's confirm reads `Deleting…` / `Removing…` and Esc and the scrim do
+nothing; a failure shows in the dialog, under the body, in `#B91C1C` 13.
 
 The web card's old label `SOLD TO @<name>` goes away: it read a column (`sold_to`) that nothing
 ever wrote, and the buyer is never shown on public cards. Every sold card says **`SOLD`**.
@@ -225,8 +240,12 @@ the price:
 
 **That wasn't me dialog** — title `Remove this purchase?` · body `<seller first name> marked
 “<title>” as sold to you. If that's wrong, remove it. The listing stays sold; you just won't be
-shown as its buyer.` · buttons `Cancel` · `Remove` (`#B91C1C`). On success the card disappears
-from the list.
+shown as its buyer.` · buttons `Cancel` · `Remove`. On success the card disappears from the
+list.
+
+**v1.3:** drawn as the Relist dialog (§3) in its **danger** tone, on both platforms, not the
+phone's `Alert`: the listing's photo with a red `user-x` badge, the listing's title in Inter
+600 `#1A1A1A` with no quote marks, and the red gradient Remove button.
 
 ---
 
@@ -234,11 +253,20 @@ from the list.
 
 Under the active listings, on web and mobile:
 
-- header `Sold · <count>` — same style as the existing listings header on each platform;
+- header `Sold · <count>` — same style as the existing listings header on each platform. **v1.3,
+  app:** the listings header there has a count chip, so the Sold header is `Sold` plus the same
+  chip (owner: `Sold · 1` beside `Priya's listings (4)` read as a mismatch). The web's listings
+  heading has no count, so it keeps `Sold · <count>`;
 - up to **12** sold listings, newest sold first, as the same cards the profile already uses,
   each with the SOLD badge; no like or save on them;
 - the section is left out when the count is 0;
 - it is never a list of buyers — only the listings.
+- **v1.3 (owner, 27 Oct: the two sections read as one list):** on the app, a rule closes the
+  listings before the Sold header: a 1dp purple hairline (`rgba(128,0,128,0.22)`) fading to
+  transparent toward both screen edges, broken in the middle by a 26 circle (pinkLight, 1px
+  `rgba(128,0,128,0.15)` border) holding `tag` 12 purple. 28 above it, 24 below it to the
+  `Sold · N` header. The web already opens the section with its own full-width heading bar
+  (the listings' tab style) 40 below the grid, so it has no rule.
 
 This is the social proof the plan asked for: a seller's history of finished sales.
 

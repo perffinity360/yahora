@@ -11,22 +11,22 @@ import { colors, font } from '../theme';
  * A user's photo, or a coloured initials disc when they have none. Shared by
  * the comment thread, the inbox and the chat header so one person always looks
  * the same everywhere in the app.
+ *
+ * Every avatar wears the thin purple ring, photo, initials or hidden (owner,
+ * 27 Oct: "wherever the avatar appears"): 1.5dp, or 2 from 40dp up. The
+ * website's avatars wear the same one.
  */
 export function Avatar({
   name,
   uri,
   size,
-  ringed = false,
+  ringed = true,
   hidden = false,
 }: {
   name?: string | null;
   uri?: string | null;
   size: number;
-  /**
-   * The purple ring the product card puts on a seller's photo (see
-   * `sellerAvatar` in ProductCard.tsx). Photo only: the initials disc is
-   * already a solid colour and gets no ring, on the card or here.
-   */
+  /** The purple ring (see above). On by default; `false` only for a reason. */
   ringed?: boolean;
   /**
    * The API hid this person from the viewer (`seller_hidden` / `user_hidden`,
@@ -37,10 +37,11 @@ export function Avatar({
   hidden?: boolean;
 }) {
   const dims = { width: size, height: size, borderRadius: size / 2 };
+  const ring = ringed ? [styles.ring, { borderWidth: size >= 40 ? 2 : 1.5 }] : null;
 
   if (hidden) {
     return (
-      <View style={[styles.avatar, dims, styles.hiddenDisc]}>
+      <View style={[styles.avatar, dims, styles.hiddenDisc, ring]}>
         <Feather name="user" size={Math.round(size * 0.5)} color={colors.white} />
       </View>
     );
@@ -56,14 +57,14 @@ export function Avatar({
     return (
       <Image
         source={{ uri: src }}
-        style={[styles.avatar, dims, ringed && [styles.ring, { borderWidth: size >= 40 ? 2 : 1.5 }]]}
+        style={[styles.avatar, dims, ring]}
         contentFit="cover"
         transition={180}
       />
     );
   }
   return (
-    <View style={[styles.avatar, dims, { backgroundColor: avatarHue(name) }]}>
+    <View style={[styles.avatar, dims, { backgroundColor: avatarHue(name) }, ring]}>
       {/* 0.34 of the disc (was 0.38 — two initials crowded the edge), but never
           under the 11dp floor: the chat and comment avatars are 26–30dp, where
           the ratio lands at 9–10 and the initials read as a smudge. See

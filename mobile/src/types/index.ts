@@ -141,7 +141,7 @@ export interface ProductDetailData extends Product, SellerHidden {
   is_saved?: boolean;
   /**
    * Present only when the viewer is the seller and the listing is sold
-   * (MARK_SOLD_SPEC §2): the buyer, or `null` for someone not on Yahora. The
+   * (MARK_SOLD_SPEC §2): the buyer, or `null` for someone off Yahora. The
    * key is absent for everyone else — never read it as "no buyer".
    */
   buyer?: SaleParty | null;
@@ -184,7 +184,7 @@ export interface ProductListing {
   sold_at?: string | null;
   /**
    * Dashboard only: who bought it. `null` when it isn't sold, was sold to
-   * someone not on Yahora, or the buyer said "That wasn't me".
+   * someone off Yahora, or the buyer said "That wasn't me".
    */
   buyer?: SaleParty | null;
 }
