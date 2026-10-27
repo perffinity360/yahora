@@ -233,6 +233,63 @@
 /* ════════════════════════════════════════════
    FOREIGN CAMPUS BANNER
 ════════════════════════════════════════════ */
+/* ── A sold listing (MARK_SOLD_SPEC §2) ──
+   The stamp: Bree Serif 400 22, white, 2px white border, radius 8, padding
+   2/12, rotated −8°, 16 from the image's top-right. The scrim fill is not in
+   the spec: white on white would vanish on a light photo. */
+.soldStamp {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  padding: 2px 12px;
+  border: 2px solid var(--white);
+  border-radius: 8px;
+  background: var(--scrim);
+  color: var(--white);
+  font-family: "Bree Serif", serif;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 28px;
+  transform: rotate(-8deg);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The banner under the price: #F3F0EF, radius 12, padding 10/12, gap 8. */
+.soldBanner {
+  --sold-banner-bg: #F3F0EF; /* inputBg */
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--sold-banner-bg);
+}
+.soldBannerIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--muted-text);
+}
+.soldBannerBody { min-width: 0; }
+.soldBannerText {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--black-soft);
+}
+.soldBannerSub {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-text);
+}
+
 .foreignBanner {
   display: flex;
   align-items: center;
@@ -473,6 +530,16 @@
   padding: 36px 0 20px;
   color: #ccc;
   font-size: 0.88rem;
+}
+
+/* A sold listing with no questions (MARK_SOLD_SPEC §2): a short muted line
+   in place of the "be the first to ask" invite. */
+.questionsClosed {
+  margin: 0;
+  padding: 20px 0 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted-text);
 }
 
 /* ── Comment Thread container ── */

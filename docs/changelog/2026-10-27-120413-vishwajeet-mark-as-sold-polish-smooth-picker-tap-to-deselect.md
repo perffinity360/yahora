@@ -16,7 +16,8 @@ on a phone and reported seven things, then three more on the same day (#8–#10)
 1. **I edited your backend file `user.controller.js`** (owner's decision, 27 Oct):
    `GET /api/user/:userId/dashboard` now sends `is_liked` / `is_saved` on each listing. Additive.
    See "New fields on existing responses".
-2. **I edited three of your `frontend/` files.** See the ⚠ section.
+2. **I edited your `ProductCard.jsx` / `.module.css`**, and on merging main I replaced your N-H
+   sold-card block (the `Sold to …` line + pills) with the v1.1 buyer box. See the ⚠ section.
 3. **Your `GET /api/users/search` finds more people now.** I changed `search_users()`, which it
    shares with buyer-candidates. Shapes are unchanged. See "Changed endpoints".
 4. **`MARK_SOLD_SPEC.md` is now v1.2.** For the website (N-H): tap again to deselect (§1), the
@@ -33,38 +34,34 @@ your own dashboard cards can work. I added one block after the buyer flattening:
 `is_saved` on every listing. It is a copy of what `getPublicProfile` in the same file already
 does. Nothing else in the handler changed. `API.md` is updated.
 
-## ⚠ I edited yours: `frontend/` (three files)
+## ⚠ I edited yours: `frontend/src/components/ProductCard/` (merged with your N-H)
 
-The owner asked me to fix on the website whichever problems also happen there, and to make the
-web's sold card look like the app's. `npm run build` passes. I haven't checked any of it in a
-browser.
+The owner asked for the web's sold card to look like the app's. I built it, then merged main
+(your N-H) into this branch. `npm run build` passes. I haven't checked any of it in a browser.
 
-- **`src/components/ProductCard/ProductCard.jsx` + `.module.css`: the sold card (spec §3
-  v1.1).** When `isOwner` and `status === "sold"`, the location tag and the time/actions row are
-  replaced by a tinted **buyer box** (avatar or `UserX`, name or `Not on Yahora`,
-  `Buyer · 27 Oct`, a pencil). It is a button that calls the new **`onChangeBuyer`** prop. Under
-  it are a **Relist** pill (`RotateCcw`, calls `onMarkAvailable`) and the delete button. It reads
-  `product.buyer` and `product.sold_at`, which the dashboard has sent since N-E. The old
-  `SOLD TO @${product.sold_to}` label and its `.cardSoldTo` class are gone (`sold_to` never
-  existed). Unsold and non-owner cards are unchanged. The diff looks big because that block got
-  one level deeper; `git diff -w` shows the real change.
-- **`src/pages/dashboard/Dashboard.jsx`:**
-  - passes `onChangeBuyer={() => handleMarkSoldClick(item)}`, so the buyer box reopens your old
-    sold modal (`POST /sold` accepts a new buyer on a sold listing);
-  - `executeMarkSold(buyerId, buyer)` puts the picked person (`contact_id`, `contact_name`,
-    `contact_avatar` mapped to `id`, `full_name`, `avatar_url`) and `sold_at` on the listing, so
-    the card shows the buyer at once;
-  - `executeMarkAvailable` clears `buyer` and `sold_at`.
-- **The like toggles in `Dashboard.jsx` are untouched.** Earlier today I had swapped them for
-  `canInteract={false}`; I have **reverted that**. With `is_liked` now coming from the server,
-  your original `handleToggleGridLike` / `handleToggleGridSave` are correct as they were.
+- **The sold card (spec §3 v1.1).** When `isOwner` and `status === "sold"`, the location tag and
+  the time/actions row are replaced by a tinted **buyer box**: your `AvatarImg` (photo with the
+  seller photo's purple ring, else initials), or `UserX` for someone not on Yahora; the name or
+  `Not on Yahora`; `Buyer · <formatShortDate(sold_at)>`; a pencil. The box is the Change buyer
+  button (`onChangeBuyer`). Under it are a **Relist** pill (`onMarkAvailable`, so your Relist
+  dialog) and the delete button.
+- **On the merge I removed your N-H `.soldInfo` block** (the `Sold to … · <date>` line and the
+  Change buyer / Relist pills) and its CSS. The owner reviewed that layout on the app and replaced
+  it with the buyer box (spec §3 v1.1), so the two can't both stand. I kept your `soldToViewer`
+  (no like or save on someone else's sold listing), and your hover-only-on-`(hover: hover)` rule,
+  now applied to the box and the pill.
+- **`Dashboard.jsx` is yours as on main.** On the merge I dropped all my edits to it: your
+  `BuyerPicker`, `handleBuyerSaved` and Relist dialog replace the old modal I had patched. Your
+  `onChangeBuyer` / `onMarkAvailable` wiring drives the new card unchanged.
+- **The like toggles in `Dashboard.jsx` are untouched.** With `is_liked` now coming from the
+  server, `handleToggleGridLike` / `handleToggleGridSave` are correct as they are.
 
 **Not changed on the web, and why:**
-- **The overlay before the sheet:** your sold modal's overlay (`fadeIn` 0.2 s) and card (`modalIn`
-  0.3 s) already start together.
+- **The overlay before the sheet:** your modals' overlay and card already start together.
 - **The Delete confirmation:** yours is already an in-app modal.
-- **Deselect (§1) and the Relist dialog (§3):** the web still has the old sold modal (a click on
-  a person marks it sold at once) and Relist asks nothing. **Build them to the spec in N-H.**
+- **Deselect (§1 v1.1) — still to do in your `BuyerPicker`:** a click on the selected row should
+  clear it (and fade the button again). Today `onSelect={setSelected}` only ever sets it. I left
+  your new component alone.
 - **Search (#2):** the database fix covers the website.
 - **Grid overlap (#7):** the web grid is CSS, not FlashList.
 

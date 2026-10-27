@@ -125,8 +125,17 @@ needs 4.5:1 (5.39 at that end; 3.64 at `#EB487F`).
 
 | Who is looking | What changes |
 |---|---|
-| **Anyone except the seller** | The SOLD stamp (mobile already has one; web adds the same: Bree Serif 400 22, white, 2px white border, radius 8, padding 2/12, rotated −8°, 16 from the image's top-right). Under the price, a **banner**: background `#F3F0EF`, radius 12, padding 10/12, gap 8, `check-circle` 16 mutedText, text `This item has been sold.` Inter 600 13 `#1A1A1A`. **Hidden:** Message seller, like, save, and the "ask a question" composer. Existing questions and answers stay readable. |
-| **The seller** | The same stamp and banner, but the banner reads `You marked this as sold on <date>.` with a second line, Inter 400 12 mutedText: `Buyer: <full name>` or `Buyer: someone not on Yahora`. |
+| **Anyone except the seller** | The SOLD stamp (mobile already has one; web adds the same: Bree Serif 400 22, white, 2px white border, radius 8, padding 2/12, rotated −8°, 16 from the image's top-right). Under the price, a **banner**: background `#F3F0EF`, radius 12, padding 10/12, gap 8, `check-circle` 16 mutedText, text `This item has been sold.` Inter 600 13 `#1A1A1A`. **Hidden:** Message seller. |
+| **The seller** | The same stamp and banner, but the banner reads `You marked this as sold on <date>.` with a second line, Inter 400 12 mutedText: `Buyer: <full name>` or `Buyer: someone not on Yahora`. The seller keeps their `Your listing` marker in place of Message seller. |
+
+**A sold listing is closed for everyone — the seller too, and logged-out or demo viewers.**
+
+- **No like:** the like count stays, as a plain stat like the views count; nothing happens on a tap.
+- **No save:** the Save button is gone.
+- **No new questions:** the "ask a question" composer is gone. Existing questions and answers stay
+  visible and readable. With none, the "be the first to ask" line is replaced by `Questions are
+  closed — this item has been sold.` (mutedText, centred).
+- **Kept:** the stamp, the banner, Share and the seller card.
 
 `<date>` uses the MESSAGES_SPEC §1 time-format table's date forms: `3 Oct`, or `3 Oct 2025` in
 an earlier year. It is the listing's `sold_at`.
@@ -138,9 +147,9 @@ an earlier year. It is the listing's `sold_at`.
 Web: Dashboard → listings. Mobile: Profile tab → Listings.
 
 **v1.1 (27 Oct, owner's review on the phone).** v1 put a caption (`Sold to <name> · <date>`)
-and two purple text links (`Change buyer`, `Relist`) under the price, above the location. On a
-two-column card that was crowded, and the links didn't read as buttons. A sold card on the
-seller's own dashboard is now:
+and two purple text links (`Change buyer`, `Relist`) under the price, above the location (a
+later revision made the links pills). On a two-column card that was crowded, and the links
+didn't read as buttons. A sold card on the seller's own dashboard is now:
 
 1. the photo with the SOLD stamp, the condition badge and like count, the price and the
    title, as on every card;
@@ -207,7 +216,12 @@ the price:
 
 - one line, Inter 500 12 mutedText: `From <seller full name> · <date>` (`<date>` = when it was
   marked sold);
-- a text button, Inter 600 12 mutedText, underlined: **`That wasn't me`**.
+- 8 below it, a quiet **pill button** **`That wasn't me`**: `user-x` 14 (Feather on mobile,
+  lucide on web), gap 6, label Inter 600 12 · mutedText for both, no underline · border 1px
+  `rgba(128,0,128,0.15)` · radius 999 · padding 4 vertical, 10 horizontal · transparent
+  background · left-aligned · at least **28** tall, so it is easy to tap · pressed (mobile),
+  hover and pressed (web): background pinkLight `#FFF4F7`, label and icon purple `#800080`,
+  150 ms · web keyboard focus: 2px purple outline, offset 2. The same on every screen size.
 
 **That wasn't me dialog** — title `Remove this purchase?` · body `<seller first name> marked
 “<title>” as sold to you. If that's wrong, remove it. The listing stays sold; you just won't be

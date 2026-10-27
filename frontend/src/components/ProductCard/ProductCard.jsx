@@ -10,6 +10,8 @@ import { Pencil, RotateCcw, User, UserX } from "lucide-react";
 import styles from "./ProductCard.module.css";
 import SmartImage from "../SmartImage/SmartImage";
 import ShareSheet from "../ShareSheet/ShareSheet";
+import AvatarImg from "../AvatarImg/AvatarImg";
+import { formatShortDate } from "../../utils/messageFormat";
 
 const CONDITION_CONFIG = {
   Mint: { label: "MINT CONDITION", bg: "#2BB7FF", color: "#fff" },
@@ -18,15 +20,6 @@ const CONDITION_CONFIG = {
   Fair: { label: "FAIR", bg: "#fb923c", color: "#fff" },
   Poor: { label: "POOR", bg: "#f87171", color: "#fff" },
 };
-
-/* "27 Oct", as on the app's sold card. */
-function shortDate(isoString) {
-  if (!isoString) return null;
-  return new Date(isoString).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-  });
-}
 
 function timeAgo(isoString) {
   if (!isoString) return "Just now";
@@ -201,6 +194,9 @@ const ProductCard = memo(function ProductCard({
   const totalImages = images.length;
   const condCfg =
     CONDITION_CONFIG[product.condition] ?? CONDITION_CONFIG["Good"];
+  /* MARK_SOLD_SPEC §5: someone else's sold listing (the public profile's
+     Sold section) has no like or save — and the API sends no counts for it. */
+  const soldToViewer = product.status === "sold" && !isOwner;
   const displayPrice =
     typeof product.price === "string" && product.price.includes("₹")
       ? product.price
@@ -326,7 +322,8 @@ const ProductCard = memo(function ProductCard({
   const buyerName = buyer
     ? buyer.full_name || (buyer.username ? `@${buyer.username}` : "Yahora student")
     : "Not on Yahora";
-  const soldDate = shortDate(product.sold_at);
+  // §2's date form: "27 Oct", or "27 Oct 2025" in an earlier year.
+  const soldDate = product.sold_at ? formatShortDate(product.sold_at) : null;
 
   return (
     <article
@@ -377,7 +374,7 @@ const ProductCard = memo(function ProductCard({
           </>
         )}
 
-        {canInteract && (
+        {canInteract && !soldToViewer && (
           <button
             className={`${styles.overlayHeart} ${product.is_liked ? styles.overlayHeartLiked : ""}`}
             onClick={handleLike}
@@ -423,7 +420,7 @@ const ProductCard = memo(function ProductCard({
             detail page; it just lands at the top. */}
         <div className={styles.footerRow}>
           <div className={styles.stats}>
-            {canInteract ? (
+            {soldToViewer ? null : canInteract ? (
               <>
                 <button
                   className={`${styles.statBtn} ${styles.statBtnHeart} ${product.is_liked ? styles.statBtnLiked : ""}`}
@@ -475,17 +472,14 @@ const ProductCard = memo(function ProductCard({
               }}
             >
               {buyer ? (
-                buyer.avatar_url ? (
-                  <img
-                    src={buyer.avatar_url}
-                    alt=""
-                    className={`${styles.saleAvatar} ${styles.saleAvatarRing}`}
-                  />
-                ) : (
-                  <span className={`${styles.sellerAvatarFallback} ${styles.saleAvatar}`}>
-                    {buyerName.replace("@", "").charAt(0).toUpperCase()}
-                  </span>
-                )
+                /* The picker's avatar (same initials colour per person); a
+                   photo gets the seller photo's purple ring. */
+                <AvatarImg
+                  src={buyer.avatar_url}
+                  name={buyerName.replace("@", "")}
+                  size={28}
+                  className={`${styles.saleAvatar} ${styles.saleAvatarRing}`}
+                />
               ) : (
                 <span className={styles.saleNoBuyer}>
                   <UserX size={13} aria-hidden="true" />

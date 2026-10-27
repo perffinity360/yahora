@@ -128,8 +128,9 @@ export default async function productPreview(request, context) {
 
     price ? `<meta property="product:price:amount" content="${escapeAttr(product.price)}" />` : "",
     price ? `<meta property="product:price:currency" content="INR" />` : "",
+    // Open Graph's values are "in stock" / "out of stock" (this said "oldout").
     product.status
-      ? `<meta property="product:availability" content="${product.status === "sold" ? "oldout" : "instock"}" />`
+      ? `<meta property="product:availability" content="${product.status === "sold" ? "out of stock" : "in stock"}" />`
       : "",
 
     `<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}" />`,

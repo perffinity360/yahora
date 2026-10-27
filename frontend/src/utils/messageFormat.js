@@ -44,6 +44,16 @@ export function formatClockTime(iso) {
   return `${hours}:${minutes} ${d.getHours() < 12 ? "AM" : "PM"}`;
 }
 
+/* A plain date: `3 Oct` this year, `3 Oct 2025` in an earlier one. The date
+   forms of the table above, never `Today` or a weekday — MARK_SOLD_SPEC §2 and
+   §3 use it for when a listing sold. */
+export function formatShortDate(iso) {
+  const d = parse(iso);
+  if (!d) return "";
+  const date = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === new Date().getFullYear() ? date : `${date} ${d.getFullYear()}`;
+}
+
 /* Date chip: `Today` · `Yesterday` · `Mon` · `12 Sep` · `12 Sep 2025`. */
 export function formatDayLabel(iso) {
   const d = parse(iso);

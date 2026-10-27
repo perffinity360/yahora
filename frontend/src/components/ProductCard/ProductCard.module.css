@@ -458,8 +458,14 @@
     background-color 0.18s ease,
     transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.saleBox:hover {
-  background: rgba(128, 0, 128, 0.11);
+/* Mouse hover only (a touch screen's :hover sticks); :active covers touch. */
+@media (hover: hover) {
+  .saleBox:hover {
+    background: rgba(128, 0, 128, 0.11);
+  }
+  .relist:hover {
+    background: rgba(128, 0, 128, 0.08);
+  }
 }
 .saleBox:active {
   background: rgba(128, 0, 128, 0.14);
@@ -551,10 +557,8 @@
     background-color 0.18s ease,
     transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.relist:hover {
-  background: rgba(128, 0, 128, 0.08);
-}
 .relist:active {
+  background: rgba(128, 0, 128, 0.08);
   transform: scale(0.97);
 }
 

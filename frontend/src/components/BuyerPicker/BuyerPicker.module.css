@@ -1,0 +1,285 @@
+/* "Who bought it?" — docs/design/MARK_SOLD_SPEC.md §1, web column. */
+
+.scrim {
+  /* Spec values the site has no global token for, named here so every rule
+     below reads a name (as Messages.module.css does). */
+  --picker-input-bg: #F3F0EF;              /* inputBg */
+  --picker-line: rgba(128, 0, 128, 0.08);  /* divider; also the selected row */
+  --picker-hover: rgba(128, 0, 128, 0.05);
+  /* The button's 135° gradient. It ends at #C02B7F, not #EB487F: white text
+     needs 4.5:1 and measures 5.39 there, 3.64 at #EB487F (§1, §7). */
+  --picker-btn-start: #800080;
+  --picker-btn-end: #C02B7F;
+  --picker-skeleton: rgba(128, 0, 128, 0.08);
+
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--scrim);
+  animation: scrimIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100dvh - 32px);
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--white);
+  box-shadow: 0 16px 48px rgba(42, 8, 42, 0.18);
+  font-family: Inter, sans-serif;
+  animation: modalIn 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.title {
+  margin: 0;
+  font-family: "Bree Serif", serif;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 26px;
+  color: var(--black);
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Search field: 38 tall, radius 19, padding 0/14, gap 8; 14 above, 6 below. */
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin: 14px 0 6px;
+  padding: 0 14px;
+  border-radius: 19px;
+  background: var(--picker-input-bg);
+  flex-shrink: 0;
+}
+.searchField:focus-within {
+  box-shadow: 0 0 0 2px var(--purple);
+}
+.searchIcon { flex-shrink: 0; color: var(--muted-text); }
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--black-soft);
+}
+.searchInput::placeholder { color: var(--muted-text); }
+/* The browser's own clear button would double up with ours. */
+.searchInput::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.clearBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+.clearBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; border-radius: 50%; }
+
+/* The list scrolls when long; the title, search and button stay put. */
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.sectionLabel {
+  margin: 12px 0 4px;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted-text);
+}
+
+/* Person row and off-platform row: padding 10/8, radius 12, gap 12. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (hover: hover) {
+  .row:hover { background: var(--picker-hover); }
+}
+.row:active { background: var(--picker-hover); }
+.row:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
+.rowSelected,
+.rowSelected:hover,
+.rowSelected:active { background: var(--picker-line); }
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+}
+.offPlatformIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--picker-input-bg);
+  color: var(--muted-text);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.rowTitle,
+.rowSubtitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rowTitle {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--black);
+}
+.rowSubtitle {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-text);
+}
+.check { flex-shrink: 0; color: var(--purple); }
+
+.divider {
+  height: 1px;
+  margin: 8px 0;
+  background: var(--picker-line);
+}
+
+.noMatch {
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted-text);
+}
+
+/* §1 "States": a 36 circle, then bars 45% × 12 and 30% × 10, 6 apart. */
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+}
+.skeletonAvatar,
+.skeletonName,
+.skeletonHandle {
+  background: var(--picker-skeleton);
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+.skeletonAvatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+.skeletonBars { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.skeletonName { width: 45%; height: 12px; border-radius: 6px; }
+.skeletonHandle { width: 30%; height: 10px; border-radius: 5px; }
+
+/* Confirm: full width, 48 tall, radius 24, 12 above. Dimmed to 0.4 until a
+   row is selected; while saving it keeps full strength and shows a spinner. */
+.confirmBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  margin-top: 12px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 24px;
+  background: linear-gradient(135deg, var(--picker-btn-start), var(--picker-btn-end));
+  color: var(--white);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    filter 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (hover: hover) {
+  .confirmBtn:not(:disabled):hover { filter: brightness(1.05); }
+}
+.confirmBtn:not(:disabled):active { transform: scale(0.98); }
+.confirmBtn:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+.confirmBtn:disabled { cursor: default; }
+.confirmBtn:disabled:not([aria-busy="true"]) { opacity: 0.4; }
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: var(--white);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes scrimIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .modal { animation: none; }
+  .skeletonAvatar,
+  .skeletonName,
+  .skeletonHandle { animation: none; }
+  .row,
+  .confirmBtn { transition: none; }
+  /* The spinner keeps turning: it is the only sign that saving is under way. */
+}
