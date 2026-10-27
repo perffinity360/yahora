@@ -43,6 +43,7 @@ import { useAddComment } from '../../src/hooks/useComments';
 import { useLeaveOnce } from '../../src/hooks/useLeaveOnce';
 import { useProductDetail } from '../../src/hooks/useProductDetail';
 import { useToggleLike, useToggleSave } from '../../src/hooks/useProductActions';
+import { formatShortDate } from '../../src/lib/messages';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, conditionColors, font, radius, spacing } from '../../src/theme';
 import type { ProductDetailData } from '../../src/types';
@@ -306,6 +307,13 @@ function Content({
   // are not real students, and a listing's seller always is one.
   const isOwnListing = !!seller && !!myUserId && seller.id === myUserId;
   const isForeignCampus = !!myUniversityId && product.university_id !== myUniversityId;
+  /* MARK_SOLD_SPEC §2: a sold listing is closed for EVERYONE, its seller
+     too: no like, no save, no new questions (the likes count and the
+     questions stay readable). Everyone else also loses Message seller, so they
+     get no action bar at all; the seller keeps a bar holding only their
+     "Your listing" marker. Replies and votes on existing questions stay with
+     the seller, as before. */
+  const closedToMe = sold && !isOwnListing;
 
   const eduLine = seller
     ? [seller.qualification, seller.year_of_study].filter(Boolean).join(' · ')
@@ -361,7 +369,7 @@ function Content({
     );
   };
 
-  const canComment = !isForeignCampus;
+  const canComment = !isForeignCampus && !closedToMe;
   const canSend = !!draft.trim() && !addComment.isPending;
 
   /* ── Back to top ──
@@ -501,6 +509,7 @@ function Content({
           <View style={styles.card}>
             <AppText style={styles.title}>{product.title}</AppText>
             <AppText style={styles.price}>{formatPrice(product.price)}</AppText>
+            {sold ? <SoldBanner product={product} isSeller={isOwnListing} /> : null}
 
             <View style={styles.metaRow}>
               {product.category ? <MetaChip icon="tag" label={product.category} /> : null}
@@ -585,6 +594,7 @@ function Content({
             viewerName={viewerName}
             viewerAvatarUrl={viewerAvatarUrl}
             canInteract={canComment}
+            soldClosed={sold}
             onAskQuestion={() => setComposerOpen(true)}
             onReplyingChange={(commentId) => {
               setReplyingTo(commentId);
@@ -608,7 +618,7 @@ function Content({
            never fight for the strip above the keyboard. */}
       <BackToTop
         visible={pastFold && showActionBar}
-        style={[styles.toTop, { bottom: dockHeight + spacing.md }]}
+        style={[styles.toTop, { bottom: (closedToMe ? bottomInset : dockHeight) + spacing.md }]}
         onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
       />
 
@@ -668,7 +678,7 @@ function Content({
             </Pressable>
           </View>
         </View>
-      ) : !showActionBar ? null : (
+      ) : !showActionBar || closedToMe ? null : (
       <View
         style={[styles.actionWrap, { paddingBottom: bottomInset + spacing.sm }]}
         onLayout={(e) => setDockHeight(e.nativeEvent.layout.height)}
@@ -681,8 +691,9 @@ function Content({
         <View style={styles.actionBar}>
           {/* No heart or bookmark on another campus's listing: the API refuses
               both (CROSS_CAMPUS_INTERACTION_BLOCKED), so a live button lit up
-              for a moment and went out again. The likes count above stays. */}
-          {isForeignCampus ? null : (
+              for a moment and went out again. None on a sold listing either,
+              the seller's own included (§2). The likes count above stays. */}
+          {isForeignCampus || sold ? null : (
           <>
           <Pressable
             onPress={onLike}
@@ -749,6 +760,37 @@ function Content({
 }
 
 /* ────────────────────────── Small pieces ────────────────────────── */
+
+/**
+ * Under the price of a sold listing (MARK_SOLD_SPEC §2). Everyone sees "This
+ * item has been sold."; the seller sees when, and who bought it. `buyer` only
+ * ever reaches the seller (the API leaves the key out for anyone else), and is
+ * only read here when `isSeller`.
+ */
+function SoldBanner({ product, isSeller }: { product: ProductDetailData; isSeller: boolean }) {
+  const date = formatShortDate(product.sold_at);
+  const buyerLine =
+    product.buyer === undefined
+      ? null
+      : product.buyer
+        ? `Buyer: ${product.buyer.full_name || product.buyer.username || 'a Yahora student'}`
+        : 'Buyer: someone not on Yahora';
+  return (
+    <View style={styles.soldBanner}>
+      <Feather name="check-circle" size={16} color={colors.mutedText} style={styles.soldBannerIcon} />
+      <View style={styles.soldBannerText}>
+        <AppText style={styles.soldBannerTitle}>
+          {!isSeller
+            ? 'This item has been sold.'
+            : date
+              ? `You marked this as sold on ${date}.`
+              : 'You marked this as sold.'}
+        </AppText>
+        {isSeller && buyerLine ? <AppText style={styles.soldBannerSub}>{buyerLine}</AppText> : null}
+      </View>
+    </View>
+  );
+}
 
 /**
  * Whether the keyboard is on screen. Android only reports that the keyboard has
@@ -972,6 +1014,29 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.headline,
     color: colors.purple,
     marginTop: 6,
+  },
+  // MARK_SOLD_SPEC §2 banner.
+  soldBanner: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: spacing.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: colors.inputBg,
+  },
+  // Level with the first line's middle (13 text, ~18 line).
+  soldBannerIcon: { marginTop: 1 },
+  soldBannerText: { flex: 1, gap: 2 },
+  soldBannerTitle: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.body,
+    color: colors.blackSoft,
+  },
+  soldBannerSub: {
+    fontFamily: font.family.regular,
+    fontSize: font.sizes.caption,
+    color: colors.mutedText,
   },
   metaRow: {
     flexDirection: 'row',

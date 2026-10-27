@@ -1010,7 +1010,8 @@ any other value is `403 FORBIDDEN`. (Was unauthenticated until 09 Sep 2026.)
                   "comments_count": 0,
                   "sold_at": "timestamptz|null",
                   "buyer": { "id": "uuid", "username": "string", "full_name": "string",
-                             "avatar_url": "string|null" } } ],
+                             "avatar_url": "string|null" },
+                  "is_liked": false, "is_saved": false } ],
   "purchases": [ { "id": "uuid", "created_at": "timestamptz",
                    "product": { "id": "uuid", "title": "string", "price": 0,
                                 "image_urls": ["string"], "status": "string",
@@ -1036,7 +1037,13 @@ rather than appearing as `null`.
 `listings` has **no status filter** — sold products are included (contrast
 [`/public`](#get-apiuseruseridpublic), which returns only `available`). `listings` and
 `purchases` fall back to `[]`, but `profile` has no such guard. `purchases[].product` is
-`null` if the product row was deleted. No `is_liked` / `is_saved` on these listings.
+`null` if the product row was deleted.
+
+**`listings[].is_liked` / `is_saved` (Phase 6B V-F, 2026-10-27).** Whether the caller has liked
+/ saved each of their own listings, on every listing (always a boolean when `listings` is
+non-empty). Computed exactly as on [`/public`](#get-apiuseruseridpublic). Before this the
+dashboard sent neither, so a client toggling from them sent every tap as "not liked yet":
+`POST /like` is a blind toggle, so a tap on a liked listing removed the like.
 
 **Mark as Sold fields (Phase 6B Block N-E).** This is the caller's own dashboard, so the buyer
 is theirs to see (MARK_SOLD_SPEC §0):
@@ -1817,7 +1824,10 @@ ignored: a 200 means the change happened.
   listings. Then `search_users(q, caller, 21)` runs: real and demo accounts never mix, and the
   seller's campus sorts first. The controller keeps `is_same_campus` rows that aren't the
   caller, and takes **at most 20**. Asking for 21 covers the one other-campus exact-handle match
-  that can sort above them. `messaged: false`.
+  that can sort above them. `messaged: false`. What counts as a match (a piece of the handle,
+  the start of any word of the name, a leading `@`) is described under
+  [`GET /api/users/search`](#get-apiuserssearch-owner-neeraj-phase-1); it widened in Phase 6B
+  V-F.
 
 **Notes:** **Not cursor-paginated, deliberately:** a fixed top-20, so `next_cursor` is always
 `null` (the same exemption as [`GET /api/users/search`](#get-apiuserssearch-owner-neeraj-phase-1)).
@@ -2482,12 +2492,27 @@ accidentally with `courseName`.
 **200:** `{ "items": [ { "id", "username", "full_name", "avatar_url", "university_name",
 "is_same_campus", "rank" } ], "next_cursor": null }` — `next_cursor` is **always** `null`
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `search_users(p_query, p_viewer, p_limit)` — prefix match via the
-`users_username_prefix_idx` (`text_pattern_ops`) plus trigram fuzzy match on username and
-full name. Ordering is fixed inside the RPC: exact match first, then same-campus, then
-similarity `rank`. **Do not re-sort in JavaScript** — §2.5 relies on the backend order.
+**Enforced by:** `search_users(p_query, p_viewer, p_limit)`. The term is trimmed and
+lower-cased, and one leading `@` is dropped. A person matches when **their handle contains the
+term anywhere** (`ver`, `.ver` and `verma` all find `rahul.verma`), **their full name or any
+word of it starts with the term** (`ver` finds "Rahul Verma"; `erm` does not, by name), or
+either is trigram-similar to it (similarity ≥ 0.3). `_` and `%` in the term are matched
+literally. Ordering is fixed inside the RPC: exact handle first, then same-campus, then how it
+matched (handle or name starts with it → a later word or a piece of the handle → similar
+only), then similarity `rank`. **Do not re-sort in JavaScript** — §2.5 relies on the backend
+order.
 **Notes:** `p_viewer` is what makes `is_same_campus` meaningful, so pass `req.user.id`. Fuzzy
-matching means "rahl" still finds "rahul". Clients debounce 300ms (§2.5).
+matching catches a typo in a whole handle or name: "rahul.vrma" and "rahl verma" find
+`rahul.verma`. It does not rescue a short fragment: "rahl" alone finds nothing. Clients
+debounce 300ms (§2.5).
+
+**Matching widened in Phase 6B V-F (2026-10-27),**
+`20261027062548_search_users_word_match.sql`. Before it, only a handle **prefix** or a
+trigram similarity of 0.3 to the **whole** handle or name matched. So a piece from the middle
+(`.ver` against `rahul.verma` scores 0.231), a surname alone shorter than most of the name,
+and any `@`-prefixed term found no one. The request and response shapes, the demo isolation
+and the controller are unchanged. More rows can now match, and a tier sits between same-campus
+and `rank` in the order.
 **Results are always from the viewer's own world (Phase 6A Block V-A, 2026-10-01):**
 - A real student sees only real students, on every campus. Campus is still not a filter, only
   the second sort key.

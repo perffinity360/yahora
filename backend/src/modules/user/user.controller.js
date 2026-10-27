@@ -131,6 +131,27 @@ export const getDashboardData = async (req, res) => {
             delete listing.purchase;
         }
 
+        // Phase 6B (Block V-F, edited by Vishwajeet at the owner's request):
+        // whether the seller has liked / saved each of their own listings,
+        // the same way getPublicProfile does it below. Without these, both
+        // apps showed every heart as empty after a reload, and a tap on one
+        // you had liked was sent as a like while the server took it away.
+        if (listings?.length) {
+            const productIds = listings.map(p => p.id);
+            const [likesRes, savesRes] = await Promise.all([
+                supabase.from('product_likes').select('product_id').eq('user_id', userId).in('product_id', productIds),
+                supabase.from('product_saves').select('product_id').eq('user_id', userId).in('product_id', productIds)
+            ]);
+
+            const likedSet = new Set(likesRes.data?.map(l => l.product_id) || []);
+            const savedSet = new Set(savesRes.data?.map(s => s.product_id) || []);
+
+            listings.forEach(p => {
+                p.is_liked = likedSet.has(p.id);
+                p.is_saved = savedSet.has(p.id);
+            });
+        }
+
         // C. Fetch User's Purchases
         const { data: purchases, error: purchasesError } = await supabase
             .from('purchases')

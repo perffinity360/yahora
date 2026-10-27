@@ -19,8 +19,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '../../src/components/AppText';
 import { AvatarSheet } from '../../src/components/AvatarSheet';
+import { BuyerPickerSheet } from '../../src/components/BuyerPickerSheet';
+import { ConfirmDialog, type ConfirmDialogContent } from '../../src/components/ConfirmDialog';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
-import { formatPrice, ProductCard } from '../../src/components/ProductCard';
+import { formatPrice, ProductCard, type SaleSummary } from '../../src/components/ProductCard';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { ZoomableImageViewer } from '../../src/components/ZoomableImageViewer';
@@ -28,7 +30,9 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useAvatarActions } from '../../src/hooks/useAvatarActions';
 import { useDashboard } from '../../src/hooks/useDashboard';
 import { useDashboardActions } from '../../src/hooks/useDashboardActions';
+import { useToggleLike } from '../../src/hooks/useProductActions';
 import { resolveMediaUrl } from '../../src/lib/config';
+import { formatShortDate } from '../../src/lib/messages';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font, radius, spacing } from '../../src/theme';
 import type { DashboardProfile, ProductListing, Purchase } from '../../src/types';
@@ -49,6 +53,53 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'watchlist', label: 'Watchlist' },
 ];
 
+/** A person's name as a sale line shows it (MARK_SOLD_SPEC §3, §4). */
+function partyName(party?: { full_name: string | null; username: string | null } | null): string {
+  return party?.full_name || party?.username || 'a Yahora student';
+}
+
+/** The seller's sold card: who bought it (null = not on Yahora) and when (spec §3). */
+function saleFor(item: ProductListing): SaleSummary {
+  return {
+    buyer: item.buyer ? { name: partyName(item.buyer), avatarUrl: item.buyer.avatar_url } : null,
+    date: formatShortDate(item.sold_at),
+  };
+}
+
+/** MARK_SOLD_SPEC §3 "Relist dialog": the words, for ConfirmDialog. */
+function relistDialogFor(item: ProductListing): ConfirmDialogContent {
+  const buyerFirst = item.buyer ? partyName(item.buyer).split(' ')[0] : null;
+  return {
+    title: 'Relist this item?',
+    message: (
+      <>
+        <ConfirmDialog.Strong>{item.title}</ConfirmDialog.Strong> goes back on the marketplace.
+        {buyerFirst ? ` ${buyerFirst} will no longer be shown as its buyer.` : ''}
+      </>
+    ),
+    confirmLabel: 'Relist',
+    icon: 'rotate-ccw',
+    imageUri: item.image_urls?.[0],
+  };
+}
+
+/** "Delete listing?" in ConfirmDialog's danger tone: it can't be undone. */
+function deleteDialogFor(item: ProductListing): ConfirmDialogContent {
+  return {
+    title: 'Delete this listing?',
+    message: (
+      <>
+        <ConfirmDialog.Strong>{item.title}</ConfirmDialog.Strong> will be removed for good. This
+        can't be undone.
+      </>
+    ),
+    confirmLabel: 'Delete',
+    icon: 'trash-2',
+    imageUri: item.image_urls?.[0],
+    tone: 'danger',
+  };
+}
+
 function initialsOf(name?: string | null): string {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '';
@@ -63,6 +114,7 @@ export default function ProfileScreen() {
 
   const { data, isLoading, isError, refetch } = useDashboard(userId);
   const actions = useDashboardActions(userId);
+  const toggleLike = useToggleLike(['dashboard', userId]);
   const { uploadAvatar, removeAvatar } = useAvatarActions(userId);
 
   const [tab, setTab] = useState<TabKey>('listings');
@@ -72,6 +124,15 @@ export default function ProfileScreen() {
   const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  /** The listing the "Who bought it?" picker is open for (MARK_SOLD_SPEC §1), and why. */
+  const [soldTarget, setSoldTarget] = useState<{
+    item: ProductListing;
+    mode: 'sell' | 'change';
+  } | null>(null);
+  /** The sold listing the Relist dialog is asking about. */
+  const [relistTarget, setRelistTarget] = useState<ProductListing | null>(null);
+  /** The listing the Delete dialog is asking about. */
+  const [deleteTarget, setDeleteTarget] = useState<ProductListing | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
@@ -131,27 +192,42 @@ export default function ProfileScreen() {
     }
   }, [removeAvatar]);
 
-  const confirmSold = (item: ProductListing) =>
-    Alert.alert('Mark as sold?', `"${item.title}" will move to your sold items.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Mark sold', onPress: () => actions.markSold.mutate({ id: item.id }) },
-    ]);
+  // The picker replaces the old Alert: it asks who bought it (or no one on Yahora).
+  const confirmSold = (item: ProductListing) => setSoldTarget({ item, mode: 'sell' });
+  // Opens on the current choice: the buyer, or "Someone not on Yahora".
+  const changeBuyer = (item: ProductListing) => setSoldTarget({ item, mode: 'change' });
 
-  const confirmAvailable = (item: ProductListing) =>
-    Alert.alert('Relist item?', `"${item.title}" will be available on the marketplace again.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Relist', onPress: () => actions.markAvailable.mutate({ id: item.id }) },
-    ]);
+  // MARK_SOLD_SPEC §3 "Relist dialog": the app's own dialog, not the phone's Alert.
+  const confirmAvailable = (item: ProductListing) => setRelistTarget(item);
+  const relist = () => {
+    if (relistTarget) actions.markAvailable.mutate({ id: relistTarget.id });
+    setRelistTarget(null);
+  };
 
-  const confirmDelete = (item: ProductListing) =>
-    Alert.alert('Delete listing?', `"${item.title}" will be removed permanently.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => actions.deleteProduct.mutate({ id: item.id }),
-      },
-    ]);
+  // MARK_SOLD_SPEC §4 "That wasn't me dialog".
+  const confirmNotMe = (purchase: Purchase) => {
+    const p = purchase.product;
+    const sellerFirst = partyName(p.seller).split(' ')[0];
+    Alert.alert(
+      'Remove this purchase?',
+      `${sellerFirst} marked “${p.title}” as sold to you. If that's wrong, remove it. The listing stays sold; you just won't be shown as its buyer.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => actions.removePurchase.mutate({ productId: p.id }),
+        },
+      ],
+    );
+  };
+
+  // The same dialog as Relist, in its red "danger" tone (owner, 27 Oct).
+  const confirmDelete = (item: ProductListing) => setDeleteTarget(item);
+  const deleteListing = () => {
+    if (deleteTarget) actions.deleteProduct.mutate({ id: deleteTarget.id });
+    setDeleteTarget(null);
+  };
 
   const profile = data?.profile;
   // Reachable-from-this-device avatar URL; see src/lib/config.ts. Used by the
@@ -239,7 +315,6 @@ export default function ProfileScreen() {
                           product={item}
                           style={{ width: cardWidth }}
                           showManageActions
-                          isLiked={item.is_liked}
                           // The dashboard endpoint returns the signed-in
                           // student's own listings with no seller joined onto
                           // them. The card names the seller on EVERY surface,
@@ -249,12 +324,15 @@ export default function ProfileScreen() {
                           onPress={() =>
                             router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
                           }
-                          onLike={() =>
-                            actions.toggleLike.mutate({ id: item.id, isLiked: !!item.is_liked })
-                          }
+                          // The dashboard sends `is_liked` since 27 Oct; before
+                          // that every tap was sent as a new like and the server
+                          // took it away (1 → 2 → 1 → 0).
+                          onLike={() => toggleLike.mutate({ productId: item.id })}
                           onEdit={() => router.push(`/sell?edit=${item.id}`)}
                           onMarkSold={() => confirmSold(item)}
                           onMarkAvailable={() => confirmAvailable(item)}
+                          sale={item.status === 'sold' ? saleFor(item) : undefined}
+                          onChangeBuyer={() => changeBuyer(item)}
                           onDelete={() => confirmDelete(item)}
                         />
                       ))}
@@ -272,7 +350,12 @@ export default function ProfileScreen() {
                   purchases.length ? (
                     <View style={styles.grid}>
                       {purchases.map((item) => (
-                        <PurchaseCard key={item.id} purchase={item} width={cardWidth} />
+                        <PurchaseCard
+                          key={item.id}
+                          purchase={item}
+                          width={cardWidth}
+                          onNotMe={() => confirmNotMe(item)}
+                        />
                       ))}
                     </View>
                   ) : (
@@ -319,6 +402,30 @@ export default function ProfileScreen() {
           onChangePhoto={handleChangePhoto}
           onRemovePhoto={handleRemovePhoto}
           onClose={() => setAvatarSheetOpen(false)}
+        />
+
+        {/* Mounted only while open, so each open starts fresh. */}
+        {soldTarget ? (
+          <BuyerPickerSheet
+            visible
+            onClose={() => setSoldTarget(null)}
+            product={soldTarget.item}
+            initialBuyerId={
+              soldTarget.mode === 'change' ? (soldTarget.item.buyer?.id ?? null) : undefined
+            }
+            mode={soldTarget.mode}
+          />
+        ) : null}
+
+        <ConfirmDialog
+          content={relistTarget ? relistDialogFor(relistTarget) : null}
+          onConfirm={relist}
+          onCancel={() => setRelistTarget(null)}
+        />
+        <ConfirmDialog
+          content={deleteTarget ? deleteDialogFor(deleteTarget) : null}
+          onConfirm={deleteListing}
+          onCancel={() => setDeleteTarget(null)}
         />
 
         {/* Pinch, drag, double-tap. The viewer owns its own gesture root —
@@ -501,13 +608,24 @@ function ListNewItemCard({ onPress }: { onPress: () => void }) {
 }
 
 /* ────────────────────────── Purchase card ────────────────────────── */
-function PurchaseCard({ purchase, width }: { purchase: Purchase; width: number }) {
+function PurchaseCard({
+  purchase,
+  width,
+  onNotMe,
+}: {
+  purchase: Purchase;
+  width: number;
+  /** "That wasn't me" (MARK_SOLD_SPEC §4). */
+  onNotMe: () => void;
+}) {
   const p = purchase.product;
-  const image = p?.image_urls?.[0];
-  const boughtOn = new Date(purchase.created_at);
-  const dateLabel = Number.isNaN(boughtOn.getTime())
-    ? ''
-    : boughtOn.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  // Loopback in local dev without this; see src/lib/config.ts.
+  const image = resolveMediaUrl(p?.image_urls?.[0]);
+  // "From Rahul Verma · 2 Oct": the date it was marked sold (spec §4).
+  const date = formatShortDate(p?.sold_at ?? purchase.created_at);
+  const fromLine = [p?.seller ? `From ${partyName(p.seller)}` : null, date || null]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <View style={[styles.purchaseShadow, { width }]}>
@@ -531,14 +649,28 @@ function PurchaseCard({ purchase, width }: { purchase: Purchase; width: number }
           <AppText style={styles.purchasePrice} numberOfLines={1}>
             {formatPrice(p?.price ?? 0)}
           </AppText>
-          {dateLabel ? (
-            <View style={styles.purchaseDateRow}>
-              <Feather name="clock" size={12} color={colors.mutedText} />
-              <AppText style={styles.purchaseDate} numberOfLines={1}>
-                {dateLabel}
-              </AppText>
-            </View>
+          {fromLine ? (
+            <AppText style={styles.purchaseFrom} numberOfLines={2}>
+              {fromLine}
+            </AppText>
           ) : null}
+          {/* A quiet pill, not an underlined link (spec §4, from the website's
+              N-H): it reads as a button and is 28 tall, so it's easy to hit. */}
+          <Pressable
+            onPress={onNotMe}
+            hitSlop={6}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.notMe, pressed && styles.notMePressed]}
+          >
+            {({ pressed }) => (
+              <>
+                <Feather name="user-x" size={14} color={pressed ? colors.purple : colors.mutedText} />
+                <AppText style={[styles.notMeText, pressed && styles.notMeTextPressed]}>
+                  That wasn&apos;t me
+                </AppText>
+              </>
+            )}
+          </Pressable>
         </View>
       </View>
     </View>
@@ -1049,17 +1181,33 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.bodyLg,
     color: colors.blueDark,
   },
-  purchaseDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  // MARK_SOLD_SPEC §4: who it was bought from, then "That wasn't me".
+  purchaseFrom: {
     marginTop: 2,
-  },
-  purchaseDate: {
-    fontFamily: font.family.regular,
+    fontFamily: font.family.medium,
     fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
+  notMe: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 28,
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.notMeBorder,
+  },
+  notMePressed: { backgroundColor: colors.pinkLight },
+  notMeText: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.caption,
+    color: colors.mutedText,
+  },
+  notMeTextPressed: { color: colors.purple },
 
   /* Empty / error */
   empty: {

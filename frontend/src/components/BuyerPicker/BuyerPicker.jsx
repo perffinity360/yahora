@@ -196,6 +196,14 @@ export default function BuyerPicker({ product, mode, initialBuyerId, onClose, on
     }
   };
 
+  /* At most one row is chosen, and clicking the chosen row again clears it
+     (MARK_SOLD_SPEC §1 v1.1): a wrong click is taken back without closing the
+     picker, and the button fades again. */
+  const toggle = (person) =>
+    setSelected((cur) => (cur?.id === person.id ? undefined : person));
+  const toggleOffPlatform = () =>
+    setSelected((cur) => (cur === null ? undefined : null));
+
   const list = searching ? search : messaged;
   const listItems = list?.status === "ready" ? list.items : [];
   // The chosen person stays on screen even when the list in view doesn't
@@ -221,7 +229,7 @@ export default function BuyerPicker({ product, mode, initialBuyerId, onClose, on
               key={p.id}
               person={p}
               selected={selected?.id === p.id}
-              onSelect={setSelected}
+              onSelect={toggle}
             />
           ))
         ) : search?.status === "error" ? null : (
@@ -241,7 +249,7 @@ export default function BuyerPicker({ product, mode, initialBuyerId, onClose, on
             key={p.id}
             person={p}
             selected={selected?.id === p.id}
-            onSelect={setSelected}
+            onSelect={toggle}
           />
         ))}
       </>
@@ -291,7 +299,7 @@ export default function BuyerPicker({ product, mode, initialBuyerId, onClose, on
 
         <div className={styles.list} role="radiogroup" aria-label="Who bought it?">
           {pinned && (
-            <PersonRow person={pinned} selected onSelect={setSelected} />
+            <PersonRow person={pinned} selected onSelect={toggle} />
           )}
           {section}
           <div className={styles.divider} />
@@ -300,7 +308,7 @@ export default function BuyerPicker({ product, mode, initialBuyerId, onClose, on
             role="radio"
             aria-checked={selected === null}
             className={`${styles.row} ${selected === null ? styles.rowSelected : ""}`}
-            onClick={() => setSelected(null)}
+            onClick={toggleOffPlatform}
           >
             <span className={styles.offPlatformIcon} aria-hidden="true">
               <UserX size={18} />

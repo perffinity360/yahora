@@ -134,8 +134,10 @@ export function FilterSheet({ visible, onClose, filters }: Props) {
 
             {/* Toggles */}
             <Section icon="sliders" title="Quick filters">
+              {/* A bookmark: Save is a bookmark everywhere, and a heart always
+                  means Like (MARK_SOLD_SPEC §6, from the website's N-H). */}
               <ToggleRow
-                icon="heart"
+                icon="bookmark"
                 label="My Wishlist"
                 sub="Only items you've saved"
                 value={showWishlist}

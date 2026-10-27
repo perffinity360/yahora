@@ -100,6 +100,17 @@ export const colors = {
   // rgba(42,8,42,0.16) is this at shadowOpacity 0.16.
   chatMenuShadow: '#2A082A',
 
+  // ── MARK_SOLD_SPEC.md §1 — the buyer picker (Phase 6B V-F) ──
+  sheetScrimLight: 'rgba(11,11,11,0.32)', // the picker's scrim (spec value; `scrim` is 0.55)
+  pickerRowSelected: 'rgba(128,0,128,0.08)',
+  pickerRowPressed: 'rgba(128,0,128,0.05)',
+  pickerDivider: 'rgba(128,0,128,0.08)',
+  // §3 — the seller's sold card: the buyer box (pickerRowSelected at rest) and the Relist pill.
+  saleBoxPressed: 'rgba(128,0,128,0.14)',
+  relistBorder: 'rgba(128,0,128,0.28)',
+  // §4 — the buyer's quiet "That wasn't me" pill.
+  notMeBorder: 'rgba(128,0,128,0.15)',
+
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
   appBgBottom: '#F1E6FF',
@@ -110,6 +121,9 @@ export const colors = {
   mutedPlaceholder: '#BBB6C8',
   errorBg: '#FEF0F0',
   errorText: '#B91C1C',
+  // ConfirmDialog's danger tone (Delete): the confirm button runs dangerStart →
+  // errorText. White text on both ends is above 4.5:1 (4.83 and 6.47).
+  dangerStart: '#DC2626',
   successBg: '#F0FDF4',
   successText: '#15803D',
   // Swipe-deck decision stamps (bright, mirrors the web's LIKE/PASS colours).

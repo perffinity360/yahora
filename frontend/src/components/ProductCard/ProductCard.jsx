@@ -6,10 +6,11 @@
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { supabase } from "../../config/supabaseClient";
-import { RotateCcw, User, Users } from "lucide-react";
+import { Pencil, RotateCcw, User, UserX } from "lucide-react";
 import styles from "./ProductCard.module.css";
 import SmartImage from "../SmartImage/SmartImage";
 import ShareSheet from "../ShareSheet/ShareSheet";
+import AvatarImg from "../AvatarImg/AvatarImg";
 import { formatShortDate } from "../../utils/messageFormat";
 
 const CONDITION_CONFIG = {
@@ -158,7 +159,7 @@ const ProductCard = memo(function ProductCard({
   onDelete = null,
   onMarkSold = null,
   onMarkAvailable = null,
-  /* MARK_SOLD_SPEC §3: "Change buyer" on the owner's sold card (Dashboard). */
+  /* The seller's sold card (MARK_SOLD_SPEC §3 v1.1): the buyer box opens this. */
   onChangeBuyer = null,
   onToggleLike = null,
   onToggleSave = null,
@@ -312,6 +313,18 @@ const ProductCard = memo(function ProductCard({
   const sellerInitial =
     typeof sellerName === "string" ? sellerName.charAt(0).toUpperCase() : "U";
 
+  /* ── THE SELLER'S SOLD CARD (MARK_SOLD_SPEC §3 v1.1, same as the app) ──
+     No location line and no time row. One tinted buyer box (avatar, name,
+     "Buyer · 27 Oct", pencil) that IS the Change buyer button, then a Relist
+     pill beside delete. `product.buyer` is null for someone not on Yahora. */
+  const ownerSold = isOwner && product.status === "sold";
+  const buyer = product.buyer ?? null;
+  const buyerName = buyer
+    ? buyer.full_name || (buyer.username ? `@${buyer.username}` : "Yahora student")
+    : "Not on Yahora";
+  // §2's date form: "27 Oct", or "27 Oct 2025" in an earlier year.
+  const soldDate = product.sold_at ? formatShortDate(product.sold_at) : null;
+
   return (
     <article
       className={`${styles.card} ${preview ? styles.cardPreview : ""}`}
@@ -387,59 +400,12 @@ const ProductCard = memo(function ProductCard({
           </div>
           <span className={styles.price}>{displayPrice}</span>
         </div>
-        {product.location && (
+        {product.location && !ownerSold && (
           <span className={styles.locationTag}>
             {product.location.toUpperCase()}
           </span>
         )}
         <h3 className={styles.title}>{product.title}</h3>
-
-        {/* MARK_SOLD_SPEC §3: the owner's sold card says who bought it and
-            when, then Change buyer · Relist. The buyer is only ever sent to
-            the seller (the dashboard's `listings[].buyer`); where a page has
-            no `buyer` key at all, the line is left out rather than guessed. */}
-        {isOwner && product.status === "sold" && (
-          <div className={styles.soldInfo}>
-            {product.buyer !== undefined && (
-              <p className={styles.soldLine}>
-                {product.buyer
-                  ? `Sold to ${product.buyer.full_name || `@${product.buyer.username}`}`
-                  : "Sold · buyer not on Yahora"}
-                {product.sold_at ? ` · ${formatShortDate(product.sold_at)}` : ""}
-              </p>
-            )}
-            {(onChangeBuyer || onMarkAvailable) && (
-              <div className={styles.soldActions}>
-                {onChangeBuyer && (
-                  <button
-                    type="button"
-                    className={styles.soldActionBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onChangeBuyer();
-                    }}
-                  >
-                    <Users size={14} aria-hidden="true" />
-                    Change buyer
-                  </button>
-                )}
-                {onMarkAvailable && (
-                  <button
-                    type="button"
-                    className={styles.soldActionBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onMarkAvailable();
-                    }}
-                  >
-                    <RotateCcw size={14} aria-hidden="true" />
-                    Relist
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── THE CARD SHOWS ONE NUMBER, NOT THREE (Phase 5, Block V-C) ──
             The view count and the comment count were removed on 2026-09-20 to
@@ -492,109 +458,153 @@ const ProductCard = memo(function ProductCard({
           </div>
         </div>
 
-        <div className={styles.timeAvatar}>
-          <p className={styles.timeAgo}>{timeLabel}</p>
-
-          {isOwner ? (
-            <div className={styles.ownerActions}>
-              {product.status === "sold" ? (
-                <>
-                  {/* The old "SOLD TO @<name>" label read a column nothing
-                      wrote, and Relist is a text button under the title
-                      now (MARK_SOLD_SPEC §3). The photo keeps its SOLD
-                      badge. */}
-                  <button
-                    className={`${styles.cardBtn} ${styles.cardBtnDelete}`}
-                    title="Delete listing"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete?.();
-                    }}
-                    style={{ color: "#f87171" }}
-                  >
-                    <TrashIcon size={14} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className={`${styles.cardBtn} ${styles.cardBtnChat}`}
-                    title="Messages"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onChat?.();
-                    }}
-                  >
-                    <ChatIcon size={14} />
-                  </button>
-
-                  {onMarkSold && (
-                    <button
-                      className={styles.cardBtn}
-                      title="Mark as Sold"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMarkSold();
-                      }}
-                      style={{ color: "#4ade80" }}
-                    >
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                      </svg>
-                    </button>
-                  )}
-
-                  <button
-                    className={`${styles.cardBtn} ${styles.cardBtnEdit}`}
-                    title="Edit listing"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit?.();
-                    }}
-                  >
-                    <PenIcon size={13} />
-                  </button>
-                  <button
-                    className={`${styles.cardBtn} ${styles.cardBtnDelete}`}
-                    title="Delete listing"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete?.();
-                    }}
-                    style={{ color: "#f87171" }}
-                  >
-                    <TrashIcon size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className={styles.seller}>
-              {sellerAvatar ? (
-                <img
-                  src={sellerAvatar}
-                  alt={sellerName}
-                  className={styles.sellerAvatar}
+        {ownerSold ? (
+          <div className={styles.sale}>
+            <button
+              type="button"
+              className={styles.saleBox}
+              disabled={!onChangeBuyer}
+              title="Change buyer"
+              aria-label={`Change buyer. Sold to ${buyer ? buyerName : "someone not on Yahora"}${soldDate ? `, ${soldDate}` : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChangeBuyer?.();
+              }}
+            >
+              {buyer ? (
+                /* The picker's avatar (same initials colour per person); a
+                   photo gets the seller photo's purple ring. */
+                <AvatarImg
+                  src={buyer.avatar_url}
+                  name={buyerName.replace("@", "")}
+                  size={28}
+                  className={`${styles.saleAvatar} ${styles.saleAvatarRing}`}
                 />
               ) : (
-                <div className={styles.sellerAvatarFallback}>
-                  {sellerHidden ? <User size={12} aria-hidden="true" /> : sellerInitial}
-                </div>
+                <span className={styles.saleNoBuyer}>
+                  <UserX size={13} aria-hidden="true" />
+                </span>
               )}
-              <span className={styles.sellerName}>by {sellerName}</span>
+              <span className={styles.saleText}>
+                <span className={styles.saleName}>{buyerName}</span>
+                <span className={styles.saleMeta}>
+                  {soldDate ? `Buyer · ${soldDate}` : "Buyer"}
+                </span>
+              </span>
+              <Pencil size={13} className={styles.salePencil} aria-hidden="true" />
+            </button>
+
+            <div className={styles.saleActions}>
+              {onMarkAvailable && (
+                <button
+                  type="button"
+                  className={styles.relist}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMarkAvailable();
+                  }}
+                >
+                  <RotateCcw size={14} aria-hidden="true" />
+                  Relist
+                </button>
+              )}
+              <button
+                className={`${styles.cardBtn} ${styles.cardBtnDelete}`}
+                title="Delete listing"
+                aria-label="Delete listing"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete?.();
+                }}
+                style={{ color: "#f87171" }}
+              >
+                <TrashIcon size={14} />
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className={styles.timeAvatar}>
+            <p className={styles.timeAgo}>{timeLabel}</p>
+
+            {isOwner ? (
+              <div className={styles.ownerActions}>
+                <button
+                  className={`${styles.cardBtn} ${styles.cardBtnChat}`}
+                  title="Messages"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChat?.();
+                  }}
+                >
+                  <ChatIcon size={14} />
+                </button>
+
+                {onMarkSold && (
+                  <button
+                    className={styles.cardBtn}
+                    title="Mark as Sold"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkSold();
+                    }}
+                    style={{ color: "#4ade80" }}
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                  </button>
+                )}
+
+                <button
+                  className={`${styles.cardBtn} ${styles.cardBtnEdit}`}
+                  title="Edit listing"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit?.();
+                  }}
+                >
+                  <PenIcon size={13} />
+                </button>
+                <button
+                  className={`${styles.cardBtn} ${styles.cardBtnDelete}`}
+                  title="Delete listing"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete?.();
+                  }}
+                  style={{ color: "#f87171" }}
+                >
+                  <TrashIcon size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className={styles.seller}>
+                {sellerAvatar ? (
+                  <img
+                    src={sellerAvatar}
+                    alt={sellerName}
+                    className={styles.sellerAvatar}
+                  />
+                ) : (
+                  <div className={styles.sellerAvatarFallback}>
+                    {sellerHidden ? <User size={12} aria-hidden="true" /> : sellerInitial}
+                  </div>
+                )}
+                <span className={styles.sellerName}>by {sellerName}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {shareOpen && (

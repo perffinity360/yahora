@@ -37,6 +37,8 @@ export interface Product {
   likes_count: number;
   comments_count: number;
   created_at: string;
+  /** When it was marked sold (Phase 6B N-E); `null` unless sold. */
+  sold_at?: string | null;
 }
 
 /**
@@ -137,6 +139,12 @@ export interface ProductDetailData extends Product, SellerHidden {
   comments: ProductComment[];
   is_liked?: boolean;
   is_saved?: boolean;
+  /**
+   * Present only when the viewer is the seller and the listing is sold
+   * (MARK_SOLD_SPEC §2): the buyer, or `null` for someone not on Yahora. The
+   * key is absent for everyone else — never read it as "no buyer".
+   */
+  buyer?: SaleParty | null;
 }
 
 /**
@@ -172,6 +180,28 @@ export interface ProductListing {
   comments_count: number;
   is_liked?: boolean;
   is_saved?: boolean;
+  /** When it was marked sold (Phase 6B N-E); `null` unless sold. */
+  sold_at?: string | null;
+  /**
+   * Dashboard only: who bought it. `null` when it isn't sold, was sold to
+   * someone not on Yahora, or the buyer said "That wasn't me".
+   */
+  buyer?: SaleParty | null;
+}
+
+/** One side of a sale: the buyer as the seller sees them (MARK_SOLD_SPEC §3), or the
+ *  seller as the buyer sees them (§4). Never shown to anyone else. */
+export interface SaleParty {
+  id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
+/** A row of `GET /api/products/:id/buyer-candidates` (MARK_SOLD_SPEC §1). */
+export interface BuyerCandidate extends SaleParty {
+  /** True in the no-`q` list (they messaged about this listing); false in a search. */
+  messaged: boolean;
 }
 
 /**
@@ -301,9 +331,23 @@ export interface PublicListing {
   is_saved?: boolean;
 }
 
+/** A row of the public profile's `sold_listings` (MARK_SOLD_SPEC §5). No buyer, ever. */
+export interface PublicSoldListing {
+  id: string;
+  title: string;
+  price: number;
+  image_urls: string[];
+  condition: string | null;
+  sold_at: string | null;
+}
+
 export interface PublicProfileData {
   profile: PublicProfile;
   listings: PublicListing[];
+  /** At most 12, newest sold first. */
+  sold_listings?: PublicSoldListing[];
+  /** All of them, which can be more than 12. */
+  sold_count?: number;
 }
 
 export interface Purchase {
@@ -314,6 +358,11 @@ export interface Purchase {
     title: string;
     price: number;
     image_urls: string[];
+    status?: string;
+    /** When it was marked sold: the date on the purchase card (MARK_SOLD_SPEC §4). */
+    sold_at?: string | null;
+    /** Who the caller bought it from. */
+    seller?: SaleParty | null;
   };
 }
 
