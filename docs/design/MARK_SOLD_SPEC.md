@@ -248,6 +248,9 @@ This is the social proof the plan asked for: a seller's history of finished sale
 
 - The marketplace feed shows **available** listings only, as today.
 - Likes and saves on a listing are kept when it sells (there is no watchlist screen yet).
+- **Icons (v1.2):** Save is always a **bookmark** (outline, filled when saved) and a **heart**
+  always means Like, on both platforms: the product page's save button, the cards, and the
+  "My Wishlist" filter.
 - Nothing notifies the buyer (notifications are Phase 8). They find the purchase in their
   purchases list.
 - Payments stay off-platform (UPI or cash in person).

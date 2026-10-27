@@ -108,6 +108,8 @@ export const colors = {
   // §3 — the seller's sold card: the buyer box (pickerRowSelected at rest) and the Relist pill.
   saleBoxPressed: 'rgba(128,0,128,0.14)',
   relistBorder: 'rgba(128,0,128,0.28)',
+  // §4 — the buyer's quiet "That wasn't me" pill.
+  notMeBorder: 'rgba(128,0,128,0.15)',
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',

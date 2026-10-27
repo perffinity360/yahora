@@ -307,9 +307,12 @@ function Content({
   // are not real students, and a listing's seller always is one.
   const isOwnListing = !!seller && !!myUserId && seller.id === myUserId;
   const isForeignCampus = !!myUniversityId && product.university_id !== myUniversityId;
-  /* MARK_SOLD_SPEC §2: a sold listing is closed to everyone but its seller.
-     Message seller, like, save and the question box go; the questions stay
-     readable. With all three buttons gone there is no action bar at all. */
+  /* MARK_SOLD_SPEC §2: a sold listing is closed for EVERYONE, its seller
+     too: no like, no save, no new questions (the likes count and the
+     questions stay readable). Everyone else also loses Message seller, so they
+     get no action bar at all; the seller keeps a bar holding only their
+     "Your listing" marker. Replies and votes on existing questions stay with
+     the seller, as before. */
   const closedToMe = sold && !isOwnListing;
 
   const eduLine = seller
@@ -591,6 +594,7 @@ function Content({
             viewerName={viewerName}
             viewerAvatarUrl={viewerAvatarUrl}
             canInteract={canComment}
+            soldClosed={sold}
             onAskQuestion={() => setComposerOpen(true)}
             onReplyingChange={(commentId) => {
               setReplyingTo(commentId);
@@ -687,8 +691,9 @@ function Content({
         <View style={styles.actionBar}>
           {/* No heart or bookmark on another campus's listing: the API refuses
               both (CROSS_CAMPUS_INTERACTION_BLOCKED), so a live button lit up
-              for a moment and went out again. The likes count above stays. */}
-          {isForeignCampus ? null : (
+              for a moment and went out again. None on a sold listing either,
+              the seller's own included (§2). The likes count above stays. */}
+          {isForeignCampus || sold ? null : (
           <>
           <Pressable
             onPress={onLike}

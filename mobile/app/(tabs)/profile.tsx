@@ -654,16 +654,21 @@ function PurchaseCard({
               {fromLine}
             </AppText>
           ) : null}
+          {/* A quiet pill, not an underlined link (spec §4, from the website's
+              N-H): it reads as a button and is 28 tall, so it's easy to hit. */}
           <Pressable
             onPress={onNotMe}
-            hitSlop={8}
+            hitSlop={6}
             accessibilityRole="button"
-            style={styles.notMe}
+            style={({ pressed }) => [styles.notMe, pressed && styles.notMePressed]}
           >
             {({ pressed }) => (
-              <AppText style={[styles.notMeText, pressed && styles.notMeTextPressed]}>
-                That wasn&apos;t me
-              </AppText>
+              <>
+                <Feather name="user-x" size={14} color={pressed ? colors.purple : colors.mutedText} />
+                <AppText style={[styles.notMeText, pressed && styles.notMeTextPressed]}>
+                  That wasn&apos;t me
+                </AppText>
+              </>
             )}
           </Pressable>
         </View>
@@ -1183,14 +1188,26 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.caption,
     color: colors.mutedText,
   },
-  notMe: { alignSelf: 'flex-start', marginTop: 4 },
+  notMe: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 28,
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.notMeBorder,
+  },
+  notMePressed: { backgroundColor: colors.pinkLight },
   notMeText: {
     fontFamily: font.family.semibold,
     fontSize: font.sizes.caption,
     color: colors.mutedText,
-    textDecorationLine: 'underline',
   },
-  notMeTextPressed: { opacity: 0.6 },
+  notMeTextPressed: { color: colors.purple },
 
   /* Empty / error */
   empty: {

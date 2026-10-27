@@ -63,6 +63,12 @@ export interface CommentSectionProps {
   viewerAvatarUrl?: string | null;
   /** False when browsing another campus — read-only, mirroring the web lock. */
   canInteract: boolean;
+  /**
+   * The listing is sold (MARK_SOLD_SPEC §2): no new questions, for anyone,
+   * the seller too. Existing questions stay readable; replies and votes on
+   * them follow `canInteract`.
+   */
+  soldClosed?: boolean;
   /** Opens the screen's pinned composer for a new top-level question. */
   onAskQuestion: () => void;
   /** Lets the screen hide its action dock while an inline reply is open. */
@@ -80,6 +86,7 @@ export function CommentSection({
   viewerName,
   viewerAvatarUrl,
   canInteract,
+  soldClosed = false,
   onAskQuestion,
   onReplyingChange,
   scrollRef,
@@ -146,7 +153,7 @@ export function CommentSection({
         ) : null}
       </View>
 
-      {canInteract ? (
+      {soldClosed ? null : canInteract ? (
         <Pressable
           onPress={onAskQuestion}
           accessibilityRole="button"
@@ -168,7 +175,11 @@ export function CommentSection({
         </View>
       )}
 
-      {topLevel.length === 0 ? (
+      {topLevel.length === 0 && soldClosed ? (
+        <View style={styles.empty}>
+          <Text style={styles.closedText}>Questions are closed — this item has been sold.</Text>
+        </View>
+      ) : topLevel.length === 0 ? (
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
             <Feather name="message-circle" size={22} color={colors.purple} />
@@ -580,6 +591,13 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: font.family.medium,
+    fontSize: font.sizes.body,
+    color: colors.mutedText,
+    textAlign: 'center',
+  },
+  // MARK_SOLD_SPEC §2: replaces the "ask something" line on a sold listing.
+  closedText: {
+    fontFamily: font.family.regular,
     fontSize: font.sizes.body,
     color: colors.mutedText,
     textAlign: 'center',

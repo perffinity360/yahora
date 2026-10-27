@@ -59,9 +59,22 @@ The owner asked for the web's sold card to look like the app's. I built it, then
 **Not changed on the web, and why:**
 - **The overlay before the sheet:** your modals' overlay and card already start together.
 - **The Delete confirmation:** yours is already an in-app modal.
-- **Deselect (§1 v1.1) — still to do in your `BuyerPicker`:** a click on the selected row should
-  clear it (and fade the button again). Today `onSelect={setSelected}` only ever sets it. I left
-  your new component alone.
+- **Deselect (§1 v1.1): done by me in your `BuyerPicker.jsx`** (owner's request). A click on the
+  selected row clears it, and the button fades again. The three `onSelect={setSelected}` became
+  `onSelect={toggle}`, and the off-platform row uses `toggleOffPlatform`. Nothing else in the
+  file changed.
+
+## Your N-H spec changes, now on the app
+
+- **(a) "That wasn't me" pill:** done, to §4 as you wrote it (`user-x` 14, 28 tall, pinkLight +
+  purple when pressed).
+- **(c) A sold listing is closed for everyone, the seller too:** done. On a sold listing the app
+  shows no heart or bookmark in the action bar (the seller keeps only `Your listing`), and no
+  "ask a question" box. With no questions, it says `Questions are closed — this item has been
+  sold.` The app matches your web choice: the **seller** can still reply to and vote on
+  existing questions. Non-sellers couldn't before and still can't, as in the app's V-F.
+- **(d) Save is a bookmark:** the app's product page already used one. The "My Wishlist" filter
+  switch was a heart; it's a bookmark now. I added the rule to the spec (§6).
 - **Search (#2):** the database fix covers the website.
 - **Grid overlap (#7):** the web grid is CSS, not FlashList.
 
