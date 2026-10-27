@@ -192,7 +192,13 @@ export default function PublicProfileScreen() {
                 <>
                   <SectionRule />
                   <View style={[styles.listingsHead, styles.soldHead]}>
-                    <AppText style={styles.listingsTitle}>Sold · {soldCount}</AppText>
+                    {/* The listings header's look, count chip included (owner,
+                        27 Oct: "Sold · 1" beside "listings (4)" read as a
+                        mismatch). MARK_SOLD_SPEC §5 v1.3. */}
+                    <AppText style={styles.listingsTitle}>Sold</AppText>
+                    <View style={styles.countChip}>
+                      <AppText style={styles.countChipText}>{soldCount}</AppText>
+                    </View>
                   </View>
                   <View style={styles.grid}>
                     {soldListings.map((item) => (

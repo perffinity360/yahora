@@ -974,9 +974,9 @@ const styles = StyleSheet.create({
   },
   soldText: {
     fontFamily: font.family.serif,
-    fontSize: 44,
-    lineHeight: 52,
-    letterSpacing: 6,
+    fontSize: 60,
+    lineHeight: 70,
+    letterSpacing: 8,
     color: colors.white,
   },
   dots: {

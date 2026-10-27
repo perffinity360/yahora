@@ -141,7 +141,8 @@ needs 4.5:1 (5.39 at that end; 3.64 at `#EB487F`).
 app) was easy to miss. The photo is now drawn the way a sold **card** draws it, for everyone,
 the seller too: a scrim over the whole photo (app `colors.scrim`, 0.55; web
 `rgba(0,0,0,0.48)`, the card's values on each platform), and `SOLD` centred across it in Bree
-Serif 400 white, page-sized (44 on the app with tracking 6, 3rem on the web with 0.12em). It
+Serif 400 white, page-sized (60 on the app with tracking 8, 4rem on the web with 0.12em; v1.3
+started at 44 / 3rem, and the owner found it small on the phone). It
 takes no touch or click: tapping the photo still opens the full-screen viewer, and pinch and
 swipe still reach it. The condition badge, the arrows and the dots sit above it, undimmed.
 
@@ -252,7 +253,10 @@ phone's `Alert`: the listing's photo with a red `user-x` badge, the listing's ti
 
 Under the active listings, on web and mobile:
 
-- header `Sold · <count>` — same style as the existing listings header on each platform;
+- header `Sold · <count>` — same style as the existing listings header on each platform. **v1.3,
+  app:** the listings header there has a count chip, so the Sold header is `Sold` plus the same
+  chip (owner: `Sold · 1` beside `Priya's listings (4)` read as a mismatch). The web's listings
+  heading has no count, so it keeps `Sold · <count>`;
 - up to **12** sold listings, newest sold first, as the same cards the profile already uses,
   each with the SOLD badge; no like or save on them;
 - the section is left out when the count is 0;
