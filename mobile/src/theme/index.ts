@@ -119,6 +119,9 @@ export const colors = {
   mutedPlaceholder: '#BBB6C8',
   errorBg: '#FEF0F0',
   errorText: '#B91C1C',
+  // ConfirmDialog's danger tone (Delete): the confirm button runs dangerStart →
+  // errorText. White text on both ends is above 4.5:1 (4.83 and 6.47).
+  dangerStart: '#DC2626',
   successBg: '#F0FDF4',
   successText: '#15803D',
   // Swipe-deck decision stamps (bright, mirrors the web's LIKE/PASS colours).

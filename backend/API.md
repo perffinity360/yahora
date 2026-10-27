@@ -1010,7 +1010,8 @@ any other value is `403 FORBIDDEN`. (Was unauthenticated until 09 Sep 2026.)
                   "comments_count": 0,
                   "sold_at": "timestamptz|null",
                   "buyer": { "id": "uuid", "username": "string", "full_name": "string",
-                             "avatar_url": "string|null" } } ],
+                             "avatar_url": "string|null" },
+                  "is_liked": false, "is_saved": false } ],
   "purchases": [ { "id": "uuid", "created_at": "timestamptz",
                    "product": { "id": "uuid", "title": "string", "price": 0,
                                 "image_urls": ["string"], "status": "string",
@@ -1036,7 +1037,13 @@ rather than appearing as `null`.
 `listings` has **no status filter** — sold products are included (contrast
 [`/public`](#get-apiuseruseridpublic), which returns only `available`). `listings` and
 `purchases` fall back to `[]`, but `profile` has no such guard. `purchases[].product` is
-`null` if the product row was deleted. No `is_liked` / `is_saved` on these listings.
+`null` if the product row was deleted.
+
+**`listings[].is_liked` / `is_saved` (Phase 6B V-F, 2026-10-27).** Whether the caller has liked
+/ saved each of their own listings, on every listing (always a boolean when `listings` is
+non-empty). Computed exactly as on [`/public`](#get-apiuseruseridpublic). Before this the
+dashboard sent neither, so a client toggling from them sent every tap as "not liked yet":
+`POST /like` is a blind toggle, so a tap on a liked listing removed the like.
 
 **Mark as Sold fields (Phase 6B Block N-E).** This is the caller's own dashboard, so the buyer
 is theirs to see (MARK_SOLD_SPEC §0):

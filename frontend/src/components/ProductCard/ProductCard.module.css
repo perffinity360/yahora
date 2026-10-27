@@ -432,12 +432,141 @@
   align-items: center;
 }
 
-.cardSoldTo {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #aaa;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+/* ── The seller's sold card (MARK_SOLD_SPEC §3 v1.1, the app's layout) ──
+   A tinted buyer box that is the Change buyer button, then a Relist pill
+   beside delete. Tints mirror the app: 8% purple at rest, 14% on press. */
+.sale {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.saleBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px 7px 7px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(128, 0, 128, 0.08);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.saleBox:hover {
+  background: rgba(128, 0, 128, 0.11);
+}
+.saleBox:active {
+  background: rgba(128, 0, 128, 0.14);
+  transform: scale(0.98);
+}
+.saleBox:focus-visible,
+.relist:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+.saleBox:disabled {
+  cursor: default;
+}
+
+.saleAvatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+/* The same thin ring as the seller's photo (.sellerAvatar). Photo only: the
+   initials disc is already a solid colour, as on the app. */
+.saleAvatarRing {
+  border: 1.5px solid var(--purple-emphasis);
+  background: #f0f0f0;
+}
+
+.saleNoBuyer {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f0ef;
+  color: var(--muted-text);
+}
+
+.saleText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.saleName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--black-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.saleMeta {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted-text);
+  white-space: nowrap;
+}
+.salePencil {
+  flex-shrink: 0;
+  color: var(--purple);
+}
+
+.saleActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.relist {
+  flex: 1;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(128, 0, 128, 0.28);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--purple);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.relist:hover {
+  background: rgba(128, 0, 128, 0.08);
+}
+.relist:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saleBox,
+  .relist {
+    transition: none;
+  }
+  .saleBox:active,
+  .relist:active {
+    transform: none;
+  }
 }
 
 .cardBtn {

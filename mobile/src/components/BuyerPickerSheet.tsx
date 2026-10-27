@@ -46,12 +46,17 @@ import type { BuyerCandidate, SaleParty } from '../types';
  *      to the bottom of the screen moves its TOP edge when its height changes.
  *      Every search result did the same while typing.
  *
- * So the rise is our own: `rise` starts a whole screen down, in the very first
- * frame, and eases to 0. And the list's height is animated too (`listHeight`):
+ * So the rise is our own: the sheet is below the screen in the very first
+ * frame and eases up to its place. And the list's height is animated too (`listHeight`):
  * when its content changes size, the list grows or shrinks over LIST_RESIZE
  * instead of at once, and the sheet's top edge glides with it.
  *
- * Only the sheet moves; the scrim is there at once (same as AvatarSheet).
+ * The scrim fades in on the same clock (`shown`, 0 → 1). It used to be there at
+ * once while the sheet started a whole screen down, so for the first part of
+ * the rise the screen was dark with no sheet on it yet: "the overlay comes
+ * first, then the sheet" (owner, 27 Oct). Now the sheet rises from just its own
+ * height below the edge (`sheetHeight`, measured), so it shows from the first
+ * frame of the fade.
  */
 const SHEET_RISE = { duration: 320, easing: Easing.out(Easing.cubic) };
 const LIST_RESIZE = { duration: 220, easing: Easing.out(Easing.cubic) };
@@ -133,13 +138,17 @@ export function BuyerPickerSheet({
     setSelectedPerson(person);
   };
 
-  // See A SMOOTH ENTRANCE. A whole screen down in the first frame, whatever the
-  // sheet's height turns out to be.
-  const rise = useSharedValue(Dimensions.get('screen').height);
+  // See A SMOOTH ENTRANCE. Until the sheet is measured it is a whole screen
+  // down, so the first frame can never show it in place.
+  const shown = useSharedValue(0);
+  const sheetHeight = useSharedValue(Dimensions.get('screen').height);
   useEffect(() => {
-    rise.value = withTiming(0, SHEET_RISE);
-  }, [rise]);
-  const riseStyle = useAnimatedStyle(() => ({ transform: [{ translateY: rise.value }] }));
+    shown.value = withTiming(1, SHEET_RISE);
+  }, [shown]);
+  const riseStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - shown.value) * sheetHeight.value }],
+  }));
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: shown.value }));
 
   // -1 until the list has been measured once: the first size is taken as it
   // is, every later one is animated to.
@@ -218,9 +227,14 @@ export function BuyerPickerSheet({
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoider style={styles.overlay} fillsModal>
-        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
+        <Reanimated.View style={[styles.scrim, scrimStyle]}>
+          <Pressable style={styles.fill} onPress={onClose} accessibilityLabel="Close" />
+        </Reanimated.View>
 
         <Reanimated.View
+          onLayout={(e) => {
+            sheetHeight.value = e.nativeEvent.layout.height;
+          }}
           style={[styles.sheet, { maxHeight: windowHeight * 0.85, paddingBottom: bottomPad }, riseStyle]}
         >
           <View style={styles.handle} />
@@ -358,6 +372,7 @@ export default BuyerPickerSheet;
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.sheetScrimLight },
+  fill: { flex: 1 },
   sheet: {
     flexShrink: 1,
     backgroundColor: colors.white,

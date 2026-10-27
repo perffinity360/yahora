@@ -1,6 +1,6 @@
-# Mark as Sold — Design Spec v1.1
+# Mark as Sold — Design Spec v1.2
 
-**Phase 6B · v1 · 11 October 2026 · v1.1 · 27 October 2026 · the single source of truth for marking a listing sold,
+**Phase 6B · v1 · 11 October 2026 · v1.1 / v1.2 · 27 October 2026 · the single source of truth for marking a listing sold,
 on BOTH platforms.**
 
 Picture: `docs/design/mark_sold.png` (source `mark-sold-mockup.html`). Where the picture and
@@ -80,7 +80,9 @@ button is disabled again. When the picker opens for **Change buyer**, the curren
 (or the off-platform row) starts selected.
 
 **Motion (mobile, v1.1).** The sheet rises from below the screen over 320 ms (ease-out cubic);
-its first frame is already off-screen, so it never shows in place first. When the list's
+its first frame is already off-screen, so it never shows in place first. **v1.2:** the scrim
+fades in on the same 320 ms, and the sheet starts just its own height below the edge, so the
+two arrive together (v1.1 showed the full scrim first, with no sheet on it yet). When the list's
 content changes size (rows arriving, search results changing), the list's height eases to the
 new size over 220 ms, so the sheet's top edge glides instead of jumping. Web: the modal is
 centred, so only the second rule applies, and only if the jump shows there.
@@ -146,7 +148,9 @@ seller's own dashboard is now:
 3. pinned to the bottom, the **buyer box**, which is also the Change buyer button:
    - background `rgba(128,0,128,0.08)`, radius 12, padding 7 (9 on the right), gap 8;
      pressed `rgba(128,0,128,0.14)` and scale 0.98;
-   - the buyer's avatar, 26 (initials fallback), or for a buyer not on Yahora a 26 circle
+   - the buyer's avatar, 26 (initials fallback). A photo gets the thin purple ring every
+     seller photo has (v1.2; app `Avatar ringed`, web `1.5px solid var(--purple-emphasis)`).
+     For a buyer not on Yahora, a 26 circle
      `#F3F0EF` holding `user-x` 13 mutedText;
    - line 1: the buyer's full name (else @username, else `a Yahora student`), or `Not on
      Yahora`, in Inter 600 12 `#1A1A1A`, 1 line;
@@ -158,10 +162,10 @@ seller's own dashboard is now:
    `rgba(128,0,128,0.08)`, scale 0.97), then the round delete button, gap 8. No divider
    line above it: the box does that job.
 
-**Likes on your own listings.** The heart on the seller's own dashboard cards is a **count,
-not a button**: a seller doesn't like their own listing (Depop and Vinted work the same way).
-Also, `GET /api/user/:userId/dashboard` sends no `is_liked`, so a toggle there treated every
-tap as a new like (owner's report: 1, 2, then back to 1, then 0).
+**Likes on your own listings (v1.2).** The heart on the seller's own cards **is a button**, as
+on every other card. `GET /api/user/:userId/dashboard` sends `is_liked` / `is_saved` on each
+listing since 27 Oct. Without them a toggle sent every tap as a new like (owner's report: 1,
+2, then back to 1, then 0); v1.1 made the heart a plain count, and the owner wanted it back.
 
 **Relist dialog** — title `Relist this item?` · body `<title> goes back on the marketplace.`
 and, when there is a buyer, ` <first name> will no longer be shown as its buyer.` · buttons
@@ -184,6 +188,12 @@ Android one out of place):
   - both scale 0.97 when pressed;
 - entrance: the scrim fades in, and the card goes from 0.92 scale, 12 lower and transparent to
   its place in 240 ms (ease-out cubic). A tap on the scrim, or back, is Cancel.
+
+**Delete dialog (v1.2)** — the Relist dialog's layout in a **danger tone**: title `Delete this
+listing?` · body `<title> will be removed for good. This can't be undone.` · buttons `Cancel` ·
+`Delete`. The badge (or the medallion) holds `trash-2`, and both it and the Delete button use
+the 135° gradient `#DC2626 → #B91C1C` instead of the brand one. The web's existing Delete
+modal is already drawn in-app (red icon, Bree Serif title, red button), so it stays as it is.
 
 The web card's old label `SOLD TO @<name>` goes away: it read a column (`sold_to`) that nothing
 ever wrote, and the buyer is never shown on public cards. Every sold card says **`SOLD`**.

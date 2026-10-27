@@ -717,13 +717,18 @@ export default function Dashboard() {
    }
  };
 
- const executeMarkSold = async (buyerId = null) => {
+ /* `buyer` is the picked person in the dashboard's own shape, so the sold
+    card (MARK_SOLD_SPEC §3 v1.1) shows their name at once rather than after
+    a reload. null = someone not on Yahora. */
+ const executeMarkSold = async (buyerId = null, buyer = null) => {
    const productId = soldModal.product.id;
 
    setData((prev) => ({
      ...prev,
      listings: prev.listings.map((p) =>
-       p.id === productId ? { ...p, status: "sold" } : p,
+       p.id === productId
+         ? { ...p, status: "sold", buyer, sold_at: new Date().toISOString() }
+         : p,
      ),
    }));
 
@@ -752,7 +757,9 @@ export default function Dashboard() {
    setData((prev) => ({
      ...prev,
      listings: prev.listings.map((p) =>
-       p.id === productId ? { ...p, status: "available" } : p,
+       p.id === productId
+         ? { ...p, status: "available", buyer: null, sold_at: null }
+         : p,
      ),
    }));
 
@@ -1040,7 +1047,13 @@ export default function Dashboard() {
                        cursor: "pointer",
                        textAlign: "left",
                      }}
-                     onClick={() => executeMarkSold(chat.contact_id)}
+                     onClick={() =>
+                       executeMarkSold(chat.contact_id, {
+                         id: chat.contact_id,
+                         full_name: chat.contact_name,
+                         avatar_url: chat.contact_avatar,
+                       })
+                     }
                    >
                      <img
                        src={
@@ -1432,6 +1445,7 @@ export default function Dashboard() {
                    onDelete={() => confirmDelete(item.id)}
                    onMarkSold={() => handleMarkSoldClick(item)}
                    onMarkAvailable={() => executeMarkAvailable(item.id)}
+                   onChangeBuyer={() => handleMarkSoldClick(item)}
                    onToggleLike={() =>
                      handleToggleGridLike(item.id, item.is_liked)
                    }

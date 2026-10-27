@@ -371,7 +371,7 @@ function ProductCardBase({
               style={({ pressed }) => [styles.saleBox, pressed && styles.saleBoxPressed]}
             >
               {ownerSale.buyer ? (
-                <Avatar name={ownerSale.buyer.name} uri={ownerSale.buyer.avatarUrl} size={26} />
+                <Avatar name={ownerSale.buyer.name} uri={ownerSale.buyer.avatarUrl} size={26} ringed />
               ) : (
                 <View style={styles.saleNoBuyer}>
                   <Feather name="user-x" size={13} color={colors.mutedText} />

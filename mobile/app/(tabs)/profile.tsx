@@ -30,6 +30,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useAvatarActions } from '../../src/hooks/useAvatarActions';
 import { useDashboard } from '../../src/hooks/useDashboard';
 import { useDashboardActions } from '../../src/hooks/useDashboardActions';
+import { useToggleLike } from '../../src/hooks/useProductActions';
 import { resolveMediaUrl } from '../../src/lib/config';
 import { formatShortDate } from '../../src/lib/messages';
 import { hrefWithFrom } from '../../src/lib/nav';
@@ -82,6 +83,23 @@ function relistDialogFor(item: ProductListing): ConfirmDialogContent {
   };
 }
 
+/** "Delete listing?" in ConfirmDialog's danger tone: it can't be undone. */
+function deleteDialogFor(item: ProductListing): ConfirmDialogContent {
+  return {
+    title: 'Delete this listing?',
+    message: (
+      <>
+        <ConfirmDialog.Strong>{item.title}</ConfirmDialog.Strong> will be removed for good. This
+        can't be undone.
+      </>
+    ),
+    confirmLabel: 'Delete',
+    icon: 'trash-2',
+    imageUri: item.image_urls?.[0],
+    tone: 'danger',
+  };
+}
+
 function initialsOf(name?: string | null): string {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '';
@@ -96,6 +114,7 @@ export default function ProfileScreen() {
 
   const { data, isLoading, isError, refetch } = useDashboard(userId);
   const actions = useDashboardActions(userId);
+  const toggleLike = useToggleLike(['dashboard', userId]);
   const { uploadAvatar, removeAvatar } = useAvatarActions(userId);
 
   const [tab, setTab] = useState<TabKey>('listings');
@@ -112,6 +131,8 @@ export default function ProfileScreen() {
   } | null>(null);
   /** The sold listing the Relist dialog is asking about. */
   const [relistTarget, setRelistTarget] = useState<ProductListing | null>(null);
+  /** The listing the Delete dialog is asking about. */
+  const [deleteTarget, setDeleteTarget] = useState<ProductListing | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
@@ -201,15 +222,12 @@ export default function ProfileScreen() {
     );
   };
 
-  const confirmDelete = (item: ProductListing) =>
-    Alert.alert('Delete listing?', `"${item.title}" will be removed permanently.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => actions.deleteProduct.mutate({ id: item.id }),
-      },
-    ]);
+  // The same dialog as Relist, in its red "danger" tone (owner, 27 Oct).
+  const confirmDelete = (item: ProductListing) => setDeleteTarget(item);
+  const deleteListing = () => {
+    if (deleteTarget) actions.deleteProduct.mutate({ id: deleteTarget.id });
+    setDeleteTarget(null);
+  };
 
   const profile = data?.profile;
   // Reachable-from-this-device avatar URL; see src/lib/config.ts. Used by the
@@ -306,11 +324,10 @@ export default function ProfileScreen() {
                           onPress={() =>
                             router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
                           }
-                          // No onLike: the heart is a plain count of who
-                          // likes it. You don't like your own listing (as on
-                          // Depop and Vinted), and this endpoint can't say
-                          // whether you had, so a toggle here counted every
-                          // tap as a new like.
+                          // The dashboard sends `is_liked` since 27 Oct; before
+                          // that every tap was sent as a new like and the server
+                          // took it away (1 → 2 → 1 → 0).
+                          onLike={() => toggleLike.mutate({ productId: item.id })}
                           onEdit={() => router.push(`/sell?edit=${item.id}`)}
                           onMarkSold={() => confirmSold(item)}
                           onMarkAvailable={() => confirmAvailable(item)}
@@ -404,6 +421,11 @@ export default function ProfileScreen() {
           content={relistTarget ? relistDialogFor(relistTarget) : null}
           onConfirm={relist}
           onCancel={() => setRelistTarget(null)}
+        />
+        <ConfirmDialog
+          content={deleteTarget ? deleteDialogFor(deleteTarget) : null}
+          onConfirm={deleteListing}
+          onCancel={() => setDeleteTarget(null)}
         />
 
         {/* Pinch, drag, double-tap. The viewer owns its own gesture root —

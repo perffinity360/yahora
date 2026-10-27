@@ -5,9 +5,9 @@ import type { DashboardData, Paged, ProductListing, SaleParty } from '../types';
 
 /**
  * Owner-side listing mutations for the dashboard (mark sold / mark available /
- * delete), plus the buyer's "That wasn't me". There is no like or save here:
- * the dashboard's own listings show their like count only (see the note at
- * the card in app/(tabs)/profile.tsx). Each cancels in-flight dashboard fetches,
+ * delete), plus the buyer's "That wasn't me". Liking your own listing is not
+ * here: the dashboard uses the shared `useToggleLike` (useProductActions), which
+ * guards double taps and tells every other screen. Each cancels in-flight dashboard fetches,
  * optimistically patches the cached `['dashboard', userId]` payload, rolls
  * back on error, and reconciles with the server on settle — so the grid feels
  * instant on slow campus networks but never drifts from the backend.

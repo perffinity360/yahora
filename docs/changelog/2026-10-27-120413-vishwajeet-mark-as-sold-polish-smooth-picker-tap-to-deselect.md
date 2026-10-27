@@ -4,34 +4,85 @@ author: vishwajeet
 phase: "6B"
 block: "V-F"
 for: neeraj
-title: "Mark as Sold polish: smooth picker, tap to deselect, wider name search, new sold card and Relist dialog, grid overlap fix"
+title: "Mark as Sold polish: smooth picker, tap to deselect, wider name search, new sold card, Relist and Delete dialogs, dashboard likes fixed, grid overlap fix"
 ---
 
-# Mark as Sold polish: smooth picker, tap to deselect, wider name search, new sold card and Relist dialog, grid overlap fix
+# Mark as Sold polish: smooth picker, tap to deselect, wider name search, new sold card, Relist and Delete dialogs, dashboard likes fixed, grid overlap fix
 
 The owner tried V-F (`2026-10-26-135948-vishwajeet-app-mark-as-sold-everywhere-picker-sold-cards-purc.md`)
-on a phone and reported seven things. Where this entry and that one disagree, this one is right.
+on a phone and reported seven things, then three more on the same day (#8–#10). Where this entry and that one disagree, this one is right.
 
-**Two things affect you:**
-1. **Your `GET /api/users/search` finds more people now.** I changed `search_users()`, which it
+**Five things affect you:**
+1. **I edited your backend file `user.controller.js`** (owner's decision, 27 Oct):
+   `GET /api/user/:userId/dashboard` now sends `is_liked` / `is_saved` on each listing. Additive.
+   See "New fields on existing responses".
+2. **I edited three of your `frontend/` files.** See the ⚠ section.
+3. **Your `GET /api/users/search` finds more people now.** I changed `search_users()`, which it
    shares with buyer-candidates. Shapes are unchanged. See "Changed endpoints".
-2. **`MARK_SOLD_SPEC.md` is now v1.1.** Three parts change for the website (N-H): tap again to
-   deselect (§1), the sold card (§3), and the Relist dialog (§3).
+4. **`MARK_SOLD_SPEC.md` is now v1.2.** For the website (N-H): tap again to deselect (§1), the
+   sold card (§3, now built on the web by me), the Relist dialog (§3), and the heart on your own
+   cards stays a button (§3).
+5. **The app's Delete listing confirmation is now an in-app dialog** (spec §3 v1.2). The web's
+   Delete modal already was one, so it is unchanged.
 
-**Nothing in `frontend/` changed.** In `backend/`, only `API.md` changed; no code file did.
+## ⚠ I edited yours: `backend/src/modules/user/user.controller.js` (`getDashboardData` only)
+
+Its banner says Vishwajeet doesn't edit it. The owner chose to anyway, so the like button on
+your own dashboard cards can work. I added one block after the buyer flattening: two queries on
+`product_likes` / `product_saves` for the caller and the listing ids, then `is_liked` /
+`is_saved` on every listing. It is a copy of what `getPublicProfile` in the same file already
+does. Nothing else in the handler changed. `API.md` is updated.
+
+## ⚠ I edited yours: `frontend/` (three files)
+
+The owner asked me to fix on the website whichever problems also happen there, and to make the
+web's sold card look like the app's. `npm run build` passes. I haven't checked any of it in a
+browser.
+
+- **`src/components/ProductCard/ProductCard.jsx` + `.module.css`: the sold card (spec §3
+  v1.1).** When `isOwner` and `status === "sold"`, the location tag and the time/actions row are
+  replaced by a tinted **buyer box** (avatar or `UserX`, name or `Not on Yahora`,
+  `Buyer · 27 Oct`, a pencil). It is a button that calls the new **`onChangeBuyer`** prop. Under
+  it are a **Relist** pill (`RotateCcw`, calls `onMarkAvailable`) and the delete button. It reads
+  `product.buyer` and `product.sold_at`, which the dashboard has sent since N-E. The old
+  `SOLD TO @${product.sold_to}` label and its `.cardSoldTo` class are gone (`sold_to` never
+  existed). Unsold and non-owner cards are unchanged. The diff looks big because that block got
+  one level deeper; `git diff -w` shows the real change.
+- **`src/pages/dashboard/Dashboard.jsx`:**
+  - passes `onChangeBuyer={() => handleMarkSoldClick(item)}`, so the buyer box reopens your old
+    sold modal (`POST /sold` accepts a new buyer on a sold listing);
+  - `executeMarkSold(buyerId, buyer)` puts the picked person (`contact_id`, `contact_name`,
+    `contact_avatar` mapped to `id`, `full_name`, `avatar_url`) and `sold_at` on the listing, so
+    the card shows the buyer at once;
+  - `executeMarkAvailable` clears `buyer` and `sold_at`.
+- **The like toggles in `Dashboard.jsx` are untouched.** Earlier today I had swapped them for
+  `canInteract={false}`; I have **reverted that**. With `is_liked` now coming from the server,
+  your original `handleToggleGridLike` / `handleToggleGridSave` are correct as they were.
+
+**Not changed on the web, and why:**
+- **The overlay before the sheet:** your sold modal's overlay (`fadeIn` 0.2 s) and card (`modalIn`
+  0.3 s) already start together.
+- **The Delete confirmation:** yours is already an in-app modal.
+- **Deselect (§1) and the Relist dialog (§3):** the web still has the old sold modal (a click on
+  a person marks it sold at once) and Relist asks nothing. **Build them to the spec in N-H.**
+- **Search (#2):** the database fix covers the website.
+- **Grid overlap (#7):** the web grid is CSS, not FlashList.
 
 ## What changed
 
 | # | Owner's report | Cause | Fix (app) | Website |
 |---|---|---|---|---|
-| 1a | The picker jumps as it opens | Reanimated's `SlideInDown` can draw the sheet for a frame in its final place before it moves. The sheet's height also changed under it: 3 skeleton rows became 1 loaded row, and a bottom-pinned sheet moves its top edge when its height changes | The rise is the sheet's own animation, starting a whole screen down in the very first frame. The list's height eases to each new size (220 ms) | Centred modal. Only add the height easing if you see a jump |
+| 1a | The picker jumps as it opens | Reanimated's `SlideInDown` can draw the sheet for a frame in its final place before it moves. The sheet's height also changed under it: 3 skeleton rows became 1 loaded row, and a bottom-pinned sheet moves its top edge when its height changes | The rise is the sheet's own animation, starting a whole screen down in the very first frame. The list's height eases to each new size (220 ms) | Not built yet (N-H). Centred modal: only add the height easing if a jump shows |
 | 1b | A gap between the sheet and the keyboard | A `statusBarTranslucent` Modal is its own window, starting at the top of the screen. The keyboard avoider measured it against the app's window. The gap in the owner's screenshot is 63 px, about 34 dp, which is the status bar's height: consistent with that window leaving the status bar out, so the sheet was lifted a status bar too far. That fits the numbers but is unconfirmed on the phone | `KeyboardAvoider` gets `fillsModal`: it measures against the physical screen | Not affected |
 | 2 | Searching `.ver` says no student matches | `search_users()` only matched a handle **prefix**, or a trigram similarity ≥ 0.3 to the **whole** string. `similarity('rahul.verma', '.ver')` is 0.231. `ver` and `@rah` failed the same way | New migration (below) | **Free:** your picker calls the same endpoint |
-| 3 | Can't untap a wrongly picked person | Spec said exactly one row is always selected | Tapping the selected row clears it, and the button disables again (§1 v1.1) | Please match |
-| 4 | The sold card looks crowded; Change buyer / Relist don't look tappable | v1's caption plus two text links | New layout (§3 v1.1): no location line or footer. One tinted **buyer box** (avatar, name, `Buyer · 27 Oct`, pencil) that is the Change buyer button, and a **Relist** pill beside delete | Please match |
-| 5 | Dashboard heart: 1, then 2, then back to 1, then 0 | `GET /api/user/:userId/dashboard` sends **no `is_liked`** on `listings` (`user.controller.js`, your file). So every tap was sent as "not liked yet". The server toggled the like off, the app wrote that answer back (2 → 1), then refetched (0) | The heart on your **own** dashboard cards is a count, not a button (as on Depop and Vinted) | **Same bug on the web:** `Dashboard.jsx` passes `item.is_liked`, which is always undefined. Your call: make it a count like the app, or return `is_liked`/`is_saved` from your dashboard endpoint |
-| 6 | The Relist confirmation (Android `Alert`) looks raw | The phone's own dialog | A new `ConfirmDialog`: the listing's photo with a gradient relist badge, a Bree Serif title, the gradient Relist button (§3 v1.1) | Please match the look (spec has every value) |
+| 3 | Can't untap a wrongly picked person | Spec said exactly one row is always selected | Tapping the selected row clears it, and the button disables again (§1 v1.1) | Old modal has no selection step. Build to v1.1 in N-H |
+| 4 | The sold card looks crowded; Change buyer / Relist don't look tappable | v1's caption plus two text links | New layout (§3 v1.1): no location line or footer. One tinted **buyer box** (avatar, name, `Buyer · 27 Oct`, pencil) that is the Change buyer button, and a **Relist** pill beside delete | **Built on the web by me** (#10) |
+| 5 | Dashboard heart: 1, then 2, then back to 1, then 0 | `GET /api/user/:userId/dashboard` sent **no `is_liked`** on `listings`. So every tap was sent as "not liked yet". The server toggled the like off, the app wrote that answer back (2 → 1), then refetched (0) | The endpoint now sends `is_liked` / `is_saved`. The dashboard heart uses the shared `useToggleLike(['dashboard', id])`, which guards double taps and updates every other screen | **Same cause on the web** (after a reload every heart showed empty, and a click on a liked one removed the like). Fixed by the endpoint, with no web change |
+| 6 | The Relist confirmation (Android `Alert`) looks raw | The phone's own dialog | A new `ConfirmDialog`: the listing's photo with a gradient relist badge, a Bree Serif title, the gradient Relist button (§3 v1.1) | The web has **no** Relist confirmation at all yet. Build v1.1's dialog in N-H |
 | 7 | After relisting, the Wacom card overlapped the card below it in the Marketplace | **A FlashList 2.3.2 bug, also in 2.3.3.** The grid keeps row heights by position. The Wacom arrived at index 0, a slot whose minHeight equalled its own height, so FlashList skipped it as "tallest". It placed row 2 under the shorter cycle card, and the repaint never corrected that | Patched with `patch-package` (`mobile/patches/`). Replayed in Node: unpatched gets stuck 17 dp short (one title line); patched lands right. Shrinking and shifting rows behave as before | Not affected (web grid is CSS) |
+| 8 | The dark overlay shows before the picker sheet | The scrim was drawn at full strength at once, while the sheet started a whole screen down | The scrim fades in on the sheet's own 320 ms, and the sheet starts its own measured height below the edge (spec §1 v1.2) | Not affected (overlay and modal already start together) |
+| 9 | The Delete confirmation (Android `Alert`) looks raw | The phone's own dialog | `ConfirmDialog` gets `tone: 'danger'`: the photo with a red `trash-2` badge and a red gradient Delete button (spec §3 v1.2) | Not affected (already an in-app modal) |
+| 10 | Make the web sold card look like the app's | | | **Built by me** (⚠ section above) |
 
 ## Migrations applied
 
@@ -71,7 +122,10 @@ not in a short fragment.
 
 ## New fields on existing responses
 
-None.
+### `GET /api/user/:userId/dashboard`: `listings[].is_liked`, `listings[].is_saved`
+
+Booleans, on every listing: whether the caller has liked / saved their own listing. Computed the
+way `/public` does it. Nothing was removed or renamed.
 
 ## Test data
 
@@ -94,7 +148,7 @@ None.
 
 - **Don't upgrade `@shopify/flash-list`** without checking the patch. 2.3.3 still has the bug.
   The upgrade steps are in `mobile/CLAUDE.md` (gotchas).
-- **Don't bring the like toggle back on the owner's dashboard cards**, unless the dashboard
-  endpoint starts returning `is_liked`.
-- Only the Relist dialog moved off the phone's `Alert`. "That wasn't me" and "Delete listing?"
-  are still Alerts on the app. They can use `ConfirmDialog` later, but the owner hasn't asked.
+- **Don't drop `is_liked` / `is_saved` from the dashboard listings.** Both apps' like toggles
+  on your own cards depend on them.
+- Relist and Delete moved off the phone's `Alert`. "That wasn't me" is still an Alert on the
+  app. It can use `ConfirmDialog` later, but the owner hasn't asked.

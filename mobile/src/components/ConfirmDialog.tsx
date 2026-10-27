@@ -32,17 +32,25 @@ export interface ConfirmDialogContent {
   icon: keyof typeof Feather.glyphMap;
   /** The listing's photo, so the dialog shows WHICH item it is about. */
   imageUri?: string | null;
+  /** 'danger' paints the badge and the confirm button red, for what can't be undone. */
+  tone?: 'brand' | 'danger';
 }
+
+const GRADIENTS = {
+  brand: [colors.purple, colors.bubbleMineEnd],
+  danger: [colors.dangerStart, colors.errorText],
+} as const;
 
 /**
  * A yes/no question in Yahora's own look, instead of the phone's Alert: the
- * Relist dialog (MARK_SOLD_SPEC §3) first. The owner asked for it on 27 Oct:
- * the Android Alert ignored the app's fonts and colours and read as a system
- * error rather than part of the app.
+ * Relist dialog (MARK_SOLD_SPEC §3) first, then Delete listing. The owner asked
+ * for both on 27 Oct: the Android Alert ignored the app's fonts and colours and
+ * read as a system error rather than part of the app.
  *
  * Centred card, the item's photo on top with the action's icon on a gradient
  * badge, the title in Bree Serif, the explanation under it, then Cancel and
- * the confirm button side by side, the confirm one in the brand gradient.
+ * the confirm button side by side, the confirm one in the brand gradient (or
+ * red, for `tone: 'danger'`).
  *
  * `content` may go null as the dialog closes (the screen clears what it was
  * for); the words it opened with stay on screen while it fades out.
@@ -60,6 +68,7 @@ export function ConfirmDialog({
   if (content) shownRef.current = content;
   const shown = shownRef.current;
   const photo = resolveMediaUrl(shown?.imageUri);
+  const gradient = GRADIENTS[shown?.tone ?? 'brand'];
 
   const confirm = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -88,7 +97,7 @@ export function ConfirmDialog({
               <View style={styles.thumbWrap}>
                 <Image source={{ uri: photo }} style={styles.thumb} contentFit="cover" transition={150} />
                 <LinearGradient
-                  colors={[colors.purple, colors.bubbleMineEnd]}
+                  colors={gradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.badge}
@@ -98,7 +107,7 @@ export function ConfirmDialog({
               </View>
             ) : (
               <LinearGradient
-                colors={[colors.purple, colors.bubbleMineEnd]}
+                colors={gradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.medallion}
@@ -124,7 +133,7 @@ export function ConfirmDialog({
                 style={({ pressed }) => [styles.button, pressed && styles.confirmPressed]}
               >
                 <LinearGradient
-                  colors={[colors.purple, colors.bubbleMineEnd]}
+                  colors={gradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.confirmFill}
