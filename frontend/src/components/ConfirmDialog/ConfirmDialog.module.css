@@ -1,0 +1,200 @@
+/* ConfirmDialog — MARK_SOLD_SPEC §3 "Relist dialog" (v1.1) and "Delete
+   dialog" (v1.2), the same values as the app's ConfirmDialog.tsx. */
+
+.scrim {
+  /* Spec values the site has no global token for. */
+  --dialog-scrim: rgba(11, 11, 11, 0.55);
+  --dialog-input-bg: #F3F0EF;      /* inputBg: Cancel, the photo's backdrop */
+  --dialog-hairline: #EEE6E2;      /* the photo's 1px border */
+  --dialog-cancel-pressed: #EEE6E2;
+  --dialog-shadow: rgba(42, 8, 42, 0.22);
+  /* 135° gradients. Brand ends at #C02B7F, not #EB487F: white text needs
+     4.5:1 and measures 5.39 there (§7). Danger runs #DC2626 → #B91C1C. */
+  --dialog-brand-start: var(--purple);
+  --dialog-brand-end: var(--bubble-mine-end);
+  --dialog-danger-start: #DC2626;
+  --dialog-danger-end: var(--error-text);
+
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 28px;
+  background: var(--dialog-scrim);
+  animation: scrimIn 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.card {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 26px 22px 20px;
+  border-radius: 28px;
+  background: var(--white);
+  box-shadow: 0 14px 28px var(--dialog-shadow);
+  font-family: Inter, sans-serif;
+  /* 0.92 scale, 12 lower and transparent → in place, 240 ms ease-out cubic. */
+  animation: cardIn 240ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+.brand {
+  --dialog-gradient: linear-gradient(135deg, var(--dialog-brand-start), var(--dialog-brand-end));
+}
+.danger {
+  --dialog-gradient: linear-gradient(135deg, var(--dialog-danger-start), var(--dialog-danger-end));
+}
+
+/* The listing's photo, 72 × 72, with the action's badge on its corner. */
+.thumbWrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  object-fit: cover;
+  background: var(--dialog-input-bg);
+  border: 1px solid var(--dialog-hairline);
+  display: block;
+}
+/* 28 badge at (−8, −8), ringed in white so it reads on any photo. */
+.badge {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid var(--white);
+  background: var(--dialog-gradient);
+  color: var(--white);
+  box-sizing: border-box;
+}
+/* No photo: a 60 gradient circle holding the icon. */
+.medallion {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  background: var(--dialog-gradient);
+  color: var(--white);
+}
+
+.title {
+  margin: 0;
+  font-family: "Bree Serif", serif;
+  font-weight: 400; /* Bree Serif ships one weight. */
+  font-size: 21px;
+  line-height: 27px;
+  color: var(--black-soft);
+}
+.message {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-text);
+  overflow-wrap: anywhere;
+}
+.strong {
+  font-weight: 600;
+  color: var(--black-soft);
+}
+.error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--error-text);
+}
+
+.actions {
+  align-self: stretch;
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+.button {
+  flex: 1;
+  height: 46px;
+  border: none;
+  border-radius: 23px;
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.button:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+.danger .confirm:focus-visible {
+  outline-color: var(--error-text);
+}
+.cancel {
+  background: var(--dialog-input-bg);
+  color: var(--black-soft);
+  font-weight: 600;
+}
+.confirm {
+  background: var(--dialog-gradient);
+  color: var(--white);
+  font-weight: 700;
+}
+@media (hover: hover) {
+  .cancel:hover:not(:disabled) {
+    background: var(--dialog-cancel-pressed);
+  }
+  .confirm:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+}
+.cancel:active:not(:disabled) {
+  background: var(--dialog-cancel-pressed);
+}
+
+@keyframes scrimIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .card {
+    animation: none;
+  }
+  .button {
+    transition: none;
+  }
+}

@@ -101,6 +101,10 @@ export function useAddComment(productId: string | undefined) {
         },
       );
     },
+    // The open page refetches itself (useProductDetail's live refresh). One
+    // already on its way could land after onSuccess, with the list from
+    // before this comment, and hide it until the next tick.
+    onMutate: () => queryClient.cancelQueries({ queryKey }),
     onSuccess: (data) => {
       // Onto the NEWEST page, which is where a brand-new comment belongs and
       // whose product fields the screen reads. A reply lands there too and

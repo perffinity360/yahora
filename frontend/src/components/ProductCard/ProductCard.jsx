@@ -316,12 +316,12 @@ const ProductCard = memo(function ProductCard({
   /* ── THE SELLER'S SOLD CARD (MARK_SOLD_SPEC §3 v1.1, same as the app) ──
      No location line and no time row. One tinted buyer box (avatar, name,
      "Buyer · 27 Oct", pencil) that IS the Change buyer button, then a Relist
-     pill beside delete. `product.buyer` is null for someone not on Yahora. */
+     pill beside delete. `product.buyer` is null for someone off Yahora. */
   const ownerSold = isOwner && product.status === "sold";
   const buyer = product.buyer ?? null;
   const buyerName = buyer
     ? buyer.full_name || (buyer.username ? `@${buyer.username}` : "Yahora student")
-    : "Not on Yahora";
+    : "Off Yahora";
   // §2's date form: "27 Oct", or "27 Oct 2025" in an earlier year.
   const soldDate = product.sold_at ? formatShortDate(product.sold_at) : null;
 
@@ -465,7 +465,7 @@ const ProductCard = memo(function ProductCard({
               className={styles.saleBox}
               disabled={!onChangeBuyer}
               title="Change buyer"
-              aria-label={`Change buyer. Sold to ${buyer ? buyerName : "someone not on Yahora"}${soldDate ? `, ${soldDate}` : ""}`}
+              aria-label={`Change buyer. Sold to ${buyer ? buyerName : "someone off Yahora"}${soldDate ? `, ${soldDate}` : ""}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onChangeBuyer?.();

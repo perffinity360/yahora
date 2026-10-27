@@ -25,6 +25,13 @@
   /* Prevents children from bleeding outside rounded corners */
   isolation: isolate;
   user-select: none;
+  /* A column, so a card stretched to its grid row (the Dashboard grid) grows
+     its info area, and the bottom row (.timeAvatar, or a sold card's .sale)
+     pins to the bottom edge. Every card in a row then ends level (owner,
+     27 Oct: a sold card is taller, and the cards beside it stopped short).
+     In a grid that doesn't stretch, the card is its natural height, as before. */
+  display: flex;
+  flex-direction: column;
 }
 
 .card:hover {
@@ -44,6 +51,7 @@
 ────────────────────────────────────── */
 .imageWrap {
   position: relative;
+  flex-shrink: 0;
   /* Square-ish ratio that matches the Figma: ~3:2.2 */
   aspect-ratio: 1 / 1;
   overflow: hidden;
@@ -204,6 +212,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* ── Row 1: Condition + Location + Price ── */
@@ -411,6 +421,8 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  /* The ring the photo (.sellerAvatar) wears: every avatar has it. */
+  border: 1.5px solid var(--purple-emphasis);
 }
 
 .sellerName {
@@ -447,7 +459,10 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 4px;
+  /* Pinned to the card's bottom (see .card); the 4 above it is padding now,
+     because an auto margin replaces a fixed one. */
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .saleBox {
@@ -616,6 +631,8 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  /* Pinned to the card's bottom (see .card). */
+  margin-top: auto;
 }
 
 /* ──────────────────────────────────────

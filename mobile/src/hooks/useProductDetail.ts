@@ -1,4 +1,4 @@
-import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, useIsMutating, type InfiniteData } from '@tanstack/react-query';
 
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -12,9 +12,10 @@ import type { ProductDetailData, ProductDetailWire } from '../types';
  *
  * Shares the `['product', id]` cache key with `useProduct` (Sell edit prefill)
  * and with the like/save mutations in `useProductActions`, which optimistically
- * flip this same cached object. Note: this endpoint increments the server-side
- * view counter, so callers should avoid needless refetches (the detail like/save
- * toggles pass `invalidateOnSettle: false` for exactly this reason).
+ * flip this same cached object. (This endpoint used to add a view on every
+ * request, which is why the detail like/save toggles still pass
+ * `invalidateOnSettle: false`. Since Phase 6B N-C it counts one view per
+ * person per listing, so a refetch costs nothing there.)
  *
  * ── COMMENTS ARE UNWRAPPED HERE ─────────────────────────────────────────────
  * Phase 4 Block N-B turned `product.comments` from an array into a paged
@@ -34,9 +35,8 @@ import type { ProductDetailData, ProductDetailWire } from '../types';
  * `?cursor=<comments.next_cursor>` for the next 20. `next_cursor: null` is the
  * end, and the only end signal.
  *
- * ⚠ Every page is a full GET /api/products/:id, and that endpoint adds a view
- * each time — so reading older questions inflates `views`. Known, backend-side
- * (Neeraj flagged the same on the web, CHANGELOG 2026-09-20); not fixable here.
+ * Every page is a full GET /api/products/:id. Older pages no longer add views:
+ * the server records a view only for the first page (Phase 6B N-C).
  *
  * ⚠ The cache holds `InfiniteData`, so this key can no longer be shared with a
  * plain `useQuery`. `useProduct` (the Sell edit prefill) reads its own
@@ -44,9 +44,15 @@ import type { ProductDetailData, ProductDetailWire } from '../types';
  * like/save toggles (useProductActions) and the comment add/vote patches
  * (useComments) — walk `pages`.
  */
-export function useProductDetail(productId: string | undefined) {
+/** How often an open product page asks the server again (see below). */
+const LIVE_REFRESH_MS = 15_000;
+
+export function useProductDetail(productId: string | undefined, { live = false } = {}) {
   const { profile } = useAuth();
   const visitorId = profile?.id;
+  // A like, a vote or a question on its way: no new tick until it lands, so a
+  // refetch can't answer with the state from before it.
+  const saving = useIsMutating() > 0;
 
   return useInfiniteQuery({
     queryKey: ['product', productId],
@@ -66,6 +72,21 @@ export function useProductDetail(productId: string | undefined) {
     getNextPageParam: (lastPage) => lastPage.commentsNextCursor ?? undefined,
     select: joinPages,
     enabled: !!productId,
+    // ── ALWAYS CURRENT WHILE IT IS ON SCREEN (owner, 27 Oct) ──
+    // The app-wide 5-minute staleTime meant a listing opened again inside
+    // those 5 minutes (or straight from the saved cache) was drawn from the
+    // old copy and never asked the server: Arjun's page showed a sold Wacom
+    // as available, with Message seller; after Priya relisted it, the page
+    // still said sold; and a question asked from another phone didn't show.
+    // So the cached copy draws at once (no skeleton) and a refetch always
+    // follows on open; the screen refetches again when it comes back into
+    // focus or the app comes back to the foreground; and while `live` (the
+    // screen is on top and the app is open) it refetches every
+    // LIVE_REFRESH_MS. Refetching adds no views any more: since Phase 6B N-C
+    // the server counts one view per person per listing, ever.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchInterval: live && !saving ? LIVE_REFRESH_MS : false,
   });
 }
 

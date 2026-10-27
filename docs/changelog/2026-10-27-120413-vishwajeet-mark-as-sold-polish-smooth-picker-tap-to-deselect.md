@@ -64,6 +64,27 @@ The owner asked for the web's sold card to look like the app's. I built it, then
   `onSelect={toggle}`, and the off-platform row uses `toggleOffPlatform`. Nothing else in the
   file changed.
 
+## ⚠ I edited yours: the purple avatar ring, everywhere (owner's request)
+
+Every avatar now has the thin purple ring, photos and initials alike: `1.5px`, or `2px` from 40px
+up, `var(--purple-emphasis)`, the inbox's and the card's ring. Website files:
+- **`components/AvatarImg/AvatarImg.jsx`:** the ring is inline on both the photo and the
+  initials circle, so every caller gets it (the picker, Messages, the sold card). There's a new
+  named export, `avatarRing(size)`. The old `rgba(255,255,255,0.12)` border on the initials
+  circle is gone.
+- **`pages/product/ProductDetail.jsx`:** its local `AvatarImg` and `HiddenAvatar` use
+  `avatarRing`.
+- **`ProductDetail.module.css`:** `.currentUserAvatar(Sm)` gains the ring, and `.sellerAvatar`'s
+  `#f0eaff` border became the ring.
+- **`Home.module.css`:** `.buzzAvatar`.
+- **`ProductCard.module.css`:** `.sellerAvatarFallback`.
+
+The profile headers (Dashboard, public profile) already had their gradient ring, and the
+onboarding upload preview keeps its dashed box. Both are unchanged.
+
+The app matches: `Avatar` rings by default (photo, initials and hidden), and so does the card's
+initials fallback.
+
 ## Your N-H spec changes, now on the app
 
 - **(a) "That wasn't me" pill:** done, to §4 as you wrote it (`user-x` 14, 28 tall, pinkLight +

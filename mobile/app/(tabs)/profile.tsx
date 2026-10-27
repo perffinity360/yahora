@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -58,7 +57,7 @@ function partyName(party?: { full_name: string | null; username: string | null }
   return party?.full_name || party?.username || 'a Yahora student';
 }
 
-/** The seller's sold card: who bought it (null = not on Yahora) and when (spec §3). */
+/** The seller's sold card: who bought it (null = someone off Yahora) and when (spec §3). */
 function saleFor(item: ProductListing): SaleSummary {
   return {
     buyer: item.buyer ? { name: partyName(item.buyer), avatarUrl: item.buyer.avatar_url } : null,
@@ -100,6 +99,26 @@ function deleteDialogFor(item: ProductListing): ConfirmDialogContent {
   };
 }
 
+/** MARK_SOLD_SPEC §4 "That wasn't me dialog", in ConfirmDialog's danger tone
+ *  (its Remove was the Alert's red "destructive" button). */
+function notMeDialogFor(purchase: Purchase): ConfirmDialogContent {
+  const p = purchase.product;
+  const sellerFirst = partyName(p.seller).split(' ')[0];
+  return {
+    title: 'Remove this purchase?',
+    message: (
+      <>
+        {sellerFirst} marked <ConfirmDialog.Strong>{p.title}</ConfirmDialog.Strong> as sold to you.
+        If that's wrong, remove it. The listing stays sold; you just won't be shown as its buyer.
+      </>
+    ),
+    confirmLabel: 'Remove',
+    icon: 'user-x',
+    imageUri: p.image_urls?.[0],
+    tone: 'danger',
+  };
+}
+
 function initialsOf(name?: string | null): string {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '';
@@ -133,6 +152,8 @@ export default function ProfileScreen() {
   const [relistTarget, setRelistTarget] = useState<ProductListing | null>(null);
   /** The listing the Delete dialog is asking about. */
   const [deleteTarget, setDeleteTarget] = useState<ProductListing | null>(null);
+  /** The purchase the "That wasn't me" dialog is asking about. */
+  const [notMeTarget, setNotMeTarget] = useState<Purchase | null>(null);
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
   const cardWidth = (width - GRID_PAD * 2 - GRID_COL_GAP) / 2;
@@ -194,7 +215,7 @@ export default function ProfileScreen() {
 
   // The picker replaces the old Alert: it asks who bought it (or no one on Yahora).
   const confirmSold = (item: ProductListing) => setSoldTarget({ item, mode: 'sell' });
-  // Opens on the current choice: the buyer, or "Someone not on Yahora".
+  // Opens on the current choice: the buyer, or "Someone off Yahora".
   const changeBuyer = (item: ProductListing) => setSoldTarget({ item, mode: 'change' });
 
   // MARK_SOLD_SPEC §3 "Relist dialog": the app's own dialog, not the phone's Alert.
@@ -204,22 +225,12 @@ export default function ProfileScreen() {
     setRelistTarget(null);
   };
 
-  // MARK_SOLD_SPEC §4 "That wasn't me dialog".
-  const confirmNotMe = (purchase: Purchase) => {
-    const p = purchase.product;
-    const sellerFirst = partyName(p.seller).split(' ')[0];
-    Alert.alert(
-      'Remove this purchase?',
-      `${sellerFirst} marked “${p.title}” as sold to you. If that's wrong, remove it. The listing stays sold; you just won't be shown as its buyer.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => actions.removePurchase.mutate({ productId: p.id }),
-        },
-      ],
-    );
+  // MARK_SOLD_SPEC §4 "That wasn't me dialog": the app's own dialog, like
+  // Relist and Delete, not the phone's Alert (owner, 27 Oct).
+  const confirmNotMe = (purchase: Purchase) => setNotMeTarget(purchase);
+  const removePurchase = () => {
+    if (notMeTarget) actions.removePurchase.mutate({ productId: notMeTarget.product.id });
+    setNotMeTarget(null);
   };
 
   // The same dialog as Relist, in its red "danger" tone (owner, 27 Oct).
@@ -426,6 +437,11 @@ export default function ProfileScreen() {
           content={deleteTarget ? deleteDialogFor(deleteTarget) : null}
           onConfirm={deleteListing}
           onCancel={() => setDeleteTarget(null)}
+        />
+        <ConfirmDialog
+          content={notMeTarget ? notMeDialogFor(notMeTarget) : null}
+          onConfirm={removePurchase}
+          onCancel={() => setNotMeTarget(null)}
         />
 
         {/* Pinch, drag, double-tap. The viewer owns its own gesture root —

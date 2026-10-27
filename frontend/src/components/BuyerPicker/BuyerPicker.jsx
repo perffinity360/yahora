@@ -7,7 +7,7 @@
 // The list: with fewer than 2 characters typed, the people who messaged the
 // seller about this listing (GET /api/products/:id/buyer-candidates); with 2
 // or more, students on the listing's campus who match (?q=), 300 ms after
-// typing stops. "Someone not on Yahora" is always there, and sends
+// typing stops. "Someone off Yahora" is always there, and sends
 // buyer_id: null. Exactly one row is selected at a time.
 //
 // It saves itself (POST /api/products/:id/sold) so the spinner and the error
@@ -98,7 +98,7 @@ function PersonRow({ person, selected, onSelect }) {
 /**
  * product        — the listing: { id, title, buyer? }
  * mode           — "sell" (button: Mark as sold) or "change" (button: Save)
- * initialBuyerId — undefined: nothing selected · null: "Someone not on Yahora"
+ * initialBuyerId — undefined: nothing selected · null: "Someone off Yahora"
  *                  selected · an id: that person selected (taken from
  *                  product.buyer, which the dashboard sends the seller)
  * onClose()      — Esc, the scrim, or the close button
@@ -314,7 +314,7 @@ export default function BuyerPicker({ product, mode, initialBuyerId, onClose, on
               <UserX size={18} />
             </span>
             <span className={styles.rowText}>
-              <span className={styles.rowTitle}>Someone not on Yahora</span>
+              <span className={styles.rowTitle}>Someone off Yahora</span>
               <span className={styles.rowSubtitle}>No one will be tagged</span>
             </span>
             {selected === null && (

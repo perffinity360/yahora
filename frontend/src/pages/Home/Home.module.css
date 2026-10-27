@@ -201,6 +201,7 @@
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
+  border: 2px solid var(--purple-emphasis); /* the site-wide avatar ring */
 }
 .buzzMeta h4 {
   margin: 0;

@@ -4,7 +4,14 @@
 // the person's initials on a gradient picked from their name, so the same
 // person always gets the same colour. Moved out of Messages.jsx (Block N-H) so
 // the buyer picker draws people the same way the chat does.
+//
+// Every avatar on the site wears the same thin purple ring, photo or initials
+// (owner, 27 Oct): 1.5px, or 2px from 40px up — the inbox's and the product
+// card's ring. It is inline, so it holds whatever class the caller passes.
 import React, { useState } from "react";
+
+export const avatarRing = (size) =>
+  `${size >= 40 ? 2 : 1.5}px solid var(--purple-emphasis)`;
 
 export default function AvatarImg({ src, name, size = 40, className }) {
   const [err, setErr] = useState(false);
@@ -36,7 +43,7 @@ export default function AvatarImg({ src, name, size = 40, className }) {
           alignItems: "center",
           justifyContent: "center",
           userSelect: "none",
-          border: "2px solid rgba(255,255,255,0.12)",
+          border: avatarRing(size),
         }}
       >
         {initials}
@@ -49,6 +56,7 @@ export default function AvatarImg({ src, name, size = 40, className }) {
       src={src}
       alt={name}
       className={className}
+      style={{ border: avatarRing(size) }}
       onError={() => setErr(true)}
     />
   );
