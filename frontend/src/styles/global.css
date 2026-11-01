@@ -77,6 +77,14 @@
   --scrim: rgba(11,11,11,0.32);
   --toast-bg: rgba(26,26,26,0.88);
 
+  /* Reactions — docs/design/COMMUNITY_SPEC.md §12, twins of mobile's
+     reactionPillBg … quickBarShadow. */
+  --reaction-pill-bg: #FFFFFF;
+  --reaction-pill-border: rgba(128,0,128,0.12);
+  --reaction-mine-bg: rgba(128,0,128,0.10);
+  --reaction-mine-border: rgba(128,0,128,0.35);
+  --quick-bar-shadow: 0 6px 20px rgba(11,11,11,0.16);
+
   /* Text & background */
   --black: #0B0B0B;
   --black-soft: #1A1A1A;

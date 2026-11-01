@@ -22,8 +22,7 @@ const PAGE_LABELS = [
   ["/messages", "Messages"],
   ["/dashboard", "your dashboard"],
   ["/sell", "selling an item"],
-  ["/hot", "Campus Hot"],
-  ["/feed", "the community feed"],
+  ["/community", "the Community"],
   ["/product", "this listing"],
   ["/user", "student profiles"],
 ];

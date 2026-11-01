@@ -325,8 +325,8 @@ function Navbar() {
           <span>Marketplace</span>
         </NavLink>
 
-        <NavLink to="/hot" end className={navLinkClass} onClick={closeMenu}>
-          <span>Campus Hot</span>
+        <NavLink to="/community" end className={navLinkClass} onClick={closeMenu}>
+          <span>Community</span>
         </NavLink>
 
         <NavLink
