@@ -1,0 +1,198 @@
+/* frontend/src/components/community/ReactionBar/ReactionBar.module.css
+   docs/design/COMMUNITY_SPEC.md §5.1 (quick bar) and §5.2 (full picker). */
+
+.reactBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-text);
+  font: 500 13px/1 "Inter", sans-serif;
+  cursor: pointer;
+  /* A long press on a phone must not select the label. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: background-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.reactBtn:hover {
+  background: var(--reaction-mine-bg);
+  color: var(--purple);
+}
+
+.reactBtn:active {
+  transform: scale(0.96);
+}
+
+.reactBtn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
+.reacted {
+  color: var(--purple);
+}
+
+.reactIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.reactEmoji {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Spec §5.1: the chosen emoji pops, 1 → 1.25 → 1 over 200 ms. */
+.pop {
+  animation: reactionPop 200ms cubic-bezier(0.3, 0.7, 0.4, 1.4);
+}
+
+@keyframes reactionPop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ── The quick bar ─────────────────────────────────────────────────────── */
+
+.quickBar {
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 999px;
+  background: var(--white);
+  box-shadow: var(--quick-bar-shadow);
+}
+
+.quickBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted-text);
+  cursor: pointer;
+  transition: background-color 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.quickEmoji {
+  display: inline-block;
+  font-size: 26px;
+  line-height: 1;
+  transition: transform 160ms cubic-bezier(0.3, 0.7, 0.4, 1.4);
+}
+
+.quickBtn:hover .quickEmoji,
+.quickBtn:focus-visible .quickEmoji {
+  transform: scale(1.18) translateY(-2px);
+}
+
+.quickBtn:active .quickEmoji {
+  transform: scale(0.95);
+}
+
+.quickBtn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: -2px;
+}
+
+/* Your current reaction sits on a reactionMineBg circle. */
+.quickMine {
+  background: var(--reaction-mine-bg);
+}
+
+.quickMore:hover {
+  color: var(--purple);
+}
+
+.quickMoreOpen {
+  background: var(--reaction-mine-bg);
+  color: var(--purple);
+}
+
+/* The quick bar, with the picker hanging off it once ⊕ is pressed. Absolute,
+   so the Popover measures and places the bar alone and the bar never moves. */
+.stack {
+  position: relative;
+}
+
+.pickerHang {
+  position: absolute;
+}
+
+.pickerAbove {
+  bottom: calc(100% + 8px);
+}
+
+.pickerBelow {
+  top: calc(100% + 8px);
+}
+
+/* ── The full picker (emoji-picker-react) ─────────────────────────────── */
+
+.pickerShell {
+  border-radius: 16px;
+  box-shadow: var(--quick-bar-shadow);
+}
+
+.pickerLoading {
+  width: 340px;
+  height: 400px;
+  border-radius: 16px;
+  background: var(--white);
+}
+
+/* Spec §5.2: white surface, radius 16, purple for the selected category.
+   One class beats the library's zero-specificity defaults. */
+.picker {
+  --epr-bg-color: var(--white);
+  --epr-category-label-bg-color: rgba(255, 255, 255, 0.94);
+  --epr-picker-border-color: var(--reaction-pill-border);
+  --epr-picker-border-radius: 16px;
+  --epr-highlight-color: var(--purple);
+  --epr-category-icon-active-color: var(--purple);
+  --epr-hover-bg-color: var(--reaction-mine-bg);
+  --epr-focus-bg-color: var(--reaction-mine-bg);
+  --epr-search-input-bg-color: #F3F0EF; /* inputBg */
+  --epr-search-input-bg-color-active: var(--white);
+  --epr-text-color: var(--black-soft);
+  --epr-font-family: "Inter", sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pop {
+    animation: none;
+  }
+
+  .reactBtn,
+  .quickBtn,
+  .quickEmoji {
+    transition: none;
+  }
+
+  .quickBtn:hover .quickEmoji,
+  .quickBtn:focus-visible .quickEmoji {
+    transform: none;
+  }
+}

@@ -1,0 +1,48 @@
+/* frontend/src/components/community/Popover/Popover.module.css */
+
+.popover {
+  position: fixed;
+  /* Above the navbar (9999): a popover near the top of a feed may need to
+     overlap it rather than be hidden behind it. */
+  z-index: 10000;
+  opacity: 0;
+}
+
+/* Fades in once it has a position, so it never flashes at the wrong spot. */
+.placed {
+  opacity: 1;
+  animation: popoverIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.popover[data-side="bottom"].placed {
+  animation-name: popoverInBelow;
+}
+
+@keyframes popoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes popoverInBelow {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placed,
+  .popover[data-side="bottom"].placed {
+    animation: none;
+  }
+}

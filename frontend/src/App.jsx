@@ -12,6 +12,7 @@ import Marketplace from './pages/marketplace/Marketplace';
 import ProductDetail from "./pages/product/ProductDetail";
 import PublicProfile from "./pages/publicProfile/PublicProfile";
 import Messages from "./pages/messages/Messages";
+import Community from "./pages/community/Community";
 import OnboardingRequired from "./components/OnboardingRequired/OnboardingRequired";
 import useScrollRestoration from "./hooks/useScrollRestoration";
 
@@ -210,8 +211,10 @@ function App() {
           <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
 
           {/* App surfaces: session + finished profile required. */}
-          <Route path="/feed" element={<RequireOnboarded><div className="container mt-4"><h3>Community Feed</h3></div></RequireOnboarded>} />
-          <Route path="/hot" element={<RequireOnboarded><div className="container mt-4"><h3>Hot Items on Campus</h3></div></RequireOnboarded>} />
+          <Route path="/community" element={<RequireOnboarded><Community /></RequireOnboarded>} />
+          {/* The old placeholder routes, kept so existing links still land. */}
+          <Route path="/feed" element={<Navigate to="/community" replace />} />
+          <Route path="/hot" element={<Navigate to="/community" replace />} />
           <Route path="/dashboard" element={<RequireOnboarded><Dashboard /></RequireOnboarded>} />
           <Route path="/sell" element={<RequireOnboarded><Sell /></RequireOnboarded>} />
           <Route path="/marketplace" element={<RequireOnboarded><Marketplace /></RequireOnboarded>} />

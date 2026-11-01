@@ -1,0 +1,44 @@
+/* frontend/src/components/community/ReactionSummary/ReactionSummary.module.css
+   docs/design/COMMUNITY_SPEC.md §5.3: Inter 500 12, mutedText, on
+   reactionPillBg with a reactionPillBorder outline, radius 999, padding 4 / 10. */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--reaction-pill-border);
+  border-radius: 999px;
+  background: var(--reaction-pill-bg);
+  font: 500 12px/18px "Inter", sans-serif;
+  color: var(--muted-text);
+  cursor: pointer;
+  transition: border-color 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pill:hover {
+  border-color: var(--reaction-mine-border);
+}
+
+.pill:active {
+  transform: scale(0.97);
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
+.emojis {
+  display: inline-flex;
+  gap: 1px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill {
+    transition: none;
+  }
+}
