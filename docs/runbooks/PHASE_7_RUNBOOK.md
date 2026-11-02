@@ -1,6 +1,9 @@
 # Yahora — Phase 7 Runbook: the Community
 
-**Version 1 · written 29 October 2026 · for Vishwajeet and Neeraj**
+**Version 2 · updated 2 November 2026 · for Vishwajeet and Neeraj**
+
+> **Continuing from version 1? Read §0.7 first.** It lists what changed on 2 November and
+> where each change lives. Everything you've already finished stays as it is.
 
 Phase 7 builds the community on both the website and the app, in the same phase (your rule):
 
@@ -55,6 +58,10 @@ I read `main` at **`b0c315d`** ("release phase 6B").
 | Reserved usernames | Already include `community`, `post`, `posts`, `report`, `reactions`, `campus`, `demo` | New routes `/community` and `/post/:id` are safe |
 | Login | Matches exactly **one** email domain per campus | Fine for now. "Several domains per campus" is a Phase 9 launch item |
 
+**Version 2 re-read `main` at `be43e92`** (2 November): N-0 and N-D part 1 are merged, so
+`/community` exists with sample data and the navbar shows **Community**. Vishwajeet's V-0
+work (`v-0-setup`, docs only) isn't merged yet.
+
 ---
 
 ## 0.2 Every decision, in one place
@@ -65,7 +72,7 @@ here is wrong, fix it in this table first, then in the block it affects.
 | # | Topic | Decision |
 |---|---|---|
 | 1 | Feeds | Two panels on a laptop (website); a switcher on narrow screens and in the app |
-| 2 | Left panel | **My campus** — only your campus sees campus posts |
+| 2 | Left panel | **My campus** — only your campus sees it, and it shows **only campus posts** (2 Nov) |
 | 3 | Right panel | A dropdown: your **country** (the default), any other country, or **Global** |
 | 4 | Your country | The country of **your university**, not where your phone is |
 | 5 | Posting | Campus feed: your campus. Country feed: **only your own country**. Global: everyone |
@@ -80,8 +87,8 @@ here is wrong, fix it in this table first, then in the block it affects.
 | 14 | Stickers | Your own Yahora sticker packs are **Phase 10**, with the logo work |
 | 15 | Moderation | **No word list.** Every post, reply and photo is checked by **OpenAI's free moderation service**: clear violations are held for review, borderline ones get a "Post this?" nudge |
 | 16 | Reports | **Anyone** who can see a post can report it. The form warns that deliberately false reports can lead to restrictions or suspension |
-| 17 | Hiding after reports | Not at 3 for everything. **3** for sexual content, violence or self-harm; **2** for child safety; **5** on campus and **10** on country or Global feeds for everything else. Hidden posts are **covered, never deleted** |
-| 18 | Rate limits | 10 posts an hour on your campus feed; 5 an hour across your country feed and Global together; 30 replies an hour; half during an account's first 24 hours |
+| 17 | Hiding after reports | Not at 3 for everything. **3** for sexual content, violence or self-harm; **2** for child safety; **5** on campus and **10** on country or Global feeds for everything else. Covered posts are **never deleted**; a direct link shows only a notice, with no way to view the post (2 Nov). The numbers live in the settings table (§1.5) |
+| 18 | Rate limits | Per person, in a sliding 1-hour window: **15** campus posts, **8** country posts, **8** Global posts (each counted on its own), **45** replies. The same for new accounts. Stored in a settings table so the Phase 9 admin page can change them (2 Nov, §1.5) |
 | 19 | Deleting your own post | It disappears at once. The row is kept for **90 days** for moderation, then removed for good |
 | 20 | Editing posts | Not in Phase 7 |
 | 21 | Demo usernames | Made automatically at demo login, starting with **`demo.`** (example: `demo.sunny.otter`). The demo skips the username step. Real accounts can never start with `demo.`, `demo-` or `demo_` |
@@ -91,6 +98,8 @@ here is wrong, fix it in this table first, then in the block it affects.
 | 25 | App's first tab | Still Marketplace; decide again after launch |
 | 26 | Launch | The community launches with the product (no pilot) |
 | 27 | Not in Phase 7 | Following feed, blocks, private accounts and notifications (Phase 8); the admin review screen (Phase 9) |
+| 28 | One post, one feed | A post appears **only** in the feed it was posted to, never in another feed (2 Nov, §1.1) |
+| 29 | Website design | Vishwajeet redesigns the website's community page (Block V-P); the spec is updated with it, and the app follows the updated spec (2 Nov) |
 
 ---
 
@@ -163,6 +172,47 @@ SQL**: Claude Code writes the migrations from the descriptions in CC-V2, and the
 tell you how to check them.
 
 ---
+
+## 0.7 What changed in version 2 (2 November) — read this first
+
+**Where you are.** Neeraj has finished N-0, N-A and N-D part 1. Vishwajeet has finished V-0.
+Everything else is still ahead. **No dates change:** Vishwajeet catches up by doing V-A and
+V-B together on day 4, and the deadline is still Friday 20 November.
+
+**Your decisions of 2 November, and where each one lives:**
+
+| # | Decision | Changed in |
+|---|---|---|
+| 1 | **One post, one feed.** A post appears only in the feed it was posted to. The campus feed shows only campus posts, and the 🌍 Global chip is gone | §1.1, CC-V2, CC-V4a, CC-NS, spec §3, Appendix A |
+| 2 | **No lower limits for new accounts.** Each student has one college email, so nobody can mass-create accounts | §1.5, CC-V2 |
+| 3 | **Country and Global are counted separately** | §1.5, CC-V2 |
+| 4 | **Every limit × 1.5**, still a sliding 1-hour window: campus **15**, country **8**, Global **8**, replies **45** | §1.5, CC-V2, every rate-limit check |
+| 5 | **The limits and the report thresholds live in a settings table**, `community_settings`, so the Phase 9 admin page only has to change numbers | §1.5, §1.7, CC-V2 |
+| 6 | **A covered post shows only a notice:** `This post was reported by several students and is being reviewed.` There is no "View anyway". It also disappears from profiles for everyone but its author | §1.7, CC-V2, CC-N1, CC-V4c, CC-N4c, spec §3.1, Appendix A |
+| 7 | **Vishwajeet redesigns the website's community page** — new Block **V-P**, on loan from Neeraj | §2.2, Track 1, CC-VP |
+| 8 | **Neeraj builds the composer, GIF picker and report form early** — new Block **N-S** — while the database is being built | §2.1, Track 3, CC-NS, CC-N4b, CC-N4c |
+
+**How the redesign and Neeraj's work stay apart** (the full rules are in §2.2):
+
+```
+Day 4 · Mon 2 Nov   Vishwajeet: V-A, then V-B                  Neeraj: N-S in new files → merged tonight
+Day 5 · Tue 3 Nov   Vishwajeet: push the DB, then V-P redesign  Neeraj: N-B (backend only)
+Day 6 · Wed 4 Nov   Vishwajeet: V-C · merge V-P                 Neeraj: N-B → PR, N-C (backend only)
+Day 8 · Fri 6 Nov   Neeraj: CC-N4b on the redesigned page — only once V-P is merged
+```
+
+1. Neeraj's N-S pieces are merged **before** the redesign starts, so the redesign includes them.
+2. While the redesign branch is open, only Vishwajeet touches the community front-end files.
+   Neeraj is on the backend (N-B, N-C), so nobody waits.
+3. The redesign keeps every piece of data coming from `sampleData.js`, in the same shape the
+   API will send, and records each design change in the spec.
+4. After the redesign is merged, Neeraj connects the redesigned screens to the real API
+   (CC-N4b), then builds the post page and Posts tabs from the updated spec (CC-N4c).
+
+**Nothing to redo.** N-D part 1 stays as it is; N-S applies decision 1 to it (the sample
+campus feed and the chip).
+
+---
 # PART 1 — THE IDEAS BEHIND THIS PHASE
 
 Read this before you start. Every Claude Code prompt in Tracks 2 and 4 refers back to these
@@ -197,9 +247,19 @@ makes a country post for India.
 3. Lena posts in Global: "Exchange students — what's your favourite Indian dish?" Rahul and
    Sneha can both reply.
 
-**The campus feed shows more than campus posts.** It shows **everything posted by students of
-your campus**, whatever the scope. So when Rahul posts in Global, his campus friends also see
-it in their campus feed, with a small `🌍 Global` chip. This keeps the campus feed lively.
+**One post, one feed** (decided 2 Nov). A post appears **only** in the feed it was posted to:
+
+| Rahul posts in… | It appears in… | It never appears in… |
+|---|---|---|
+| his campus feed | the IIITDM Kurnool campus feed | the India feed, Global |
+| the India feed | the India feed | his campus feed, Global |
+| Global | Global | his campus feed, the India feed |
+
+So nobody sees the same post twice while switching feeds, and each feed keeps its own
+character. If Rahul wants all of India to see an event, he posts it in the India feed; his
+campus-mates can read it there too, they just switch to the India feed. (His profile's Posts
+tab still lists his posts, because a profile isn't a feed. Each visitor sees only the posts
+they're allowed to see.)
 
 **"We split by country to spread the load" — what the split really does.** Country feeds help
 **people** much more than **servers**:
@@ -342,21 +402,55 @@ supports it.
 
 ## 1.5 Rate limits, kept by the database
 
-A **rate limit** caps how often one person can do something. Ours:
+A **rate limit** caps how often one person can do something. Ours (changed 2 Nov: 1.5 times
+the first numbers, each feed counted separately, and the same for every account):
 
-| Action | Limit per hour | In an account's first 24 hours |
-|---|---|---|
-| Posts in your campus feed | 10 | 5 |
-| Posts in your country feed **and** Global, counted together | 5 | 2 |
-| Replies, anywhere | 30 | 15 |
+| Action | Limit per person, in any 60 minutes |
+|---|---|
+| Posts in your campus feed | **15** |
+| Posts in your country feed | **8** |
+| Posts in Global | **8** |
+| Replies, anywhere | **45** |
 
-**Worked example.** Rahul posts 10 times in his campus feed between 2:00 and 2:50.
-- At 2:55 the 11th post is refused with `RATE_LIMIT_POSTS`.
-- At 3:01, his 2:00 post is more than an hour old, so there are only 9 in the last hour: the
-  next post goes through.
+**Each line is counted on its own.** Using up your 15 campus posts doesn't touch your 8
+country posts or your 8 Global posts.
+
+**Worked example.** Rahul posts 15 times in his campus feed between 2:00 and 2:50.
+- At 2:55, his 16th campus post is refused with `RATE_LIMIT_POSTS`.
+- At 2:56, he posts in Global: it goes through, because Global has its own count.
+- At 3:01, his 2:00 post is more than an hour old, so only 14 campus posts are in the last
+  hour: his next campus post goes through.
 
 This is called a **sliding window**: it always looks at the last 60 minutes, not at "the
 current clock hour".
+
+**No lower limits for new accounts.** On open platforms a new account is free, so spammers
+keep making new ones, and new accounts get lower limits. On Yahora each student has exactly
+one college email, so that trick doesn't work: new students get the same limits as everyone.
+
+**The numbers live in a table, not in the code.** The database keeps them in a small table,
+`community_settings`:
+
+```
+key                                  value
+rate_limit_campus_posts_per_hour     15
+rate_limit_country_posts_per_hour     8
+rate_limit_global_posts_per_hour      8
+rate_limit_replies_per_hour          45
+report_threshold_child_safety         2      ← §1.7
+report_threshold_serious              3      ← §1.7
+report_threshold_other_campus         5      ← §1.7
+report_threshold_other_wide          10      ← §1.7
+```
+
+The rule reads the number from this table every time someone posts. **Worked example:**
+launch week is busy and 15 campus posts an hour feels tight. You change one row to 20, and
+the very next post is checked against 20, with no code change and no redeploy. Until the
+admin page exists (Phase 9), you change a row with a one-line migration, so the change is
+recorded in the repo. After that, the admin page changes the same rows with a form.
+
+If a row is ever missing, the rule falls back to the numbers above, so a mistake in the table
+can't stop people posting.
 
 **Why in the database?** For the same reason as every rule since Phase 1:
 - a check in JavaScript can be skipped by another code path;
@@ -408,15 +502,26 @@ by a third-party moderation service."
 **Anyone who can see a post can report it**, including students viewing another country's
 feed. The only exception is the author.
 
-**Reports don't delete anything. At a threshold, they cover the post:** it leaves every feed,
-and on a profile or a direct link it shows behind
-`This post was reported by several students and is being reviewed. [View anyway]`.
+**Reports don't delete anything. At a threshold, they cover the post** (changed 2 Nov):
+- it leaves every feed, and it disappears from the author's profile for everyone else;
+- anyone who opens it from a direct link sees only
+  `This post was reported by several students and is being reviewed.` — no text, no photos,
+  and no way to open it anyway;
+- the author still sees their post, labelled `Under review`.
+
+A covered **reply** disappears from its thread in the same way, for everyone but its author.
+
+The API doesn't even send a covered post's text to anyone but its author. If it did, anyone
+could read it in the browser's developer tools, and the cover would only be decoration.
 
 | Reason | Reports needed to cover the post |
 |---|---|
 | Child safety | **2** |
 | Sexual content, violence or threats, self-harm | **3** |
 | Everything else (spam, harassment, hate speech, impersonation, false information, prohibited item, something else) | **5** on a campus post · **10** on a country or Global post |
+
+These numbers are rows in `community_settings` (§1.5), so the Phase 9 admin page can change
+them too.
 
 **Only reports from the post's own audience count for the "everything else" reasons.**
 Worked example: a post in the **India** feed gets reported as *spam* by 12 students in Germany
@@ -663,6 +768,7 @@ Share keys with each other through a direct message you then delete, or a passwo
 | App — messages | `app/chat/[contactId].tsx`, `src/components/MessageActionMenu.tsx`, `src/hooks/useMessages.ts`, `src/contexts/RealtimeContext.tsx`, `app/(tabs)/messages.tsx`, `src/lib/messages.ts` |
 | App — demo | `app/(auth)/onboarding.tsx` |
 | App libraries | `rn-emoji-keyboard` |
+| Website — community redesign (**on loan from Neeraj**, Block V-P) | `frontend/src/pages/community/*`, `frontend/src/components/community/*`, `frontend/src/utils/community.js`, the community variables in `frontend/src/styles/global.css`, `frontend/src/pages/dev/CommunitySandbox.jsx`, `docs/design/COMMUNITY_SPEC.md` |
 
 **Neeraj**
 
@@ -670,6 +776,7 @@ Share keys with each other through a direct message you then delete, or a passwo
 |---|---|
 | Backend — **on loan** (§2.2) | `backend/src/modules/posts/posts.routes.js`, `posts.controller.js` |
 | Backend — his own | `backend/src/modules/reports/reports.routes.js`, `reports.controller.js` |
+| Website — standalone pieces (Block N-S, day 4) | `src/utils/klipy.js`, `src/hooks/useGifSearch.js`, `useComposer.js`, `useReport.js`, `src/components/community/GifPicker/`, `Composer/`, `ReportModal/` (all **new**); `src/pages/dev/CommunitySandbox.jsx` (**new**, development only) |
 | Website — community | `src/pages/community/*` (**new**), `src/pages/post/*` (**new**), `src/components/community/*` (**new**), `src/utils/community.js` (**new**), `src/App.jsx` (routes), `src/components/navbar/navbar.jsx`, `src/styles/global.css`, `src/pages/publicProfile/PublicProfile.jsx`, `src/pages/dashboard/Dashboard.jsx` |
 | Website — messages | `src/pages/messages/Messages.jsx`, `Messages.module.css`, `src/components/MessageMenu/*` |
 | Website — demo | `src/pages/onboarding/onboarding.jsx` |
@@ -680,7 +787,9 @@ Share keys with each other through a direct message you then delete, or a passwo
 of you updates only your own module's section. Git merges edits to different parts of one
 file on its own.
 
-## 2.2 Ownership — one loan, for this phase only
+## 2.2 Ownership — two loans, for this phase only
+
+**Loan 1 — the posts module goes to Neeraj.**
 
 `backend/CLAUDE.md` gives the `posts` module to Vishwajeet. **For Phase 7 it is lent to
 Neeraj**, from day 1 until sign-off. Why:
@@ -704,6 +813,51 @@ The database stays entirely Vishwajeet's: **Neeraj never writes SQL**. If the po
 something from the database that isn't there, Neeraj files a "Migration request" entry
 (`backend/CLAUDE.md` explains how).
 
+**Loan 2 — the website community files go to Vishwajeet, for the redesign (new on 2 Nov).**
+
+`frontend/` is Neeraj's. While Vishwajeet redesigns the community page (Block V-P), these
+files are his:
+
+```
+frontend/src/pages/community/*               frontend/src/components/community/*
+frontend/src/utils/community.js              the community variables in frontend/src/styles/global.css
+frontend/src/pages/dev/CommunitySandbox.jsx  docs/design/COMMUNITY_SPEC.md
+```
+
+**The rules.** They're what keeps the redesign and Neeraj's work from colliding:
+
+1. **Neeraj's N-S pieces are merged first**, so the redesign includes them.
+2. **The loan runs from the moment Vishwajeet opens `v-p-web-community-redesign` until it's
+   merged.** Neeraj files the loan entry (in N-S).
+3. **While it runs, Neeraj doesn't edit those files.** He's on the backend anyway (N-B, N-C).
+4. **The data seam stays.** All data in the redesigned page still comes from `sampleData.js`
+   (and the test page's sample handlers), in the PostItem shape of Appendix A. That's the one
+   place Neeraj changes in CC-N4b to switch to the real API, so the new design survives
+   untouched.
+5. **The spec is updated in the same pull request.** Every changed size, colour, layout and
+   wording goes into `COMMUNITY_SPEC.md`. The app (V-D) and Neeraj's remaining screens (the
+   post page and the Posts tabs) are built from the spec, which keeps all three consistent.
+6. **Neeraj looks at the redesign before it merges.** Website PRs don't need a review, but
+   it's his area.
+7. **Vishwajeet files a changelog entry** listing what changed, especially any renamed
+   components or props.
+8. **Neeraj's next website block (CC-N4b) starts only after the redesign is merged.** If it
+   isn't merged when he gets there, he does T1 first.
+
+**Why not both work on the page at once?** A complete redesign changes almost every line of
+these files. Git can merge changes to *different* lines of a file on its own, but when two
+people rewrite the *same* lines it can't choose for you. That's a merge conflict, and on a
+redesign it would mean redoing hours of work by hand.
+
+In time order, the branches line up like this:
+
+```
+Day 4     n-s-standalone (Neeraj)                      ──► merged into main
+Day 5–6   v-p-web-community-redesign (Vishwajeet)      ──► merged into main   ┐ at the same time,
+          n-b-posts-api · n-c-reports-api (Neeraj)     ──► merged into main   ┘ different files
+Day 8 →   n-d-web-community-2 (Neeraj), cut from a main that already has the redesign
+```
+
 ## 2.3 The calendar
 
 Each day is one working day of 5–6 hours. **R** = review the other person's backend PR (about
@@ -715,11 +869,11 @@ the API's answers, so the website work isn't blocked while the API is being writ
 | 1 | Fri 30 Oct | **V-0** setup, accounts and keys · **V-A** shared backend · design review (30 min, ~12:00) | **N-0** commit the package (**first thing**) · design review · **N-D** page shell and adjustable layout |
 | 2 | Sat 31 Oct | **V-A** → PR · **V-B** migrations begin | **R** V-A · **N-D** post card and composer with mock data |
 | 3 | Sun 1 Nov | **V-B** migrations and local tests | **N-D** reactions UI (quick bar, picker, summary, breakdown) with mock data |
-| 4 | Mon 2 Nov | **V-B** finish → merged | `supabase db reset` · **N-B** posts API (CC-N1: reading) |
-| 5 | Tue 3 Nov | **Production push** of the migrations (morning) · **V-C** messages, auth, universities | **N-B** (CC-N2: posting, deleting, reacting) |
-| 6 | Wed 4 Nov | **V-C** → PR · **V-D** app community begins (CC-V4a) | **R** V-C · **N-B** → PR · **N-C** reports API |
-| 7 | Thu 5 Nov | **R** N-B · **V-D** (CC-V4a) | merge N-B · **N-C** → PR · **T1** API checks |
-| 8 | Fri 6 Nov | **R** N-C · **V-D** (CC-V4a) | merge N-C · **N-D** connect the website to the real API (CC-N4a) |
+| 4 | Mon 2 Nov | **V-A** shared backend → PR (Neeraj reviews) → merged · **V-B** migrations → merged by evening | **N-S** standalone pieces → merged by evening · **R** V-A · notes for the redesign · loan entry · test prep |
+| 5 | Tue 3 Nov | **Production push** of the migrations (morning) · **V-P** website community redesign (on loan, §2.2) | `supabase db reset` · **N-B** posts API (CC-N1, CC-N2), backend only |
+| 6 | Wed 4 Nov | **V-C** messages, auth, universities → PR · Neeraj looks at the redesign → merge **V-P** | **R** V-C · **N-B** → PR · **N-C** reports API |
+| 7 | Thu 5 Nov | **R** N-B · **V-D** app community begins (CC-V4a) | merge N-B · **N-C** → PR · **T1** API checks |
+| 8 | Fri 6 Nov | **R** N-C · **V-D** (CC-V4a) | merge N-C · **N-D** connect the redesigned website to the real API (CC-N4b) |
 | 9 | Sat 7 Nov | **V-D** (CC-V4b: composer) | **N-D** (CC-N4b: composer) |
 | 10 | Sun 8 Nov | **V-D** (CC-V4b) | **N-D** (CC-N4b) |
 | 11 | Mon 9 Nov | **V-D** (CC-V4c: post page, reactions, report, profile) | **N-D** (CC-N4c: post page, report, profile, navbar) |
@@ -736,7 +890,11 @@ the API's answers, so the website work isn't blocked while the API is being writ
 | 22 | **Fri 20 Nov** | **SIGN-OFF** together · release 7 | **SIGN-OFF** together |
 | — | Sat 21 – Mon 23 Nov | buffer | buffer |
 
-**How the work splits:** about 21 days each.
+**Version 2:** days 4–6 were re-planned on 2 November (V-A and V-B both on day 4; the redesign
+V-P and Neeraj's N-S are new). Every date, and the deadline, stay the same.
+
+**How the work splits:** about 21 days each. The redesign adds about a day to Vishwajeet's
+side; N-S is Neeraj's later website work brought forward, not extra work.
 - **Vishwajeet:** the shared backend, the database, the messages and auth API, and every app
   screen.
 - **Neeraj:** the posts and reports API, every website screen, and **all** the hands-on
@@ -755,6 +913,7 @@ each.
 |---|---|---|---|
 | Day 5 | Vishwajeet | Push the 4 migrations (V-B, by hand) | Only adds things; no code uses `posts` yet |
 | Day 5 | Vishwajeet | Add `OPENAI_API_KEY` to Render | N-B (day 7) needs it the moment it merges |
+| Day 6 | Vishwajeet | Merge V-P (the redesign) | It only changes the community page, which still runs on sample data |
 | Day 6–7 | Vishwajeet | Merge V-C | Adds routes and fields; old clients ignore them |
 | Day 7 | Neeraj | Merge N-B (posts API) | New routes, nothing calls them yet |
 | Day 8 | Neeraj | Merge N-C (reports API) | Same |
@@ -765,10 +924,15 @@ each.
 After each merge, check Render shows "Live" (and press **Manual Deploy → Deploy latest commit**
 if auto-deploy is off, as in 6B), and that Netlify shows "Published".
 
+**Merging website work to `main` publishes it.** The community page has been on
+yahora.netlify.app, with sample data, since N-D part 1 merged, and the redesign will replace
+it there too. That's fine before launch; just don't be surprised to see it.
+
 ## 2.5 What "done" means for Phase 7
 
 - [ ] **Feeds:** campus, country and Global work on the website (two panels and the switcher)
-      and in the app (switcher). The view-only rules in §1.1 hold. (T2)
+      and in the app (switcher). The view-only rules in §1.1 hold, and every post appears
+      only in the feed it was posted to. (T2)
 - [ ] **Posts:** 1,000 characters with "See more"; 3 photos or 1 GIF; one level of replies;
       delete your own. (T2)
 - [ ] **Reactions:** tap ❤️, the quick bar, the ⊕ picker, change and remove, the summary and the
@@ -777,8 +941,9 @@ if auto-deploy is off, as in 6B), and that Netlify shows "Published".
 - [ ] **Moderation:** nudge, hold and the support card all work; posting still works when
       the service is down. (T1, T2)
 - [ ] **Reports:** anyone who can see a post can report it; the warning shows; the thresholds
-      cover posts as in §1.7. (T1, T2)
-- [ ] **Limits:** the rate limits refuse the 11th campus post in an hour. (T1)
+      cover posts as in §1.7; a covered post's link shows only the notice. (T1, T2)
+- [ ] **Limits:** the 16th campus post in an hour is refused, while a Global post still goes
+      through. (T1)
 - [ ] **Demo:** demo accounts get `demo.` names and their own community; real users can't
       take `demo.` names. (T2)
 - [ ] **Nothing else broke:** marketplace, messages, Mark as Sold and privacy, on all phones.
@@ -789,7 +954,8 @@ if auto-deploy is off, as in 6B), and that Netlify shows "Published".
 ---
 # TRACK 1 — VISHWAJEET, MANUAL STEPS
 
-Seven blocks. V-A and V-B unblock Neeraj's backend work, so they come first and must not slip.
+Eight blocks. V-A and V-B unblock Neeraj's backend work, so they come first and must not slip.
+V-P, the website redesign, is new in version 2.
 
 ## Block V-0 — Setup, accounts and keys (Day 1, about 1½ hours)
 
@@ -862,7 +1028,7 @@ prints nothing, **stop** and add `.env` to that folder's `.gitignore` before any
 5. At about **12:00**, the design review with Neeraj (Block N-A): you check the **app** half
    of the spec.
 
-## Block V-A — Shared backend pieces (Days 1–2)
+## Block V-A — Shared backend pieces (Day 4, Mon 2 Nov — first)
 
 **This unblocks Neeraj.** Read §1.4 (emoji check), §1.6 (moderation) and §1.3 (cursors)
 first.
@@ -899,9 +1065,11 @@ into `backend/API.md`, and files the loan entry.
 3. Open `backend/API.md` and find **"posts module (Phase 7)"**. The endpoints match the
    runbook's Appendix A.
 4. `node scripts/changelog.mjs for neeraj` lists the loan entry.
-5. Commit, push, open the PR. **Neeraj reviews it** (backend PR rule). Merge it on day 2.
+5. Commit, push, open the PR. **Neeraj reviews it** (backend PR rule). Merge it as soon as he
+   approves. You don't have to wait for that merge to start V-B: the two touch different
+   files.
 
-## Block V-B — The four migrations (Days 2–4; production push Day 5)
+## Block V-B — The four migrations (Day 4, Mon 2 Nov; production push Day 5 morning)
 
 Read §1.1 to §1.8 and §1.11 first: they describe every table and rule you're about to add.
 
@@ -938,7 +1106,8 @@ a test script for each, and sample posts for your local database. Let it take it
      `deleted_at`;
    - `post_reactions` and `reports` exist;
    - `messages` has `reactions` and `gif`;
-   - `universities` has `country_code`.
+   - `universities` has `country_code`;
+   - `community_settings` has the 8 rows of §1.5 (15, 8, 8, 45, 2, 3, 5, 10).
 4. Studio → **SQL Editor** (local), run:
 
    ```sql
@@ -993,6 +1162,7 @@ select
   (select count(*) from information_schema.columns where table_schema='public' and table_name='messages'
      and column_name in ('reactions','gif'))                               as message_columns,   -- expect 2
   (select count(*) from cron.job where jobname = 'refresh-hot-scores')    as cron_jobs,         -- expect 1
+  (select count(*) from public.community_settings)                         as settings_rows,     -- expect 8
   (select count(*) from public.users u join public.universities n on n.id = u.university_id
     where n.is_demo and u.username is not null and u.username not like 'demo.%')
                                                                            as demo_left;         -- expect 0
@@ -1009,7 +1179,64 @@ service by itself. Wait until it shows **Live**.
 `node scripts/changelog.mjs new vishwajeet "Phase 7 migrations pushed to production" --phase 7 --block V-B --for neeraj`
 — with the two numbers from step 1 and the results from step 4.
 
-## Block V-C — Messages: reactions and GIFs; demo usernames; countries (Days 5–6)
+## Block V-P — The website community redesign (Day 5, after the production push) — new on 2 Nov
+
+You're redesigning every part of the website's community page: the layout, the feeds, the
+post card, the reactions, the country menu, and the composer, GIF picker and report form that
+Neeraj builds in N-S. The website is Neeraj's area, so this runs as a **loan** (§2.2, Loan 2).
+Its rules are what keep your work and his from colliding.
+
+**Before you start**
+1. Neeraj's N-S is merged (he merges it on day 4), and he has filed the loan entry.
+   `node scripts/changelog.mjs for vishwajeet` lists both.
+2. Read his notes on what looks wrong (in his N-S entry), and spec §1–§9.
+
+```bash
+git checkout main && git pull origin main      # includes Neeraj's N-S pieces
+git checkout -b v-p-web-community-redesign
+cd frontend && npm install && npm run dev
+```
+
+Open `http://localhost:3000/community`, and `http://localhost:3000/dev/community`: the test
+page where the composer, GIF picker and report form can be tried with every result.
+
+Run **CC-VP**. It starts the redesign and sets the rules. After that, keep refining with your
+own prompts as you like, and end each of them with: *"Keep the rules of runbook Block V-P."*
+
+**The four rules, in short** (CC-VP spells them out for Claude Code):
+1. **Data:** it keeps coming from `sampleData.js` and the test page's sample handlers, in the
+   same shape (Appendix A). No API calls.
+2. **Behaviour:** the adjustable layout, reactions, the view-only banner, the composer's rules
+   and every result screen keep working, unless you change one on purpose and write it in the
+   spec.
+3. **Spec:** every change of size, colour, layout or wording goes into `COMMUNITY_SPEC.md` in
+   the same branch. New colours become tokens, listed in the spec's §12 for both the website
+   and the app.
+4. **The brand stays unless you decide otherwise:** Inter for text and Bree Serif for headings
+   and prices, on both platforms. ⛔ `frontend/DESIGN.md` is the rebrand you never adopted
+   (highlighter yellow, Khand, "Inter banned"), and `frontend/CLAUDE.md` §15 still says
+   "Never Inter". Claude Code reads both files, so CC-VP tells it to ignore their colours and
+   fonts.
+
+**👁️ CHECKPOINT V-P**
+1. `cd frontend && npm run build` passes.
+2. The checks of N-D1 (Track 3) still work on the new design: the divider, collapsing, ⤢, the
+   remembered layout, the switcher under 1,024 px, reactions, the view-only banner — unless
+   you changed one on purpose and wrote it in the spec.
+3. `/dev/community`: the composer, GIF picker and report form still work, and every result
+   button still shows its screen.
+4. Look at it at laptop width (about 1,440 px) and phone width (about 390 px).
+5. `git diff --stat main` lists only files from the loan list (§2.2).
+6. **Neeraj looks at it** before you merge: it's his area.
+7. File the entry, then merge. Merging ends the loan.
+   `node scripts/changelog.mjs new vishwajeet "Website community redesign (V-P)" --phase 7 --block V-P --for neeraj`
+   — list what changed, especially any renamed components or props, and the spec sections
+   you updated.
+
+If the redesign takes more than a day, that's fine: Neeraj's next website block simply waits
+for it (§2.2, rule 8).
+
+## Block V-C — Messages: reactions and GIFs; demo usernames; countries (Day 6)
 
 Read §1.4 (reactions on messages) and §1.11 (demo usernames).
 
@@ -1067,28 +1294,30 @@ different yet; that's correct.
 Open the PR. **Neeraj reviews it.** Merge on day 6 or 7. (It's safe live straight away: it only
 adds things — §1.14.)
 
-## Block V-D — The app community (Days 6–13)
+## Block V-D — The app community (Days 7–13)
 
 The largest block of the phase. Read **all** of `docs/design/COMMUNITY_SPEC.md` first. Then run
 the three prompts **in order**, one at a time, each only after the previous checkpoint passes:
 
 | Prompt | Days | What |
 |---|---|---|
-| **CC-V4a** | 6–8 | The Community tab, the switcher and countries, the three feeds, the post card, reactions on the card |
+| **CC-V4a** | 7–8 | The Community tab, the switcher and countries, the three feeds, the post card, reactions on the card |
 | **CC-V4b** | 9–10 | The compose screen: text, photos, GIF, and every result of posting |
 | **CC-V4c** | 11–13 | The post page and replies, the full emoji picker, the breakdown, reporting, deleting, the Posts tabs, the "new posts" pill |
 
 Each prompt is its own branch: `v-d-app-community-a`, `-b`, `-c` (§1.15). Merge each one
 after its checkpoint, so the next starts from `main`.
 
-> **Before Neeraj's posts API is merged (day 7),** CC-V4a builds against the contract in
-> `backend/API.md`. To see real data on day 6, run your local backend from a throwaway branch
-> that also has his `n-b-posts-api` branch merged in (§1.15, "When one block needs another").
+> **If Neeraj's posts API isn't merged yet when you start,** CC-V4a builds against the
+> contract in `backend/API.md`. To see real data before it merges, run your local backend from
+> a throwaway branch that also has his `n-b-posts-api` branch merged in (§1.15, "When one
+> block needs another").
 
 **👁️ CHECKPOINT V-D4a** — the POCO, logged in as `arjun.mehta`:
 1. Four tabs: Marketplace, Community, Messages, Profile. The app still opens on Marketplace.
 2. Community → **Campus**: the seeded IIITDM Kurnool posts, newest first. Long posts fold
-   with **See more**.
+   with **See more**. Only campus posts: none of the India or Global posts appear here, and
+   no card carries a 🌍 or 🇮🇳 chip.
 3. Tap the second segment: **🇮🇳 India** is selected. Tap it again: the dropdown shows India
    (your country) first, then Global, then Germany (the local test campus CC-V2 adds).
 4. Switch to **Global**, then flip **Hot · New**: the order changes.
@@ -1107,8 +1336,8 @@ after its checkpoint, so the next starts from `main`.
 6. Type `I will hurt you after class tomorrow` and post: the "being checked" message. It's
    not in the feed, but it is on your Profile → **Posts** with the label `Being checked`
    (that tab arrives in CC-V4c; check this step again then).
-7. Post 10 times quickly in Campus. The 11th shows the posting-limit message, and your text
-   is kept.
+7. Post 15 times quickly in Campus. The 16th shows the posting-limit message, and your text
+   is kept. Then post in **Global**: it goes through, because each feed is counted on its own.
 
 **👁️ CHECKPOINT V-D4c**
 1. Tap a post's 💬: the post page, with replies oldest first, and **Load more replies** when
@@ -1129,6 +1358,9 @@ after its checkpoint, so the next starts from `main`.
 9. **"New posts" pill:** keep Campus open on the POCO. From Neeraj's account on the same
    campus (or the website), post something. Within 30 seconds the pill `↑ 1 new post`
    appears; tap it and the post is at the top.
+10. **A covered post** (cover one with the curl steps of checkpoint N-C, Track 3): log in as
+    its author, `sneha.gupta` — on Profile → **Posts** it's labelled `Under review`. Log in as
+    `arjun.mehta` — it's in no feed.
 
 ## Block V-E — The app: reactions and GIFs in messages (Days 14–16)
 
@@ -1340,10 +1572,29 @@ Rules for all four files:
        gif, when present, is an object with string provider, id and url.
    - An index for every feed query below, partial where it helps
      (top-level only, active, not deleted). Clear names.
-3. BEFORE INSERT trigger on posts (one function):
-   - Load the author's university_id, that campus's country_code and
-     is_demo, and the author's created_at. Set new.university_id and
-     new.is_demo from them, ignoring whatever the caller sent.
+3. public.community_settings — the numbers the Phase 9 admin page will
+   tune (runbook §1.5):
+     key text primary key, value integer not null check (value > 0),
+     description text not null, updated_at timestamptz not null
+     default now().
+   Insert these 8 rows, each with a one-line description:
+     rate_limit_campus_posts_per_hour   15
+     rate_limit_country_posts_per_hour   8
+     rate_limit_global_posts_per_hour    8
+     rate_limit_replies_per_hour        45
+     report_threshold_child_safety       2
+     report_threshold_serious            3   (sexual_content, violence, self_harm)
+     report_threshold_other_campus       5   (other reasons, campus posts)
+     report_threshold_other_wide        10   (other reasons, country and global posts)
+   Add community_setting(p_key text, p_default integer) returns integer
+   (stable): the row's value, or p_default when the row is missing, so a
+   deleted row can never stop posting. Every rule below that uses one of
+   these numbers reads it through this function, with the value above as
+   p_default. RLS on; service_role only.
+4. BEFORE INSERT trigger on posts (one function):
+   - Load the author's university_id, and that campus's country_code and
+     is_demo. Set new.university_id and new.is_demo from them, ignoring
+     whatever the caller sent.
    - Top-level post: country_code = the author's country (so a country
      post can only go to your own country — §1.1). Keep scope as sent.
    - Reply (parent_post_id set): load the parent.
@@ -1355,40 +1606,47 @@ Rules for all four files:
        anyone. And the author's is_demo must equal the parent's.
        Otherwise → NOT_ALLOWED_HERE.
    - Rate limits (§1.5). Count the author's rows in the last hour,
-     INCLUDING deleted ones:
-       top-level campus ≥ 10, or top-level country + global together ≥ 5
+     INCLUDING deleted ones, each kind ON ITS OWN:
+       top-level campus posts  ≥ rate_limit_campus_posts_per_hour  (15)
+       top-level country posts ≥ rate_limit_country_posts_per_hour  (8)
+       top-level global posts  ≥ rate_limit_global_posts_per_hour   (8)
          → RATE_LIMIT_POSTS;
-       replies ≥ 30 → RATE_LIMIT_REPLIES.
-     If the account is under 24 hours old, the limits are 5, 2 and 15.
-     Keep the numbers as named constants at the top of the function.
+       replies                 ≥ rate_limit_replies_per_hour       (45)
+         → RATE_LIMIT_REPLIES.
+     Read each number with community_setting(); the numbers in brackets
+     are the defaults. The same limits apply to every account, however
+     new. Count only the kind being inserted, so the check stays one
+     indexed count.
    - Set the first hot_score of a top-level post with the §1.3 formula
      (no reactions, no replies, age 0), so new posts enter Hot at once.
-4. Triggers that keep the parent's replies_count equal to its visible
+5. Triggers that keep the parent's replies_count equal to its visible
    replies (active and not deleted): after insert, after update of
    deleted_at or moderation_status, after delete. Never below 0.
-5. post_visibility(p_viewer uuid, p_post_id uuid) returns text, one of:
-     'visible' | 'not_found' | 'deleted' | 'removed'.
+6. post_visibility(p_viewer uuid, p_post_id uuid) returns text, one of:
+     'visible' | 'under_review' | 'not_found' | 'deleted' | 'removed'.
+   Check in this order:
+   - no such post; the viewer's world (is_demo) differs from the post's;
+     or a campus post of another campus → 'not_found';
    - deleted_at set → 'deleted'; moderation_status 'removed' → 'removed';
-   - pending → 'visible' only to the author, otherwise 'not_found';
-   - the viewer's world (is_demo) must equal the post's, else 'not_found';
-   - campus scope → the viewer's university must equal the post's, else
-     'not_found';
-   - country and global scope → 'visible';
-   - under_review → 'visible' (the apps show a cover).
+   - pending → 'visible' to the author, otherwise 'not_found';
+   - under_review → 'visible' to the author, otherwise 'under_review'.
+     A covered post is never readable by anyone else (runbook §1.7);
+   - otherwise → 'visible'.
    Also add two yes/no helpers that use exactly the same rules as the
    insert trigger, so the API never re-implements them in JavaScript:
    - can_reply_to_post(p_viewer, p_post_id) returns boolean — false for
      pending and under_review posts;
    - can_post_in_feed(p_viewer, p_scope, p_country) returns boolean —
      campus and global: true; country: only the viewer's own country.
-6. Read functions. They ALL return the same flat columns: Appendix A's
+7. Read functions. They ALL return the same flat columns: Appendix A's
    PostItem, plus hot_score for building cursors. viewer_reaction comes
    from post_reactions; is_mine compares the author to the viewer; author
    fields come from users and universities.
    - get_campus_feed(p_viewer, p_limit, p_cursor_time, p_cursor_id): top-level
-     posts whose author's campus is the viewer's campus (ANY scope), active,
-     not deleted, same world; newest first (created_at desc, id desc); the
-     cursor means "strictly after (created_at, id)".
+     posts with scope 'campus' from the viewer's campus ONLY — country and
+     global posts never appear here (runbook §1.1, "One post, one feed") —
+     active, not deleted, same world; newest first (created_at desc, id
+     desc); the cursor means "strictly after (created_at, id)".
    - get_country_feed(p_viewer, p_country, p_sort, p_limit, p_cursor_score,
      p_cursor_time, p_cursor_id): scope 'country', that country_code, active,
      not deleted, same world. p_sort 'hot' → (hot_score desc, id desc);
@@ -1399,18 +1657,19 @@ Rules for all four files:
      'visible', otherwise none.
    - get_post_replies(p_viewer, p_post_id, p_limit, p_cursor_time,
      p_cursor_id): active, not-deleted replies, oldest first (created_at asc,
-     id asc), plus the viewer's own pending replies.
+     id asc), plus the viewer's own pending and under-review replies
+     (covered replies are hidden from everyone else).
    - get_user_posts(p_viewer, p_author, p_limit, p_cursor_time, p_cursor_id):
-     the author's top-level posts that the viewer may see (post_visibility
-     'visible'), newest first; when the viewer IS the author, also pending
-     and under_review.
+     the author's top-level posts for which post_visibility is 'visible' to
+     this viewer, newest first. So the author also sees their own pending
+     and covered posts, and everyone else sees only active ones.
    - count_new_campus_posts(p_viewer, p_since): how many posts
      get_campus_feed would show newer than p_since, excluding the viewer's
      own.
    - countries_for_viewer(p_viewer): rows (country_code, is_mine) — the
      country codes of active campuses in the viewer's world (real viewers:
      active non-demo campuses; demo viewers: the demo campus only).
-7. refresh_hot_scores(): for active, not-deleted, top-level country and
+8. refresh_hot_scores(): for active, not-deleted, top-level country and
    global posts from the last 7 days, set hot_score with the §1.3 formula.
    Schedule it with pg_cron as 'refresh-hot-scores', '*/5 * * * *'. Enable
    pg_cron the way Supabase's docs say (create extension …); it must work
@@ -1418,7 +1677,7 @@ Rules for all four files:
    (unschedule a job of the same name first).
    (Removing deleted posts after 90 days is NOT done here: their photos live
    in Storage, which SQL can't delete. The backend does it — CC-V3.)
-8. supabase/seed.sql (LOCAL only):
+9. supabase/seed.sql (LOCAL only):
    - a test campus "TU Munich (test)", country_code 'DE', is_active true,
      with one student lena.test / password123 (use the existing seed_user
      helper);
@@ -1441,8 +1700,8 @@ Rules for all four files:
    emoji's key, remove keys that reach 0, never go below 0.
 3. react_to_post(p_post_id, p_user_id, p_emoji text) returns
    (reactions_total, reaction_counts, viewer_reaction):
-   - post_visibility must be 'visible', and the post must not be pending,
-     else POST_NOT_FOUND;
+   - post_visibility must be 'visible' and the post 'active' (not pending,
+     not under review), else POST_NOT_FOUND;
    - p_emoji null → delete the caller's row; otherwise insert … on conflict
      (post_id, user_id) do update the emoji and updated_at.
    (The backend checks the emoji is real with isSingleEmoji; the length
@@ -1462,7 +1721,9 @@ Rules for all four files:
    reports are tracked (§1.7).
 5. create_report(p_reporter, p_target_type, p_target_id, p_reason,
    p_details): Phase 7 handles target_type 'post' only.
-   - The post must be 'visible' to the reporter, else POST_NOT_FOUND.
+   - post_visibility must be 'visible' or 'under_review' for the reporter
+     (someone who saw the post just before it was covered can still report
+     it), else POST_NOT_FOUND.
    - The reporter must not be the author, else CANNOT_REPORT_OWN.
    - reporter_in_audience: campus post → same campus; country post → the
      reporter's country = the post's country_code; global → true.
@@ -1470,11 +1731,14 @@ Rules for all four files:
      backend maps to DUPLICATE.
 6. AFTER INSERT trigger on reports (target_type 'post'):
    - recount the post's distinct reporters into posts.report_count;
-   - then apply the cover rules (§1.7). Each rule counts its own reports:
-       child_safety, counting everyone ≥ 2;
-       sexual_content + violence + self_harm, counting everyone ≥ 3;
-       all other reasons, counting only reporter_in_audience: ≥ 5 on a
-         campus post, ≥ 10 on a country or global post.
+   - then apply the cover rules (§1.7). Each rule counts its own reports,
+     and reads its number with community_setting() (defaults in brackets):
+       child_safety, counting everyone ≥ report_threshold_child_safety (2);
+       sexual_content + violence + self_harm, counting everyone
+         ≥ report_threshold_serious (3);
+       all other reasons, counting only reporter_in_audience:
+         ≥ report_threshold_other_campus (5) on a campus post,
+         ≥ report_threshold_other_wide (10) on a country or global post.
    - If any rule is met and the post is 'active', set it to 'under_review'.
 
 ════ MIGRATION 3 — message_reactions_gifs ════
@@ -1531,11 +1795,21 @@ assert. At least:
   · a NIET student can reply to an India post; lena.test can SEE it but
     gets NOT_ALLOWED_HERE when replying; a demo user can't reply to a real
     post;
-  · the 11th campus post in an hour is refused;
+  · the 16th campus post in an hour is refused; country and global are
+    counted on their own (after 15 campus posts a global post still goes
+    through, and the 9th global post in an hour is refused); an account
+    created a minute ago has the same limits; updating a
+    community_settings row changes the limit at once, and deleting the
+    row falls back to the default;
   · a 1,001-character post is refused; photos + GIF together are refused;
   · replies_count follows inserts and soft deletes;
-  · the campus feed shows its campus's posts of every scope and never demo
-    posts;
+  · the campus feed shows only its own campus's campus posts — never a
+    country or global post, never another campus's, never a demo post;
+    the country and global feeds never show campus posts;
+  · a post set to under_review: post_visibility is 'under_review' for
+    others and 'visible' for its author; get_post_item and get_user_posts
+    return it only to its author; it's in no feed; a covered reply is
+    missing from get_post_replies for everyone but its author;
   · New and Hot both page with the cursor with no repeats and no gaps;
   · after refresh_hot_scores, a newer active post outranks an older quiet
     one.
@@ -1547,7 +1821,11 @@ assert. At least:
     unique_violation;
   · 2 child_safety reports cover a post; 3 violence reports do too;
   · 4 spam reports on a campus post don't, the 5th does;
-  · spam reports from lena.test on an India post don't count toward 10.
+  · spam reports from lena.test on an India post don't count toward 10;
+  · the thresholds come from community_settings: with
+    report_threshold_other_campus set to 2, two spam reports cover a
+    campus post;
+  · a post that is already under_review can still be reported.
 - 03:
   · react_to_message by a participant sets and removes; by an outsider →
     MESSAGE_NOT_FOUND; on a tombstone → MESSAGE_DELETED;
@@ -1576,6 +1854,67 @@ VERIFY AFTER — report each
 3. The NOTICE and ERROR lines from all four test files.
 4. The result of: select jobname, schedule from cron.job;  (one job)
 5. Anything you decided that this prompt didn't specify.
+6. The 8 rows of community_settings.
+```
+
+## CC-VP — The website community redesign
+
+```
+Phase 7, Block V-P. A complete redesign of the website's community page:
+the layout, the feeds, the post card, the reactions, the country menu, and
+the composer, GIF picker and report form Neeraj built in Block N-S.
+
+OWNERSHIP — read this first. frontend/ is Neeraj's. For this block these
+files are ON LOAN to me (Vishwajeet) — see the changelog entry "Ownership
+loan: website community files to Vishwajeet for the redesign":
+  frontend/src/pages/community/*
+  frontend/src/components/community/*
+  frontend/src/utils/community.js
+  the community variables in frontend/src/styles/global.css
+  frontend/src/pages/dev/CommunitySandbox.jsx
+  docs/design/COMMUNITY_SPEC.md
+Touch nothing else in frontend/: not App.jsx, not the navbar, and not the
+hooks in src/hooks/ (ask me first if one of them has to change). If a
+change outside this list seems needed, STOP and tell me.
+
+Read first: docs/design/COMMUNITY_SPEC.md (all of it), runbook §0.7, §1.1
+and §1.13, frontend/CLAUDE.md, and Neeraj's N-S changelog entry (his notes
+on what looks wrong). Open /community and /dev/community.
+
+⛔ IGNORE the colours and fonts in frontend/DESIGN.md, and the "Never Inter"
+line in frontend/CLAUDE.md §15. They describe a rebrand that was never
+adopted (highlighter yellow, Khand, Instrument Sans). The decided brand,
+the same on the website and the app: Inter for text; Bree Serif, regular
+400 only, for headings and prices; the colour variables already in
+src/styles/global.css. Everything else in frontend/CLAUDE.md applies.
+
+THE RULES (runbook Block V-P):
+1. Data: all of it keeps coming from src/pages/community/sampleData.js and
+   the test page's sample handlers, in the PostItem shape of the runbook's
+   Appendix A. No fetch, no API calls. Components get data and callbacks
+   through props: that's the seam Neeraj replaces with the real API.
+2. Behaviour: keep the adjustable layout (resize, collapse, ⤢, double-click
+   for 50/50, the saved layout, the switcher under 1,024 px), reactions
+   (tap ❤️, hover 300 ms, ⊕ picker, change and remove), the view-only
+   banner, the composer's rules (1,000 code points, photos or a GIF), and
+   every result screen on /dev/community. Change one only when I ask, and
+   then write it in the spec.
+3. Spec: update docs/design/COMMUNITY_SPEC.md in this branch for every
+   size, colour, layout and wording you change. New colours become
+   variables in global.css AND rows in spec §12 with an app token name,
+   because the app is built from the same spec.
+4. Quality: visible keyboard focus on every control; text contrast at least
+   4.5:1 (3:1 for large text and icons); respect prefers-reduced-motion.
+
+Start by telling me, in one sentence, the direction you propose, and the 5
+biggest problems you see in the current page and in Neeraj's notes. Then
+wait for my answer before changing any code.
+
+VERIFY AFTER each round — report:
+1. npm run build passes.
+2. Screenshots at 1440 and 390 px wide (Playwright), with your critique.
+3. The files you changed — all from the loan list.
+4. The spec sections you updated.
 ```
 
 ## CC-V3 — Messages: reactions and GIFs; demo usernames; campus countries
@@ -1721,8 +2060,8 @@ backend/API.md "posts module (Phase 7)"; runbook §1.1, §1.3, §1.4, §1.12.
      across restarts).
 7. src/components/community/PostCard.tsx — memoised, so a card re-renders
    only when its own data changes. Exactly spec §3:
-   - the author line (tap → app/profile/[id]);
-   - the scope chip in the campus feed;
+   - the author line (tap → app/profile/[id]). No scope chip: each feed
+     shows only its own posts (runbook §1.1);
    - text with the 6-line fold and "See more" (expands in place), links
      tappable;
    - photos in the 1 / 2 / 3 layouts, opening the existing
@@ -1840,8 +2179,9 @@ posts" pill. Read: spec §3.1, §4, §5.2, §5.4, §7, §8, §10; runbook §1.7,
    - the pinned reply bar opens compose with parent=<id>. When can_reply is
      false, it reads "Only students in <country> can reply.";
    - 404 → "This post isn't available."; 410 POST_DELETED → "This post was
-     deleted."; 410 POST_REMOVED → spec §3.1's text; under review → the
-     cover with "View anyway".
+     deleted."; 410 POST_REMOVED → spec §3.1's text; 403 POST_UNDER_REVIEW
+     → only "This post was reported by several students and is being
+     reviewed." — no content and no way to open it (runbook §1.7).
 5. The ⋯ menu: Report (everyone except the author) and Delete (the author
    only). Delete → ConfirmDialog with the spec's text → DELETE
    /api/posts/:id → remove the post from every cached feed and page.
@@ -1949,8 +2289,8 @@ VERIFY AFTER — report each
 ---
 # TRACK 3 — NEERAJ, MANUAL STEPS
 
-Five building blocks and five rounds of testing (T1–T5). The testing decides whether the
-phase passed, and it's yours: the website **and** the phones.
+Six building blocks and five rounds of testing (T1–T5). The testing decides whether the
+phase passed, and it's yours: the website **and** the phones. N-S is new in version 2.
 
 ## Block N-0 — The package and setup (Day 1, first thing)
 
@@ -2045,7 +2385,81 @@ Read §1.1, §1.12 and §1.13, then the spec §1, §3 and §5. Run **CC-N4a**.
 
 Commit and merge it (website — no review needed). The sample data stays until part 2.
 
-## Block N-B — The posts API (Days 4–6)
+## Block N-S — Standalone pieces, while the database is being built (Day 4, Mon 2 Nov) — new on 2 Nov
+
+**Why this block exists.** N-B needs Vishwajeet's V-A and V-B merged, which happens during
+today. Instead of waiting, you build the community pieces that don't need our API, in **new
+files**:
+- the **GIF picker** (it talks to KLIPY directly, so it works today);
+- the **composer**;
+- the **report form**;
+- a **test page**, only for development, `/dev/community`, to try all three with every
+  result.
+
+They were planned for days 8–12, so this is your later work brought forward. Tomorrow
+Vishwajeet redesigns the whole community page, **including these pieces** (Block V-P). So
+build them to work exactly as the spec says, keep them clean and simple, and don't spend time
+polishing how they look.
+
+**Logic and look, kept apart.** CC-NS puts each piece's *behaviour* (counting characters,
+checking photos, searching GIFs, turning a server answer into the right screen) in a small
+**hook** file, and its *look* in a component that uses the hook. Worked example: the
+composer's rule "at most 3 photos, never with a GIF" lives in `useComposer.js`. Tomorrow
+Vishwajeet can change every pixel of the composer without touching that rule, and in CC-N4b
+you pass the real API call into the same hook without touching his design.
+
+**Steps**
+
+```bash
+git checkout main && git pull origin main
+git checkout -b n-s-standalone
+```
+
+Run **CC-NS**. It also applies decision 1 of 2 November (§0.7) to the sample-data page: the
+campus feed shows only campus posts, and the 🌍 chip goes.
+
+**👁️ CHECKPOINT N-S** — logged in as `arjun.mehta`:
+1. `/community`: the campus feed shows only campus posts, and no card has a 🌍 or 🇮🇳 chip.
+2. `/dev/community` → **GIF picker**: trending GIFs appear; type `hello` → results after a
+   short pause; scroll down → more load; **Powered by KLIPY** at the bottom; pick one → the
+   test page shows what was picked.
+3. **Composer**: `Posting as @…` is shown; the counter appears at 100 left; Post is disabled
+   above 1,000; 3 photos at most; photos and a GIF never together (the hint says why); the
+   destination chip follows the test page's feed switch; the reply toggle hides the photo
+   button.
+4. Press each **result button**, then Post: the **Post this?** dialog (Edit keeps the text),
+   the "being checked" message, the support card, the limit message (text kept), the
+   network-error message.
+5. **Report form**: 11 reasons in order; the warning paragraph; Report disabled until a reason
+   is picked; details stop at 500; the self-harm line; the "sent" and "already reported"
+   results.
+6. `cd frontend && npm run build` passes, and `ls dist/assets | grep -i sandbox` prints
+   nothing (the test page isn't part of the live site).
+
+**Also today**
+- **Review V-A** when Vishwajeet opens the PR (backend rule, about 30 minutes).
+- **Notes for the redesign.** Open `/community` and `/dev/community` at laptop and phone
+  width, and write 5–10 short points about what looks wrong or feels awkward. Put them in your
+  entry below, and send Vishwajeet the screenshots directly. He starts from them tomorrow.
+- **Testing prep (30 minutes).** Check Expo Go on your phone supports SDK 57. Run
+  `cd mobile && npm install && npx expo start` once from `main` and open the app. On
+  production, make sure you have your own account and a campus-mate's test account ready for
+  T1 and T5.
+
+**Before you stop: merge, and file two entries.** The redesign starts from your merged work.
+
+```bash
+node scripts/changelog.mjs new neeraj "Ownership loan: website community files to Vishwajeet for the redesign" --phase 7 --block N-S --for vishwajeet
+node scripts/changelog.mjs new neeraj "Standalone community pieces + notes for the redesign (N-S)" --phase 7 --block N-S --for vishwajeet
+```
+
+In the loan entry, copy the file list and the eight rules from §2.2 (Loan 2).
+
+**From tomorrow,** while the redesign branch is open, you work only on the backend (N-B,
+N-C) and don't touch the community front-end files. Your next website block, CC-N4b, starts
+after the redesign is merged.
+
+## Block N-B — The posts API (Days 5–6)
 
 ⛔ **The posts module belongs to Vishwajeet and is on loan to you** (§2.2). The prompts say so.
 Don't change its `OWNER:` banner.
@@ -2116,10 +2530,12 @@ post $ARJUN campus "I will hurt you after class tomorrow" | python3 -m json.tool
 post $ARJUN campus "$(python3 -c 'print("a"*1001)')"
 #    → {"error":"CONTENT_TOO_LONG", "max":1000}
 
-# 9. The rate limit: 10 campus posts in an hour, then refused
-for i in $(seq 1 11); do post $ARJUN campus "Test post $i" | grep -o '"error":"[A-Z_]*"'; done
+# 9. The rate limit: 15 campus posts in an hour, then refused
+for i in $(seq 1 16); do post $ARJUN campus "Test post $i" | grep -o '"error":"[A-Z_]*"'; done
 #    → the first lines print nothing (posted); the last prints "error":"RATE_LIMIT_POSTS"
-#      (the earlier posts in this checkpoint count too, so it may refuse sooner)
+#      (the campus post held in check 7 counts too, so it may refuse one sooner)
+post $ARJUN global "Global has its own count" | grep -o '"error":"[A-Z_]*"'
+#    → prints nothing: the Global post goes through (each feed is counted on its own)
 
 # 10. Arjun deletes his India post; opening it now says deleted
 curl -s -X DELETE "$API/posts/$PID" -H "Authorization: Bearer $ARJUN"
@@ -2143,6 +2559,9 @@ On a new branch, `n-c-reports-api`, run **CC-N3**.
 
 **👁️ CHECKPOINT N-C**
 
+Paste the helper block from checkpoint N-B again first: `supabase db reset` logged everyone
+out. Then:
+
 ```bash
 SEEDED=$(curl -s "$API/posts/feed/campus" -H "Authorization: Bearer $ARJUN" | python3 -c "import sys,json; print(json.load(sys.stdin)['items'][0]['id'])")
 report() { curl -s -X POST "$API/reports" -H "Authorization: Bearer $1" -H "Content-Type: application/json" -d "{\"target_type\":\"post\",\"target_id\":\"$2\",\"reason\":\"$3\"}"; }
@@ -2150,6 +2569,21 @@ report() { curl -s -X POST "$API/reports" -H "Authorization: Bearer $1" -H "Cont
 report $ARJUN $SEEDED spam        # → {"reported":true}   (unless the post is Arjun's own: then CANNOT_REPORT_OWN)
 report $ARJUN $SEEDED spam        # → {"error":"DUPLICATE"}
 report $ARJUN $SEEDED rude        # → {"error":"INVALID_FORMAT", …}
+```
+
+Then **a covered post** (§1.7). Sneha posts in the India feed, and three students report it
+as violence: three serious reports cover it.
+
+```bash
+PRIYA=$(login priya.nair); RAHUL=$(login rahul.verma); KARAN=$(login karan.singh)
+COV=$(post $SNEHA country "Cover test" | python3 -c "import sys,json; print(json.load(sys.stdin)['post']['id'])")
+for T in $ARJUN $PRIYA $RAHUL; do report $T $COV violence; echo; done
+curl -s "$API/posts/$COV" -H "Authorization: Bearer $KARAN"
+#    → {"error":"POST_UNDER_REVIEW"}        nothing about the post itself
+curl -s "$API/posts/$COV" -H "Authorization: Bearer $SNEHA" | grep -o '"moderation_status":"[a-z_]*"'
+#    → "moderation_status":"under_review"   the author still sees it
+curl -s "$API/posts/feed/country/IN" -H "Authorization: Bearer $ARJUN" | grep -c "$COV"
+#    → 0                                     it's out of the feed
 ```
 
 PR → **Vishwajeet reviews (day 8)** → merge.
@@ -2168,8 +2602,12 @@ Then delete your test post (check 10). Write the results in your T1 changelog en
 
 | Prompt | Days | What |
 |---|---|---|
-| **CC-N4b** | 8–10 | The real API instead of sample data, the composer, the GIF picker, every result of posting |
-| **CC-N4c** | 11–12 | The post page and replies, reporting, deleting, the Posts tabs, the "new posts" pill |
+| **CC-N4b** | 8–10 | The real API instead of sample data; the redesigned composer and GIF picker put into the feeds; every result of posting |
+| **CC-N4c** | 11–12 | The post page and replies, the report form and deleting, the Posts tabs, the "new posts" pill |
+
+⛔ **Start CC-N4b only after the redesign (V-P) is merged** (§2.2). First read Vishwajeet's
+V-P changelog entry and the spec sections it updated: you build on the new design, and any
+renamed components or props are listed there.
 
 Use one branch per prompt (`n-d-web-community-2`, `-3`).
 
@@ -2177,7 +2615,7 @@ Use one branch per prompt (`n-d-web-community-2`, `-3`).
 - "Posting as…"; the counter; 3 photos or a GIF, never both;
 - the nudge with **Edit** keeping the text;
 - the hold message;
-- the 11th post refused, with the text kept;
+- the 16th campus post refused, with the text kept, while a Global post still goes through;
 - the GIF picker shows **Powered by KLIPY**.
 
 **👁️ CHECKPOINT N-D3** — the same steps as V-D4c, on the website:
@@ -2185,6 +2623,7 @@ Use one branch per prompt (`n-d-web-community-2`, `-3`).
 - replying, including the view-only case as `lena.test`;
 - reporting: the warning, the toast, "already reported";
 - deleting your own post;
+- a covered post's link (from checkpoint N-C) shows only the notice, with no way to open it;
 - the Posts tab on Dashboard and on a profile;
 - the "new posts" pill appearing within 30 seconds when someone else posts.
 
@@ -2225,13 +2664,15 @@ Mark each cell ✅ or ❌. A phone you don't have is run by whoever has it (§2.
 | 14 | Report a post | the reasons; the warning; Report disabled until a reason; the toast; the post leaves your feed | | | | | |
 | 15 | Report the same post again (from its link) | `You've already reported this post.` | | | | | |
 | 16 | Delete your own post; open its link | gone from feeds; the link says `This post was deleted.` | | | | | |
-| 17 | 11 campus posts in a row | the 11th is refused with the limit message; the text is kept | | | | | |
+| 17 | 16 campus posts in a row, then one in Global | the 16th campus post is refused with the limit message and the text is kept; the Global post goes through | | | | | |
 | 18 | Someone else on your campus posts while you watch | `↑ 1 new post` within 30 s; nothing jumps on its own | | | | | |
 | 19 | Profile → Posts (yours and someone else's) | your Being checked post appears only on yours | | | | | |
 | 20 | **Explore Live Demo**, then Community | a name like `@demo.sunny.otter`; only the demo personas' posts | | | | | |
 | 21 | **Laptop only:** drag, double-click, collapse, ⤢, reload | everything works and the layout is remembered | | — | — | — | — |
 | 22 | **Samsung:** scroll a feed with GIFs for 30 s | smooth; GIFs pause when scrolled away | — | — | — | — | |
 | 23 | Airplane mode, pull to refresh, then back online | a friendly error, no crash; it recovers | | | | | |
+| 24 | Post once in Campus, once in India, once in Global; look at all three feeds | each post appears only in its own feed, never in the other two | | | | | |
+| 25 | A covered post (from checkpoint N-C) | web: its link shows only `This post was reported by several students and is being reviewed.` — no text, no button · app: in no feed; its author sees it on Profile → Posts as `Under review` | | | | | |
 
 **For every ❌:** a screenshot or a screen recording, the platform, and the block (V-D or N-D).
 Vishwajeet fixes the app ones; you fix the website ones.
@@ -2310,6 +2751,97 @@ File: `node scripts/changelog.mjs new neeraj "T5 passed on production" --phase 7
 
 Start every session with the opener from Track 2, using `for neeraj`.
 
+## CC-NS — Standalone community pieces (website)
+
+```
+Phase 7, Block N-S. Standalone community pieces for the website, built
+while the database and the posts API don't exist yet. Tomorrow Vishwajeet
+redesigns the whole community page (Block V-P), including these pieces.
+So make them correct and clean, keep their logic separate from their look,
+and don't spend time on visual polish.
+
+Read first: docs/design/COMMUNITY_SPEC.md §2, §6, §7 and §13; runbook
+§0.7, §1.1, §1.9, §1.12 and §1.16; frontend/CLAUDE.md.
+
+1. The decisions of 2 November, on the existing sample-data page:
+   - each feed shows only its own posts: in src/pages/community/sampleData.js
+     the campus feed returns only scope 'campus' posts of the viewer's
+     campus;
+   - remove the scope chip: the showScopeChip prop, its markup and its CSS
+     in components/community/PostCard/, and the prop in CommunityFeed.jsx.
+2. src/utils/klipy.js — every KLIPY call lives in this one file. It reads
+   import.meta.env.VITE_KLIPY_API_KEY (the only place that variable is read;
+   it's a util, not a component, so frontend/CLAUDE.md allows it). Read
+   KLIPY's API docs, then export:
+     trendingGifs({ page }) and searchGifs({ query, page }) → { items, next }
+   where each item is a GifRef { provider: 'klipy', id, url, preview_url,
+   width, height }: a small animated rendition (WebP or GIF) as preview_url
+   and a medium one as url. If KLIPY asks for a per-user id, send a random
+   id kept in localStorage, never the user's real id. With no key, throw a
+   clear error the UI can show.
+3. Logic separate from look. Put the behaviour in hooks, so the redesign
+   can change every pixel without touching it:
+   - src/hooks/useGifSearch.js — trending at first; search
+     GIF_SEARCH_DEBOUNCE_MS after typing stops; loadMore; loading and error
+     states.
+   - src/hooks/useComposer.js — the text; the codePointLength counter
+     (shown at 100 or fewer left); photos (at most 3, JPEG / PNG / WebP,
+     5 MB each, with the spec's error texts); one GIF; the photos-or-GIF
+     rule; canPost; and submit(onSubmit), which turns the answer into the
+     spec §2.3 state: posted, nudge, held, support, rate-limited,
+     not-allowed or error. onSubmit is passed in from outside, so the test
+     page's sample handler and N-D's real API call use the same hook.
+   - src/hooks/useReport.js — reason, details (≤ 500 code points),
+     canSubmit, submit(onSubmit) → sent, duplicate or error.
+4. Components — plain and clean, with existing tokens and patterns (CSS
+   Modules, lucide icons), using exactly the spec's words and states:
+   - components/community/GifPicker/ (spec §6): a popover with a search
+     box, a 3-column grid, infinite loading and "Powered by KLIPY".
+     Props: onPick(gifRef), onClose. On error: "GIFs aren't available
+     right now."
+   - components/community/Composer/ (spec §2): the closed row and the open
+     composer — "Posting as @username · campus", the textarea, the counter,
+     the destination chip, photo previews with ✕, the GIF and 😊 buttons
+     (😊 opens emoji-picker-react, already installed, inserting at the
+     cursor), and Post. Plus the result screens: the "Post this?" dialog
+     (the existing ConfirmDialog), the held message (the existing
+     AppToast), the support card (spec §2.4) and the inline limit message.
+     Props: feed ('campus' | 'country' | 'global'), countryName, viewer
+     { username, campus }, parentId (a reply: no photo button, grey text
+     "Reply to @username…"), onSubmit(formData, { confirm }).
+   - components/community/ReportModal/ (spec §7): the 11 reasons in order,
+     optional details, the warning paragraph always visible, the self-harm
+     line, Report disabled until a reason is picked. Props: postId,
+     onClose, onSubmit(body).
+5. A development-only test page, src/pages/dev/CommunitySandbox.jsx, at
+   /dev/community:
+   - register the route in App.jsx ONLY when import.meta.env.DEV is true,
+     and load the page with React.lazy(() => import(...)), so it is never
+     part of the production build;
+   - it shows the composer (with a campus / India / Global switch and a
+     "reply" toggle), the GIF picker (showing the picked GifRef under it),
+     and a button that opens the report form;
+   - a row of buttons makes the sample onSubmit answer with each result of
+     spec §2.3 — posted, nudge, held, held + support, rate-limited, network
+     error — and the report form's sample onSubmit answer sent or
+     duplicate.
+6. Don't put the composer or the report form into /community yet. That
+   happens after the redesign (CC-N4b and CC-N4c).
+
+HARD CONSTRAINTS
+- New files, plus only these edits to existing files: sampleData.js,
+  PostCard (the chip), CommunityFeed.jsx (the chip prop) and App.jsx (the
+  development-only route).
+- No calls to our API. frontend/CLAUDE.md patterns. No new libraries.
+- Do not touch backend/ or mobile/.
+
+VERIFY AFTER — report each
+1. npm run build passes, and `ls dist/assets | grep -i sandbox` prints
+   nothing.
+2. Which KLIPY endpoints and renditions you used.
+3. Remind me of checkpoint N-S.
+```
+
 ## CC-N1 — The posts API, part 1: reading
 
 ```
@@ -2356,6 +2888,9 @@ Routes (in posts.routes.js; register the fixed paths BEFORE '/:id'):
    rpc count_new_campus_posts → { count }.
 6. GET /:id (a uuid, else 400) → rpc post_visibility first:
    - 'not_found' → 404 POST_NOT_FOUND;
+   - 'under_review' → 403 POST_UNDER_REVIEW, with nothing else about the
+     post: a covered post's text must never leave the server (runbook
+     §1.7);
    - 'deleted' → 410 POST_DELETED;
    - 'removed' → 410 POST_REMOVED;
    - 'visible' → rpc get_post_item →
@@ -2540,8 +3075,8 @@ Read: spec §1, §3, §5.1–§5.4, §9, §12 and §13; runbook §1.1, §1.12 an
    - Infinite scroll with the existing InfiniteScrollSentinel; skeletons;
      spec §9's empty texts.
 7. src/components/community/PostCard/ — exactly spec §3:
-   - the author line (→ /user/:id); the scope chip; the 6-line fold with
-     See more; links;
+   - the author line (→ /user/:id); the scope chip (removed again on
+     2 Nov — CC-NS); the 6-line fold with See more; links;
    - photos in the 1 / 2 / 3 layouts, opening the existing ImageLightbox;
    - a GIF that plays muted on a loop and pauses off screen
      (IntersectionObserver);
@@ -2569,12 +3104,16 @@ VERIFY AFTER — report each
 3. Remind me of checkpoint N-D1.
 ```
 
-## CC-N4b — The website community, part 2: real data and composing
+## CC-N4b — The website community, part 2: the real API, and posting
 
 ```
-Phase 7, Block N-D, part 2 of 3. Swap the sample data for the real API,
-and build the composer and the GIF picker. Read: spec §2 and §6; runbook
-§1.3, §1.6, §1.9, §1.10 and §1.12; backend/API.md "posts module (Phase 7)".
+Phase 7, Block N-D, part 2 of 3. Connect the redesigned community page to
+the real API, and put the composer and the GIF picker into the feeds.
+
+Read first: Vishwajeet's V-P changelog entry (what the redesign changed,
+including any renamed components or props), the spec as V-P left it
+(§1–§6), runbook §1.3, §1.6, §1.9, §1.10 and §1.12, and backend/API.md
+"posts module (Phase 7)".
 
 1. src/pages/community/api.js — raw fetch with the token, the way
    ProductDetail does it, and API_BASE_URL from src/config/urls.js:
@@ -2583,34 +3122,26 @@ and build the composer and the GIF picker. Read: spec §2 and §6; runbook
    getUserPosts(userId, cursor), createPost(formData), deletePost(id),
    react(id, emoji), unreact(id), report(body). Cursors are echoed back
    exactly as received, never parsed (§1.3).
-2. Use it everywhere sample data was used, then DELETE sampleData.js.
-   Reactions are optimistic and roll back on error.
-3. The composer (spec §2):
-   - the closed row; the open inline composer with "Posting as @username ·
-     campus", the textarea, the counter (codePointLength, shown at 100
-     left), the destination chip;
-   - photos: at most 3, JPEG / PNG / WebP, 5 MB each, with previews and ✕;
-   - the GIF button and the 😊 button (emoji-picker-react, inserting at the
-     cursor); the photos-or-GIF rule with the spec's hint text;
-   - Post: multipart POST /api/posts.
-   Handle every result in spec §2.3:
-   - 201 → clear and close, put the post at the top of that feed;
-   - 422 MODERATION_NUDGE → the existing ConfirmDialog ("Post this?").
-     Edit keeps everything; Post anyway re-sends with confirm=true;
-   - 202 held → the AppToast message, or the support card (spec §2.4) when
-     support is true;
+2. Use it everywhere sampleData.js was used, then DELETE sampleData.js. If
+   the test page (/dev/community) still needs sample values, move them into
+   the test page's own file. Reactions are optimistic and roll back on
+   error.
+3. The composer and the GIF picker (built in N-S, redesigned in V-P): put
+   the composer into each feed where you can post — campus always; your own
+   country; Global — the way the spec shows it, unless V-P already did.
+   Give useComposer a real onSubmit: a multipart POST /api/posts with
+   content, scope, parent_post_id, gif (as a JSON string), images[] and
+   confirm. useComposer already turns each answer into the right screen;
+   check every one against the real API:
+   - 201 → clear and close, and put the post at the top of that feed;
+   - 422 MODERATION_NUDGE → "Post this?"; Post anyway re-sends with
+     confirm=true;
+   - 202 held → the held message, or the support card when support is
+     true;
    - 429 / 403 / 400 → the inline messages; a network error → the toast.
-   Never clear the text unless the result is 201 or 202.
-4. src/components/community/GifPicker/ (spec §6): a popover with a search
-   box, trending first, 3 columns, infinite loading, a 300 ms debounce,
-   and "Powered by KLIPY". It calls KLIPY from the browser with
-   import.meta.env.VITE_KLIPY_API_KEY, read in ONE file,
-   src/utils/klipy.js. That's the only exception to "don't read
-   import.meta.env in components", and it's in a util, not a component.
-   Read KLIPY's API docs for the search and trending endpoints, and use a
-   small rendition. It returns a GifRef
-   { provider: 'klipy', id, url, preview_url, width, height }. With no key:
-   "GIFs aren't available right now."
+   The text is never cleared unless the result is 201 or 202.
+4. Keep the redesign exactly as it is. If something can't be connected
+   without a design change, list it for Vishwajeet instead of changing it.
 
 HARD CONSTRAINTS
 - frontend/CLAUDE.md patterns. No new libraries.
@@ -2618,47 +3149,54 @@ HARD CONSTRAINTS
 
 VERIFY AFTER — report each
 1. npm run build passes.
-2. Which KLIPY endpoints and rendition you used.
+2. Every place sampleData.js was used, and what replaced it.
 3. Remind me of checkpoint N-D2.
 ```
 
 ## CC-N4c — The website community, part 3: the post page and everything around it
 
 ```
-Phase 7, Block N-D, part 3 of 3. The post page and replies, reporting,
-deleting, the Posts tabs and the "new posts" pill. Read: spec §3.1, §4, §7,
-§8 and §10; runbook §1.7 and §1.8.
+Phase 7, Block N-D, part 3 of 3. The post page and replies, the report
+form, deleting, the Posts tabs and the "new posts" pill.
+
+Read: the spec as V-P left it (§3.1, §4, §7, §8, §10), runbook §1.7 and
+§1.8, and Vishwajeet's V-P entry. New screens follow the redesigned look:
+reuse the redesigned components and styles, and don't invent a second
+style.
 
 1. src/pages/post/PostDetail.jsx at /post/:id (RequireOnboarded):
-   - the parent post larger (text 17/26);
+   - the parent post, larger (spec §4);
    - replies oldest first, with a "Load more replies" button (not infinite
-     scroll); compact PostCards with a 32 avatar;
-   - the reply box pinned at the bottom (text with a GIF, no photos). When
-     can_reply is false: "Only students in <country> can reply.";
+     scroll), as compact post cards;
+   - the reply box pinned at the bottom: the Composer with parentId (text
+     and a GIF, no photos). When can_reply is false: "Only students in
+     <country> can reply.";
    - 404 → "This post isn't available."; 410 POST_DELETED → "This post was
-     deleted."; 410 POST_REMOVED → spec §3.1's text; under review → the
-     cover with "View anyway".
-2. The ⋯ menu on posts and replies: Report (everyone except the author) and
-   Delete (the author only). Delete → ConfirmDialog with the spec's text →
-   remove the post from the page and from any loaded feed.
-3. src/components/community/ReportModal/ — exactly spec §7:
-   - the 11 reasons in order; optional details (500); the warning paragraph
-     always visible; the self-harm line; Report disabled until a reason is
-     picked;
-   - 201 → the toast, and hide the post from this user's loaded feeds;
-     400 DUPLICATE → "You've already reported this post."; anything else →
-     "Couldn't send. Try again."
+     deleted."; 410 POST_REMOVED → spec §3.1's text; 403 POST_UNDER_REVIEW
+     → only "This post was reported by several students and is being
+     reviewed." — no content and no way to open it (runbook §1.7).
+2. The ⋯ menu on posts and replies: Report (everyone except the author)
+   opens the ReportModal from N-S; Delete (the author only) → ConfirmDialog
+   with the spec's text → DELETE /api/posts/:id → remove the post from the
+   page and from every loaded feed.
+3. The ReportModal's real onSubmit: POST /api/reports. 201 → the toast, and
+   hide the post from this user's loaded feeds; 400 DUPLICATE → "You've
+   already reported this post."; anything else → "Couldn't send. Try
+   again." (useReport already maps these; check them against the API.)
 4. The Posts tabs (spec §10):
    - Dashboard: a fourth tab, "Posts", after Watchlist (keep the tab in
-     useHistoryEntryState, as the other tabs are — frontend/CLAUDE.md);
+     useHistoryEntryState, like the other tabs — frontend/CLAUDE.md);
    - PublicProfile: a Posts section.
    Both from GET /api/posts/by-user/:userId with infinite scroll. Your own
-   shows the "Being checked" and "Under review" labels.
+   shows the "Being checked" and "Under review" labels; other people's
+   never include held or covered posts (the API leaves them out).
 5. The "new posts" pill (spec §8) on the campus feed:
    - poll new-count every NEW_POSTS_POLL_MS while the page is visible
      (document.visibilityState);
    - click → scroll to the top and reload;
    - never insert posts on its own.
+6. Everything now lives in the real pages: delete the test page
+   (src/pages/dev/CommunitySandbox.jsx) and its route in App.jsx.
 
 HARD CONSTRAINTS
 - frontend/CLAUDE.md patterns. No new libraries.
@@ -2725,6 +3263,7 @@ Tick a box only when you have seen it yourself, on the device named.
       phones.
 - [ ] 👁️ The view-only rules hold: in another country's feed you can react and report, but not
       post or reply.
+- [ ] 👁️ Each post appears only in the feed it was posted to.
 - [ ] 👁️ 1,000 characters with See more; 3 photos or 1 GIF; replies one level deep; deleting
       your own post.
 
@@ -2739,8 +3278,8 @@ Tick a box only when you have seen it yourself, on the device named.
 - [ ] Posting still works when moderation is unavailable (try once with `OPENAI_API_KEY`
       removed from `backend/.env` locally, then put it back).
 - [ ] 👁️ Reporting: the warning shows, "already reported" works, and the thresholds cover
-      posts (the V-B tests prove the numbers).
-- [ ] The 11th campus post in an hour is refused.
+      posts (the V-B tests prove the numbers). A covered post's link shows only the notice.
+- [ ] The 16th campus post in an hour is refused, and a Global post still goes through.
 
 **Demo (T2)**
 - [ ] 👁️ Demo accounts get `demo.` names and see only the demo community; real users can't take
@@ -2752,9 +3291,10 @@ Tick a box only when you have seen it yourself, on the device named.
 **Docs and housekeeping**
 - [ ] `backend/API.md` matches every route in Appendix A.
 - [ ] Every block filed a changelog entry.
-- [ ] Two lines added to the Privacy Policy page (Neeraj): posts and photos are checked by an
-      automated moderation service (§1.6); deleted posts are kept for 90 days for safety
-      reviews, then removed (§1.8).
+- [ ] Two lines for the Privacy Policy (Neeraj): posts and photos are checked by an automated
+      moderation service (§1.6); deleted posts are kept for 90 days for safety reviews, then
+      removed (§1.8). The footer links to `/privacy`, but the website has no such page yet:
+      if it still doesn't exist, add the two lines to the Phase 9 compliance pages instead.
 - [ ] "Apply for the KLIPY production key" and the Phase 9 items in Appendix E are on the
       Phase 9 list.
 
@@ -2815,21 +3355,21 @@ The fields:
 - `content`: at most 1,000 code points. It can be empty when there is a photo or a GIF.
 - `gif`: `{ "provider": "klipy", "id", "url", "preview_url", "width", "height" }` or `null`.
 - `viewer_reaction`: your own reaction, or `null`.
-- `moderation_status`: `active` for everyone. The author alone also sees `pending` and
-  `under_review` on their own posts; other viewers see `under_review` posts behind a cover.
+- `moderation_status`: `active` for everyone. Only the author ever sees `pending` or
+  `under_review`, on their own posts. Nobody else ever receives a covered post (§1.7).
 
 ### posts module — Neeraj, on loan from Vishwajeet for Phase 7
 
 | # | Route | Answer | Errors |
 |---|---|---|---|
 | 1 | `GET /api/posts/countries` | `{ items: [{ code, name, is_mine }], next_cursor: null }`, your country first | — |
-| 2 | `GET /api/posts/feed/campus` | the campus feed: posts by students of your campus, any scope, newest first | 400 INVALID_FORMAT (bad cursor) |
+| 2 | `GET /api/posts/feed/campus` | the campus feed: your campus's campus posts only, newest first | 400 INVALID_FORMAT (bad cursor) |
 | 3 | `GET /api/posts/feed/country/:code?sort=hot\|new` | that country's feed, plus `can_post` | 400 INVALID_FORMAT |
 | 4 | `GET /api/posts/feed/global?sort=hot\|new` | the Global feed, plus `can_post: true` | 400 INVALID_FORMAT |
 | 5 | `GET /api/posts/feed/campus/new-count?since=<ISO>` | `{ count }` | 400 INVALID_FORMAT |
-| 6 | `GET /api/posts/:id` | `{ post, can_reply }` | 404 POST_NOT_FOUND · 410 POST_DELETED · 410 POST_REMOVED |
+| 6 | `GET /api/posts/:id` | `{ post, can_reply }` | 404 POST_NOT_FOUND · 403 POST_UNDER_REVIEW (covered; nothing else is sent) · 410 POST_DELETED · 410 POST_REMOVED |
 | 7 | `GET /api/posts/:id/replies` | replies, **oldest first** | 400 INVALID_FORMAT |
-| 8 | `GET /api/posts/by-user/:userId` | that person's posts that you may see; your own include pending and under-review | 400 INVALID_FORMAT |
+| 8 | `GET /api/posts/by-user/:userId` | that person's posts that you may see — never held or covered ones, except your own | 400 INVALID_FORMAT |
 | 9 | `POST /api/posts` (multipart) | 201 `{ post }` · 202 `{ post, held: true, support }` | 422 MODERATION_NUDGE `{ categories }` · 400 CONTENT_TOO_LONG `{ max }`, EMPTY_POST, TOO_MANY_IMAGES `{ max }`, MEDIA_CONFLICT, INVALID_GIF, FILE_TOO_LARGE, INVALID_FILE_TYPE, INVALID_FORMAT, NESTED_REPLY_NOT_ALLOWED · 403 NOT_ALLOWED_HERE · 404 POST_NOT_FOUND (parent) · 429 RATE_LIMIT_POSTS, RATE_LIMIT_REPLIES |
 | 10 | `DELETE /api/posts/:id` | `{ id, deleted: true }` (it's fine to delete twice) | 403 FORBIDDEN · 404 POST_NOT_FOUND |
 | 11 | `PUT /api/posts/:id/reaction` body `{ emoji }` | `{ post_id, viewer_reaction, reactions_total, reaction_counts }` | 400 INVALID_EMOJI · 404 POST_NOT_FOUND |
@@ -2895,7 +3435,8 @@ The fields:
 
 **Sent directly by controllers:** `MODERATION_NUDGE` (422), `CONTENT_TOO_LONG`, `EMPTY_POST`,
 `TOO_MANY_IMAGES`, `MEDIA_CONFLICT`, `INVALID_GIF`, `INVALID_EMOJI`, `FILE_TOO_LARGE`,
-`INVALID_FILE_TYPE` (400), `POST_DELETED` and `POST_REMOVED` (410).
+`INVALID_FILE_TYPE` (400), `POST_UNDER_REVIEW` (403), `POST_DELETED` and `POST_REMOVED`
+(410).
 
 ## C. URLs, accounts and commands you'll reuse
 
@@ -2945,6 +3486,13 @@ cd frontend && npm run build
 - **GIFs stay on KLIPY.** Never download them or store them yourself, and never remove the
   credit.
 - **The posts module is on loan:** its `OWNER:` banner stays as it is.
+- **While the redesign branch is open, Neeraj stays out of the community front-end files**
+  (§2.2, Loan 2), and his CC-N4b waits until it's merged.
+- **`frontend/DESIGN.md` is the rebrand you never adopted** (highlighter yellow, Khand, "Inter
+  banned"). The decided fonts are Inter and Bree Serif. CC-VP says so; say it again if Claude
+  Code drifts toward yellow or Khand.
+- **Limits and report thresholds are rows in `community_settings`.** To change one before the
+  admin page exists, write a one-line migration; never edit the trigger.
 - **Ideas that come up mid-phase go to the Phase 10 list,** not into Phase 7.
 
 ## E. Deliberately NOT in Phase 7
