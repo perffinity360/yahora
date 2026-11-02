@@ -16,12 +16,14 @@ aspirational.
 
 **Part 2** is the Phase 0 contract required by plan §0.5.3 and §0.F Step 4: every endpoint
 from Phases 1, 3, 5, 6 and 8, specified **before** either developer implements anything.
-Neeraj implements 20 of them, Vishwajeet 16. Both clients — web and mobile — are built
-against these shapes, so **a deviation must be fixed in this file in the same commit**
+Neeraj implements 20 of them, Vishwajeet 16. **The posts and reports sections were replaced in
+Phase 7** from `docs/runbooks/PHASE_7_RUNBOOK.md` Appendix A, so those counts predate them. Both
+clients — web and mobile — are built against these shapes, so **a deviation must be fixed in this file in the same commit**
 (Golden Rule 3). Every entry carries an `OWNER` and `PHASE` tag on its heading line.
 
 Source of truth: `backend/src/app.js` and `backend/src/modules/**` for Part 1;
-`docs/YAHORA_BUILD_PLAN.md` for Part 2; column names from
+`docs/YAHORA_BUILD_PLAN.md` for Part 2, and the Phase 7 runbook for its posts and reports; column
+names from
 `supabase/migrations/20260808143802_remote_schema.sql`.
 
 ---
@@ -57,7 +59,8 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 
 - `next_cursor: null` means you have reached the end. It is the **only** end-of-list signal.
 - Send the previous response's `next_cursor` back as `?cursor=`. **Never construct a cursor
-  yourself** — the type differs per endpoint (see the warning in the posts module).
+  yourself** — the type differs per endpoint (see [the cursor rule](#the-cursor-rule) in the posts
+  module).
 - `limit` defaults to 20 (notifications: 30) and is **capped at 50**. An uncapped limit is a
   denial-of-service (§0.5.4). Validate it server-side; do not trust the client.
 - Never use page numbers or `OFFSET`. `OFFSET 100000` makes Postgres discard 100,000 rows
@@ -85,11 +88,11 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `USER_NOT_FOUND` | 404 | §1.5 — no user with that handle, live or historical. **Live.** `GET /api/user/:userId/public` — no such user (was a 500 until Phase 6B). Both routes also send it to a **demo** caller asking for a real student (identity rule, Phase 6B) | — |
 | `CROSS_CAMPUS_INTERACTION_BLOCKED` | 403 | **Live.** `POST /api/products/:id/like`, `/save` and `/comments`, and `POST /api/products/comments/:commentId/vote` (the last two since Phase 6B) — the listing's `university_id` does not match the caller's. A `NULL` on either side counts as a mismatch | `message` |
 | `INVALID_PRICE` | 400 | **Live.** `PUT /api/products/:id` — `price` was supplied but does not parse to a finite number `>= 0`. Only raised when the key is present; an absent `price` is simply left alone | `message` |
-| `DUPLICATE` | 400 | `mapDbError` — Postgres `23505` unique violation | — |
+| `DUPLICATE` | 400 | `mapDbError` — Postgres `23505` unique violation. Phase 7: a repeat of `POST /api/reports` | — |
 | `INVALID_REFERENCE` | 400 | `mapDbError` — Postgres `23503` foreign-key violation. Also raised **deliberately** by `POST /api/auth/onboarding` when `course_id` / `specialization_id` names a missing row, so the failure lands before the password change; and by `POST /api/products/:id/comments` when `parent_comment_id` is not a comment on that listing (Phase 6B) | `message` (onboarding and comments only) |
 | `INTERNAL_ERROR` | 500 | `mapDbError` fallback — anything unrecognised | — |
 | `USERNAME_TAKEN` | 400 | Unique index `users_username_key` (`23505`); also `POST /api/auth/onboarding`, both from `is_username_available()` returning false and from catching `23505` on the race | — |
-| `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()` | — |
+| `USERNAME_RESERVED` | 400 | Trigger `trg_username_not_reserved`; also `POST /api/auth/onboarding` via `is_username_available()`. Phase 7 (migration `demo_usernames`): also a demo account's name without `demo.`, or a real account's name starting `demo.`, `demo-` or `demo_` | — |
 | `INVALID_FORMAT` | 400 | `CHECK users_username_valid`; also `POST /api/auth/onboarding` when `username` is missing or unavailable for a reason that is neither reserved nor taken; also `GET /api/messages/history` when `userId`, `contactId` or `productId` is not a canonical uuid; also `POST /api/messages/send` when `receiver_id` / `product_id` is missing or not a uuid, `content` is over 2000 characters, or `reply_to_id` is not a uuid, and the two message-action routes when `:id` is not a uuid (Phase 6B V-C); also the four Mark-as-Sold routes when `:id` is not a uuid, and `POST /api/products/:id/sold` when `buyer_id` is neither null nor a uuid (Phase 6B N-E) | `message` (optional) |
 | `MISSING_FIELDS` | 400 | `POST /api/auth/onboarding` — a mandatory profile field is absent or empty; `POST /api/auth/set-password` — `current_password` omitted on an account that already has one; `PUT /api/products/:id` — the body carried none of the seven updatable keys; `POST /api/messages/send` — `content` missing, not a string, or only whitespace (Phase 6B V-C) | `message` |
 | `WEAK_PASSWORD` | 400 | `POST /api/auth/onboarding` and `POST /api/auth/set-password` — under 8 characters, equal to the caller's username, or rejected by GoTrue's own policy | `message` |
@@ -103,16 +106,29 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `CANNOT_FOLLOW_SELF` | 400 | `CHECK no_self_follow` | — |
 | `BLOCKED` | 403 | Trigger `trg_prepare_follow` | — |
 | `PRIVATE_ACCOUNT` | 403 | `can_view_social_content()` returned false | — |
-| `CONTENT_TOO_LONG` | 400 | §6.6 controller validation | `max` |
-| `CONTENT_BLOCKED` | 400 | `contains_banned_term(content, 'block')` | `message` |
-| `TOO_MANY_IMAGES` | 400 | §6.6 controller / `CHECK posts_max_3_images` | `max` |
-| `NESTED_REPLY_NOT_ALLOWED` | 400 | Trigger `trg_single_level_replies` | — |
-| `ACCOUNT_SUSPENDED` | **403 or 400 — see below** | Trigger `trg_post_rate_limit` | — |
-| `POSTING_RESTRICTED` | **403 or 400 — see below** | Trigger `trg_post_rate_limit` | `until` |
-| `RATE_LIMIT_POSTS` | 429 | Trigger `trg_post_rate_limit` — 10 top-level posts/hour | `message` |
-| `RATE_LIMIT_REPLIES` | 429 | Trigger `trg_post_rate_limit` — 30 replies/hour | — |
+| `CONTENT_TOO_LONG` | 400 | Phase 7 — `POST /api/posts`, over 1,000 code points | `max` |
+| `TOO_MANY_IMAGES` | 400 | Phase 7 — `POST /api/posts`, more than 3 photos | `max` |
+| `NESTED_REPLY_NOT_ALLOWED` | 400 | Phase 7 — the `posts` insert trigger: replying to a reply | — |
+| `ACCOUNT_SUSPENDED` | **403 or 400 — see below** | Not raised in Phase 7: the `posts` insert trigger has no suspension check | — |
+| `POSTING_RESTRICTED` | **403 or 400 — see below** | Not raised in Phase 7, for the same reason | `until` |
+| `RATE_LIMIT_POSTS` | 429 | Phase 7 — the `posts` insert trigger: 15 campus, 8 country or 8 Global posts in any 60 minutes, each counted on its own | — |
+| `RATE_LIMIT_REPLIES` | 429 | Phase 7 — the `posts` insert trigger: 45 replies in any 60 minutes | — |
+| `POST_NOT_FOUND` | 404 | Phase 7 — the database: no such post, or you're not allowed to see it | — |
+| `NOT_ALLOWED_HERE` | 403 | Phase 7 — the database: posting or replying in a feed you can only view | — |
+| `CANNOT_REPORT_OWN` | 400 | Phase 7 — `create_report()`: reporting your own post | — |
+| `MESSAGE_DELETED` | 400 | Phase 7 — `react_to_message()`: reacting to a deleted message. *(Block V-C — not built yet)* | — |
+| `MODERATION_NUDGE` | 422 | Phase 7 — `POST /api/posts`: the check flagged it and `confirm` wasn't sent. Nothing was saved | `categories` |
+| `EMPTY_POST` | 400 | Phase 7 — `POST /api/posts`: no text, photo or GIF | — |
+| `MEDIA_CONFLICT` | 400 | Phase 7 — `POST /api/posts`: photos with a GIF, or photos on a reply | — |
+| `INVALID_GIF` | 400 | Phase 7 — `POST /api/posts`; `POST /api/messages/send` *(Block V-C — not built yet)* | — |
+| `INVALID_EMOJI` | 400 | Phase 7 — `PUT /api/posts/:id/reaction`; `PUT /api/messages/:id/reaction` *(Block V-C — not built yet)* | — |
+| `FILE_TOO_LARGE` | 400 | Phase 7 — `POST /api/posts`: a photo over 5 MB | — |
+| `INVALID_FILE_TYPE` | 400 | Phase 7 — `POST /api/posts`: a photo that isn't a readable JPEG, PNG or WebP | — |
+| `POST_UNDER_REVIEW` | 403 | Phase 7 — `GET /api/posts/:id`: covered by reports. Nothing about the post is sent | — |
+| `POST_DELETED` | 410 | Phase 7 — `GET /api/posts/:id`: the author deleted it | — |
+| `POST_REMOVED` | 410 | Phase 7 — `GET /api/posts/:id`: removed by moderation | — |
 | `LOGIN_REQUIRED` | 401 | **Live (Phase 6B N-C).** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` (including its `redirect_to` case) when the caller is anonymous and the person is a real student. Not `UNAUTHORIZED`: the route is open, but this answer needs a student's token. See [the identity rule](#the-identity-rule-phase-6b) | — |
-| `MESSAGE_NOT_FOUND` | 404 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` and `/delete-for-me`, from `delete_message_for_everyone()` / `hide_message_for_me()` (migration `message_actions`) — no such message, or the caller is not one of its two people | — |
+| `MESSAGE_NOT_FOUND` | 404 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` and `/delete-for-me`, from `delete_message_for_everyone()` / `hide_message_for_me()` (migration `message_actions`) — no such message, or the caller is not one of its two people. Also the two reaction routes *(Phase 7 Block V-C — not built yet)* | — |
 | `NOT_MESSAGE_SENDER` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the caller didn't send the message | — |
 | `DELETE_WINDOW_EXPIRED` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the message is more than 60 minutes old | — |
 | `CANNOT_MESSAGE_SELF` | 400 | **Live (Phase 6B V-FIX).** `POST /api/messages/send` — `receiver_id` is the caller. Sent by the controller before any database call | `message` |
@@ -138,6 +154,8 @@ same change. No name in the map may be part of another name in it.
 > **Which is correct: patch `mapDbError` to return 403 for these two, or change §6.6 to 400?**
 > Note also that `POSTING_RESTRICTED` carries an `until` field that `mapDbError` cannot
 > produce — it only ever emits `{ error: CODE }`, so this needs a special case either way.
+> **Phase 7:** the `posts` insert trigger raises neither code, so this stays open until
+> suspensions are built.
 
 ---
 
@@ -319,7 +337,7 @@ response, not an error.
 
 **[Root / health](#root--health)** (not in a module router)
 - [GET /api/health](#get-apihealth)
-- [GET /](#get)
+- [GET /](#get-)
 
 **[auth](#auth)**
 - [POST /api/auth/request-otp](#post-apiauthrequest-otp)
@@ -368,6 +386,8 @@ response, not an error.
 - [PUT /api/messages/deliver](#put-apimessagesdeliver)
 - [POST /api/messages/:id/delete-for-everyone](#post-apimessagesiddelete-for-everyone)
 - [POST /api/messages/:id/delete-for-me](#post-apimessagesiddelete-for-me)
+- [PUT /api/messages/:id/reaction](#put-apimessagesidreaction-phase-7-block-v-c--not-built-yet) (Phase 7 Block V-C — not built yet)
+- [DELETE /api/messages/:id/reaction](#delete-apimessagesidreaction-phase-7-block-v-c--not-built-yet) (Phase 7 Block V-C — not built yet)
 
 ### Part 2 — the contract, not yet implemented
 
@@ -396,28 +416,29 @@ response, not an error.
 - [GET /api/notifications/unread-count](#get-apinotificationsunread-count---owner-neeraj--phase-5)
 - [POST /api/notifications/mark-read](#post-apinotificationsmark-read---owner-neeraj--phase-5)
 
-**[reports module](#reports-module)** — Neeraj · Phase 6
-- [POST /api/reports](#post-apireports---owner-neeraj--phase-6)
+**[reports module](#reports-module-phase-7)** — Neeraj · Phase 7
+- [POST /api/reports](#post-apireports---owner-neeraj--phase-7)
 
-**[posts module](#posts-module)** — Vishwajeet · Phase 6
-- [GET /api/posts/feed/campus](#get-apipostsfeedcampus---owner-vishwajeet--phase-6)
-- [GET /api/posts/feed/global](#get-apipostsfeedglobal---owner-vishwajeet--phase-6)
-- [GET /api/posts/feed/following](#get-apipostsfeedfollowing---owner-vishwajeet--phase-6)
-- [GET /api/posts/:id](#get-apipostsid---owner-vishwajeet--phase-6)
-- [GET /api/posts/:id/replies](#get-apipostsidreplies---owner-vishwajeet--phase-6)
-- [POST /api/posts](#post-apiposts---owner-vishwajeet--phase-6)
-- [DELETE /api/posts/:id](#delete-apipostsid---owner-vishwajeet--phase-6)
-- [POST /api/posts/:id/like](#post-apipostsidlike---owner-vishwajeet--phase-6)
-- [DELETE /api/posts/:id/like](#delete-apipostsidlike---owner-vishwajeet--phase-6)
-- [GET /api/users/:username/posts](#get-apiusersusernameposts---owner-vishwajeet--phase-6)
-- [GET /api/posts/feed/campus/count-since](#get-apipostsfeedcampuscount-since---owner-vishwajeet--phase-6)
+**[posts module](#posts-module-phase-7)** — Neeraj (on loan from Vishwajeet) · Phase 7
+- [GET /api/posts/countries](#get-apipostscountries---owner-neeraj--phase-7)
+- [GET /api/posts/feed/campus](#get-apipostsfeedcampus---owner-neeraj--phase-7)
+- [GET /api/posts/feed/country/:code](#get-apipostsfeedcountrycode---owner-neeraj--phase-7)
+- [GET /api/posts/feed/global](#get-apipostsfeedglobal---owner-neeraj--phase-7)
+- [GET /api/posts/feed/campus/new-count](#get-apipostsfeedcampusnew-count---owner-neeraj--phase-7)
+- [GET /api/posts/:id](#get-apipostsid---owner-neeraj--phase-7)
+- [GET /api/posts/:id/replies](#get-apipostsidreplies---owner-neeraj--phase-7)
+- [GET /api/posts/by-user/:userId](#get-apipostsby-useruserid---owner-neeraj--phase-7)
+- [POST /api/posts](#post-apiposts---owner-neeraj--phase-7)
+- [DELETE /api/posts/:id](#delete-apipostsid---owner-neeraj--phase-7)
+- [PUT /api/posts/:id/reaction](#put-apipostsidreaction---owner-neeraj--phase-7)
+- [DELETE /api/posts/:id/reaction](#delete-apipostsidreaction---owner-neeraj--phase-7)
 
-**[admin module](#admin-module)** — Vishwajeet · Phase 8
-- [GET /api/admin/reports](#get-apiadminreports---owner-vishwajeet--phase-8)
-- [POST /api/admin/reports/:id/action](#post-apiadminreportsidaction---owner-vishwajeet--phase-8)
-- [POST /api/admin/users/:id/restrict](#post-apiadminusersidrestrict---owner-vishwajeet--phase-8)
-- [POST /api/admin/users/:id/suspend](#post-apiadminusersidsuspend---owner-vishwajeet--phase-8)
-- [GET /api/admin/stats](#get-apiadminstats---owner-vishwajeet--phase-8)
+**[admin module](#admin-module)** — Vishwajeet · Phase 9
+- [GET /api/admin/reports](#get-apiadminreports---owner-vishwajeet--phase-9)
+- [POST /api/admin/reports/:id/action](#post-apiadminreportsidaction---owner-vishwajeet--phase-9)
+- [POST /api/admin/users/:id/restrict](#post-apiadminusersidrestrict---owner-vishwajeet--phase-9)
+- [POST /api/admin/users/:id/suspend](#post-apiadminusersidsuspend---owner-vishwajeet--phase-9)
+- [GET /api/admin/stats](#get-apiadminstats---owner-vishwajeet--phase-9)
 
 ---
 
@@ -1078,7 +1099,7 @@ is **ignored in silence** (no error, so an older client keeps working):
 
   Presence is tested with `hasOwnProperty`, so an explicit `null` is written rather than
   dropped. Not writable through this endpoint, each for its own reason: `username` (use
-  [PATCH /api/users/me/username](#patch-apiusersmeusername)), `has_password` (password
+  [PATCH /api/users/me/username](#patch-apiusersmeusername---owner-neeraj--phase-1)), `has_password` (password
   endpoints only), `university_id` (**changing it would move a student to another campus and
   defeat tenant isolation**), `is_profile_complete` (onboarding only), `id` and `created_at`
   (never writable).
@@ -1826,11 +1847,11 @@ ignored: a 200 means the change happened.
   caller, and takes **at most 20**. Asking for 21 covers the one other-campus exact-handle match
   that can sort above them. `messaged: false`. What counts as a match (a piece of the handle,
   the start of any word of the name, a leading `@`) is described under
-  [`GET /api/users/search`](#get-apiuserssearch-owner-neeraj-phase-1); it widened in Phase 6B
+  [`GET /api/users/search`](#get-apiuserssearch---owner-neeraj--phase-1); it widened in Phase 6B
   V-F.
 
 **Notes:** **Not cursor-paginated, deliberately:** a fixed top-20, so `next_cursor` is always
-`null` (the same exemption as [`GET /api/users/search`](#get-apiuserssearch-owner-neeraj-phase-1)).
+`null` (the same exemption as [`GET /api/users/search`](#get-apiuserssearch---owner-neeraj--phase-1)).
 The picker (MARK_SOLD_SPEC §1) waits 300 ms after typing stops before searching. "Someone not
 on Yahora" isn't a row here; the client draws it and sends `buyer_id: null` to `/sold`.
 
@@ -1956,6 +1977,18 @@ row and overwrites anything sent.
 Hidden messages are left out of `GET /history` and skipped by `GET /inbox`, for the person who
 hid them only.
 
+#### The reactions and gif fields (Phase 7 Block V-C — not built yet)
+
+From Block V-C, every `<messages row>` (send, history and Realtime) also carries:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `reactions` | object | One reaction per person: `{ "<user id>": "❤️" }`. `{}` when there are none. Holds at most the two people in the chat. Emptied on a tombstone |
+| `gif` | object or null | `{ "provider": "klipy", "id", "url", "preview_url", "width", "height" }`. `null` when there is no GIF. Cleared on a tombstone |
+
+A reaction arrives as a Realtime **UPDATE** of the message row, so no new subscription is needed.
+Merge it by id, exactly as for tombstones.
+
 ### GET /api/messages/inbox/:userId
 **Module:** messages
 **Auth:** **`requireAuth` — own inbox only.** `:userId` must equal the caller's own id; any
@@ -1983,6 +2016,8 @@ other value is `403 FORBIDDEN`. (Was unauthenticated until 14 Sep 2026.)
     caller's id → the preview reads "You: …", or "You deleted this message" for a tombstone
   - `last_message_deleted` (Phase 6B) — the last visible message is a tombstone (deleted for
     everyone). `last_message` is then `""`
+  - `last_message_has_gif` **(Phase 7 Block V-C — not built yet)** — boolean: the last visible
+    message has a GIF
   - **Messages the caller hid ("delete for me") are skipped** for the preview, the ordering and
     `unread_count`. If the caller hid every message in a conversation, that conversation leaves
     **their** inbox until a new message arrives. The other person's inbox is unaffected
@@ -2128,6 +2163,9 @@ campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 202
     not deleted for everyone. Absent or `null` → not a reply, exactly as before. **Send only the
     id.** `reply_to_sender_id` and `reply_preview` are filled by the database trigger
     `trg_fill_message_reply`, and anything sent for them is overwritten
+  - gif: object, **optional (Phase 7 Block V-C — not built yet)** — `provider` `klipy`, `id`, an
+    https `url`, optional https `preview_url`, positive integer `width` and `height`. `content` may
+    then be `''`. Without a GIF, the empty-message rule above stays
 **201:** `{ "message": { "<messages row>": "..." } }` — the row includes the
   [four message-action fields](#the-four-message-action-fields-phase-6b). On a reply,
   `reply_to_sender_id` and `reply_preview` are already filled
@@ -2144,6 +2182,8 @@ campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 202
   when `reply_to_id` is present and not `null`
 **400:** `{ "error": "REPLY_TARGET_INVALID" }` — `reply_to_id` names a message in another
   conversation, a deleted-for-everyone message, or no message at all. Raised by the trigger
+**400:** `{ "error": "INVALID_GIF" }` **(Phase 7 Block V-C — not built yet)** — `gif` is present
+  and isn't a valid GIF object
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **403:** `{ "error": "FORBIDDEN", "message": "You can only message students on your own
   campus." }` — sender and receiver are on different campuses. **A `NULL` `university_id` on
@@ -2307,6 +2347,38 @@ table is backend-only: RLS is on with no policies, there are no grants to `anon`
 told, and no Realtime event is sent.** Remove the message from the local view after the 200.
 From then on, `GET /history` leaves it out and `GET /inbox` skips it, for this caller only.
 There is no "unhide".
+
+### PUT /api/messages/:id/reaction (Phase 7 Block V-C — not built yet)
+**Module:** messages
+**Auth:** **`requireAuth`. The actor is always the caller** (`req.user.id`).
+**Content-Type:** application/json
+**Path:**
+  - id: uuid, required — the message
+**Body:**
+  - emoji: string, required — exactly one emoji, checked with `isSingleEmoji()`
+**200:** `{ "message": { "<messages row>": "..." } }`. Setting a new emoji replaces the caller's
+  reaction
+**400:** `{ "error": "INVALID_FORMAT" }` — `:id` isn't a uuid
+**400:** `{ "error": "INVALID_EMOJI" }`
+**400:** `{ "error": "MESSAGE_DELETED" }` — the message was deleted for everyone
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**404:** `{ "error": "MESSAGE_NOT_FOUND" }` — no such message, or the caller is not one of its
+  two people
+**Notes:** every rule lives in `react_to_message(p_message_id, p_user_id, p_emoji)`, which does one
+update of the row, so Realtime delivers it to both people.
+
+### DELETE /api/messages/:id/reaction (Phase 7 Block V-C — not built yet)
+**Module:** messages
+**Auth:** **`requireAuth`. The actor is always the caller** (`req.user.id`). There is no body.
+**Content-Type:** n/a (no body)
+**Path:**
+  - id: uuid, required — the message
+**200:** `{ "message": { "<messages row>": "..." } }` — the row without the caller's reaction
+**400:** `{ "error": "INVALID_FORMAT" }` — `:id` isn't a uuid
+**400:** `{ "error": "MESSAGE_DELETED" }`
+**401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
+**404:** `{ "error": "MESSAGE_NOT_FOUND" }`
+**Notes:** `react_to_message()` with `p_emoji` null.
 
 ---
 
@@ -2829,8 +2901,9 @@ items must stay findable and buyable (§3.2, §4.2).
 Mounted at `/api/notifications`**
 
 **Read side only.** Notifications are *written* by `backend/src/utils/notify.js` (Vishwajeet,
-already built) called from the social and posts modules, and by `trg_report_threshold` for
-moderation. This module never inserts.
+already built), which the social and posts modules are meant to call. Nothing calls it yet. This
+module never inserts. The Phase 7 trigger on `reports` writes no notification either: it only
+covers the post, and its author sees it labelled `Under review`.
 
 > **This module is the load valve** (§0.5.5). It is the most self-contained thing in the
 > project — three read endpoints, no client writes — so it is the first thing to move to
@@ -2871,8 +2944,10 @@ per type** and attach them. Looping and fetching per notification is the N+1 pro
 notifications become 31 round trips (§5.3).
 
 `actor` is `null` for `moderation_action`, which `notify()` inserts with `actor_id = NULL`.
-Clients must handle a missing actor: "Your post was hidden after multiple reports" has no
-avatar.
+Clients must handle a missing actor: a moderation notice has no avatar.
+**TODO — not decided:** nothing writes `moderation_action` yet. Phase 7 tells an author only through
+the `Under review` label, so a later phase must decide whether covering or removing a post also
+sends a notification, and what it says.
 **TODO — ambiguous in plan:** the envelope key is `notifications`, not `items`. Same conflict
 as the social lists.
 **TODO — ambiguous in plan:** what is `entity.preview` for a `follow` notification, whose
@@ -2916,366 +2991,421 @@ Tapping a single notification marks just that one read (§5.4), so `ids` is the 
 
 ---
 
-## reports module
+## reports module (Phase 7)
 
-**Owner: Neeraj · Phase 6 · Depends on migration 008 · Files:
+**Owner: Neeraj · Phase 7 · Depends on migration `reactions_and_reports` (Block V-B) · Files:
 `backend/src/modules/reports/{reports.routes.js,reports.controller.js}` · Mounted at
 `/api/reports`**
 
-One endpoint. It pairs with Neeraj's report modal in §7.7. The review side is a different
-module, a different owner and a different phase — see [admin module](#admin-module).
+Replaces the Phase 0 contract. One endpoint, and **posts are the only thing that can be
+reported in Phase 7.** The review side arrives with the admin screen in Phase 9.
 
-### POST /api/reports   `OWNER: Neeraj`  `PHASE 6`
+### POST /api/reports   `OWNER: Neeraj`  `PHASE 7`
 **Module:** reports
 **Auth:** required (Bearer token) — `reporter_id` is `req.user.id`, never a body field
 **Content-Type:** application/json
 **Body:**
-  - target_type: string, required — `post` | `user` | `product` | `comment` | `message`
+  - target_type: string, required — `post`
   - target_id: uuid, required
   - reason: string, required — `spam` | `harassment` | `hate_speech` | `sexual_content` |
-    `violence` | `impersonation` | `misinformation` | `self_harm` | `prohibited_item` | `other`
-  - details: string, optional, **max 500**
-**200:** **TODO — ambiguous in plan: no success shape specified.**
-**400:** `{ "error": "DUPLICATE" }` — via `mapDbError` from the `UNIQUE (reporter_id,
-target_type, target_id)` constraint. §7.7 step 7: show "You've already reported this post."
-**400:** `{ "error": "INVALID_REFERENCE" }` — `target_id` does not exist
+    `child_safety` | `violence` | `self_harm` | `impersonation` | `misinformation` |
+    `prohibited_item` | `other`
+  - details: string, optional, **at most 500 characters** (code points)
+**201:** `{ "reported": true }` — always this, whatever the report caused
+**400:** `{ "error": "INVALID_FORMAT", "message": "Only posts can be reported for now." }` —
+`target_type` is not `post`
+**400:** `{ "error": "INVALID_FORMAT" }` — `target_id` is not a uuid, `reason` is not one of the
+eleven values, or `details` is too long
+**400:** `{ "error": "CANNOT_REPORT_OWN" }` — the caller wrote the post
+**400:** `{ "error": "DUPLICATE" }` — the caller has already reported this post
+**404:** `{ "error": "POST_NOT_FOUND" }` — no such post, or the caller may not see it
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `trg_report_threshold` (AFTER INSERT on `reports`) — recounts unique reports
-for the target, writes `posts.report_count`, and **at 3 reports flips
-`moderation_status` to `'hidden'` and inserts a `moderation_action` notification for the
-author.** All of that is automatic. Do not count reports in JavaScript and do not hide the
-post yourself.
-**Notes:** **the response must not reveal the outcome.** §7.7 step 5: never tell the reporter
-how many reports a post has or whether it got hidden — that lets people coordinate abuse of
-the report system. The confirmation is always the same flat "Thanks. Our team will review
-this."
+**Enforced by:** `create_report()` decides who may report and records whether the reporter is in
+the post's audience. A trigger on `reports` applies the cover rules below. **Do not count reports
+in JavaScript, and do not cover the post yourself.**
+**Notes:** **the response must never reveal the outcome** — not how many reports a post has, and
+not whether it was covered. That would let people organise false reports.
 
-`reason` and `target_type` must match the DB enums character for character; §7.7's radio list
-is these ten values in order. A mismatch surfaces as a `CHECK` violation, not a clean 400.
+Anyone who can see a post can report it, including students viewing another country's feed. Only
+the author can't. A post that was covered a moment ago can still be reported.
 
-The threshold trigger only acts on `target_type = 'post'`. Reports against a user, product,
-comment or message are recorded for human review and auto-hide nothing.
+**When a post is covered** (`moderation_status = 'under_review'`). The numbers are rows in
+`community_settings`, so they can change without a code change:
 
-The client hides the reported post from the reporter's own feed immediately, locally — there
-is no endpoint for that.
-**TODO — ambiguous in plan:** is `201` (a row was created, matching `POST /api/products`) or
-`200` correct? And does the body echo the created report, or just acknowledge?
+| Reason | Reports needed | Who counts |
+|---|---|---|
+| `child_safety`, on a post with photos | **1** | everyone |
+| `child_safety`, on a text-only post | **2** | everyone |
+| `sexual_content`, `violence`, `self_harm` | **3** | everyone |
+| every other reason, on a campus post | **5** | the post's audience |
+| every other reason, on a country or Global post | **10** | the post's audience |
+
+**Only reports with status `open` count toward these numbers**, so a dismissed report never counts
+again. `posts.report_count` still counts every distinct reporter.
+
+A covered post leaves every feed and disappears from the author's profile for everyone else. See
+`GET /api/posts/:id` for what a direct link answers.
 
 ---
 
-## posts module
+## posts module (Phase 7)
 
-**Owner: Vishwajeet · Phase 6 · Depends on migrations 007, 008, 009 · Files:
+**Owner: Neeraj (on loan from Vishwajeet for Phase 7) · Phase 7 · Depends on migrations
+`community_posts` and `reactions_and_reports` (Block V-B) · Files:
 `backend/src/modules/posts/{posts.routes.js,posts.controller.js}` · Mounted at `/api/posts`**
 
-Eleven endpoints. One `posts` table holds everything: top-level posts and replies, campus and
-global. A **reply** is a post with `parent_post_id` set, one level only, no images. **`scope`**
-(`campus` | `global`) is chosen by the author at compose time.
+Replaces the Phase 0 contract, including its likes, its following feed and its 250-character
+limit. Twelve endpoints. One `posts` table holds top-level posts and replies; a **reply** is a
+post with `parent_post_id` set, one level only. Every route requires the token.
 
-> # ⚠️ THE THREE FEEDS USE THREE DIFFERENT CURSOR TYPES
->
-> This is the single easiest thing to get wrong in the entire API, and when it is wrong the
-> feed **silently skips or repeats posts** — no error, no crash, just missing content that
-> nobody notices for weeks.
->
-> | Endpoint | Cursor is | SQL type | Comparison |
-> |---|---|---|---|
-> | `/feed/campus` | `created_at` **timestamp** | `TIMESTAMPTZ` | `created_at < cursor` |
-> | `/feed/following` | `created_at` **timestamp** | `TIMESTAMPTZ` | `created_at < cursor` |
-> | `/feed/global?sort=hot` | `hot_score` **float** | `DOUBLE PRECISION` | `hot_score < cursor` |
-> | `/feed/global?sort=new` | **epoch seconds** | `DOUBLE PRECISION` | `EXTRACT(EPOCH FROM created_at) < cursor` |
->
-> Note that `get_global_feed()` takes **one** `p_cursor DOUBLE PRECISION` parameter that means
-> two different things depending on `p_sort`. Passing an ISO timestamp to it, or a `hot_score`
-> to the `new` sort, produces a valid query that returns wrong rows.
->
-> **Clients: always echo `next_cursor` back verbatim. Never construct, parse, or convert it.**
-> **Server: switching `sort` mid-scroll invalidates the cursor — restart pagination.**
+**One post, one feed.** The feed a student posts from is the post's `scope`, and the post appears
+only in that feed. A reply inherits its parent's scope and country.
 
-### GET /api/posts/feed/campus   `OWNER: Vishwajeet`  `PHASE 6`
+| | Campus post | Country post | Global post |
+|---|---|---|---|
+| Who can **see** it | that campus | everyone | everyone |
+| Who can **post or reply** | that campus | students at universities in that country | everyone |
+| Who can **react** | that campus | everyone | everyone |
+| Who can **report** | that campus | everyone | everyone |
+
+**Two worlds, never mixed.** Demo accounts see only demo posts, and real students never see them.
+
+**The database decides who may see what.** Call the SQL functions named below, and never
+re-check scope, campus, country or demo-world rules in JavaScript.
+
+### The cursor rule
+
+- Every list returns `{ items, next_cursor }`. `next_cursor` is an **opaque** string, or `null`
+  at the end of the list.
+- Send it back as `?cursor=` exactly as you received it. **Clients never build or read one.**
+- A cursor belongs to one list and one sort, so changing `sort` starts again from page one.
+- `limit` defaults to 20 and is at most 50.
+- Server side: `encodeCursor(value, id)` and `decodeCursor(raw, kind)` from `utils/pagination.js`.
+  The kind is `'number'` (`hot_score|id`) for `sort=hot`, and `'timestamp'` (`created_at|id`)
+  everywhere else. `next_cursor` comes from the last item when the page is full. A cursor that
+  doesn't decode is `400 INVALID_FORMAT`.
+
+### The PostItem — one shape for every feed, reply and profile list
+
+Flat: there is no nested `author` object.
+
+```json
+{
+  "id": "uuid",
+  "parent_post_id": null,
+  "scope": "campus",
+  "country_code": "IN",
+  "content": "Lost my calculator near Block C",
+  "image_urls": ["https://…"],
+  "gif": null,
+  "created_at": "2026-11-02T10:15:00Z",
+  "reactions_total": 4,
+  "reaction_counts": { "❤️": 3, "😂": 1 },
+  "replies_count": 2,
+  "viewer_reaction": "❤️",
+  "moderation_status": "active",
+  "moderation_support": false,
+  "author_id": "uuid",
+  "author_username": "rahul.verma",
+  "author_name": "Rahul Verma",
+  "author_avatar": "https://… or null",
+  "author_university": "IIITDM Kurnool",
+  "is_mine": false
+}
+```
+
+- `content`: at most 1,000 code points. It can be empty when there is a photo or a GIF.
+- `gif`: `{ "provider": "klipy", "id", "url", "preview_url", "width", "height" }` or `null`.
+- `viewer_reaction`: your own reaction, or `null`.
+- `moderation_status`: `active` for everyone. Only the author ever sees `pending` or
+  `under_review`, on their own posts. Nobody else ever receives a covered post.
+- `moderation_support`: `true` only for the author of a post held because of self-harm, while it's
+  still held: show the support card (spec §2.4) under it on their Posts tab. `false` for everyone
+  else. The database works this out; the controller just passes it through.
+- The SQL functions also return `hot_score`, for building cursors. **Remove it from every item
+  before responding.**
+
+### GET /api/posts/countries   `OWNER: Neeraj`  `PHASE 7`
+**Module:** posts
+**Auth:** required (Bearer token)
+**Content-Type:** n/a (no body)
+**200:** `{ "items": [ { "code": "IN", "name": "India", "is_mine": true } ], "next_cursor": null }`
+— your country first, then by name
+**401:** `{ "error": "UNAUTHORIZED" }`
+**Enforced by:** `countries_for_viewer(p_viewer)`. Name each code with
+`new Intl.DisplayNames(['en'], { type: 'region' }).of(code)`.
+
+### GET /api/posts/feed/campus   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token) — the feed is defined by *your* campus
 **Content-Type:** n/a (no body)
 **Query:**
-  - cursor: timestamptz, optional
-  - limit: int, optional, default 20, **cap at 50**
-**Cursor type:** ⚠️ **`created_at` timestamp** (ISO 8601), descending.
-**200:**
-```json
-{
-  "items": [ {
-    "id": "uuid", "content": "string", "image_urls": ["https://..."], "scope": "campus",
-    "created_at": "...", "likes_count": 0, "replies_count": 0,
-    "author_id": "uuid", "author_username": "rahul", "author_name": "Rahul Sharma",
-    "author_avatar": "https://...", "author_university": "IIITDM Kurnool",
-    "viewer_has_liked": false
-  } ],
-  "next_cursor": "2026-08-01T10:00:00Z"
-}
-```
-The item fields are exactly the `RETURNS TABLE` columns of `get_campus_feed()` — **flat, not
-nested.** There is no `author` object; the author is five sibling `author_*` keys.
+  - limit: int, optional, default 20, **at most 50**
+  - cursor: opaque string, optional
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — newest first
+**400:** `{ "error": "INVALID_FORMAT" }` — a bad cursor
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `get_campus_feed(p_viewer, p_limit, p_cursor)`. Inside the RPC:
-`is_blocked_pair()` removes blocked users both ways, `moderation_status = 'active'` hides
-reported posts, and `parent_post_id IS NULL` excludes replies. Index `posts_home_feed_idx`.
-**Notes:** shows **both** scopes from your own campus — a campus post and a global post from
-your college both appear. Chronological, newest first. Never ranked.
+**Enforced by:** `get_campus_feed()` — your campus's **campus** posts only. Country and Global
+posts never appear here.
 
-`viewer_has_liked` is computed in the same query. **Do not make a second request to check like
-state** — that is the N+1 fix and it is why hearts do not flicker in after render.
+### GET /api/posts/feed/country/:code   `OWNER: Neeraj`  `PHASE 7`
+**Module:** posts
+**Auth:** required (Bearer token)
+**Content-Type:** n/a (no body)
+**Path:**
+  - code: two-letter country code, uppercased by the server; it must then match `^[A-Z]{2}$`
+**Query:**
+  - sort: string, optional — `hot` (**default**) | `new`
+  - limit: int, optional, default 20, **at most 50**
+  - cursor: opaque string, optional
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null", "can_post": true }`
+**400:** `{ "error": "INVALID_FORMAT" }` — a bad code, sort or cursor
+**401:** `{ "error": "UNAUTHORIZED" }`
+**Enforced by:** `get_country_feed()`; `can_post` comes from `can_post_in_feed(viewer, 'country',
+code)`. It is true only for your own country. Another country's feed is **view only**: you can't
+post or reply, but you can react, open profiles and report.
 
-### GET /api/posts/feed/global   `OWNER: Vishwajeet`  `PHASE 6`
+### GET /api/posts/feed/global   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token)
 **Content-Type:** n/a (no body)
 **Query:**
-  - sort: string, optional — `hot` (**default**, and what clients should show) | `new`
-  - cursor: float, optional — **meaning depends on `sort`, see below**
-  - limit: int, optional, default 20, **cap at 50**
-**Cursor type:** ⚠️ **`sort=hot` → `hot_score`, a float. `sort=new` → epoch seconds, a float.**
-Never a timestamp, for either. Changing `sort` invalidates the cursor.
-**200:** same envelope as `/feed/campus`, and each item additionally carries
-`"hot_score": 2.12`. Note `get_global_feed()` does **not** return `scope` (every row is
-`global` by definition) — so the item shape differs from the other two feeds by one field in
-each direction.
+  - sort: string, optional — `hot` (**default**) | `new`
+  - limit: int, optional, default 20, **at most 50**
+  - cursor: opaque string, optional
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null", "can_post": true }`
+**400:** `{ "error": "INVALID_FORMAT" }` — a bad sort or cursor
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `get_global_feed(p_viewer, p_sort, p_limit, p_cursor)`; indexes
-`posts_global_hot_idx` and `posts_global_new_idx`. `is_blocked_pair()` and
-`moderation_status = 'active'` applied inside.
-**Notes:** ranked by `score = (likes + replies × 2 + 1) ÷ (hours_since_posted + 2)^1.5`.
-`hot_score` is a **stored column**, refreshed every 5 minutes by the
-`refresh_global_hot_scores()` cron job — not computed per request. The formula depends on
-`now()`, so it changes every second and Postgres cannot index it; storing it makes the feed a
-straight index scan. A score up to 5 minutes stale is invisible to a human.
+**Enforced by:** `get_global_feed()`; `can_post` comes from `can_post_in_feed(viewer, 'global',
+null)`.
+**Notes:** Hot is `(reactions + 2 × replies + 1) ÷ (hours since posting + 2)^1.5`. `hot_score` is a
+stored column, refreshed every 5 minutes by pg_cron for posts from the last 7 days.
 
-Only posts newer than 7 days get refreshed, so older posts keep a frozen score and sink.
-
-### GET /api/posts/feed/following   `OWNER: Vishwajeet`  `PHASE 6`
+### GET /api/posts/feed/campus/new-count   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token)
 **Content-Type:** n/a (no body)
 **Query:**
-  - cursor: timestamptz, optional
-  - limit: int, optional, default 20, **cap at 50**
-**Cursor type:** ⚠️ **`created_at` timestamp** (ISO 8601), descending — same as campus, *not*
-the global float.
-**200:** same envelope and item shape as `/feed/campus` (includes `scope`).
+  - since: ISO timestamp, required
+**200:** `{ "count": 3 }`
+**400:** `{ "error": "INVALID_FORMAT" }` — `since` doesn't parse
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `get_following_feed(p_viewer, p_limit, p_cursor)` — inner-joins `follows` on
-`status = 'accepted'`, so pending requests contribute nothing.
-**Notes:** you see a followed user's **global** posts always, but their **campus** posts only
-if you share their campus. Following someone at another college does not leak their campus
-feed to you.
+**Enforced by:** `count_new_campus_posts(p_viewer, p_since)` — how many posts the campus feed
+would show that are newer than `since`, excluding your own.
 
-Unlike the other two, this RPC has no `is_blocked_pair()` call — it does not need one, because
-`trg_apply_block` already deleted the follow rows in both directions.
-
-### GET /api/posts/:id   `OWNER: Vishwajeet`  `PHASE 6`
+### GET /api/posts/:id   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token)
 **Content-Type:** n/a (no body)
 **Path:**
   - id: uuid, required
-**200:** **TODO — ambiguous in plan: no shape specified.** §7.6 renders the parent post larger
-at the top of `/post/:id`, so it needs at least the feed item's fields. Is it a bare feed item,
-`{ "post": {...} }`, or a feed item plus the first page of replies?
-**403 / 404:** §8.6's test says "`GET /api/posts/:id` for another campus's post → confirm
-403/404". **TODO — ambiguous in plan: which, and with what error code?** `NOT_FOUND` leaks
-less than `FORBIDDEN` (it does not confirm the post exists), which argues for 404.
+**200:** `{ "post": PostItem, "can_reply": true }`
+**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** none of the three feed RPCs covers this path, so the controller must apply
-the same three gates itself: `moderation_status = 'active'`, `is_blocked_pair()`, and
-scope/campus. RLS policy `posts_select` encodes exactly those rules and is the reference — but
-the service-role client bypasses it, so it will not save you.
-**Notes:** a hidden post must disappear from the author's own profile too (§8.6), so do not
-special-case the author here.
+**403:** `{ "error": "POST_UNDER_REVIEW" }` — covered by reports. **Nothing else is sent:** a
+covered post's text must never leave the server, or anyone could read it in the browser's
+developer tools. Clients show `This post was reported and is being reviewed.`
+There is no "View anyway". The author gets a 200 instead
+**404:** `{ "error": "POST_NOT_FOUND" }` — no such post, or you may not see it
+**410:** `{ "error": "POST_DELETED" }` — the author deleted it
+**410:** `{ "error": "POST_REMOVED" }` — removed by moderation
+**Enforced by:** `post_visibility(p_viewer, p_post_id)` first; on `'visible'`, `get_post_item()`
+and `can_reply_to_post()`. `can_reply` is false for pending and under-review posts.
 
-### GET /api/posts/:id/replies   `OWNER: Vishwajeet`  `PHASE 6`
+### GET /api/posts/:id/replies   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token)
 **Content-Type:** n/a (no body)
 **Path:**
   - id: uuid, required — the parent post
 **Query:**
-  - cursor: timestamptz, optional
-  - limit: int, optional, default 20, **cap at 50**
-**Cursor type:** ⚠️ **`created_at` timestamp, ASCENDING** — the opposite direction to every
-other list in this API. §7.6: replies are shown oldest first because a thread is a
-conversation, and the index is `posts_replies_idx (parent_post_id, created_at ASC)`. The
-comparison is therefore `created_at > cursor`, not `<`. Getting the sign wrong returns an
-empty page on the second request.
-**200:** **TODO — ambiguous in plan: no shape specified.** Replies are posts, so presumably
-the feed item shape minus `image_urls` (replies are text-only) — but the envelope key
-(`items` vs `replies`) is unstated.
+  - limit: int, optional, default 20, **at most 50**
+  - cursor: opaque string, optional
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — ⚠️ **oldest first**, the
+opposite of every feed
+**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid, or a bad cursor
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `CHECK posts_replies_no_images` guarantees `image_urls` is always empty here.
-**Notes:** flat, single level — `trg_single_level_replies` makes a reply-to-a-reply impossible,
-so the client never has to nest. §7.6 uses an explicit "Load more replies" button rather than
-infinite scroll.
+**Enforced by:** `get_post_replies()` — active, undeleted replies, plus your own pending and
+under-review ones. A covered reply is missing for everyone but its author.
 
-### POST /api/posts   `OWNER: Vishwajeet`  `PHASE 6`
+### GET /api/posts/by-user/:userId   `OWNER: Neeraj`  `PHASE 7`
+**Module:** posts
+**Auth:** required (Bearer token)
+**Content-Type:** n/a (no body)
+**Path:**
+  - userId: uuid, required
+**Query:**
+  - limit: int, optional, default 20, **at most 50**
+  - cursor: opaque string, optional
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — newest first
+**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid, or a bad cursor
+**401:** `{ "error": "UNAUTHORIZED" }`
+**Enforced by:** `get_user_posts()` — that person's top-level posts that you may see, never held or
+covered ones, except your own. A profile isn't a feed, so this list mixes all three scopes.
+
+### POST /api/posts   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token) — `author_id` is `req.user.id`, never a body field
 **Content-Type:** multipart/form-data
 **Body:**
-  - content: string, required, **max 250 characters after trim**
-  - scope: string, optional, default `campus` — `campus` | `global`. **Ignored for replies**,
-    which inherit the parent's scope.
-  - parent_post_id: uuid, optional — present makes this a reply
-  - images: File[], optional, **max 3**, each **≤5MB**, MIME type in the allowlist.
-    **Rejected outright when `parent_post_id` is set** — replies are text only.
-**200:** **TODO — ambiguous in plan: only the error shapes are specified.** Presumably the
-created post in feed-item shape so the client can replace its optimistic insert. `201` would
-match `POST /api/products`.
-**400:** `{ "error": "CONTENT_TOO_LONG", "max": 250 }`
-**400:** `{ "error": "CONTENT_BLOCKED", "message": "Your post contains language not allowed on Yahora." }`
+  - content: string — text, **at most 1,000 code points after trimming** (`[...text].length`). May
+    be empty if there is media
+  - scope: string, optional, default `campus` — `campus` | `country` | `global`. **Ignored for
+    replies.** A country post always goes to the author's own country
+  - parent_post_id: uuid, optional — makes it a reply
+  - gif: JSON string, optional — the GIF object: `provider` `klipy`, `id`, an https `url`, optional
+    https `preview_url`, positive `width` and `height`
+  - images: up to 3 files, JPEG / PNG / WebP, 5 MB each. Not allowed with a GIF or on a reply
+  - confirm: `true` when re-sending after a nudge
+**201:** `{ "post": PostItem }`
+**202:** `{ "post": PostItem, "held": true, "support": false }` — held for review, **or it couldn't
+be checked yet and will appear once it has been.** Only the author sees it, labelled `Being checked`.
+`support: true` means a checked self-harm category caused the hold: show the support card with
+helplines (spec §2.4), not a plain message
+**400:** `{ "error": "CONTENT_TOO_LONG", "max": 1000 }`
+**400:** `{ "error": "EMPTY_POST" }` — no text, photo or GIF
 **400:** `{ "error": "TOO_MANY_IMAGES", "max": 3 }`
+**400:** `{ "error": "MEDIA_CONFLICT" }` — photos and a GIF together, or photos on a reply
+**400:** `{ "error": "INVALID_GIF" }`
+**400:** `{ "error": "FILE_TOO_LARGE" }`
+**400:** `{ "error": "INVALID_FILE_TYPE" }` — the declared type is wrong, or the file isn't a JPEG, PNG
+or WebP that reads all the way through. Test each photo with `isReadablePhoto(file)` from
+`utils/moderation.js`; the declared type proves nothing
+**400:** `{ "error": "INVALID_FORMAT" }` — a bad `scope` or `parent_post_id`
 **400:** `{ "error": "NESTED_REPLY_NOT_ALLOWED" }` — replying to a reply
-**403:** `{ "error": "ACCOUNT_SUSPENDED" }`
-**403:** `{ "error": "POSTING_RESTRICTED", "until": "2026-08-09T10:00:00Z" }`
-**429:** `{ "error": "RATE_LIMIT_POSTS", "message": "You can post 10 times per hour." }`
-**429:** `{ "error": "RATE_LIMIT_REPLIES" }` — 30 replies per hour
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:**
-- `trg_post_rate_limit` (BEFORE INSERT) — raises `ACCOUNT_SUSPENDED`, `POSTING_RESTRICTED`,
-  `RATE_LIMIT_POSTS` (≥10 top-level/hour) and `RATE_LIMIT_REPLIES` (≥30 replies/hour). **Do
-  not count posts in JavaScript.** Catch these four and map them.
-- `trg_single_level_replies` (BEFORE INSERT) → `NESTED_REPLY_NOT_ALLOWED`.
-- `CHECK posts_max_3_images` and `CHECK posts_replies_no_images`.
-- `trg_post_replies_count` maintains the parent's `replies_count`.
-- `contains_banned_term(content, 'block')` → `CONTENT_BLOCKED`. Word-boundary matched, so
-  "assignment" does not trip a rule about a substring.
-**Notes:** **validation order matters** (§6.6): auth → length → scope → reply rules → images →
-banned terms → **upload images** → insert → map trigger errors → `notify()`. Check banned
-terms **before** uploading, or a blocked post still costs you 3 storage objects. Part 1's
-`POST /api/products` has exactly that bug.
+**403:** `{ "error": "NOT_ALLOWED_HERE" }` — replying in a feed you can only view
+**404:** `{ "error": "POST_NOT_FOUND" }` — the parent is missing, deleted or not active
+**422:** `{ "error": "MODERATION_NUDGE", "categories": ["harassment"] }` — **nothing was saved or
+uploaded.** Ask `Post this?` with **Edit** and **Post anyway**; Post anyway re-sends with
+`confirm=true`
+**429:** `{ "error": "RATE_LIMIT_POSTS" }` / `{ "error": "RATE_LIMIT_REPLIES" }`
+**Enforced by:** the `posts` BEFORE INSERT trigger fills `university_id`, `country_code` and
+`is_demo`, ignoring whatever the caller sent. It also enforces the reply rules and the rate limits:
+per person, in any 60 minutes, **15 campus posts, 8 country posts, 8 Global posts and 45 replies**,
+each counted on its own. Deleted posts still count. The numbers are rows in `community_settings`.
+**Do not count posts or check limits in JavaScript**; map the trigger's exception through
+`mapDbError()`.
+**Notes:** ⛔ **The order matters.** (1) Check the text, photo count, types and sizes, and that each photo passes `isReadablePhoto`. (2) Run
+`checkContent({ text, images })` from `utils/moderation.js`. (3) Only then upload the photos, with
+random file names that never contain user ids. (4) Insert the row. (5) If the insert fails, delete
+the uploaded photos first, then return the error. Uploading before moderating leaves files in
+storage that nothing points to.
 
-Emit `notify()` with type `post_reply` to the parent's author when this is a reply. The
-`entity_id` is the **parent** post id, not the reply's.
+What each moderation outcome saves:
 
-`CONTENT_BLOCKED` and `RATE_LIMIT_POSTS` happen in normal use and need real UI, not a toast
-(§7.4). Never clear the composer on `CONTENT_BLOCKED` — the student has to edit the text.
+| `checkContent` says | `moderation_status` | Also saved |
+|---|---|---|
+| `publish` | `active` | `moderation_scores`, `moderation_checked_at` |
+| `nudge`, without `confirm` | nothing saved | answers 422 |
+| `nudge`, with `confirm=true` | `active` | `moderation_flagged = true`, scores, checked time |
+| `hold`, with `checked: true` | `pending` | scores, checked time, `moderation_support = support`; answers 202 |
+| `hold`, with `checked: false` | `pending` | whatever scores arrived; `moderation_checked_at` stays empty, so the re-check job finds it; answers 202 |
 
-Images go to the `posts` storage bucket (authenticated insert only), separate from `products`.
+**Nothing becomes public unchecked:** if the key is missing, or the service is down, refuses or takes
+over 3 seconds for any part of the post, `checkContent` answers `hold` with `checked: false`.
+**Test `checked` before saving the checked time**, or the re-check job never finds the post.
 
-### DELETE /api/posts/:id   `OWNER: Vishwajeet`  `PHASE 6`
+The re-check job takes up to 20 such posts every 10 minutes, oldest first, with a 15-second limit.
+Still unchecked: it tries again next run. `publish`: `active`. `nudge`: `active` with
+`moderation_flagged = true`, because the author isn't there to confirm. `hold`: stays `pending`, with
+`moderation_support` set. All three save the scores and the checked time. A photo that can't be
+fetched or read adds 1 to `moderation_photo_failures`; at 6 the job skips the post, which stays
+`pending` for review. An OpenAI outage doesn't count as a failure.
+
+**A held post's photos are already in storage,** in the public bucket under random names. Only the
+author is given those URLs. Accepted for Phase 7.
+
+`checkContent` makes one request for the text and one for each photo, all at the same time, and the
+strictest outcome wins. `moderation_scores` is `{ "text": {…} | null, "images": [ {…} | null ] }`. Each
+photo is judged on a copy at most 768 px on its long side; **store and show the original.** **Never
+log post text or photos.**
+
+### DELETE /api/posts/:id   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token)
 **Content-Type:** n/a — no body
 **Path:**
   - id: uuid, required
-**200:** **TODO — ambiguous in plan: no response body specified.**
-**403:** `{ "error": "FORBIDDEN" }` — not your post (§1.6's pattern)
-**404:** `{ "error": "NOT_FOUND" }`
+**200:** `{ "id": "uuid", "deleted": true }` — deleting twice is fine
+**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `trg_post_replies_count` decrements the parent's counter when a reply is
-deleted. `ON DELETE CASCADE` on `posts.parent_post_id` removes a parent's replies with it, and
-`post_likes` cascades too.
-**Notes:** RLS `posts_delete_own` is `author_id = auth.uid()`, but the service-role backend
-bypasses RLS — **check ownership in the controller.**
+**403:** `{ "error": "FORBIDDEN" }` — not your post. The service-role backend bypasses RLS, so
+**check ownership in the controller**
+**404:** `{ "error": "POST_NOT_FOUND" }`
+**Notes:** sets `deleted_at`; the row is not removed. The post and its replies disappear at once.
+A daily backend job removes the photos and then the row after **90 days**, so don't touch the
+photos here.
 
-This is the author deleting their own post, and it is the only hard delete in the community
-feature. **Moderation never deletes** — a removed post keeps its row with
-`moderation_status = 'removed'` so you still have it if a college administration asks.
+### PUT /api/posts/:id/reaction   `OWNER: Neeraj`  `PHASE 7`
+**Module:** posts
+**Auth:** required (Bearer token)
+**Content-Type:** application/json
+**Path:**
+  - id: uuid, required
+**Body:**
+  - emoji: string, required — exactly one emoji, checked with `isSingleEmoji()` from `utils/emoji.js`
+**200:** `{ "post_id": "uuid", "viewer_reaction": "😂", "reactions_total": 5, "reaction_counts": { "❤️": 3, "😂": 2 } }`
+**400:** `{ "error": "INVALID_EMOJI" }`
+**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid
+**401:** `{ "error": "UNAUTHORIZED" }`
+**404:** `{ "error": "POST_NOT_FOUND" }` — no such post, you may not see it, or it isn't active
+**Enforced by:** `react_to_post(p_post_id, p_user_id, p_emoji)`. **One reaction per person:** a
+different emoji replaces yours. A trigger keeps `reactions_total` and `reaction_counts` right, so
+your code never writes them.
 
-### POST /api/posts/:id/like   `OWNER: Vishwajeet`  `PHASE 6`
+### DELETE /api/posts/:id/reaction   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
 **Auth:** required (Bearer token)
 **Content-Type:** n/a — no body
 **Path:**
   - id: uuid, required
-**200:** **TODO — ambiguous in plan: no response body specified.** Returning the new
-`likes_count` would let the client reconcile its optimistic update.
-**400:** `{ "error": "DUPLICATE" }` — already liked; `post_likes` PK is `(user_id, post_id)`
+**200:** the same answer as `PUT`, with `"viewer_reaction": null`
+**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `trg_post_likes_count` (AFTER INSERT on `post_likes`) maintains
-`posts.likes_count`. Do not increment it yourself.
-**Notes:** this is a **separate POST and DELETE pair**, not a toggle — unlike Part 1's
-`POST /api/products/:id/like`, which flips state and is not idempotent. Liking twice here is a
-duplicate-key error, which is the correct, retry-safe behaviour.
-
-Emit `notify()` with type `post_like` to the post's author.
-
-Clients update optimistically (§7.4), reusing the Phase 4 follow-button pattern.
-
-### DELETE /api/posts/:id/like   `OWNER: Vishwajeet`  `PHASE 6`
-**Module:** posts
-**Auth:** required (Bearer token)
-**Content-Type:** n/a — no body
-**Path:**
-  - id: uuid, required
-**200:** **TODO — ambiguous in plan: no response body specified.**
-**401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `trg_post_likes_count` (AFTER DELETE) decrements, floored at 0 by
-`GREATEST(likes_count - 1, 0)`.
-**Notes:** unliking something you never liked deletes zero rows. Decide whether that is 200 or
-404 and record it here.
-
-No notification is emitted or withdrawn on unlike; the original `post_like` notification stays.
-
-### GET /api/users/:username/posts   `OWNER: Vishwajeet`  `PHASE 6`
-**Module:** posts
-**Auth:** required (Bearer token)
-**Content-Type:** n/a (no body)
-**Path:**
-  - username: string, required — the **handle**, not a uuid. The only endpoint in the posts
-    module keyed by username rather than id.
-**Query:**
-  - cursor: timestamptz, optional
-  - limit: int, optional, default 20, **cap at 50**
-**Cursor type:** **`created_at` timestamp**, descending — index
-`posts_author_idx (author_id, created_at DESC) WHERE parent_post_id IS NULL`.
-**200:** **TODO — ambiguous in plan: no shape specified.** §7.8 reuses the same post card, so
-presumably the feed item shape.
-**403:** `{ "error": "PRIVATE_ACCOUNT" }` — §7.8: "This account is private. Follow to see
-their posts", while the Listings tab **stays visible and functional**
-**401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `can_view_social_content(p_viewer, p_target)` — call it before returning
-anything. Top-level posts only (`parent_post_id IS NULL`); a user's replies do not appear on
-their profile.
-**Notes:** hidden and removed posts must not appear here either, including for the author
-(§8.6).
-**TODO — this endpoint has no route to live on.** It is a **posts-module** endpoint (owner
-Vishwajeet) at a **`/api/users`** path. The frozen `app.js` mounts `/api/users` to
-`userRoutes` and `socialRoutes` only — both Neeraj's files — and mounts `postsRoutes` at
-`/api/posts`. So it must either (a) go in one of Neeraj's files, breaking the ownership split
-this scaffold exists to protect, (b) get a third `/api/users` mount added to a file that is
-supposed to be frozen after Phase 0, or (c) move to `/api/posts/by-user/:username`.
-**Decide at the contract review — this is a scaffolding decision, not an implementation
-detail.**
-
-### GET /api/posts/feed/campus/count-since   `OWNER: Vishwajeet`  `PHASE 6`
-**Module:** posts
-**Auth:** required (Bearer token)
-**Content-Type:** n/a (no body)
-**Query:**
-  - ts: timestamptz, required — the newest `created_at` the client has already seen
-**200:** **TODO — ambiguous in plan: no shape specified.** `{ "count": 3 }` would match
-`/api/notifications/unread-count`, the closest sibling.
-**401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** same visibility rules as `/feed/campus` — the count must exclude blocked
-users and hidden posts, or the pill promises posts the feed will not show.
-**Notes:** **campus feed only.** §7.5: the global feed at hundreds of colleges would show this
-pill constantly, which is noise.
-
-Polled every 30 seconds. Keep it a count — do not return the posts. The client must **not**
-auto-insert them: shifting a feed under someone who is reading is the single most irritating
-thing a feed can do. Tapping the pill scrolls to top and loads.
+**404:** `{ "error": "POST_NOT_FOUND" }`
+**Enforced by:** `react_to_post()` with `p_emoji` null.
 
 ---
 
 ## admin module
 
-**Owner: Vishwajeet · Phase 8 · Depends on migration 010 · Files:
+**Owner: Vishwajeet · Phase 9 · Depends on Phase 7's `reactions_and_reports` and on a Phase 9
+migration that isn't written yet · Files:
 `backend/src/modules/admin/{admin.routes.js,admin.controller.js}` · Mounted at `/api/admin`**
 
 Five endpoints behind an admin allowlist. **Every route in this module needs `requireAuth`
 plus an `is_admin` check** — this is the one module where a missing guard exposes other
 people's reports and hands out suspension powers.
 
+> **Phase 7 moved this module to Phase 9 and changed what it sits on** (runbook §1.7, §2.5 and
+> Appendix E). Nothing here is built. What it can rely on after Block V-B:
+>
+> - `reports.status` is `open` | `upheld` | `dismissed`. There is no `reviewed` or `actioned`.
+> - `reports` has `reviewed_at` and `reporter_in_audience`. It has **no** `reviewed_by` or
+>   `review_note`, so the Phase 9 migration must add them if they are wanted.
+> - `posts.moderation_status` is `active` | `pending` | `under_review` | `removed`. There is no
+>   `hidden`.
+> - A trigger on `reports` covers a post (`under_review`) at **1** report for `child_safety` on a post
+>   with photos and **2** on a text-only post, **3** for `sexual_content`, `violence` or `self_harm`,
+>   and **5** (campus) or **10** (country and Global) for everything else. Those last two count only
+>   reports from the post's audience. It counts only `open` reports. The numbers are rows in
+>   `community_settings`.
+> - `reports` has RLS on and no policies, so only the service-role backend can read it.
+> - `users.is_admin`, `users.is_suspended`, `users.suspension_reason` and
+>   `users.posting_restricted_until` **don't exist in any migration**, and the Phase 7 `posts`
+>   trigger doesn't check for a suspension. The Phase 9 migration must add all of that.
+
 > §8.1: "If you're short on time, this can literally be the Supabase table editor for week
 > one." The endpoints should still exist so the screen can be built quickly when volume grows.
+
+**TODO — no endpoints specified for three Phase 9 jobs.** The runbook also gives the admin screen
+these, and nothing below covers them:
+
+- approving or removing **held posts** (`moderation_status = 'pending'`), which have no reports
+  and so never reach `GET /api/admin/reports`;
+- reviewing posts published through **Post anyway** (`moderation_flagged = true`);
+- changing the numbers in `community_settings`.
 
 **TODO — ambiguous in plan: the admin gate has no specified error code.** A signed-in
 non-admin should presumably get `403 FORBIDDEN`, but §8.1 only describes "a protected route
@@ -3286,29 +3416,31 @@ endpoint exists) or 404 (does not).
 `UPDATE users SET is_admin = true WHERE username IN (...)`. There is no endpoint to grant or
 revoke it, which is a deliberate-looking omission — confirm it is deliberate.
 
-### GET /api/admin/reports   `OWNER: Vishwajeet`  `PHASE 8`
+### GET /api/admin/reports   `OWNER: Vishwajeet`  `PHASE 9`
 **Module:** admin
 **Auth:** required (Bearer token) **+ `users.is_admin = true`**
 **Content-Type:** n/a (no body)
 **Query:**
-  - status: string, optional, default `open` — `open` | `reviewed` | `actioned` | `dismissed`
-  - cursor: timestamptz, optional
-  - limit: int, optional, default 20, **cap at 50**
-**Cursor type:** **`created_at` timestamp**, descending — index
-`reports_open_idx (created_at DESC) WHERE status = 'open'`.
+  - status: string, optional, default `open` — `open` | `upheld` | `dismissed`
+  - limit: int, optional, default 20, **at most 50**
+  - cursor: opaque string, optional
+**Cursor type:** opaque, `created_at|id`, built with `encodeCursor` from `utils/pagination.js`.
+Newest first. This list needs an index on `reports` for its `status` and `created_at`, which the
+Phase 9 migration should add if Phase 7's doesn't.
 **200:** **TODO — ambiguous in plan: no shape specified.** §8.1 says the screen shows, per
 report: the reported content, the reason, the reporter, the author, and **the author's prior
 report count**. That last field exists nowhere in the schema as a column — it is a
-`COUNT(*) FROM reports` joined by author. Confirm the exact key names and that this is
-hydrated server-side in one query per type rather than N+1.
+`COUNT(*) FROM reports` joined by author. Phase 7 adds `reporter_in_audience`, the post's
+`moderation_scores` and `report_count`, which the screen will also want. Confirm the exact key
+names and that this is hydrated server-side rather than N+1.
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** nothing — RLS `reports_select_own` restricts the direct-Supabase path to a
-reporter's own rows, and the service-role backend bypasses it. **The `is_admin` check in this
-controller is the only thing protecting the queue.**
-**Notes:** the reported content must be hydrated per `target_type` (`post`, `user`, `product`,
-`comment`, `message`) — five different joins. This is the N+1 trap again.
+**Enforced by:** nothing. **The `is_admin` check in this controller is the only thing protecting
+the queue**, because the service-role backend bypasses RLS.
+**Notes:** Phase 7 only accepts reports on posts, so `post` is the only `target_type` this list can
+contain at first. If `user`, `product`, `comment` or `message` reports are added later, each needs
+its own hydration.
 
-### POST /api/admin/reports/:id/action   `OWNER: Vishwajeet`  `PHASE 8`
+### POST /api/admin/reports/:id/action   `OWNER: Vishwajeet`  `PHASE 9`
 **Module:** admin
 **Auth:** required (Bearer token) **+ `users.is_admin = true`**
 **Content-Type:** application/json
@@ -3316,24 +3448,33 @@ controller is the only thing protecting the queue.**
   - id: uuid, required — the report
 **Body:**
   - action: string, required — `remove` | `restore` | `dismiss`
-  - note: string, optional — stored in `reports.review_note`
+  - note: string, optional — needs a `reports.review_note` column, which Phase 7 doesn't add
 **200:** **TODO — ambiguous in plan: no response body specified.**
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** nothing automatic — this endpoint writes `reports.status`, `reviewed_by`,
-`reviewed_at`, `review_note` and the target's `moderation_status` itself. `trg_report_threshold`
-fires on report *inserts* only, so it will not undo a `restore`.
-**Notes:** the three actions map to `posts.moderation_status`: `remove` → `'removed'`,
-`restore` → `'active'`, `dismiss` → leaves the post alone and only closes the report. **Never
-hard-delete** — a removed post keeps its row.
+**Enforced by:** nothing automatic — this endpoint writes `reports.status`, `reports.reviewed_at`
+and the post's `moderation_status` itself. The trigger on `reports` fires on *inserts* only, so it
+won't undo a `restore`.
+**Notes:**
 
-**A `restore` is fragile.** `trg_report_threshold` re-hides a post at 3 reports *on the next
-insert*, and `report_count` is already ≥3, so one more report immediately re-hides it. Whether
-restore should also reset `report_count` or mark the existing reports `dismissed` is not
-specified — **TODO — ambiguous in plan.**
+| Action | `posts.moderation_status` | `reports.status` |
+|---|---|---|
+| `remove` | `removed` | `upheld` |
+| `restore` | `active` | `dismissed` |
+| `dismiss` | unchanged | `dismissed` |
 
-`reviewed_by` should be `req.user.id`.
+The `reports.status` column above is inferred from runbook §1.7, so confirm it. Dismissed reports
+are how false reporting gets tracked: Phase 9 can, for example, pause someone's reporting for a
+week after 5 dismissed reports in 30 days. **Never hard-delete** — a removed post keeps its row,
+and viewers get `410 POST_REMOVED`.
 
-### POST /api/admin/users/:id/restrict   `OWNER: Vishwajeet`  `PHASE 8`
+**`restore` must dismiss every open report on the post.** The cover rules count only `open` reports,
+so that is what stops the next report covering the post again. Until this endpoint exists, the same
+two updates are run by hand (runbook §1.7).
+
+**TODO — ambiguous:** a post usually has several open reports. Does an action apply to that one
+report, or to every open report on the post? `reviewed_by`, if added, should be `req.user.id`.
+
+### POST /api/admin/users/:id/restrict   `OWNER: Vishwajeet`  `PHASE 9`
 **Module:** admin
 **Auth:** required (Bearer token) **+ `users.is_admin = true`**
 **Content-Type:** application/json
@@ -3344,16 +3485,14 @@ specified — **TODO — ambiguous in plan.**
   - reason: string, optional
 **200:** **TODO — ambiguous in plan: no response body specified.**
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `trg_post_rate_limit` reads `users.posting_restricted_until` on every insert
-into `posts` and raises `POSTING_RESTRICTED`. This endpoint only sets the timestamp; the
-enforcement is already written.
+**Enforced by:** **not written yet.** The Phase 9 migration must add the column and make the `posts`
+insert trigger raise `POSTING_RESTRICTED`.
 **Notes:** a temporary posting pause, not a suspension — the user can still browse, buy, sell
 and message. It blocks `posts` inserts only.
 
-`reason` has no column on `users` (`suspension_reason` is for suspensions). **TODO —
-ambiguous in plan:** where is a restriction's `reason` stored?
+**TODO — ambiguous in plan:** where is a restriction's `reason` stored?
 
-### POST /api/admin/users/:id/suspend   `OWNER: Vishwajeet`  `PHASE 8`
+### POST /api/admin/users/:id/suspend   `OWNER: Vishwajeet`  `PHASE 9`
 **Module:** admin
 **Auth:** required (Bearer token) **+ `users.is_admin = true`**
 **Content-Type:** application/json
@@ -3363,20 +3502,20 @@ ambiguous in plan:** where is a restriction's `reason` stored?
   - reason: string, required — stored in `users.suspension_reason`
 **200:** **TODO — ambiguous in plan: no response body specified.**
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `trg_post_rate_limit` reads `users.is_suspended` and raises
-`ACCOUNT_SUSPENDED`. Setting the boolean is all this endpoint does.
-**Notes:** **the trigger only guards `posts` inserts.** A suspended user can still list
-products, comment, message and follow — nothing else in the schema reads `is_suspended`.
-Either that is intended for v1 or the other write paths need the same check; §8.3's escalation
-ladder ("post removed → temporary posting restriction → suspension") reads as though
-suspension should be broader. **TODO — ambiguous in plan.**
+**Enforced by:** **not written yet.** The Phase 9 migration must add `users.is_suspended` and
+`users.suspension_reason`, and make the `posts` insert trigger raise `ACCOUNT_SUSPENDED`.
+**Notes:** **as specified, that only guards `posts` inserts.** A suspended user could still list
+products, comment, message and follow. Either that is intended for v1 or the other write paths need
+the same check; §8.3's escalation ladder ("post removed → temporary posting restriction →
+suspension") reads as though suspension should be broader, and the report form warns of
+"restrictions on your account, including suspension". **TODO — ambiguous in plan.**
 
 There is no un-suspend endpoint in the §8.1 table. **TODO — ambiguous in plan:** is
 `is_suspended = false` a manual SQL fix, or should this endpoint take a boolean?
 
 `ACCOUNT_SUSPENDED` gets a full-screen client state, not a toast, with a link to appeal (§7.4).
 
-### GET /api/admin/stats   `OWNER: Vishwajeet`  `PHASE 8`
+### GET /api/admin/stats   `OWNER: Vishwajeet`  `PHASE 9`
 **Module:** admin
 **Auth:** required (Bearer token) **+ `users.is_admin = true`**
 **Content-Type:** n/a (no body)
@@ -3405,13 +3544,14 @@ Resolve at minimum:
    disagree, and `POSTING_RESTRICTED` needs an `until` field that `mapDbError()` cannot emit.
 3. **`viewer.is_blocked` vs `viewer.is_blocked_by_me`** on `by-username` — a Phase 3 rename of
    a Phase 1 field, or both?
-4. **Where `GET /api/users/:username/posts` lives** — a Vishwajeet endpoint on a Neeraj mount
-   point, with no route registered for it in the frozen `app.js`.
+4. ~~**Where `GET /api/users/:username/posts` lives**~~ — settled in Phase 7: it is
+   [`GET /api/posts/by-user/:userId`](#get-apipostsby-useruserid---owner-neeraj--phase-7).
 5. **Whether search is exempt from cursor pagination** — `search_users()` cannot support one
    as written.
 6. **The 14 endpoints with no specified success body** — every write in the social module,
    both admin sanction endpoints, and more. Clients need to know what they get back.
-7. **The endpoint count.** §0.F Step 4 and Appendix C both say **37** (Neeraj 20 +
+7. ~~**The endpoint count.**~~ Settled in Phase 7, which replaced the posts contract and has no
+   edit-a-post (runbook §0.2, decision 20). The original question: §0.F Step 4 and Appendix C both say **37** (Neeraj 20 +
    Vishwajeet 17). The tables in §1.5, §3.2, §5.3, §6.6 and §8.1 contain **36** rows in total
    (Neeraj 20 ✓, Vishwajeet **16**). One Vishwajeet posts endpoint is described nowhere. The
    likeliest candidate is **edit-a-post**: migration 007 adds `posts.edited_at`, and no
@@ -3433,12 +3573,12 @@ piece for an oversight:
 | `users.username`, `username_history`, `reserved_usernames`, `is_username_available()`, `suggest_usernames()`, `search_users()` | 002, 003 | the whole user module |
 | `follows`, `blocks`, `users.is_private`/`followers_count`/`following_count`, `can_view_social_content()`, `is_blocked_pair()` | 004, 005 | the whole social module; the `viewer` block on `by-username` |
 | `notifications` | 006 | the notifications module; every `notify()` call is a logged no-op until then |
-| `posts.scope`/`parent_post_id`/`hot_score`/`moderation_status`, `post_likes`, `get_campus_feed()`, `get_global_feed()`, `get_following_feed()` | 007, 009 | the whole posts module |
-| `reports`, `banned_terms`, `contains_banned_term()` | 008 | the reports module; `CONTENT_BLOCKED` on `POST /api/posts` |
-| `users.is_admin` | 010 | the whole admin module |
+| `universities.country_code`, the reworked `posts` columns, `community_settings`, `post_visibility()`, `can_post_in_feed()`, `can_reply_to_post()`, `get_campus_feed()`, `get_country_feed()`, `get_global_feed()`, `get_post_item()`, `get_post_replies()`, `get_user_posts()`, `count_new_campus_posts()`, `countries_for_viewer()` | `community_posts` (Phase 7 Block V-B) | the whole posts module |
+| `post_reactions`, `react_to_post()`, `reports`, `create_report()` | `reactions_and_reports` (Phase 7 Block V-B) | the posts module's reaction routes; the reports module |
+| `users.is_admin`, `users.is_suspended`, `users.suspension_reason`, `users.posting_restricted_until` | a Phase 9 migration, not written yet | the whole admin module |
 
 The existing `posts` table has only `author_id`, `university_id`, `content` (max 250),
-`image_url` — migration 007 drops `image_url` and adds nine columns. Nothing reads or writes
+`image_url` — migration `community_posts` reworks it (Phase 7 Block V-B). Nothing reads or writes
 it today.
 
 **Shared infrastructure, and what actually uses it.** `utils/respond.js`,

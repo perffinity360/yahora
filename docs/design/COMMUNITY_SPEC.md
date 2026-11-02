@@ -174,6 +174,10 @@ Clicking it opens the composer: inline on the website, a full-screen compose pag
 Inter 400 14/20 on pinkLight, radius 16, padding 16. The phone number and the link are
 tappable. Nothing on this card may sound like a punishment.
 
+**The same card, later.** A post can be held for self-harm after it was sent, if the check had to
+wait. While that post is held, the author's Posts tab shows this card directly under it, without
+**Close** (API field `moderation_support`).
+
 ---
 
 ## 3. The post card
@@ -212,8 +216,8 @@ tappable. Nothing on this card may sound like a punishment.
 
 | State | Who sees what |
 |---|---|
-| `Being checked` (held) | Only the author, on their Posts tab, with a grey label. |
-| **Under review** (reported) | It's taken out of every feed and off the author's profile for everyone else. A direct link shows only `This post was reported by several students and is being reviewed.` — no text, no photos, no button to view it. A covered reply disappears from its thread. The author still sees the post, labelled `Under review`. |
+| `Being checked` (held) | Only the author, on their Posts tab, with a grey label. If it was held for self-harm, the support card (§2.4) sits under it. |
+| **Under review** (reported) | It's taken out of every feed and off the author's profile for everyone else. A direct link shows only `This post was reported and is being reviewed.` — no text, no photos, no button to view it. A covered reply disappears from its thread. The author still sees the post, labelled `Under review`. |
 | Deleted | It disappears everywhere. A direct link shows `This post was deleted.` |
 | Removed by Yahora (Phase 9) | A direct link shows `This post was removed for breaking the Community Guidelines.` |
 

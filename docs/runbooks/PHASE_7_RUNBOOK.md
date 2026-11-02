@@ -85,9 +85,9 @@ here is wrong, fix it in this table first, then in the block it affects.
 | 12 | Reactions on messages | Yes, the same quick bar and full picker |
 | 13 | GIFs | From **KLIPY** (Google shut Tenor down on 30 June 2026). In posts, replies and messages |
 | 14 | Stickers | Your own Yahora sticker packs are **Phase 10**, with the logo work |
-| 15 | Moderation | **No word list.** Every post, reply and photo is checked by **OpenAI's free moderation service**: clear violations are held for review, borderline ones get a "Post this?" nudge |
+| 15 | Moderation | **No word list.** Every post, reply and photo is checked by **OpenAI's free moderation service**: clear violations are held for review, borderline ones get a "Post this?" nudge. **Nothing is public until it has been checked:** if a check can't run, the post waits as `Being checked` and a re-check job decides. A temporary Phase 7 setup; a fuller stack comes later (2 Nov, §1.6, Appendix E) |
 | 16 | Reports | **Anyone** who can see a post can report it. The form warns that deliberately false reports can lead to restrictions or suspension |
-| 17 | Hiding after reports | Not at 3 for everything. **3** for sexual content, violence or self-harm; **2** for child safety; **5** on campus and **10** on country or Global feeds for everything else. Covered posts are **never deleted**; a direct link shows only a notice, with no way to view the post (2 Nov). The numbers live in the settings table (§1.5) |
+| 17 | Hiding after reports | Not at 3 for everything. **3** for sexual content, violence or self-harm; for child safety, **1** on a post with photos and **2** on a text-only post; **5** on campus and **10** on country or Global feeds for everything else. **Only open reports count**, so a dismissed report never counts again. Covered posts are **never deleted**; a direct link shows only a notice, with no way to view the post (2 Nov). The numbers live in the settings table (§1.5) |
 | 18 | Rate limits | Per person, in a sliding 1-hour window: **15** campus posts, **8** country posts, **8** Global posts (each counted on its own), **45** replies. The same for new accounts. Stored in a settings table so the Phase 9 admin page can change them (2 Nov, §1.5) |
 | 19 | Deleting your own post | It disappears at once. The row is kept for **90 days** for moderation, then removed for good |
 | 20 | Editing posts | Not in Phase 7 |
@@ -188,9 +188,11 @@ V-B together on day 4, and the deadline is still Friday 20 November.
 | 3 | **Country and Global are counted separately** | §1.5, CC-V2 |
 | 4 | **Every limit × 1.5**, still a sliding 1-hour window: campus **15**, country **8**, Global **8**, replies **45** | §1.5, CC-V2, every rate-limit check |
 | 5 | **The limits and the report thresholds live in a settings table**, `community_settings`, so the Phase 9 admin page only has to change numbers | §1.5, §1.7, CC-V2 |
-| 6 | **A covered post shows only a notice:** `This post was reported by several students and is being reviewed.` There is no "View anyway". It also disappears from profiles for everyone but its author | §1.7, CC-V2, CC-N1, CC-V4c, CC-N4c, spec §3.1, Appendix A |
+| 6 | **A covered post shows only a notice:** `This post was reported and is being reviewed.` There is no "View anyway". It also disappears from profiles for everyone but its author | §1.7, CC-V2, CC-N1, CC-V4c, CC-N4c, spec §3.1, Appendix A |
 | 7 | **Vishwajeet redesigns the website's community page** — new Block **V-P**, on loan from Neeraj | §2.2, Track 1, CC-VP |
 | 8 | **Neeraj builds the composer, GIF picker and report form early** — new Block **N-S** — while the database is being built | §2.1, Track 3, CC-NS, CC-N4b, CC-N4c |
+
+Updated again on the evening of 2 November: moderation — see §1.6.
 
 **How the redesign and Neeraj's work stay apart** (the full rules are in §2.2):
 
@@ -438,6 +440,7 @@ rate_limit_country_posts_per_hour     8
 rate_limit_global_posts_per_hour      8
 rate_limit_replies_per_hour          45
 report_threshold_child_safety         2      ← §1.7
+report_threshold_child_safety_photo   1      ← §1.7
 report_threshold_serious              3      ← §1.7
 report_threshold_other_campus         5      ← §1.7
 report_threshold_other_wide          10      ← §1.7
@@ -460,36 +463,58 @@ can't stop people posting.
 
 ## 1.6 Automatic moderation (OpenAI's free moderation service)
 
+**This is a temporary Phase 7 setup.** A fuller moderation stack comes later (Appendix E), so
+this one stays simple and easy to replace.
+
 Every post and reply, **with its photos**, is checked **before** it's saved. The check returns
 a score from 0 to 1 for each category: harassment, hate, sexual content, violence, self-harm,
 and so on. There are three outcomes:
 
-| Outcome | When (starting values) | What happens |
+| Outcome | When | What happens |
 |---|---|---|
-| **Hold** | something clearly serious: a threat (harassment/threatening or hate/threatening ≥ 0.70), graphic violence (≥ 0.80), anything sexual involving minors (≥ 0.20), self-harm intent or instructions (≥ 0.50), explicit sexual content (≥ 0.85) | The post is saved as **pending**: only its author sees it, labelled `Being checked`. You review it in Phase 9's admin screen. |
-| **Nudge** | not held, but the service still flags it (for example, insulting language) | Nothing is saved yet. The app asks `Post this?` with **Edit** and **Post anyway**. If the student posts anyway, it's published and marked so you look at it first later. |
+| **Hold** | something clearly serious: a threat, graphic violence, anything sexual, self-harm, or a violent or self-harm photo | The post is saved as **pending**: only its author sees it, labelled `Being checked`. You review it in Phase 9's admin screen. |
+| **Nudge** | not held, but it's borderline or the service flags it (for example, insulting language) | Nothing is saved yet. The app asks `Post this?` with **Edit** and **Post anyway**. If the student posts anyway, it's published and marked so you look at it first later. |
 | **Publish** | everything else | Published straight away |
 
 **Worked examples:**
 - "You're such an idiot, nobody likes your posts" → probably a **nudge**. Many people edit
   when asked; that's why Instagram and YouTube ask.
 - "I'll hurt you after class tomorrow" → **hold**: a threat.
-- A post that shows the author may want to hurt themselves → **hold**, and instead of a
-  plain message the author sees the support card with helplines (spec §2.4). The aim is help,
-  not punishment.
+- A post whose text **or photo** shows the author may want to hurt themselves → **hold**, and
+  instead of a plain message the author sees the support card with helplines (spec §2.4). The
+  aim is help, not punishment. If the hold only comes later, from the re-check job, the author
+  sees the card under that post on their Posts tab.
 
-**The numbers are starting values.** They live in one place, `backend/src/utils/moderation.js`,
-so you can tune them after launch without touching anything else.
+**The text and each photo are checked separately, at the same time.** A photo's scores change
+with the text sent beside it, so each photo gets its own request. The strictest outcome wins.
+A GIF isn't sent to the service, so a post with only a GIF has nothing to check and publishes.
 
-**If the service is down, the post still goes through.** We wait at most 3 seconds. If there
-is no answer:
-- the post is published and marked "not checked yet";
-- a small job checks unchecked posts every 10 minutes and holds any that should have been
-  held.
+**The photo check uses a copy.** Each photo is checked as a copy at most 768 px on its long side.
+The original is stored and shown unchanged.
 
-A free outside service must never stop students posting. This is called **failing open**.
-The cost is small: during an outage, a bad post can be visible for up to 10 minutes before
-the re-check holds it, and reports still work during that time.
+**A held post's photos are already in storage.** They sit in the public `posts` bucket under
+random file names, because the author's card shows them and the re-check job fetches them. The
+API gives those URLs only to the author, but anyone the author sends a link to could open one. We
+accept that for Phase 7; private storage for held photos is on the Phase 9 list (Appendix E).
+
+**The thresholds live in one place,** `backend/src/utils/moderation.js`, in two groups: one for
+text and one for images. You can tune them there without touching anything else.
+
+**Nothing becomes public until it has been checked.** We wait at most 3 seconds. If the key is
+missing, or any part of the check fails or times out:
+- the post is held: only its author sees it, labelled `Being checked`;
+- a job re-checks these posts every 10 minutes, oldest first, and decides: **publish** makes it
+  public, **nudge** also makes it public but marks it as if the student chose **Post anyway**
+  (they aren't there to answer), and **hold** keeps it pending for review;
+- if a post's photo has gone missing from storage, the job stops trying after 6 failed runs, so
+  those posts can't block the queue. The post stays held for review.
+
+**Worked example:** OpenAI goes down at 2:00, and Priya posts. The check gets no answer within
+3 seconds, so her post waits as `Being checked`: she sees it on her Posts tab, and nobody else
+sees it. At 2:10 the re-check runs, OpenAI is back and the answer is publish. Her post appears
+in the feed, with no action from anyone.
+
+The old rule, failing open (publish first and check later), was replaced on 2 November.
 
 **Privacy:** posts and photos are sent to OpenAI to be checked. That needs one line in your
 privacy policy, for example: "Posts and photos are automatically checked for harmful content
@@ -505,7 +530,7 @@ feed. The only exception is the author.
 **Reports don't delete anything. At a threshold, they cover the post** (changed 2 Nov):
 - it leaves every feed, and it disappears from the author's profile for everyone else;
 - anyone who opens it from a direct link sees only
-  `This post was reported by several students and is being reviewed.` — no text, no photos,
+  `This post was reported and is being reviewed.` — no text, no photos,
   and no way to open it anyway;
 - the author still sees their post, labelled `Under review`.
 
@@ -516,12 +541,35 @@ could read it in the browser's developer tools, and the cover would only be deco
 
 | Reason | Reports needed to cover the post |
 |---|---|
-| Child safety | **2** |
+| Child safety | **1** on a post with photos (it's covered at once) · **2** on a text-only post |
 | Sexual content, violence or threats, self-harm | **3** |
 | Everything else (spam, harassment, hate speech, impersonation, false information, prohibited item, something else) | **5** on a campus post · **10** on a country or Global post |
 
 These numbers are rows in `community_settings` (§1.5), so the Phase 9 admin page can change
 them too.
+
+**Only open reports count toward these numbers.** A dismissed report never counts again.
+Worked example: three students report a post as *violence*, and it's covered. You review it,
+decide it's fine, restore it and dismiss the three reports. A fourth student then reports it as
+*violence*. Only that one report is open, so the post stays up; it would take three new reports
+to cover it again. `posts.report_count` still says 4, because it counts every distinct reporter.
+
+**One child-safety report covers a photo post, so one false report can too.** We accept that:
+hiding a harmful photo quickly matters more than the short wait a false report causes. Until
+Phase 9's admin screen exists, Vishwajeet finds covered posts and restores them by hand, in the
+Supabase SQL Editor:
+
+```sql
+select id, created_at from public.posts where moderation_status = 'under_review';
+
+-- to restore one, after reviewing it: dismiss its open reports first, then uncover it
+update public.reports set status = 'dismissed', reviewed_at = now()
+ where target_type = 'post' and target_id = '<post id>' and status = 'open';
+update public.posts set moderation_status = 'active' where id = '<post id>';
+```
+
+If a report may be right that a photo sexualises a minor, don't download or share the photo. Leave
+it covered and get legal advice first.
 
 **Only reports from the post's own audience count for the "everything else" reasons.**
 Worked example: a post in the **India** feed gets reported as *spam* by 12 students in Germany
@@ -591,7 +639,8 @@ itself:
 
 Posting with photos happens in this order, and the order matters:
 
-1. check the text length, photo count, types and sizes;
+1. check the text length, photo count, types and sizes, and that each photo really is a readable
+   image (a photo that can't be read can never be checked);
 2. run the moderation check (§1.6) on the text **and** the photos;
 3. **only then** upload the photos to the `posts` storage bucket, with random file names;
 4. insert the post row;
@@ -938,8 +987,8 @@ it there too. That's fine before launch; just don't be surprised to see it.
 - [ ] **Reactions:** tap ❤️, the quick bar, the ⊕ picker, change and remove, the summary and the
       breakdown — on posts, replies and messages; live on both sides in a chat. (T2, T3)
 - [ ] **GIFs:** in posts, replies and messages, with the KLIPY credit. (T2, T3)
-- [ ] **Moderation:** nudge, hold and the support card all work; posting still works when
-      the service is down. (T1, T2)
+- [ ] **Moderation:** nudge, hold and the support card all work; when the service is down, a
+      post waits as `Being checked` and the re-check job decides. (T1, T2)
 - [ ] **Reports:** anyone who can see a post can report it; the warning shows; the thresholds
       cover posts as in §1.7; a covered post's link shows only the notice. (T1, T2)
 - [ ] **Limits:** the 16th campus post in an hour is refused, while a Global post still goes
@@ -1052,12 +1101,13 @@ into `backend/API.md`, and files the loan entry.
    cd backend && node scripts/try-moderation.mjs && cd ..
    ```
 
-   You should see three lines, roughly:
+   You should see four lines, roughly:
 
    ```
    "Good morning, campus!"                       → publish
    "You are such an idiot, nobody likes you"     → nudge
    "I will hurt you after class tomorrow"        → hold
+   3 photos of 4.8 MB                            → publish in about 2000 ms
    ```
 
    If the second one says `publish`, that's fine: the service decides, and the threshold
@@ -1107,7 +1157,7 @@ a test script for each, and sample posts for your local database. Let it take it
    - `post_reactions` and `reports` exist;
    - `messages` has `reactions` and `gif`;
    - `universities` has `country_code`;
-   - `community_settings` has the 8 rows of §1.5 (15, 8, 8, 45, 2, 3, 5, 10).
+   - `community_settings` has the 9 rows of §1.5 (15, 8, 8, 45, 2, 1, 3, 5, 10).
 4. Studio → **SQL Editor** (local), run:
 
    ```sql
@@ -1162,7 +1212,7 @@ select
   (select count(*) from information_schema.columns where table_schema='public' and table_name='messages'
      and column_name in ('reactions','gif'))                               as message_columns,   -- expect 2
   (select count(*) from cron.job where jobname = 'refresh-hot-scores')    as cron_jobs,         -- expect 1
-  (select count(*) from public.community_settings)                         as settings_rows,     -- expect 8
+  (select count(*) from public.community_settings)                         as settings_rows,     -- expect 9
   (select count(*) from public.users u join public.universities n on n.id = u.university_id
     where n.is_demo and u.username is not null and u.username not like 'demo.%')
                                                                            as demo_left;         -- expect 0
@@ -1418,6 +1468,9 @@ Phase 7 session start.
 
 ## CC-V1 — Shared helpers and the Phase 7 contract
 
+> **Already run. Don't run item 3 again:** its moderation rules were replaced on 2 November.
+> §1.6 and `backend/src/utils/moderation.js` are correct.
+
 ```
 Phase 7, Block V-A. Shared backend pieces for the community, all in files I
 own. Nothing calls the new code until Neeraj's Block N-B.
@@ -1559,6 +1612,8 @@ Rules for all four files:
        moderation_status text not null default 'active'
          check in (active, pending, under_review, removed),
        moderation_flagged boolean not null default false,
+       moderation_support boolean not null default false,
+       moderation_photo_failures int not null default 0,
        moderation_scores jsonb, moderation_checked_at timestamptz,
        report_count int not null default 0, deleted_at timestamptz.
    - author_id and university_id not null, with foreign keys to users
@@ -1577,15 +1632,16 @@ Rules for all four files:
      key text primary key, value integer not null check (value > 0),
      description text not null, updated_at timestamptz not null
      default now().
-   Insert these 8 rows, each with a one-line description:
-     rate_limit_campus_posts_per_hour   15
-     rate_limit_country_posts_per_hour   8
-     rate_limit_global_posts_per_hour    8
-     rate_limit_replies_per_hour        45
-     report_threshold_child_safety       2
-     report_threshold_serious            3   (sexual_content, violence, self_harm)
-     report_threshold_other_campus       5   (other reasons, campus posts)
-     report_threshold_other_wide        10   (other reasons, country and global posts)
+   Insert these 9 rows, each with a one-line description:
+     rate_limit_campus_posts_per_hour      15
+     rate_limit_country_posts_per_hour      8
+     rate_limit_global_posts_per_hour       8
+     rate_limit_replies_per_hour           45
+     report_threshold_child_safety          2   (text-only posts)
+     report_threshold_child_safety_photo    1   (posts with photos: covered at once)
+     report_threshold_serious               3   (sexual_content, violence, self_harm)
+     report_threshold_other_campus          5   (other reasons, campus posts)
+     report_threshold_other_wide           10   (other reasons, country and global posts)
    Add community_setting(p_key text, p_default integer) returns integer
    (stable): the row's value, or p_default when the row is missing, so a
    deleted row can never stop posting. Every rule below that uses one of
@@ -1641,7 +1697,9 @@ Rules for all four files:
 7. Read functions. They ALL return the same flat columns: Appendix A's
    PostItem, plus hot_score for building cursors. viewer_reaction comes
    from post_reactions; is_mine compares the author to the viewer; author
-   fields come from users and universities.
+   fields come from users and universities. moderation_support is true only
+   when the column is true, the viewer is the author and the post is still
+   'pending'; otherwise it's false, for everyone.
    - get_campus_feed(p_viewer, p_limit, p_cursor_time, p_cursor_id): top-level
      posts with scope 'campus' from the viewer's campus ONLY — country and
      global posts never appear here (runbook §1.1, "One post, one feed") —
@@ -1730,10 +1788,15 @@ Rules for all four files:
    - Insert the row. A duplicate raises unique_violation, which the
      backend maps to DUPLICATE.
 6. AFTER INSERT trigger on reports (target_type 'post'):
-   - recount the post's distinct reporters into posts.report_count;
-   - then apply the cover rules (§1.7). Each rule counts its own reports,
-     and reads its number with community_setting() (defaults in brackets):
-       child_safety, counting everyone ≥ report_threshold_child_safety (2);
+   - recount the post's distinct reporters into posts.report_count (every
+     reporter, whatever the report's status);
+   - then apply the cover rules (§1.7). Each rule counts only its own reports
+     with status 'open', so a dismissed report never counts again, and reads
+     its number with community_setting() (defaults in brackets):
+       child_safety, counting everyone:
+         ≥ report_threshold_child_safety_photo (1) on a post whose image_urls
+           is not empty,
+         ≥ report_threshold_child_safety (2) on a text-only post;
        sexual_content + violence + self_harm, counting everyone
          ≥ report_threshold_serious (3);
        all other reasons, counting only reporter_in_audience:
@@ -1810,6 +1873,9 @@ assert. At least:
     others and 'visible' for its author; get_post_item and get_user_posts
     return it only to its author; it's in no feed; a covered reply is
     missing from get_post_replies for everyone but its author;
+  · moderation_support comes back true only to the author of a pending post
+    with the column set, and false once that post is 'active';
+  · moderation_photo_failures defaults to 0 and is not part of the PostItem;
   · New and Hot both page with the cursor with no repeats and no gaps;
   · after refresh_hot_scores, a newer active post outranks an older quiet
     one.
@@ -1819,7 +1885,11 @@ assert. At least:
   · reacting to an invisible post → POST_NOT_FOUND;
   · reporting your own post → CANNOT_REPORT_OWN; reporting twice →
     unique_violation;
-  · 2 child_safety reports cover a post; 3 violence reports do too;
+  · one child_safety report covers a post with photos; a text-only post
+    still needs 2; 3 violence reports cover a post too;
+  · dismissed reports don't count toward a threshold: with 2 violence reports
+    set to 'dismissed', a 3rd doesn't cover the post, and report_count is
+    still 3;
   · 4 spam reports on a campus post don't, the 5th does;
   · spam reports from lena.test on an India post don't count toward 10;
   · the thresholds come from community_settings: with
@@ -1854,7 +1924,7 @@ VERIFY AFTER — report each
 3. The NOTICE and ERROR lines from all four test files.
 4. The result of: select jobname, schedule from cron.job;  (one job)
 5. Anything you decided that this prompt didn't specify.
-6. The 8 rows of community_settings.
+6. The 9 rows of community_settings.
 ```
 
 ## CC-VP — The website community redesign
@@ -1977,11 +2047,24 @@ working before they are updated.
    clean-up:
    - every 10 minutes — re-check posts the moderation service couldn't check
      (runbook §1.6). Add recheckUncheckedPosts() to utils/moderation.js:
-     take up to 20 posts from the last 24 hours with moderation_checked_at
-     null and status 'active'; fetch their photos from their public URLs as
-     buffers; run checkContent; save moderation_checked_at and
-     moderation_scores; set status 'pending' when the outcome is 'hold'. If
-     the service is still down, leave them for the next run.
+     take up to 20 posts with moderation_status 'pending',
+     moderation_checked_at empty and moderation_photo_failures below 6,
+     OLDEST FIRST, with no time window (so it catches up after any outage or
+     a sleeping server). For each one, fetch the original photos from their
+     public URLs as buffers:
+       · a photo can't be fetched or fails isReadablePhoto → add 1 to
+         moderation_photo_failures and go on to the next post. At 6 (about an
+         hour) the job stops picking it up, so missing photos can't block the
+         queue; the post stays 'pending' for review.
+     Otherwise run checkContent({ text: content, images }, { timeoutMs: 15000 }):
+       · still not checked → leave it for the next run, and DON'T add to
+         moderation_photo_failures: an OpenAI outage must never use up a
+         post's tries;
+       · publish → 'active', scores saved, checked now;
+       · nudge → 'active', moderation_flagged true, scores saved, checked now
+         (the author isn't there to confirm, so this is like "Post anyway");
+       · hold → stays 'pending', moderation_support = result.support, scores
+         saved, checked now.
    - once a day — remove posts deleted more than 90 days ago (runbook
      §1.8): first delete their photos from the 'posts' storage bucket
      through the Storage API, then delete the rows (replies and reactions
@@ -2180,8 +2263,7 @@ posts" pill. Read: spec §3.1, §4, §5.2, §5.4, §7, §8, §10; runbook §1.7,
      false, it reads "Only students in <country> can reply.";
    - 404 → "This post isn't available."; 410 POST_DELETED → "This post was
      deleted."; 410 POST_REMOVED → spec §3.1's text; 403 POST_UNDER_REVIEW
-     → only "This post was reported by several students and is being
-     reviewed." — no content and no way to open it (runbook §1.7).
+     → only "This post was reported and is being reviewed." — no content and no way to open it (runbook §1.7).
 5. The ⋯ menu: Report (everyone except the author) and Delete (the author
    only). Delete → ConfirmDialog with the spec's text → DELETE
    /api/posts/:id → remove the post from every cached feed and page.
@@ -2197,7 +2279,9 @@ posts" pill. Read: spec §3.1, §4, §5.2, §5.4, §7, §8, §10; runbook §1.7,
    infinite loading:
    - app/(tabs)/profile.tsx: a Posts tab after Watchlist;
    - app/profile/[id].tsx: a Posts section.
-   Your own tab shows the "Being checked" and "Under review" labels.
+   Your own tab shows the "Being checked" and "Under review" labels. When
+   moderation_support is true, show the support card (spec §2.4) under that
+   post, with no Close button.
 8. The "new posts" pill (spec §8) on the campus feed:
    - poll GET /api/posts/feed/campus/new-count?since=<the newest created_at
      shown> every NEW_POSTS_POLL_MS, only while the Community tab is focused
@@ -2477,6 +2561,9 @@ Read §1.1–§1.6 and §1.10, the posts section of `backend/API.md`, and `backe
 
 **👁️ CHECKPOINT N-B — with curl, against your local API**
 
+⚠️ **Get your own `OPENAI_API_KEY` first** (Block V-0, Step 1 shows how), and put it in
+`backend/.env`. Without it, every post comes back held.
+
 Start the backend (`cd backend && npm run dev`). Paste once:
 
 ```bash
@@ -2545,7 +2632,8 @@ curl -s "$API/posts/$PID" -H "Authorization: Bearer $SNEHA"
 
 > **About 6 and 7.** The moderation service makes the decision, not us. If 6 posts instead of
 > nudging, that's acceptable: the numbers can be tuned. If 7 publishes, tell Vishwajeet before
-> you merge — either the key isn't set in `backend/.env`, or the thresholds need a look.
+> you merge: the thresholds need a look. If ordinary posts come back held too, the key isn't set
+> in `backend/.env`.
 
 Run `supabase db reset` afterwards. It puts the database back exactly as the seed made it, and
 undoes the rate-limit test.
@@ -2655,7 +2743,7 @@ Mark each cell ✅ or ❌. A phone you don't have is run by whoever has it (§2.
 | 5 | Post a GIF | it plays; the picker shows Powered by KLIPY | | | | | |
 | 6 | Post `You are such an idiot, nobody likes you` | the "Post this?" dialog; Edit keeps the text | | | | | |
 | 7 | Post `I will hurt you after class tomorrow` | the "being checked" message; the post shows only on your Posts tab, as Being checked | | | | | |
-| 8 | Post `I don't want to be alive anymore` *(a test of the support card only)* | the support card with Tele-MANAS 14416 and findahelpline.com, not a plain message | | | | | |
+| 8 | Post `I don't want to be alive anymore` *(a test of the support card only)* | the support card with Tele-MANAS 14416 and findahelpline.com, not a plain message; your Posts tab shows the post as Being checked, with the card under it | | | | | |
 | 9 | Tap / click ♡ | ❤️; the count goes up by 1; tap again: back | | | | | |
 | 10 | Long-press (app) or hover (web) ♡ → 😂, then ⊕ → search `fire` → 🔥 | your reaction changes each time; counts stay right | | | | | |
 | 11 | Tap the reaction summary | the breakdown grid, biggest first, ⊕ first, no names | | | | | |
@@ -2672,7 +2760,7 @@ Mark each cell ✅ or ❌. A phone you don't have is run by whoever has it (§2.
 | 22 | **Samsung:** scroll a feed with GIFs for 30 s | smooth; GIFs pause when scrolled away | — | — | — | — | |
 | 23 | Airplane mode, pull to refresh, then back online | a friendly error, no crash; it recovers | | | | | |
 | 24 | Post once in Campus, once in India, once in Global; look at all three feeds | each post appears only in its own feed, never in the other two | | | | | |
-| 25 | A covered post (from checkpoint N-C) | web: its link shows only `This post was reported by several students and is being reviewed.` — no text, no button · app: in no feed; its author sees it on Profile → Posts as `Under review` | | | | | |
+| 25 | A covered post (from checkpoint N-C) | web: its link shows only `This post was reported and is being reviewed.` — no text, no button · app: in no feed; its author sees it on Profile → Posts as `Under review` | | | | | |
 
 **For every ❌:** a screenshot or a screen recording, the platform, and the block (V-D or N-D).
 Vishwajeet fixes the app ones; you fix the website ones.
@@ -2736,8 +2824,8 @@ On `https://yahora.netlify.app`, with your own account and a campus-mate's test 
 
 1. Post in Campus, in your country and in Global: each appears in the right feed.
 2. React, reply with a GIF, open the breakdown.
-3. The campus-mate reports one of your test posts: it stays visible to everyone else (one
-   report is far below every threshold).
+3. The campus-mate reports one of your test posts as spam: it stays visible to everyone else
+   (one spam report is far below that threshold).
 4. In a chat: react to a message and send a GIF.
 5. **Explore Live Demo:** a `demo.` name, and only demo posts.
 6. Ask Vishwajeet to check the Render logs for `[moderation] check skipped`. There should be
@@ -2944,18 +3032,23 @@ backend/API.md; backend/src/utils/moderation.js and emoji.js.
       - content trimmed; codePointLength ≤ 1000, else CONTENT_TOO_LONG
         { max: 1000 } (count with [...text].length — §1.12);
       - there must be text, a photo or a GIF, else EMPTY_POST;
-      - photos and a GIF together, or photos on a reply → MEDIA_CONFLICT.
+      - photos and a GIF together, or photos on a reply → MEDIA_CONFLICT;
+      - every photo must pass await isReadablePhoto(file), from
+        utils/moderation.js, else INVALID_FILE_TYPE. The mimetype proves
+        nothing, and a photo that can't be read would block the re-check job.
    d. const result = await checkContent({ text: content, images: files })
       - outcome 'nudge' and confirm isn't 'true' → 422
         { error: 'MODERATION_NUDGE', categories: result.categories }.
         Nothing saved, nothing uploaded.
-      - 'hold' → moderation_status 'pending', moderation_scores =
-        result.scores, moderation_checked_at = now.
+      - outcome 'hold' → moderation_status 'pending', moderation_scores =
+        result.scores; moderation_checked_at = now ONLY when result.checked
+        is true, otherwise left empty (the re-check job looks for those);
+        moderation_support = result.support.
       - 'nudge' with confirm → 'active', moderation_flagged true, scores
         saved, checked now.
-      - result.checked false → 'active', moderation_checked_at left empty
-        (Vishwajeet's job re-checks it).
-      - otherwise → 'active', scores saved, checked now.
+      - 'publish' → 'active', scores saved, checked now.
+      The 202 answer in step g carries support only when result.checked is
+      true.
    e. Upload the photos to the 'posts' storage bucket with random file
       names, never containing user ids (6B's rule — see how products names
       its files now).
@@ -2967,7 +3060,7 @@ backend/API.md; backend/src/utils/moderation.js and emoji.js.
       NOT_ALLOWED_HERE, RATE_LIMIT_POSTS, RATE_LIMIT_REPLIES).
    g. Read the post back with rpc get_post_item (viewer = the author).
       Return 201 { post }, or for a hold
-      202 { post, held: true, support: result.support }.
+      202 { post, held: true, support: result.checked && result.support }.
 2. DELETE /:id → a uuid, else 400.
    - Read author_id and deleted_at. Not found → 404 POST_NOT_FOUND. Not the
      author → 403 FORBIDDEN.
@@ -3173,8 +3266,7 @@ style.
      <country> can reply.";
    - 404 → "This post isn't available."; 410 POST_DELETED → "This post was
      deleted."; 410 POST_REMOVED → spec §3.1's text; 403 POST_UNDER_REVIEW
-     → only "This post was reported by several students and is being
-     reviewed." — no content and no way to open it (runbook §1.7).
+     → only "This post was reported and is being reviewed." — no content and no way to open it (runbook §1.7).
 2. The ⋯ menu on posts and replies: Report (everyone except the author)
    opens the ReportModal from N-S; Delete (the author only) → ConfirmDialog
    with the spec's text → DELETE /api/posts/:id → remove the post from the
@@ -3188,8 +3280,10 @@ style.
      useHistoryEntryState, like the other tabs — frontend/CLAUDE.md);
    - PublicProfile: a Posts section.
    Both from GET /api/posts/by-user/:userId with infinite scroll. Your own
-   shows the "Being checked" and "Under review" labels; other people's
-   never include held or covered posts (the API leaves them out).
+   shows the "Being checked" and "Under review" labels, and the support card
+   (spec §2.4, with no Close button) under a post whose moderation_support is
+   true; other people's never include held or covered posts (the API leaves
+   them out).
 5. The "new posts" pill (spec §8) on the campus feed:
    - poll new-count every NEW_POSTS_POLL_MS while the page is visible
      (document.visibilityState);
@@ -3275,8 +3369,8 @@ Tick a box only when you have seen it yourself, on the device named.
 
 **Safety (T1, T2)**
 - [ ] 👁️ Nudge, hold and the support card all work.
-- [ ] Posting still works when moderation is unavailable (try once with `OPENAI_API_KEY`
-      removed from `backend/.env` locally, then put it back).
+- [ ] With `OPENAI_API_KEY` removed from `backend/.env`, a new post shows `Being checked`; with
+      the key back and the backend restarted, the re-check job publishes it within 10 minutes.
 - [ ] 👁️ Reporting: the warning shows, "already reported" works, and the thresholds cover
       posts (the V-B tests prove the numbers). A covered post's link shows only the notice.
 - [ ] The 16th campus post in an hour is refused, and a Global post still goes through.
@@ -3342,6 +3436,7 @@ Flat: there is no nested `author` object.
   "replies_count": 2,
   "viewer_reaction": "❤️",
   "moderation_status": "active",
+  "moderation_support": false,
   "author_id": "uuid",
   "author_username": "rahul.verma",
   "author_name": "Rahul Verma",
@@ -3357,6 +3452,8 @@ The fields:
 - `viewer_reaction`: your own reaction, or `null`.
 - `moderation_status`: `active` for everyone. Only the author ever sees `pending` or
   `under_review`, on their own posts. Nobody else ever receives a covered post (§1.7).
+- `moderation_support`: `true` only for the author of a post held because of self-harm, while
+  it's still held: show the support card under it. `false` for everyone else.
 
 ### posts module — Neeraj, on loan from Vishwajeet for Phase 7
 
@@ -3469,7 +3566,7 @@ cd frontend && npm run build
 ## D. Things that cost a day if you forget them
 
 - **⛔ The keys must be in production before the code that needs them.**
-  - `OPENAI_API_KEY` goes on Render on day 5. Without it, every post is published unchecked.
+  - `OPENAI_API_KEY` goes on Render on day 5. Without it, every post waits as `Being checked`.
   - `VITE_KLIPY_API_KEY` goes on Netlify before M1. Without it, there are no GIFs on the live
     site.
 - **Restart after changing a `.env` file.**
@@ -3504,6 +3601,12 @@ cd frontend && npm run build
 | Several email domains per campus, currencies, the campus admin page | 9 |
 | Students under 18: date of birth at sign-up, parental consent, safer defaults (§0.4) | 9 |
 | The KLIPY production key | 9 |
+| The full moderation stack: image moderation with OCR (for example AWS Rekognition or Sightengine), benchmarked with `backend/scripts/moderation-benchmark.mjs` | 9 |
+| PhotoDNA or another dedicated child-safety tool | 9 |
+| Human review and appeals | 9 |
+| A check that understands romanised Hindi and Telugu | 9 |
+| Legal advice on reporting duties | 9 |
+| Private storage for held photos, with a signed link for the author and the re-check job | 9 |
 | Your own Yahora sticker packs, the logo | 10 |
 | Editing posts, @mentions, hashtags, link previews | later, if wanted |
 | Recommendations (see the 6B notes on activity and recommendations) | after launch |
