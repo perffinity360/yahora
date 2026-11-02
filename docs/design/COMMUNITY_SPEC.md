@@ -1,6 +1,11 @@
 # Community — design spec (Phase 7)
 
-**Version 1 · 29 October 2026 · for the website and the app**
+**Version 2 · 2 November 2026 · for the website and the app**
+
+> **Changed in version 2:** each feed shows only its own posts, so the scope chip is gone
+> (§1.1, §3), and a covered post shows only a notice, with no "View anyway" (§3.1). The
+> website redesign (runbook Block V-P) will update this spec again; whatever it changes here
+> is what both the website and the app follow.
 
 The website and the app are built from this one file, so they look and behave the same. The
 runbook's Claude Code prompts point here for every size, word and state.
@@ -32,7 +37,8 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
         left: My campus                 ↑ divider        right: country or Global
 ```
 
-- **Left panel, "My campus":** the campus feed. Its header shows your campus name.
+- **Left panel, "My campus":** the campus feed. Its header shows your campus name. It shows
+  **only campus posts**: a post appears only in the feed it was posted to, never in another.
 - **Right panel:** a dropdown (§1.3) picks a country or 🌍 Global. Next to it is a
   **Hot · New** switch. Hot is the default (ranking: runbook §1.3).
 - **The divider** (react-resizable-panels):
@@ -174,7 +180,6 @@ tappable. Nothing on this card may sound like a punishment.
 
 ```
 (avatar 40)  Rahul Verma  @rahul.verma · IIITDM Kurnool · 2h        ⋯
-             [🌍 Global]                       ← scope chip, campus feed only
              Text of the post, Inter 400 15/22, black-soft. Long posts fold after 6
              lines with "See more"…
              ┌───────────── photos (1–3) or GIF ─────────────┐
@@ -187,8 +192,6 @@ tappable. Nothing on this card may sound like a punishment.
   mutedText. Tapping the avatar or the name opens the profile.
 - **Time:** `now`, `5m`, `2h`, `3d`; then `12 Oct`, or `12 Oct 2025` for an earlier year.
   Reuse the message time formatter.
-- **Scope chip:** only in the campus feed, on posts that went to a country or to Global:
-  `🇮🇳 India` or `🌍 Global`. Inter 500 11, on inputBg, radius 999, padding 2 / 8.
 - **Text:** links are tappable; there are no link previews. A long post folds after
   **6 lines** behind `See more`, which expands it in place.
 - **Photos** (radius 12, 2 px gaps; tapping one opens the existing image viewer):
@@ -210,7 +213,7 @@ tappable. Nothing on this card may sound like a punishment.
 | State | Who sees what |
 |---|---|
 | `Being checked` (held) | Only the author, on their Posts tab, with a grey label. |
-| **Under review** (reported) | It's taken out of every feed. On the profile or a direct link, others see a cover: `This post was reported by several students and is being reviewed.` plus a **View anyway** button. The author sees the post with the label `Under review`. |
+| **Under review** (reported) | It's taken out of every feed and off the author's profile for everyone else. A direct link shows only `This post was reported by several students and is being reviewed.` — no text, no photos, no button to view it. A covered reply disappears from its thread. The author still sees the post, labelled `Under review`. |
 | Deleted | It disappears everywhere. A direct link shows `This post was deleted.` |
 | Removed by Yahora (Phase 9) | A direct link shows `This post was removed for breaking the Community Guidelines.` |
 
@@ -407,7 +410,7 @@ A **Posts** tab sits next to the existing tabs:
 
 - It uses the same post cards.
 - Your own Posts tab also shows your `Being checked` and `Under review` posts, with their
-  labels. Nobody else sees those there.
+  labels. Nobody else sees those posts anywhere.
 
 ## 11. The demo
 
