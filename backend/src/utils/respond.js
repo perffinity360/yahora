@@ -33,6 +33,11 @@ const RAISED_STATUS = {
   BUYER_IS_SELLER: 400,
   BUYER_NOT_ON_CAMPUS: 400,
   PURCHASE_NOT_FOUND: 404,
+  // Phase 7 — the community and message reactions
+  POST_NOT_FOUND: 404,
+  NOT_ALLOWED_HERE: 403,
+  CANNOT_REPORT_OWN: 400,
+  MESSAGE_DELETED: 400,
 };
 
 /** Maps a Postgres/Supabase error to our standard response. */
