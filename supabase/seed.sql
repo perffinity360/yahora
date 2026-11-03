@@ -1534,3 +1534,84 @@ values
          'https://thumb.wikimedia.org/wikipedia/commons/thumb/0/09/GandM_Flare_DXM_bat-Purist_156g_ball.jpg/960px-GandM_Flare_DXM_bat-Purist_156g_ball.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'],
    'available', 'NIET Sports Ground', 'Poor', 127, now() - interval '52 days')
 on conflict do nothing;
+
+
+-- ============ Layer 7: the community (Phase 7, Block V-B) ============
+-- A campus in another country, for testing the view-only rule: Lena can read and
+-- react to India posts but can't reply to them (runbook §1.1). The .test domain
+-- can never receive an OTP, so she logs in with her password.
+insert into universities (id, name, domain, country_code, is_active) values
+  ('a0000000-0000-4000-8000-000000000006', 'TU Munich (test)', 'tum.test', 'DE', true)
+on conflict (domain) do nothing;
+
+select pg_temp.seed_user('b0000000-0000-4000-8000-000000000018', 'lena@tum.test', 'password123', 'Lena Fischer', 'lena.test', 'a0000000-0000-4000-8000-000000000006');
+
+-- trg_prepare_post fills the campus, country and world, and a reply's scope, so
+-- nothing here sets them. Fixed ids, prefix 70000000. Every post is more than 2
+-- hours old, so the rate limits start empty for anyone testing them.
+insert into posts (id, author_id, scope, content, image_urls, gif, created_at) values
+  -- Campus: IIITDM Kurnool
+  ('70000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000003', 'campus',
+   'Lost my calculator near Block C. Casio fx-991ES, my name is scratched on the back. Please message me if you find it.',
+   '{}', null, now() - interval '3 hours'),
+  ('70000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000001', 'campus',
+   E'Things I wish someone had told me in first year:\n\n1. Buy your textbooks from seniors, never new.\n2. The library is empty before 9.\n3. The Block C canteen does better dosa than the main one.\n4. Join one club, not five.\n5. Attendance matters more than you think.\n6. Sleep. Actually sleep.\n7. Call home on Sundays.\n\nAnyone want to add to this?',
+   '{}', null, now() - interval '20 hours'),
+  ('70000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000002', 'campus',
+   'Clearing out my desk before the semester ends. All of this is going cheap, message me.',
+   array[
+     'https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Casio_fx-991ES_Calculator_New.jpg/960px-Casio_fx-991ES_Calculator_New.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+     'https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/A_modern_Cricket_bat_%28back_view%29.jpg/960px-A_modern_Cricket_bat_%28back_view%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail',
+     'https://thumb.wikimedia.org/wikipedia/commons/thumb/3/34/HP_Pavilion_15_cs3095nr.jpg/960px-HP_Pavilion_15_cs3095nr.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail'
+   ], null, now() - interval '30 hours'),
+  -- Campus: NIET Greater Noida
+  ('70000000-0000-4000-8000-000000000004', 'b0000000-0000-4000-8000-000000000004', 'campus',
+   'Me when the mess announces paneer on a Tuesday',
+   '{}', '{"provider":"klipy","id":"seed-gif-1","url":"https://upload.wikimedia.org/wikipedia/commons/2/2c/Rotating_earth_%28large%29.gif","preview_url":"https://upload.wikimedia.org/wikipedia/commons/2/2c/Rotating_earth_%28large%29.gif","width":400,"height":400}',
+   now() - interval '8 hours'),
+  ('70000000-0000-4000-8000-000000000005', 'b0000000-0000-4000-8000-000000000005', 'campus',
+   'Is the Knowledge Park bus running on Saturday, or do we need to book a cab?',
+   '{}', null, now() - interval '50 hours'),
+  -- India
+  ('70000000-0000-4000-8000-000000000006', 'b0000000-0000-4000-8000-000000000001', 'country',
+   'Any good hackathons in November? Looking for a team too.',
+   '{}', null, now() - interval '5 hours'),
+  ('70000000-0000-4000-8000-000000000007', 'b0000000-0000-4000-8000-000000000004', 'country',
+   'Which college has the best fest in India, and why is it yours?',
+   '{}', null, now() - interval '14 hours'),
+  ('70000000-0000-4000-8000-000000000008', 'b0000000-0000-4000-8000-000000000003', 'country',
+   'Summer internship season has started. What actually helped you get a call back?',
+   '{}', null, now() - interval '40 hours'),
+  ('70000000-0000-4000-8000-000000000009', 'b0000000-0000-4000-8000-000000000005', 'country',
+   'Train or flight for the Diwali trip home? Tickets are already gone everywhere.',
+   '{}', null, now() - interval '65 hours'),
+  -- Global
+  ('70000000-0000-4000-8000-000000000010', 'b0000000-0000-4000-8000-000000000018', 'global',
+   'Exchange students: what is your favourite Indian dish?',
+   '{}', null, now() - interval '6 hours'),
+  ('70000000-0000-4000-8000-000000000011', 'b0000000-0000-4000-8000-000000000002', 'global',
+   'What is one thing about student life in your country that surprises people?',
+   '{}', null, now() - interval '18 hours'),
+  ('70000000-0000-4000-8000-000000000012', 'b0000000-0000-4000-8000-000000000005', 'global',
+   'Best free tool you use for studying? Mine is a plain paper notebook.',
+   '{}', null, now() - interval '36 hours'),
+  ('70000000-0000-4000-8000-000000000013', 'b0000000-0000-4000-8000-000000000001', 'global',
+   'Night owl or early bird? Trying to work out when this feed is awake.',
+   '{}', null, now() - interval '60 hours');
+
+-- Replies in a separate statement, so their parents already exist for the trigger.
+insert into posts (id, author_id, parent_post_id, content, created_at) values
+  ('70000000-0000-4000-8000-000000000014', 'b0000000-0000-4000-8000-000000000002', '70000000-0000-4000-8000-000000000001',
+   'I saw one on the bench outside the Block C lab this morning. Check with the lab assistant.', now() - interval '150 minutes'),
+  ('70000000-0000-4000-8000-000000000015', 'b0000000-0000-4000-8000-000000000003', '70000000-0000-4000-8000-000000000002',
+   '8. Back up your project before the night it is due.', now() - interval '19 hours'),
+  ('70000000-0000-4000-8000-000000000016', 'b0000000-0000-4000-8000-000000000004', '70000000-0000-4000-8000-000000000006',
+   'Smart India Hackathon is on the 14th! We have a team of three at NIET and need one more.', now() - interval '4 hours'),
+  ('70000000-0000-4000-8000-000000000017', 'b0000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000010',
+   'Dosa, every time. Come to Kurnool and we will settle this.', now() - interval '5 hours'),
+  ('70000000-0000-4000-8000-000000000018', 'b0000000-0000-4000-8000-000000000004', '70000000-0000-4000-8000-000000000010',
+   'Chole bhature, and I will not be taking questions.', now() - interval '4 hours');
+
+-- Every post was inserted with the score of a brand new post. This gives them
+-- their real one, so Hot is right from the first reset, not 5 minutes later.
+select public.refresh_hot_scores();
