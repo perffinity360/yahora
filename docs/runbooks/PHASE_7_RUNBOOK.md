@@ -703,21 +703,33 @@ the switcher instead, exactly like the app.
 
 The same safe order as 6B: **expand the database, then use it, then contract.**
 
-1. **Day 5 — the database.** All four migrations are additive:
+1. **Day 5 — the database.** Three of the four migrations only add things:
    - the `posts` table is reworked, but no code uses it yet;
    - messages get two new optional fields;
-   - demo usernames get a rule.
+   - demo usernames get a rule. **This one changes something live**, for demo accounts only
+     (see the in-between states below).
 
-   The live website keeps working unchanged.
+   The live website keeps working unchanged for real students.
 2. **Days 6–8 — the backend.** First the messages, auth and universities changes (V-C), then
    the posts and reports API (N-B, N-C). Each only adds routes or fields.
 3. **Day 13 — M1, the website community.**
 4. **Day 18 — M2, reactions and GIFs in messages on the website, and the demo onboarding.**
 
-One small in-between state: from day 6, demo accounts already get `demo.` names, but the old
-onboarding screen still shows an editable username field until M2. If a demo user changes the
-name, the database refuses. Demo users can press **Skip for now**, as they can today. This is
-pre-launch, so it harms nobody.
+Two small in-between states, both for demo accounts only. This is pre-launch, so they harm
+nobody:
+
+| When | What a new demo account sees | Why |
+|---|---|---|
+| **The production push → V-C live** (a day or two) | It gets no name at login, and the onboarding screen refuses any name that doesn't start with `demo.`, as `INVALID_FORMAT`. Its suggestions are refused too. **Skip for now** works, as it does today, and a name like `demo.anything` is accepted | The database rule is live, but `demoLogin` doesn't generate a name until V-C |
+| **V-C live → M2** | It gets a `demo.` name at login. The old screen still shows the username field, and its live check refuses a name that doesn't start with `demo.`. Whatever name is sent, the server keeps the generated one | The server is ready, but the screens change in N-E and V-F |
+
+A refused name costs the student nothing: `is_username_available` answers before
+`completeOnboarding` sets the password, so their session survives. To keep the first window
+short, merge V-C as soon as it's reviewed.
+
+**The personas keep readable names.** The push renames `rahul.sharma` to `demo.rahul.sharma`, and
+from V-C on `seedDemo.js` writes the same names, so nothing needs re-seeding for the names to
+look right.
 
 ## 1.15 Branches: one short branch per block (recap from 6B)
 
@@ -960,7 +972,7 @@ each.
 
 | When | Who | What | Why it's safe at that moment |
 |---|---|---|---|
-| Day 5 | Vishwajeet | Push the 4 migrations (V-B, by hand) | Only adds things; no code uses `posts` yet |
+| Day 5 | Vishwajeet | Push the 4 migrations (V-B, by hand) | Real students notice nothing, because no code uses `posts` yet. Demo accounts can't choose a plain username until V-C, and can press **Skip for now** (§1.14) |
 | Day 5 | Vishwajeet | Add `OPENAI_API_KEY` to Render | N-B (day 7) needs it the moment it merges |
 | Day 6 | Vishwajeet | Merge V-P (the redesign) | It only changes the community page, which still runs on sample data |
 | Day 6–7 | Vishwajeet | Merge V-C | Adds routes and fields; old clients ignore them |
@@ -1336,6 +1348,10 @@ curl -s -X POST "$API/auth/demo-login" | python3 -c "import sys,json; print(json
 # 5. Campuses now carry a country
 curl -s "$API/universities" | python3 -c "import sys,json; print(json.load(sys.stdin)[0].get('country_code'))"
 #    → IN
+
+# 6. The demo seed runs again, with demo. names
+node backend/scripts/seedDemo.js
+#    → finishes without an error. In Studio, the demo campus's users are demo.rahul.sharma and so on
 ```
 
 👁️ And in the app: send a message from the POCO to Neeraj's test account. Nothing looks
@@ -1827,19 +1843,24 @@ Rules for all four files:
 
 ════ MIGRATION 4 — demo_usernames ════
 1. Rename every demo-campus user whose username is set and doesn't start
-   with 'demo.' to 'demo.' || substr(md5(id::text), 1, 8). Delete the
+   with 'demo.' to 'demo.' || username, so rahul.sharma becomes
+   demo.rahul.sharma. If that's over 25 characters or already taken, use
+   'demo.' || substr(md5(id::text), 1, 8) instead. Delete the
    username_history rows of demo-campus users (frees their old names).
-2. A trigger BEFORE INSERT OR UPDATE OF username, university_id ON users,
-   when username is not null:
-   - demo campus → the name must start with 'demo.', else USERNAME_RESERVED;
-   - real campus → the name must not match '^demo[._-]' (ignoring case),
-     else USERNAME_RESERVED.
+2. username_breaks_world_rule(p_username text, p_university_id uuid) returns
+   boolean, the one statement of the rule. A NULL campus counts as real:
+   - demo campus → true unless the name starts with 'demo.';
+   - any other → true if the name matches '^demo[._-]' (ignoring case).
+   Grant to service_role only: the backend calls it to name a refusal (CC-V3).
+   A trigger BEFORE INSERT OR UPDATE OF username, university_id ON users,
+   when username is not null, raises USERNAME_RESERVED when it returns true.
    Look at how the existing username triggers are declared (some run when
    GoTrue inserts users, which needs SECURITY DEFINER — a lesson from
    Phase 2) and declare this one the same way. Say where it runs relative
    to them.
-3. Update is_username_available() so names matching '^demo[._-]' are
-   unavailable to real users, mirroring the trigger. Show me the diff.
+3. Update is_username_available() to use the same function, with the campus
+   of p_user_id, so demo names are unavailable to real users and a plain
+   name is unavailable to a demo user. Show me the diff.
 4. generate_demo_username() returns text:
    - 'demo.' + an adjective + '.' + an animal, from two small lists of
      about 40 short lowercase words each, always ≤ 25 characters;
@@ -2023,16 +2044,40 @@ working before they are updated.
    reading the code, and say so.
 
 4. auth:
-   - demoLogin: set the new user's username from
-     supabase.rpc('generate_demo_username'), in the same upsert that creates
-     the users row. Change nothing else in the flow.
-   - completeOnboarding: for demo users, ignore a username in the body
-     (keep the generated one) instead of failing.
+   - demoLogin: give the new user a username from
+     supabase.rpc('generate_demo_username'). NOT in the existing upsert: it
+     uses ignoreDuplicates (ON CONFLICT DO NOTHING) and on_auth_user_created
+     has always made the row by then, so a username there would be silently
+     thrown away. Keep that upsert as it is, then UPDATE the row's username.
+     If the UPDATE fails with 23505 (two logins drew the same name), generate
+     again, up to 3 tries. Read the row back AFTER the UPDATE, so
+     userProfile.username is set. Change nothing else in the flow.
+   - completeOnboarding: for a demo user (their campus has is_demo = true),
+     ignore any username in the body and don't require one, because the N-E
+     and V-F screens stop sending it. Skip the is_username_available check
+     and leave username out of the UPDATE, so the generated name stays. The
+     password-equals-username check compares with the stored name. Everything
+     else about the flow stays the same for demo and real users.
+   - classifyUnavailableUsername: a real student asking for demo.x has to get
+     USERNAME_RESERVED (API.md, Appendix B), but today it falls through to
+     INVALID_FORMAT. After the three lookups, and before that final return,
+     call supabase.rpc('username_breaks_world_rule', { p_username,
+     p_university_id: the caller's campus }) and return USERNAME_RESERVED when
+     it's true. Don't write the demo. rule in JavaScript (backend/CLAUDE.md).
 
 5. university: GET /api/universities also returns country_code.
 
-6. backend/scripts/seedDemo.js. Its 25 community posts were written for the
-   old posts table. Update them to the Phase 7 shape:
+6. backend/scripts/seedDemo.js. Two things stop it running since V-B.
+   First, the personas' usernames: trg_username_world_prefix refuses a
+   demo-campus name without 'demo.', so rahul.sharma fails the upsert and the
+   whole script stops. Put 'demo.' in front of every DUMMY_USERS username
+   (demo.rahul.sharma, demo.priya_verma), the same names V-B's rename gave
+   them in production. Make assertValidHandles require the prefix too, so a
+   new persona fails with a readable message before anything is written. The
+   20-character limit can stay: the longest is 18 with the prefix. Update the
+   comment above DUMMY_USERS and leave the login emails as they are.
+   Second, its 25 community posts were written for the old posts table.
+   Update them to the Phase 7 shape:
    - a mix of campus, country and global scope;
    - image_urls instead of image_url;
    - don't send university, country or is_demo — the trigger fills them;
@@ -2081,6 +2126,13 @@ working before they are updated.
    Under "What NOT to do yet", write: "A reaction arrives as a Realtime UPDATE
    of the message row (its reactions field). Merge it by id, exactly as for
    tombstones."
+   Also ask Neeraj for one change in his module, because user/ isn't mine:
+   "In user.controller.js, classifyUnavailableUsername answers INVALID_FORMAT
+   when a real student asks for demo.x. Before that final return, call
+   rpc('username_breaks_world_rule', { p_username, p_university_id: the
+   viewer's campus or null }) and return 'RESERVED' when it's true. It also
+   covers a demo account asking for a plain name. Don't write the rule in
+   JavaScript."
 
 HARD CONSTRAINTS
 - Touch only backend/src/modules/messages/*,
@@ -2095,6 +2147,12 @@ VERIFY AFTER — report each
 1. node --check on every changed file.
 2. The route list in messages.routes.js, in order.
 3. Remind me of the curl checks in checkpoint V-C.
+4. How you tested these against the local API: demo-login returns a
+   username; a demo onboarding with no username, and one with a different
+   username, both keep the generated name; a real student's onboarding with
+   demo.x answers USERNAME_RESERVED and leaves their password unchanged.
+5. node backend/scripts/seedDemo.js against the local database finishes, and
+   every demo-campus username starts with demo.
 ```
 
 ## CC-V4a — The app community, part 1: the tab, the feeds, the post card
