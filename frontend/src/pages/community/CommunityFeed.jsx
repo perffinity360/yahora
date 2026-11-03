@@ -8,9 +8,9 @@
 // mount: cursors belong to one list and one sort (runbook Appendix A), and a
 // remount is the simplest way never to mix two.
 //
-// `patches` holds reaction answers by post id. A post can sit in two loaded
-// feeds at once (a Global post by a classmate is in Campus too), so the
-// answer lives above both feeds and each one lays it over its own copy.
+// `patches` holds reaction answers by post id. They live above the feeds, so a
+// reaction survives switching feeds and coming back (the feed remounts), and
+// each feed lays them over its own copy.
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AvatarImg from "../../components/AvatarImg/AvatarImg";
@@ -41,7 +41,6 @@ export default function CommunityFeed({
   composerText,
   emptyText,
   viewOnlyName,
-  countries,
   patches,
   onReact,
 }) {
@@ -146,8 +145,6 @@ export default function CommunityFeed({
             <PostCard
               key={p.id}
               post={p}
-              showScopeChip={kind === "campus"}
-              countries={countries}
               onReact={onReact}
             />
           ))}

@@ -21,11 +21,17 @@ import styles from "./ConfirmDialog.module.css";
  * confirmLabel, Icon (a lucide component), imageUrl (the listing's first
  * photo; none → a gradient medallion), tone ("brand" | "danger"),
  * busy + busyLabel (the confirm's text while its request runs), error.
+ * Optional, for the community's "Post this?" (COMMUNITY_SPEC §2.3):
+ * cancelLabel (default "Cancel") and primary ("confirm", the default, or
+ * "cancel" — the cancel button then takes the gradient and the focus, and
+ * the confirm one the plain look). The defaults keep every other dialog as is.
  */
 export default function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  cancelLabel = "Cancel",
+  primary = "confirm",
   Icon,
   imageUrl,
   tone = "brand",
@@ -36,6 +42,8 @@ export default function ConfirmDialog({
   onCancel,
 }) {
   const confirmRef = useRef(null);
+  const cancelRef = useRef(null);
+  const cancelIsPrimary = primary === "cancel";
   const toneClass = tone === "danger" ? styles.danger : styles.brand;
 
   useEffect(() => {
@@ -46,10 +54,11 @@ export default function ConfirmDialog({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onCancel, busy]);
 
-  // Keyboard users land on the action; Enter confirms, Esc cancels.
+  // Keyboard users land on the primary button (normally the action, so Enter
+  // confirms); Esc cancels.
   useEffect(() => {
-    confirmRef.current?.focus({ preventScroll: true });
-  }, []);
+    (cancelIsPrimary ? cancelRef : confirmRef).current?.focus({ preventScroll: true });
+  }, [cancelIsPrimary]);
 
   return createPortal(
     <div className={styles.scrim} onClick={() => !busy && onCancel()}>
@@ -89,16 +98,17 @@ export default function ConfirmDialog({
         <div className={styles.actions}>
           <button
             type="button"
-            className={`${styles.button} ${styles.cancel}`}
+            ref={cancelRef}
+            className={`${styles.button} ${cancelIsPrimary ? styles.confirm : styles.cancel}`}
             onClick={onCancel}
             disabled={busy}
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"
             ref={confirmRef}
-            className={`${styles.button} ${styles.confirm}`}
+            className={`${styles.button} ${cancelIsPrimary ? styles.cancel : styles.confirm}`}
             onClick={onConfirm}
             disabled={busy}
           >

@@ -232,7 +232,11 @@ export function sampleFeed(kind, { country, sort = "new", cursor = null } = {}) 
   let list;
   let canPost = true;
   if (kind === "campus") {
-    list = POSTS.filter((p) => p.author_university === SAMPLE_VIEWER.university).sort(byNew);
+    // One post, one feed (decision of 2 November): only campus posts of the
+    // viewer's campus, never their country or Global posts.
+    list = POSTS.filter(
+      (p) => p.scope === "campus" && p.author_university === SAMPLE_VIEWER.university,
+    ).sort(byNew);
   } else if (kind === "country") {
     list = POSTS.filter((p) => p.scope === "country" && p.country_code === country);
     list.sort(sort === "hot" ? byHot : byNew);

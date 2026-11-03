@@ -13,13 +13,7 @@ import ReactionBar from "../ReactionBar/ReactionBar";
 import ReactionSummary from "../ReactionSummary/ReactionSummary";
 import PostPhotos from "./PostPhotos";
 import PostGif from "./PostGif";
-import {
-  countryName,
-  flagEmoji,
-  formatCount,
-  formatPostTime,
-  splitLinks,
-} from "../../../utils/community";
+import { formatCount, formatPostTime, splitLinks } from "../../../utils/community";
 import styles from "./PostCard.module.css";
 
 /* Spec §3 "Text": folds after POST_FOLD_LINES (6, set in the CSS clamp) behind
@@ -70,18 +64,10 @@ function PostText({ content }) {
   );
 }
 
-function PostCard({ post, showScopeChip = false, countries, onReact }) {
+function PostCard({ post, onReact }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const profile = `/user/${post.author_id}`;
   const time = formatPostTime(post.created_at);
-
-  // Spec §3 "Scope chip": campus feed only, on posts that went further.
-  const chip =
-    showScopeChip && post.scope !== "campus"
-      ? post.scope === "global"
-        ? "🌍 Global"
-        : `${flagEmoji(post.country_code)} ${countryName(post.country_code, countries)}`
-      : null;
 
   const react = (emoji) => onReact(post.id, emoji);
 
@@ -119,8 +105,6 @@ function PostCard({ post, showScopeChip = false, countries, onReact }) {
             <Ellipsis size={18} aria-hidden="true" />
           </button>
         </header>
-
-        {chip && <span className={styles.chip}>{chip}</span>}
 
         {post.content && <PostText content={post.content} />}
 

@@ -110,17 +110,6 @@
   outline-offset: 1px;
 }
 
-/* Spec §3 "Scope chip": Inter 500 11, on inputBg, radius 999, padding 2 / 8. */
-.chip {
-  --chip-input-bg: #F3F0EF; /* inputBg */
-  align-self: flex-start;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--chip-input-bg);
-  font: 500 11px/16px "Inter", sans-serif;
-  color: var(--black-soft);
-}
-
 /* ── Text ──────────────────────────────────────────────────────────────── */
 
 .text {
