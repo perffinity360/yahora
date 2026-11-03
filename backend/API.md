@@ -3253,8 +3253,9 @@ covered ones, except your own. A profile isn't a feed, so this list mixes all th
   - scope: string, optional, default `campus` — `campus` | `country` | `global`. **Ignored for
     replies.** A country post always goes to the author's own country
   - parent_post_id: uuid, optional — makes it a reply
-  - gif: JSON string, optional — the GIF object: `provider` `klipy`, `id`, an https `url`, optional
-    https `preview_url`, positive `width` and `height`
+  - gif: JSON string, optional — the GIF object: `provider` `klipy`, a non-empty string `id`, an
+    https `url`, optional https `preview_url`, and `width` and `height` as positive integers. Only
+    those six keys are stored
   - images: up to 3 files, JPEG / PNG / WebP, 5 MB each. Not allowed with a GIF or on a reply
   - confirm: `true` when re-sending after a nudge
 **201:** `{ "post": PostItem }`
@@ -3271,7 +3272,8 @@ helplines (spec §2.4), not a plain message
 **400:** `{ "error": "INVALID_FILE_TYPE" }` — the declared type is wrong, or the file isn't a JPEG, PNG
 or WebP that reads all the way through. Test each photo with `isReadablePhoto(file)` from
 `utils/moderation.js`; the declared type proves nothing
-**400:** `{ "error": "INVALID_FORMAT" }` — a bad `scope` or `parent_post_id`
+**400:** `{ "error": "INVALID_FORMAT" }` — a bad `scope` or `parent_post_id`, a `content` that
+isn't a single text field, or a file sent under a field other than `images`
 **400:** `{ "error": "NESTED_REPLY_NOT_ALLOWED" }` — replying to a reply
 **401:** `{ "error": "UNAUTHORIZED" }`
 **403:** `{ "error": "NOT_ALLOWED_HERE" }` — replying in a feed you can only view
