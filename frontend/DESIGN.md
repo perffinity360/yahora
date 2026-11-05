@@ -36,8 +36,11 @@ the variables in `src/styles/global.css`.
 - **Floating chrome.** Headers, switchers and composers float on glass (white at about 74%, blur 14),
   and content passes underneath. It feels more spacious than a solid bar.
 - Radii stay small on working surfaces: panels 8, menus and dialogs 10–12. Pills are for small actions.
-- Text on a patterned background needs something behind it. On trial on the community page: frosted glass
-  (white at about 32%, blur 6) on a pseudo-element, with its edges faded by a mask so no rectangle shows.
+- **Text on a patterned background gets a halo,** the way maps keep labels readable: a few stacked
+  `text-shadow`s with no offset (1–6 px), in the ground's own light colour. The letters clear the pattern
+  from just around themselves. Frosted glass behind the text was tried first and still looked busy.
+- On a busy background, make the structure stronger too: a line between rows you can actually see, and
+  one left edge for everything in a row.
 
 ## Icons over words
 
@@ -48,9 +51,10 @@ the variables in `src/styles/global.css`.
 
 ## Using width well
 
-- **A post's avatar is a drop cap, not a column.** Float it in the corner so only the first lines sit beside
-  it. Text wraps below it, and media gets the full width. Short nested rows, like replies, are the exception:
-  avatar in its own column, and every line starts in the same place.
+- **An avatar gets a column of its own.** Everything in the row, text, media, actions and nested replies,
+  starts at one left edge. We tried a drop cap (text wrapping under the avatar); it saved width but made
+  rows hard to scan.
+- **Thin lines people can point at** get a hit area wider than the line, and respond on hover.
 - **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
   context already says, such as a campus name in that campus's own feed.
 - **Components respond to their container, not the window.** Use `@container` and `cqi`, because a panel

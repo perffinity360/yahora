@@ -310,7 +310,7 @@ function WideLayout({
           collapsible
           collapsedSize={LAYOUT_COLLAPSED_PX}
           onResize={(size) => setLeftCollapsed(isCollapsed(size))}
-          className={styles.panel}
+          className={`${styles.panel} ${styles.panelLeft}`}
           style={{ overflow: "hidden" }}
         >
           {leftCollapsed && (
@@ -370,7 +370,11 @@ function WideLayout({
             onPointerUp={onHubUp}
             onPointerCancel={onHubUp}
           >
-            <AvatarImg src={viewer.avatar} name={viewer.name} size={48} className={styles.hubAvatar} />
+            <span className={`${styles.hubHalf} ${styles.hubHalfLeft}`} />
+            <span className={`${styles.hubHalf} ${styles.hubHalfRight}`} />
+            <span className={styles.hubPhoto}>
+              <AvatarImg src={viewer.avatar} name={viewer.name} size={41} className={styles.hubAvatar} />
+            </span>
             <span className={`${styles.hubBadge} ${styles.hubBadgeCampus}`}>
               <GraduationCap size={14} />
             </span>
@@ -388,7 +392,7 @@ function WideLayout({
           collapsible
           collapsedSize={LAYOUT_COLLAPSED_PX}
           onResize={(size) => setRightCollapsed(isCollapsed(size))}
-          className={styles.panel}
+          className={`${styles.panel} ${styles.panelRight}`}
           style={{ overflow: "hidden" }}
         >
           {rightCollapsed && (

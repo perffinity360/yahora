@@ -2,16 +2,13 @@
 //
 // The replies under a post — docs/design/COMMUNITY_SPEC.md §4. The most-liked
 // replies show by default (`post.top_replies`), then "Show more replies" loads
-// the rest in place, oldest first. One rail runs down from the post, curving
-// into each reply's avatar.
+// the next REPLIES_PAGE_SIZE in place, oldest first, and comes back while there
+// are more. One rail runs down from the post, curving into each reply's avatar.
 //
 //   · a reply can only be liked (❤️, the default reaction), not given any emoji;
 //   · the post's own author gets a highlighted username;
 //   · a reply shows the student's username; the campus only if there is room
 //     (the @container rule in the CSS) and never in the campus feed.
-//
-//   · the text is not a drop cap: unlike a post, a reply keeps its avatar in a
-//     column of its own, so every line starts at the same place.
 //
 // `moreRequest` is a counter: when it goes up, the next page loads. It lets the
 // post's reply button open the thread where the student can't reply.
@@ -42,11 +39,11 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact }
 
   return (
     <li className={styles.reply}>
+      <span className={styles.rail} aria-hidden="true" />
       <Link to={profile} className={styles.replyAvatarLink} aria-label={reply.author_username} tabIndex={-1}>
         <AvatarImg src={reply.author_avatar} name={reply.author_name} size={22} className={styles.replyAvatar} />
       </Link>
 
-      {/* Its own column: every line of the reply starts at the same place. */}
       <div className={`${styles.replyBody} ${styles.readable}`}>
         <header className={styles.replyHeader}>
           <Link
@@ -161,6 +158,7 @@ export default function PostThread({
       ))}
       {hasMore && (
         <li className={styles.threadMore}>
+          <span className={styles.rail} aria-hidden="true" />
           <button type="button" className={styles.showMore} onClick={loadMore} disabled={loading}>
             {loading ? (
               <Loader2 size={13} className={styles.spinner} aria-hidden="true" />

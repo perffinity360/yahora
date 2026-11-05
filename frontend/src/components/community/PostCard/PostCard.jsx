@@ -1,8 +1,8 @@
 // frontend/src/components/community/PostCard/PostCard.jsx
 //
 // One post in a feed — docs/design/COMMUNITY_SPEC.md §3. A flat row split from
-// the next by a hairline, with the avatar as a drop cap: it floats in the corner
-// and everything below its height runs the post's full width. Takes a PostItem
+// the next by a line, with the avatar in a column of its own, so the text, media,
+// actions and replies all hang off one left edge. Takes a PostItem
 // (runbook Appendix A) exactly as the API sends it, and reports reactions
 // through onReact(postId, emoji | null); it never changes the post itself.
 //
@@ -62,58 +62,63 @@ function PostCard({
         <AvatarImg src={post.author_avatar} name={post.author_name} size={28} className={styles.avatar} />
       </Link>
 
-      {/* The frosted layer sits behind the author line and the text (spec §3). */}
-      <div className={styles.readable}>
-        <header className={styles.header}>
-          <Link to={profile} className={styles.name}>
-            {post.author_name}
-          </Link>
-          <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
-          {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{post.author_university}</span>}
-          {time && (
-            <Link
-              to={`/post/${post.id}`}
-              className={`${styles.meta} ${styles.time}`}
-              title={new Date(post.created_at).toLocaleString()}
-            >
-              <time dateTime={post.created_at}>{time}</time>
+      {/* The top of the thread's line, shown only when the post has a thread. */}
+      <span className={styles.stem} aria-hidden="true" />
+
+      <div className={styles.postBody}>
+        {/* The text's halo keeps it readable on the wallpaper (spec §3). */}
+        <div className={styles.readable}>
+          <header className={styles.header}>
+            <Link to={profile} className={styles.name}>
+              {post.author_name}
             </Link>
-          )}
-          {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
-          <button type="button" className={styles.moreBtn} aria-label="More options">
-            <Ellipsis size={15} aria-hidden="true" />
-          </button>
-        </header>
+            <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
+            {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{post.author_university}</span>}
+            {time && (
+              <Link
+                to={`/post/${post.id}`}
+                className={`${styles.meta} ${styles.time}`}
+                title={new Date(post.created_at).toLocaleString()}
+              >
+                <time dateTime={post.created_at}>{time}</time>
+              </Link>
+            )}
+            {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
+            <button type="button" className={styles.moreBtn} aria-label="More options">
+              <Ellipsis size={15} aria-hidden="true" />
+            </button>
+          </header>
 
-        {post.content && <PostText content={post.content} />}
-      </div>
+          {post.content && <PostText content={post.content} />}
+        </div>
 
-      {post.image_urls?.length > 0 && (
-        <PostPhotos urls={post.image_urls} authorName={post.author_name} onOpen={setLightboxIndex} />
-      )}
-
-      {post.gif && <PostGif gif={post.gif} />}
-
-      <div className={styles.actions}>
-        {post.reactions_total > 0 && (
-          <ReactionSummary
-            counts={post.reaction_counts}
-            total={post.reactions_total}
-            mine={post.viewer_reaction}
-            onReact={react}
-          />
+        {post.image_urls?.length > 0 && (
+          <PostPhotos urls={post.image_urls} authorName={post.author_name} onOpen={setLightboxIndex} />
         )}
-        <ReactionBar reaction={post.viewer_reaction} onReact={react} />
-        <button
-          type="button"
-          className={styles.replyPill}
-          aria-label={canReply ? `${countWords}. Write a reply` : `${countWords}. Show them`}
-          title={canReply ? "Reply" : "Replies"}
-          onClick={onReplyPress}
-        >
-          <MessageCircle size={14} aria-hidden="true" />
-          {count > 0 && <span>{formatCount(count)}</span>}
-        </button>
+
+        {post.gif && <PostGif gif={post.gif} />}
+
+        <div className={styles.actions}>
+          {post.reactions_total > 0 && (
+            <ReactionSummary
+              counts={post.reaction_counts}
+              total={post.reactions_total}
+              mine={post.viewer_reaction}
+              onReact={react}
+            />
+          )}
+          <ReactionBar reaction={post.viewer_reaction} onReact={react} />
+          <button
+            type="button"
+            className={styles.replyPill}
+            aria-label={canReply ? `${countWords}. Write a reply` : `${countWords}. Show them`}
+            title={canReply ? "Reply" : "Replies"}
+            onClick={onReplyPress}
+          >
+            <MessageCircle size={14} aria-hidden="true" />
+            {count > 0 && <span>{formatCount(count)}</span>}
+          </button>
+        </div>
       </div>
 
       <PostThread

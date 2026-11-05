@@ -1,15 +1,20 @@
 /* frontend/src/components/community/PostCard/PostCard.module.css
    docs/design/COMMUNITY_SPEC.md §3 (the post) and §4 (its replies). */
 
-/* ── A post: a flat row with the avatar as a drop cap ──────────────────── */
+/* ── A post: a flat row, the avatar in a column of its own ─────────────── */
 
+/* Everything in the post hangs off one left edge, the text column, so the eye can
+   find what belongs to what over a busy wallpaper. */
 .post {
   --text-line: 20px;
-  display: flow-root; /* holds the floated avatar */
+  --thread-rail: var(--community-rail);
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: 8px;
   /* The row fills the panel. Its content stops at 860 px, centred, so a panel
      opened full width still has readable lines. */
-  padding: 9px max(12px, calc((100cqi - 860px) / 2)) 8px;
-  border-bottom: 1px solid var(--community-hairline);
+  padding: 11px max(12px, calc((100cqi - 860px) / 2)) 9px;
+  border-bottom: 1px solid var(--community-post-rule);
   transition: background-color 180ms var(--community-ease);
   animation: postIn 320ms var(--community-ease) backwards;
   animation-delay: calc(var(--post-i, 0) * 28ms);
@@ -19,78 +24,36 @@
   background: var(--community-row-hover);
 }
 
-/* The row only rises; what's inside it fades. Fading anything around the glass
-   below would cut it off from the wallpaper it blurs, and it would pop in late. */
 @keyframes postIn {
   from {
+    opacity: 0;
     transform: translateY(4px);
   }
 }
 
-.post > :not(.readable, .thread),
-.reply > :not(.readable),
-.readable > * {
-  animation: contentIn 320ms var(--community-ease) backwards;
-  animation-delay: calc(var(--post-i, 0) * 28ms);
-}
-
-@keyframes contentIn {
-  from {
-    opacity: 0;
-  }
+.postBody {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
 }
 
 /* ── Keeping text readable on the wallpaper ────────────────────────────── */
 
-/* Frosted glass behind the author line and the text, one layer for each. Its
-   edges fade out, so no rectangle shows where the doodles turn sharp again. On
-   a pseudo-element because a mask on .readable would fade the text as well. */
+/* A halo, the way maps keep labels readable over busy ground: the letters wipe the
+   doodles from just around themselves, and the wallpaper stays sharp elsewhere.
+   It inherits, so everything inside .readable gets it. */
 .readable {
-  position: relative;
-  isolation: isolate;
-}
-
-.readable::before {
-  content: "";
-  position: absolute;
-  inset: -2px -6px;
-  z-index: -1;
-  background: var(--community-text-glass);
-  -webkit-backdrop-filter: var(--community-text-blur);
-  backdrop-filter: var(--community-text-blur);
-  -webkit-mask-image:
-    linear-gradient(to right, transparent, #000 6px, #000 calc(100% - 6px), transparent),
-    linear-gradient(to bottom, transparent, #000 4px, #000 calc(100% - 4px), transparent);
-  mask-image:
-    linear-gradient(to right, transparent, #000 6px, #000 calc(100% - 6px), transparent),
-    linear-gradient(to bottom, transparent, #000 4px, #000 calc(100% - 4px), transparent);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-  pointer-events: none;
-}
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .readable::before {
-    background: var(--community-glass);
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .readable::before {
-    background: var(--community-canvas);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
+  text-shadow: var(--community-text-halo);
 }
 
 .avatarLink {
-  position: relative; /* stays above the glass, whose box runs behind the float */
-  z-index: 1;
-  float: left;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
   display: block;
   width: 28px;
   height: 28px;
-  margin: 1px 8px 0 0;
+  margin-top: 1px;
   border-radius: 50%;
 }
 
@@ -220,8 +183,7 @@
   overflow-wrap: anywhere;
 }
 
-/* POST_FOLD_LINES = 6 (spec §13). overflow: clip, not hidden: hidden would make
-   a new formatting context and stop the text wrapping under the avatar. */
+/* POST_FOLD_LINES = 6 (spec §13). */
 .folded {
   max-height: calc(var(--text-line) * 6);
   overflow: clip;
@@ -253,10 +215,9 @@
   border-radius: 3px;
 }
 
-/* ── Photos: below the avatar, so they get the post's whole width ───────── */
+/* ── Photos ────────────────────────────────────────────────────────────── */
 
 .photos {
-  clear: both;
   display: grid;
   gap: 2px;
   width: 100%;
@@ -320,15 +281,15 @@
 
 /* ── GIF ───────────────────────────────────────────────────────────────── */
 
+/* Opaque, so the doodles don't show through a GIF with transparent parts. */
 .gif {
   position: relative;
-  clear: both;
   width: min(100%, 280px);
   max-height: 360px;
   margin-top: 6px;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--reaction-pill-border);
+  background: var(--community-canvas);
 }
 
 .gifMedia {
@@ -353,7 +314,6 @@
 /* ── Actions: pills side by side, icons instead of words ───────────────── */
 
 .actions {
-  clear: both;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -396,19 +356,50 @@
 
 /* ── The thread ────────────────────────────────────────────────────────── */
 
-/* One continuous line. It sits under the post's avatar, at its centre, and starts
-   against the action row. Each reply draws its own piece: a curved elbow that
-   touches its avatar, and, unless it is the last, a straight run on to the next.
-   The rows touch, and the colour is opaque, so the pieces join with no gap and no
-   darker overlap. */
+/* One continuous line, from just under the post's avatar to the last reply. The
+   stem runs down the avatar's column; each reply draws its own piece: a curved
+   elbow that touches its avatar, and, unless it is the last, a straight run on to
+   the next. The rows touch and the colour is opaque, so the pieces join with no gap
+   and no darker overlap. Pointing at any piece darkens the whole line. */
 .thread {
-  --rail-x: -13px;
-  --rail: 1.5px solid var(--community-rail);
+  --rail-x: -22px; /* from the text column back to the middle of the post's avatar */
   --elbow: 14px; /* from the row's top to the middle of its avatar */
-  clear: both;
+  grid-column: 2;
+  grid-row: 2;
   margin: 0;
-  padding: 0 0 0 26px;
+  padding: 0;
   list-style: none;
+}
+
+/* Wider than the line it draws, because 1.5 px is too thin to point at. */
+.stem {
+  display: none;
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  width: 10px;
+  margin: 32px 0 0 9px;
+}
+
+.post:has(> .thread) .stem {
+  display: block;
+}
+
+.stem::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  border-left: 1.5px solid var(--thread-rail);
+  transition: border-color 140ms var(--community-ease);
+}
+
+@media (hover: hover) {
+  .post:has(.stem:hover, .rail:hover) {
+    --thread-rail: var(--community-rail-hover);
+  }
 }
 
 .reply,
@@ -433,30 +424,47 @@
 
 @keyframes replyIn {
   from {
+    opacity: 0;
     transform: translateY(-3px);
   }
 }
 
-.reply::before,
-.threadMore::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: var(--rail-x);
-  width: calc(-1 * var(--rail-x));
-  height: var(--elbow);
-  border-left: var(--rail);
-  border-bottom: var(--rail);
-  border-bottom-left-radius: 10px;
-}
-
-.reply:not(:last-child)::after {
-  content: "";
+.rail {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: var(--rail-x);
-  border-left: var(--rail);
+  left: calc(var(--rail-x) - 5px);
+  width: calc(5px - var(--rail-x));
+}
+
+:last-child > .rail {
+  bottom: auto;
+  height: var(--elbow);
+}
+
+.rail::before,
+.rail::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 5px;
+  border-left: 1.5px solid var(--thread-rail);
+  transition: border-color 140ms var(--community-ease);
+}
+
+.rail::before {
+  right: 0;
+  height: var(--elbow);
+  border-bottom: 1.5px solid var(--thread-rail);
+  border-bottom-left-radius: 10px;
+}
+
+.rail::after {
+  bottom: 0;
+}
+
+:last-child > .rail::after {
+  display: none;
 }
 
 .replyAvatarLink {
@@ -516,6 +524,7 @@
   border-radius: 999px;
   background: var(--reaction-mine-bg);
   color: var(--purple);
+  text-shadow: none; /* it has a ground of its own */
 }
 
 .replyTools {
@@ -627,6 +636,7 @@
   background: transparent;
   font: 600 13px/16px "Inter", sans-serif;
   color: var(--purple);
+  text-shadow: var(--community-text-halo);
   cursor: pointer;
   transition: background-color 140ms var(--community-ease);
 }
@@ -680,15 +690,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .post,
-  .post > :not(.readable, .thread),
   .reply,
-  .reply > :not(.readable),
-  .readable > *,
   .likePop {
     animation: none;
   }
 
   .post,
+  .stem::before,
+  .rail::before,
+  .rail::after,
   .photo,
   .moreBtn,
   .replyPill,

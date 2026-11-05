@@ -1404,7 +1404,7 @@ after its checkpoint, so the next starts from `main`.
 
 **👁️ CHECKPOINT V-D4b**
 1. Tap the composer in **Campus**: the compose screen shows
-   `Posting as @arjun.mehta · IIITDM Kurnool` and the chip **Campus**.
+   your avatar and the chip **Campus** (no "Posting as" line since V-P, spec §2.2).
 2. Type a long text: the counter appears at 100 left, and at 1,001 Post is disabled.
 3. Add 3 photos, then try GIF: the GIF button says to remove the photos first.
 4. Remove the photos, add a GIF, post: it appears at the top of Campus with the GIF playing.
@@ -2246,7 +2246,7 @@ Appendix A "POST /api/posts".
 1. app/compose.tsx, opened as a modal route:
    router.push('/compose?feed=campus|country|global&country=IN&parent=<id>').
    It shows spec §2.2:
-   - "Posting as @username · campus", from the profile;
+   - your avatar from the profile (no "Posting as" line since V-P, spec §2.2);
    - a growing text input: the limit is 1,000 by codePointLength; the
      counter shows at 100 or fewer left; Post is disabled over the limit or
      when there is nothing to post;
@@ -2762,7 +2762,7 @@ renamed components or props are listed there.
 Use one branch per prompt (`n-d-web-community-2`, `-3`).
 
 **👁️ CHECKPOINT N-D2** — the same steps as Vishwajeet's V-D4b (Track 1), on the website:
-- "Posting as…"; the counter; 3 photos or a GIF, never both;
+- no "Posting as…" line (spec §2.2); the counter; 3 photos or a GIF, never both;
 - the nudge with **Edit** keeping the text;
 - the hold message;
 - the 16th campus post refused, with the text kept, while a Global post still goes through;

@@ -32,8 +32,9 @@ change both.
 - **Avoid cards inside cards.** In a list, use flat rows split by a hairline.
 - **Floating chrome.** Switchers and composers float, with content passing underneath. Use `expo-blur` for the
   glass. It feels more spacious than a solid bar.
-- Text on a patterned background needs something behind it. On trial on the website's community page: frosted
-  glass behind the text, faded at the edges. Wait for that decision before building it here.
+- **Text on a patterned background gets a halo,** the way maps keep labels readable: a `textShadow` with no
+  offset, radius about 4, in the ground's own light colour. The website tried frosted glass first; it still
+  looked busy.
 - Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every overlap
   as a darker patch.
 
@@ -45,10 +46,8 @@ change both.
 
 ## Using width well
 
-- **A post's avatar is a drop cap, not a column.** Only the first lines sit beside it, and media gets the full
-  width. React Native can't wrap text around a float, so put the avatar and author line in one row, and start
-  the text below at full width. Short nested rows, like replies, are the exception: avatar in its own column,
-  and every line starts in the same place.
+- **An avatar gets a column of its own.** Everything in the row, text, media, actions and nested replies,
+  starts at one left edge. A drop cap was tried on the website; it made rows hard to scan.
 - **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
   context already says, such as a campus name in that campus's own feed.
 

@@ -19,7 +19,7 @@
 .wide {
   height: calc(100dvh - var(--app-chrome));
   padding: 4px;
-  background: var(--white); /* the frame, and the gap the divider sits in */
+  background: var(--bg);
 }
 
 .group {
@@ -38,6 +38,15 @@
   flex-direction: column;
   border-radius: 8px;
   box-shadow: inset 0 0 0 1px var(--community-hairline);
+}
+
+/* Square where the two composer bars meet, so they read as one bar. */
+.panelLeft {
+  border-bottom-right-radius: 0;
+}
+
+.panelRight {
+  border-bottom-left-radius: 0;
 }
 
 .panelInner {
@@ -154,20 +163,24 @@
 
 /* ── The divider, carrying your avatar ─────────────────────────────────── */
 
+/* White, down to the composer bars, where it takes their colour so they read as
+   one bar with your avatar sitting on it. */
 .handle {
+  --dock-height: 42px;
   position: relative;
   z-index: 3;
   width: 6px;
   outline: none;
+  background: linear-gradient(to top, var(--community-dock) var(--dock-height), var(--white) var(--dock-height));
   cursor: col-resize;
 }
 
-/* White at rest, like the gap it sits in. It turns purple only when in use. */
+/* It turns purple only when in use. */
 .handle::before {
   content: "";
   position: absolute;
   top: 6px;
-  bottom: 112px;
+  bottom: var(--dock-height);
   left: 50%;
   width: 1px;
   background: transparent;
@@ -193,10 +206,10 @@
   box-shadow: 0 0 0 3px var(--reaction-mine-bg);
 }
 
-/* Sits on the cap above the avatar: three dots in a white pill. */
+/* Three dots in a white pill, in the middle of the divider. */
 .handleGrip {
   position: absolute;
-  bottom: 84px;
+  top: 50%;
   left: 50%;
   width: 8px;
   height: 24px;
@@ -207,8 +220,7 @@
     radial-gradient(circle, var(--purple-dark) 1.2px, transparent 1.7px) 50% 15px / 100% 6px no-repeat,
     var(--white);
   box-shadow: inset 0 0 0 1px var(--community-grip-border);
-  transform: translateX(-50%);
-  transform-origin: bottom;
+  transform: translate(-50%, -50%);
   transition: transform 200ms var(--community-spring), box-shadow 140ms var(--community-ease);
 }
 
@@ -216,72 +228,54 @@
 .handle[data-separator="hover"] .handleGrip,
 .handle[data-separator="active"] .handleGrip {
   box-shadow: inset 0 0 0 1px var(--purple);
-  transform: translateX(-50%) scale(1.12);
+  transform: translate(-50%, -50%) scale(1.12);
 }
 
-/* Your avatar, joining the divider and the two composers. Its collar is the dock's
-   colour, so it looks cut into the composers tucked in behind it. */
+/* Your avatar, joining the two composers tucked in behind it. From the outside in:
+   a ring in the accent of the side in use, a band whose half on that side fills in,
+   a white gap, then the photo. */
 .hub {
   --hub-accent: var(--community-rail);
-  --hub-tint: transparent;
+  --hub-glow: transparent;
   position: absolute;
-  bottom: 22px;
+  bottom: 7px;
   left: 50%;
-  width: 48px;
-  height: 48px;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 2.5px solid var(--hub-accent);
   border-radius: 50%;
-  background: var(--white);
-  box-shadow:
-    0 0 0 5px var(--community-dock),
-    0 0 0 6.5px var(--hub-accent),
-    0 0 0 6.5px var(--hub-tint),
-    var(--community-float-shadow);
+  background: var(--community-canvas);
+  box-shadow: 0 2px 14px var(--hub-glow), var(--community-float-shadow);
   transform: translateX(-50%);
   cursor: col-resize;
   touch-action: none;
-  transition: box-shadow 200ms var(--community-ease), transform 220ms var(--community-spring);
+  transition: border-color 200ms var(--community-ease), box-shadow 220ms var(--community-ease),
+    transform 220ms var(--community-spring);
 }
 
 .hub[data-active="left"] {
   --hub-accent: var(--purple-dark);
-  --hub-tint: var(--reaction-mine-bg);
+  --hub-glow: var(--reaction-mine-bg);
 }
 
 .hub[data-active="right"] {
   --hub-accent: var(--pink-dark);
-  --hub-tint: var(--community-world-tint);
+  --hub-glow: var(--community-world-tint);
 }
 
-.hub[data-active] {
-  box-shadow:
-    0 0 0 3px var(--white),
-    0 0 0 6px var(--hub-accent),
-    0 0 0 9px var(--hub-tint),
-    var(--community-float-shadow);
-}
-
-/* The cap above, joining the grip to the collar. */
+/* The cap on top. */
 .hub::before {
   content: "";
   position: absolute;
-  top: -14px;
+  z-index: 1;
+  top: -8.5px;
   left: 50%;
-  width: 14px;
-  height: 9px;
-  border-radius: 5px 5px 2px 2px;
+  width: 11px;
+  height: 10px;
+  border-radius: 5.5px 5.5px 0 0;
   background: var(--purple-dark);
-  transform: translateX(-50%);
-}
-
-/* The stem below, running on to the bottom of the panel. */
-.hub::after {
-  content: "";
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 50%;
-  width: 2px;
-  height: 17px;
-  background: var(--community-rail);
   transform: translateX(-50%);
 }
 
@@ -294,25 +288,64 @@
   transform: translateX(-50%) scale(1.06);
 }
 
+.hubHalf {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 200ms var(--community-ease);
+}
+
+.hubHalfLeft {
+  background: conic-gradient(transparent 0deg 180deg, var(--purple) 180deg 360deg);
+}
+
+.hubHalfRight {
+  background: conic-gradient(
+    var(--pink-dark) 0deg,
+    var(--purple) 90deg,
+    var(--pink-dark) 180deg,
+    transparent 180deg 360deg
+  );
+}
+
+.hub[data-active="left"] .hubHalfLeft,
+.hub[data-active="right"] .hubHalfRight {
+  opacity: 1;
+}
+
+.hubPhoto {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 46px;
+  padding: 2.5px;
+  border-radius: 50%;
+  background: var(--white);
+}
+
+/* !important: AvatarImg sets its usual purple ring inline. Here the rings around
+   the photo do that job, so it gets only a thin grey edge (spec §1.1). */
 .hubAvatar {
   display: block;
-  width: 48px;
-  height: 48px;
-  border: 2.5px solid var(--white);
+  width: 41px;
+  height: 41px;
+  border: 1px solid var(--community-grip-border) !important;
   border-radius: 50%;
   object-fit: cover;
 }
 
-/* Where you're writing, only as an icon. Springs out on the side in use. */
+/* Where you're writing, only as an icon. Springs out on the side in use, over the
+   ring's upper corner. */
 .hubBadge {
   position: absolute;
-  z-index: 1;
-  top: -6px;
+  z-index: 2;
+  top: -3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 22px;
+  width: 30px;
+  height: 20px;
   border-radius: 999px;
   color: var(--white);
   box-shadow: var(--community-float-shadow);
@@ -323,13 +356,13 @@
 }
 
 .hubBadgeCampus {
-  right: calc(100% + 2px);
+  right: calc(50% + 20px);
   background: var(--purple-dark);
   transform-origin: right center;
 }
 
 .hubBadgeWorld {
-  left: calc(100% + 2px);
+  left: calc(50% + 20px);
   background: var(--pink-dark);
   transform-origin: left center;
 }
@@ -374,8 +407,8 @@
 
 .dock {
   flex: 0 0 auto;
-  min-height: 58px;
-  padding: 9px 8px;
+  min-height: 42px;
+  padding: 3.5px 8px 4px;
   border-top: 1.5px solid var(--community-rail);
   background: var(--community-dock);
 }
@@ -946,6 +979,7 @@
   .handle::before,
   .handleGrip,
   .hub,
+  .hubHalf,
   .hubBadge {
     transition: none;
   }

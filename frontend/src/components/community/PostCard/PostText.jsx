@@ -3,11 +3,7 @@
 // Spec §3 "Text": folds after POST_FOLD_LINES behind See more, which expands
 // it in place. Used by posts and replies.
 //
-// The text has to flow around the avatar (a drop cap), and that rules out the
-// usual line clamp. -webkit-line-clamp and overflow: hidden both make a new
-// formatting context, which sits BESIDE a float instead of wrapping around it,
-// and the whole post would narrow to the avatar's right again. A max-height with
-// overflow: clip folds it without doing that (see .folded in the CSS).
+// It folds with a max-height and overflow: clip (see .folded in the CSS).
 //
 // Whether it overflows is measured, not guessed from the length: six lines of a
 // narrow panel hold far less text than six lines of a maximised one.

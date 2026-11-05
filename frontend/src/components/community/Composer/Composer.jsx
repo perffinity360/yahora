@@ -11,7 +11,7 @@
 //   feed            "campus" | "country" | "global" — where the post goes
 //   countryName     the country's name, for a country feed ("India")
 //   countryCode     its two-letter code, for the flag where the post goes
-//   viewer          { username, campus, name?, avatar? }
+//   viewer          { username, name?, avatar? }
 //   showAvatar      the avatar inside the line; off on a laptop, where the page
 //                   shows one shared avatar on the panels' divider
 //   parentId        set for a reply: always open, text and a GIF, no photos
@@ -25,6 +25,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  ArrowUp,
   GraduationCap,
   Globe,
   ImagePlus,
@@ -226,9 +227,7 @@ export default function Composer({
   }
 
   const postLabel = isReply ? "Reply" : "Post";
-  // Your name appears as soon as there's something to post, so it's always in
-  // view before you press Post. The cheapest moderation there is.
-  const showTopLine = isReply || !isEmpty;
+  const showTopLine = isReply && Boolean(onCancelReply);
   const showExtras = active || isReply || !isEmpty;
 
   return (
@@ -237,10 +236,7 @@ export default function Composer({
         <div className={`${styles.reveal} ${showTopLine ? styles.revealOpen : ""}`} inert={!showTopLine}>
           <div className={styles.revealInner}>
             <div className={styles.topLine}>
-              <p className={styles.postingAs}>
-                Posting as @{viewer?.username} · {viewer?.campus}
-              </p>
-              {isReply && onCancelReply && (
+              {showTopLine && (
                 <span className={styles.replyChip}>
                   <span className={styles.replyChipName}>Replying to @{replyToUsername}</span>
                   <button
@@ -407,7 +403,14 @@ export default function Composer({
               aria-busy={c.posting}
               aria-label={c.posting ? "Posting" : postLabel}
             >
-              {c.posting ? <Loader2 size={14} className={styles.spinner} aria-hidden="true" /> : postLabel}
+              {c.posting ? (
+                <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <>
+                  <span className={styles.postWord}>{postLabel}</span>
+                  <ArrowUp size={15} strokeWidth={2.5} className={styles.postArrow} aria-hidden="true" />
+                </>
+              )}
             </button>
           </div>
         </div>
