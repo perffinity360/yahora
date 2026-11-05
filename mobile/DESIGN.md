@@ -15,9 +15,16 @@ change both.
 3. Decide, and write down why.
 4. Build it, then add anything reusable to this file.
 
+## Tools and our own assets
+
+- **Installing or adding a design skill or package is allowed and encouraged.** We want the best possible
+  design: modern, premium, attractive and beautiful. Don't settle for less to avoid adding a dependency.
+- **If what we need doesn't exist, create our own:** animations, motion graphics, stickers, or any similar
+  component.
+
 ## Density
 
-- **Compact by default.** Body 13/19, secondary 12, small labels 11. Controls look 24–28 pt tall.
+- **Compact by default.** Body 14/20, secondary 13, small labels 12. Controls look 24–28 pt tall.
 - Don't make things bigger to fill space. Let the content have the room.
 
 ## Surfaces
@@ -25,7 +32,10 @@ change both.
 - **Avoid cards inside cards.** In a list, use flat rows split by a hairline.
 - **Floating chrome.** Switchers and composers float, with content passing underneath. Use `expo-blur` for the
   glass. It feels more spacious than a solid bar.
-- Text on a patterned background needs a light tint or note behind it.
+- Text on a patterned background needs something behind it. On trial on the website's community page: frosted
+  glass behind the text, faded at the edges. Wait for that decision before building it here.
+- Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every overlap
+  as a darker patch.
 
 ## Icons over words
 
@@ -35,9 +45,10 @@ change both.
 
 ## Using width well
 
-- **An avatar is a drop cap, not a column.** Only the first lines sit beside it, and media gets the full
+- **A post's avatar is a drop cap, not a column.** Only the first lines sit beside it, and media gets the full
   width. React Native can't wrap text around a float, so put the avatar and author line in one row, and start
-  the text below at full width.
+  the text below at full width. Short nested rows, like replies, are the exception: avatar in its own column,
+  and every line starts in the same place.
 - **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
   context already says, such as a campus name in that campus's own feed.
 

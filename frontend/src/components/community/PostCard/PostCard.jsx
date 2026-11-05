@@ -62,28 +62,31 @@ function PostCard({
         <AvatarImg src={post.author_avatar} name={post.author_name} size={28} className={styles.avatar} />
       </Link>
 
-      <header className={styles.header}>
-        <Link to={profile} className={styles.name}>
-          {post.author_name}
-        </Link>
-        <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
-        {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{post.author_university}</span>}
-        {time && (
-          <Link
-            to={`/post/${post.id}`}
-            className={`${styles.meta} ${styles.time}`}
-            title={new Date(post.created_at).toLocaleString()}
-          >
-            <time dateTime={post.created_at}>{time}</time>
+      {/* The frosted layer sits behind the author line and the text (spec §3). */}
+      <div className={styles.readable}>
+        <header className={styles.header}>
+          <Link to={profile} className={styles.name}>
+            {post.author_name}
           </Link>
-        )}
-        {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
-        <button type="button" className={styles.moreBtn} aria-label="More options">
-          <Ellipsis size={15} aria-hidden="true" />
-        </button>
-      </header>
+          <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
+          {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{post.author_university}</span>}
+          {time && (
+            <Link
+              to={`/post/${post.id}`}
+              className={`${styles.meta} ${styles.time}`}
+              title={new Date(post.created_at).toLocaleString()}
+            >
+              <time dateTime={post.created_at}>{time}</time>
+            </Link>
+          )}
+          {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
+          <button type="button" className={styles.moreBtn} aria-label="More options">
+            <Ellipsis size={15} aria-hidden="true" />
+          </button>
+        </header>
 
-      {post.content && <PostText content={post.content} />}
+        {post.content && <PostText content={post.content} />}
+      </div>
 
       {post.image_urls?.length > 0 && (
         <PostPhotos urls={post.image_urls} authorName={post.author_name} onOpen={setLightboxIndex} />

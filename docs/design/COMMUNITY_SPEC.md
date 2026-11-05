@@ -44,11 +44,14 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 ```
 
 - **Background of both panels:** the chat's wallpaper, pinned while posts scroll: `chatCanvas`
-  with the shared doodle tile at 50% strength (`MESSAGES_SPEC.md` §2). The rows carry a light tint
-  so text stays readable: warm on the campus side (`communityRowCampus`), quieter on the other
-  (`communityRowWorld`).
+  with the shared doodle tile at 50% strength (`MESSAGES_SPEC.md` §2). The rows carry a light tint:
+  warm on the campus side (`communityRowCampus`), quieter on the other (`communityRowWorld`).
+- **Text on the wallpaper (on trial, owner to decide):** the author line and text of each post and
+  reply sit on one layer of frosted glass, `communityTextGlass` with `communityTextBlur`. Its edges fade
+  out over a few pixels, so no rectangle shows. With reduced transparency on, it's plain `chatCanvas`
+  instead. The doodles stay sharp around the text.
 - **Hierarchy:** My campus is the main panel. Its title is Bree Serif 15 in purple-dark. The right
-  title is Inter 600 13.
+  title is Inter 600 14.
 - **Panel header:** **36 px**, glass (`communityGlass`, blur 14), radius 8 on the panel. It floats
   over the feed, so posts pass underneath it.
 - **Left panel, "My campus":** the campus feed. Its header shows an animated graduation-cap icon and
@@ -60,7 +63,10 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 - **Icons, not emoji:** the panel icons are drawn in when they first appear. Hovering the header gives
   the cap a small hop and turns the globe. Flags stay emoji, because they are worked out from the code.
 - **The divider** (react-resizable-panels), **6 px** wide:
-  - a 1 px line running down into your avatar, with a small grip in the middle;
+  - white at rest, the same as the 4 px frame around the panels, so nothing shows between them but white;
+  - a white grip in the middle, 6 × 28, with a 1 px `communityGripBorder` outline;
+  - while hovered, dragged or focused, a purple line runs down to your avatar and the grip's outline
+    turns purple;
   - drag it to resize; each panel is at least **320 px** wide;
   - double-click it to go back to 50 / 50;
   - keyboard: focus it with Tab, move it with the arrow keys.
@@ -82,7 +88,7 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 
 ```
 ┌──────────────────────────────────┐
-│ ( (cap) | 🇮🇳 India | ⌄ )  ([🔥|🕐])│   ← two floating glass pills; posts pass underneath
+│ ( (cap) [🇮🇳 India ⌄] )    ([🔥|🕐])│   ← two floating glass pills; posts pass underneath
 │ post                             │
 │ ──────────────────────────────── │
 │ post                             │
@@ -92,9 +98,10 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 
 - **The switcher floats.** The bar is transparent, sticky at the top, and only its pills take presses.
   Posts scroll underneath, which keeps the screen feeling open. It takes 50 px.
-- **The pill:** a campus icon, the selected country or Global, and a separate chevron.
-- **The chevron always opens the dropdown.** Tapping the country only selects that feed, so nothing
-  is hidden behind a second tap.
+- **The pill:** a campus icon, then the selected country or Global.
+- **The chevron shows only on the country / Global side,** inside the same purple as the country's
+  name. It slides open as you switch, and on the campus side it takes up no room. It stays its own
+  button: tapping the name selects the feed, and only the chevron opens the dropdown (§1.3).
 - **Hot · New** is the second pill, only on the country / Global side.
 - **The look stays thin; a finger still gets 44 px.** On a touch screen each control has an invisible
   hit area reaching 44 px tall. In the app, use `hitSlop`.
@@ -127,7 +134,7 @@ A quiet line takes the composer's place in the dock:
 (eye icon)  Only students in Germany can post and reply here. You can still react and report.
 ```
 
-Inter 400 12/16, communityMuted, with the icon in purple. No box on a laptop; on a narrow window it
+Inter 400 13/18, communityMuted, with the icon in purple. No box on a laptop; on a narrow window it
 floats on glass like the composer.
 
 ---
@@ -137,7 +144,7 @@ floats on glass like the composer.
 ### 2.1 Closed
 
 The composer is **always at the bottom of the feed**, separately for each panel: a dock of 42 px
-with a white one-line field, radius 16, Inter 400 13/18. On a laptop the shared avatar sits on the
+with a white one-line field, radius 16, Inter 400 14/20. On a laptop the shared avatar sits on the
 divider between the two docks (§1.1). On a narrow window the composer floats over the posts, with
 your avatar (24) inside the field. Grey text depends on the feed:
 
@@ -163,7 +170,7 @@ open.
 └────────────────────────────────────────────────────┘
 ```
 
-- **"Posting as @username · Campus name"** is always shown, in Inter 500 11, communityMuted.
+- **"Posting as @username · Campus name"** is always shown, in Inter 500 12, communityMuted.
   Seeing your own name is the cheapest moderation there is.
 - **Text:** up to **1,000 characters**, counted the way runbook §1.12 explains (one emoji
   is one character).
@@ -211,7 +218,7 @@ open.
                                                     [Close]
 ```
 
-Inter 400 13/19 on pinkLight, radius 12, padding 12, with a purple `HeartHandshake` icon and the title
+Inter 400 14/20 on pinkLight, radius 12, padding 12, with a purple `HeartHandshake` icon and the title
 in Bree Serif 15. It takes the composer's place in the dock. The phone number and the link are
 tappable. Nothing on this card may sound like a punishment.
 
@@ -228,18 +235,18 @@ with a soft tint on hover. Compact, like a code editor's panels.
 
 ```
 (av) Rahul Verma @rahul.verma · IIITDM Kurnool · 2h                 ⋯
-Text of the post, Inter 400 13/19, black-soft. The avatar is a drop cap: only
+Text of the post, Inter 400 14/20, black-soft. The avatar is a drop cap: only
 the first lines sit beside it, and everything below runs the post's full width.
 ┌───────────────────── photos (1–3) or GIF ─────────────────────┐
 └───────────────────────────────────────────────────────────────┘
-( ❤️ 😂 😮 👍 1.2K ) ( ♡ ) ( 💬 14 )     ← pills (§5.3), then the thread (§4)
+( ❤️ 😂 😮 👍 1.2K ) ( ☺ ) ( 💬 14 )     ← pills (§5.3), then the thread (§4)
 ```
 
 - **The avatar is a drop cap:** 28 px, floated in the corner, with 8 px after it. Text wraps under it,
   and photos, GIFs, actions and the thread all start below it at full width. On a 390 px phone the
   text gets 366 px.
-- **Author line: always exactly one line.** Full name in Inter 600 13; then `@username · campus · time`
-  in Inter 400 12, communityMuted. When space runs out they truncate in this order: the campus first,
+- **Author line: always exactly one line.** Full name in Inter 600 14; then `@username · campus · time`
+  in Inter 400 13, communityMuted. When space runs out they truncate in this order: the campus first,
   then the username, then the name. The time never goes. Tapping the avatar or the name opens the
   profile. Tapping the time opens the post's page.
 - **Campus name:**
@@ -259,13 +266,15 @@ the first lines sit beside it, and everything below runs the post's full width.
   away. It carries a small `GIF` badge in the corner.
 - **Actions: icons in pills, no words,** 24 px tall, with 4 px between them:
   - **The reaction summary** (§5.3), when there are reactions.
-  - **React:** your current emoji, or ♡ if you haven't reacted (§5).
+  - **React:** your current emoji, or a line-drawn smiley icon (lucide `Smile`, Feather `smile` in the app)
+    if you haven't reacted (§5).
   - **💬 count:** where you can reply, it opens the composer in reply mode (§4). In a view-only feed
     it loads more replies.
   - **⋯ menu:** Report (§7); Delete for your own posts, with confirm text
     `Delete this post? It will be removed for everyone.`
 - **Counts:** `999`, `1.2K`, `12K`, `1.2M`.
-- **Entrance:** posts fade and rise 4 px over 320 ms, staggered by 28 ms, stopping after the sixth.
+- **Entrance:** posts fade and rise 4 px over 320 ms (the row rises, its contents fade, so the glass
+  behind the text is never cut off from the wallpaper), staggered by 28 ms, stopping after the sixth.
 
 ### 3.1 States
 
@@ -283,12 +292,12 @@ the first lines sit beside it, and everything below runs the post's full width.
 Replies now show **under each post in the feed,** as well as on the post's page.
 
 ```
-( ❤️ 😂 1.2K ) ( ♡ ) ( 💬 14 )
+( ❤️ 😂 1.2K ) ( ☺ ) ( 💬 14 )
  │
- ╰─ (av) @priya.nair · IIITDM Kurnool · 2h                  ♡ 12  ⋯
- │  Reply text, Inter 400 12.5/18. It also wraps under its avatar.
- ╰─ (av) [@rahul.verma] · 1h                                ♥ 3   ⋯
- │  The highlighted name is the post's own author.
+ ╰─(av) @priya.nair · IIITDM Kurnool · 2h                   ♡ 12  ⋯
+ │      Reply text, Inter 400 13/19. Every line starts under the username.
+ ╰─(av) [@rahul.verma] · 1h                                 ♥ 3   ⋯
+ │      The highlighted name is the post's own author.
  ╰─ ⌄ Show more replies
 ```
 
@@ -296,15 +305,21 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   tied.
 - **`Show more replies`** loads the rest in place, 20 at a time, oldest first, without leaving the
   feed. It disappears when there are no more.
-- **The thread:** one 1.5 px `communityRail` line runs down under the post's avatar. Each reply curves
-  off it into its own avatar (radius 10). The last one ends in its curve, and doesn't continue. The
-  line starts below the post's action row, because the drop-cap avatar has text under it.
-- **Each reply:** a 22 px drop-cap avatar; `@username` in Inter 600 12; `campus · time` in Inter 400 12;
-  text in Inter 400 12.5/18, with an optional GIF up to 180 px wide.
+- **The thread:** one unbroken 1.5 px `communityRail` line runs down under the post's avatar, starting
+  against the post's action row, because the drop-cap avatar has text under it. Each reply curves off it
+  (radius 10) until it touches the middle of its own avatar. The last one ends in its curve, and doesn't
+  continue. The colour is opaque, so joins never show as a darker patch.
+- **Each reply:** 45 px from the top of one to the top of the next when it has one line: 4 above, a
+  20 px author line, a 19 px text line, 2 below. A 22 px avatar in its own column, then 8 px. Unlike a
+  post, a reply is **not** a drop cap: every line of text starts directly under the username.
+  `@username` in Inter 600 13; `campus · time` in Inter 400 12; text in Inter 400 13/19, with an optional
+  GIF up to 180 px wide.
 - **Usernames, not full names.** The campus shows only under the rule in §3.
 - **The post's author is highlighted:** when they reply to their own post, their username sits on
-  a `reactionMineBg` pill in purple.
-- **A reply can only be liked.** A heart at the right of its line, with the count; it stores
+  a `reactionMineBg` pill in purple. The pill reaches out to the left, so the name itself stays in line
+  with the text below.
+- **A reply can only be liked.** A heart (not the post's smiley, because it is a like, not a choice of
+  emoji) at the right of its line, with the count; it stores
   `DEFAULT_REACTION`, ❤️. No quick bar and no picker. Filled in `communityLike` when it's yours. The ⋯
   menu sits next to it, shown on hover with a mouse and always on touch.
 - There are **no replies to replies**: one level only.
@@ -337,7 +352,8 @@ reaction; picking your current one again removes it. Replies have only a like (�
 ```
 
 - **The six, in this order:** ❤️ 👍 😂 😮 😢 🙏. Then **⊕**, which opens the full emoji picker.
-- **The React button is an icon, with no word:** a heart, or your current emoji, in a 30 × 24 pill.
+- **The React button is an icon, with no word:** a line-drawn smiley, or your current emoji, in a 30 × 24
+  pill. It tints purple on hover. Tapping it still gives ❤️.
 - **Look:** a white pill with radius 999 and a soft shadow. With a mouse, each emoji is 22 in a
   34 × 34 button. On a touch screen, 26 in 44 × 44. Your current reaction sits on a `reactionMineBg`
   circle.
@@ -364,12 +380,12 @@ reaction; picking your current one again removes it. Replies have only a like (�
 ### 5.3 The summary under a post
 
 ```
-( 😂 ❤️ 👍 😮 1.3K )  ( ♡ )  ( 💬 237 )
+( 😂 ❤️ 👍 😮 1.3K )  ( ☺ )  ( 💬 237 )
 ```
 
 - The **top 4 emojis** by count (`REACTION_SUMMARY_COUNT`), spaced apart, then the total. Separate
   pills sit beside it, on the same row.
-- 24 px tall, emoji 13, Inter 500 11 with tabular numbers, communityMuted, on communityPill with a
+- 24 px tall, emoji 14, Inter 500 12 with tabular numbers, communityMuted, on communityPill with a
   communityHairline outline, radius 999, padding 0 / 9 / 0 / 7.
 - **Once you've reacted,** the pill is tinted: `reactionMineBg`, `reactionMineBorder`, purple text.
 - A new emoji springs in, and a new total rolls up.
@@ -498,7 +514,7 @@ API reason values, in the same order: `spam`, `harassment`, `hate_speech`, `sexu
 | Global | `Nothing here yet. Start the conversation.` |
 | A profile's Posts tab | `No posts yet.` |
 
-The text sits on a small glass note, Inter 400 13/19, communityMuted, because it's on the wallpaper.
+The text sits on a small glass note, Inter 400 14/20, communityMuted, because it's on the wallpaper.
 
 While loading, show 3 flat skeleton rows, the same shape as a post (avatar circle, two text lines, a
 tinted block), split by hairlines.
@@ -542,9 +558,12 @@ A **Posts** tab sits next to the existing tabs:
 | `communityGlass` | `--community-glass` | `rgba(255,255,255,0.74)` | panel header, dock, floating pills |
 | `communityPill` | `--community-pill` | `rgba(255,255,255,0.72)` | action pills |
 | `communityHairline` | `--community-hairline` | `rgba(128,0,128,0.1)` | lines between posts, outlines |
-| `communityRail` | `--community-rail` | `rgba(128,0,128,0.26)` | the reply thread, the divider's line |
+| `communityRail` | `--community-rail` | `#D1AAD7` | the reply thread (opaque, so its pieces join cleanly) |
+| `communityTextGlass` | `--community-text-glass` | `rgba(255,255,255,0.32)` | on trial: the tint behind post and reply text |
+| `communityTextBlur` | `--community-text-blur` | `blur(6px) saturate(1.15)` | on trial: that layer's blur (app: `expo-blur`, nearest match) |
+| `communityGripBorder` | `--community-grip-border` | `#8E8B99` | outline of the divider's grip (3.3:1 on white) |
 | `communityMuted` | `--community-muted` | `#5C5969` | secondary text on the wallpaper (5.58:1 on `chatCanvas`; `mutedText` is 4.44:1, too low) |
-| `communityLike` | `--community-like` | `#D81E5B` | a liked reply, hover on React |
+| `communityLike` | `--community-like` | `#D81E5B` | a liked reply, the ring when a reaction pops |
 | `communityFloatShadow` | `--community-float-shadow` | `0 4px 16px rgba(42,8,42,0.12)` | anything floating over the feed |
 | `communityEase` | `--community-ease` | `cubic-bezier(0.2,0.8,0.2,1)` | movement and fades |
 | `communitySpring` | `--community-spring` | `cubic-bezier(0.34,1.56,0.64,1)` | small things that pop (the app uses a real spring) |

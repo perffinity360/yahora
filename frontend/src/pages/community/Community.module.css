@@ -19,7 +19,7 @@
 .wide {
   height: calc(100dvh - var(--app-chrome));
   padding: 4px;
-  background: var(--bg);
+  background: var(--white); /* the frame, and the gap the divider sits in */
 }
 
 .group {
@@ -162,7 +162,7 @@
   cursor: col-resize;
 }
 
-/* A hairline running down into the avatar, so the two read as one object. */
+/* White at rest, like the gap it sits in. It turns purple only when in use. */
 .handle::before {
   content: "";
   position: absolute;
@@ -170,7 +170,7 @@
   bottom: 40px;
   left: 50%;
   width: 1px;
-  background: var(--community-rail);
+  background: transparent;
   transform: translateX(-50%);
   transition: background-color 140ms var(--community-ease), width 140ms var(--community-ease);
 }
@@ -197,11 +197,11 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 5px;
+  width: 6px;
   height: 28px;
   border-radius: 999px;
   background: var(--white);
-  box-shadow: inset 0 0 0 1px var(--community-rail);
+  box-shadow: inset 0 0 0 1px var(--community-grip-border);
   transform: translate(-50%, -50%);
   transition: height 200ms var(--community-spring), box-shadow 140ms var(--community-ease);
 }
@@ -312,7 +312,7 @@
   gap: 8px;
   margin: 0;
   min-height: 30px;
-  font: 400 12px/16px "Inter", sans-serif;
+  font: 400 13px/18px "Inter", sans-serif;
   color: var(--community-muted);
 }
 
@@ -342,7 +342,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  font: 600 13px/18px "Inter", sans-serif;
+  font: 600 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
   cursor: pointer;
   transition: background-color 140ms var(--community-ease), transform 120ms var(--community-ease);
@@ -572,11 +572,11 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  font: 600 12px/16px "Inter", sans-serif;
+  font: 600 13px/16px "Inter", sans-serif;
   color: var(--community-muted);
   cursor: pointer;
   transition: background-color 180ms var(--community-ease), color 180ms var(--community-ease),
-    transform 120ms var(--community-ease);
+    padding 220ms var(--community-ease), transform 120ms var(--community-ease);
 }
 
 .segment:active {
@@ -607,7 +607,29 @@
   color: var(--white);
 }
 
-.segmentActive .worldIcon {
+/* The country and its chevron share one purple pill. Off this feed the chevron
+   has no width and takes no presses or focus (inert in the JSX). */
+.worldSegment {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  transition: background-color 180ms var(--community-ease);
+}
+
+.worldSegmentActive {
+  background: var(--purple);
+}
+
+.worldSegmentActive .segment {
+  padding-right: 3px;
+  color: var(--white);
+}
+
+.worldSegmentActive .worldIcon,
+.worldSegmentActive .chevron,
+.worldSegmentActive .chevronOpen {
   color: var(--white);
 }
 
@@ -617,13 +639,31 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  width: 0;
   height: 28px;
   padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
+  opacity: 0;
+  pointer-events: none;
   cursor: pointer;
+  transition: width 220ms var(--community-ease), margin 220ms var(--community-ease),
+    opacity 160ms var(--community-ease);
+}
+
+.worldSegmentActive .segmentChevron {
+  width: 22px;
+  margin-right: 4px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Purple on purple wouldn't show. */
+.worldSegmentActive .segment:focus-visible,
+.worldSegmentActive .segmentChevron:focus-visible {
+  outline-color: var(--white);
+  outline-offset: -3px;
 }
 
 /* A finger needs 44 px even though the controls stay thin to look at. */
@@ -676,7 +716,7 @@
   border-radius: 12px;
   background: var(--community-glass);
   text-align: center;
-  font: 400 13px/19px "Inter", sans-serif;
+  font: 400 14px/20px "Inter", sans-serif;
   color: var(--community-muted);
 }
 
@@ -776,6 +816,8 @@
   .sortThumb,
   .sortBtn,
   .segment,
+  .worldSegment,
+  .segmentChevron,
   .chevron,
   .chevronOpen,
   .menuOption,

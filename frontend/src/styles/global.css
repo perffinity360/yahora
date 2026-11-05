@@ -97,7 +97,10 @@
   --community-glass: rgba(255,255,255,0.74);
   --community-pill: rgba(255,255,255,0.72);
   --community-hairline: rgba(128,0,128,0.1);
-  --community-rail: rgba(128,0,128,0.26);
+  --community-rail: #D1AAD7;
+  --community-text-glass: rgba(255,255,255,0.32);
+  --community-text-blur: blur(6px) saturate(1.15);
+  --community-grip-border: #8E8B99;
   --community-muted: #5C5969;
   --community-like: #D81E5B;
   --community-float-shadow: 0 4px 16px rgba(42,8,42,0.12);

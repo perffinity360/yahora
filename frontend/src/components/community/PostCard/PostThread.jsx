@@ -10,6 +10,9 @@
 //   · a reply shows the student's username; the campus only if there is room
 //     (the @container rule in the CSS) and never in the campus feed.
 //
+//   · the text is not a drop cap: unlike a post, a reply keeps its avatar in a
+//     column of its own, so every line starts at the same place.
+//
 // `moreRequest` is a counter: when it goes up, the next page loads. It lets the
 // post's reply button open the thread where the student can't reply.
 
@@ -43,47 +46,50 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact }
         <AvatarImg src={reply.author_avatar} name={reply.author_name} size={22} className={styles.replyAvatar} />
       </Link>
 
-      <header className={styles.replyHeader}>
-        <Link
-          to={profile}
-          className={`${styles.replyUsername} ${isAuthor ? styles.replyUsernameAuthor : ""}`}
-          title={isAuthor ? "Author of this post" : undefined}
-        >
-          @{reply.author_username}
-        </Link>
-        {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
-        {time && (
-          <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>
-            {time}
-          </time>
-        )}
-        <span className={styles.replyTools}>
-          <button
-            type="button"
-            className={`${styles.likeBtn} ${mine ? styles.likeBtnOn : ""}`}
-            aria-pressed={Boolean(mine)}
-            aria-label={`${total} ${total === 1 ? "like" : "likes"}. ${mine ? "Remove your like" : "Like this reply"}`}
-            title={mine ? "Unlike" : "Like"}
-            onClick={toggleLike}
+      {/* Its own column: every line of the reply starts at the same place. */}
+      <div className={`${styles.replyBody} ${styles.readable}`}>
+        <header className={styles.replyHeader}>
+          <Link
+            to={profile}
+            className={`${styles.replyUsername} ${isAuthor ? styles.replyUsernameAuthor : ""}`}
+            title={isAuthor ? "Author of this post" : undefined}
           >
-            <span key={popKey} className={popKey ? styles.likePop : undefined}>
-              <Heart size={13} fill={mine ? "currentColor" : "none"} aria-hidden="true" />
-            </span>
-            {total > 0 && <span>{formatCount(total)}</span>}
-          </button>
-          {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
-          <button type="button" className={styles.replyMore} aria-label="More options">
-            <Ellipsis size={14} aria-hidden="true" />
-          </button>
-        </span>
-      </header>
+            @{reply.author_username}
+          </Link>
+          {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
+          {time && (
+            <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>
+              {time}
+            </time>
+          )}
+          <span className={styles.replyTools}>
+            <button
+              type="button"
+              className={`${styles.likeBtn} ${mine ? styles.likeBtnOn : ""}`}
+              aria-pressed={Boolean(mine)}
+              aria-label={`${total} ${total === 1 ? "like" : "likes"}. ${mine ? "Remove your like" : "Like this reply"}`}
+              title={mine ? "Unlike" : "Like"}
+              onClick={toggleLike}
+            >
+              <span key={popKey} className={popKey ? styles.likePop : undefined}>
+                <Heart size={14} fill={mine ? "currentColor" : "none"} aria-hidden="true" />
+              </span>
+              {total > 0 && <span>{formatCount(total)}</span>}
+            </button>
+            {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
+            <button type="button" className={styles.replyMore} aria-label="More options">
+              <Ellipsis size={14} aria-hidden="true" />
+            </button>
+          </span>
+        </header>
 
-      {reply.content && <PostText content={reply.content} className={styles.replyText} />}
-      {reply.gif && (
-        <div className={styles.replyGif}>
-          <PostGif gif={reply.gif} />
-        </div>
-      )}
+        {reply.content && <PostText content={reply.content} className={styles.replyText} />}
+        {reply.gif && (
+          <div className={styles.replyGif}>
+            <PostGif gif={reply.gif} />
+          </div>
+        )}
+      </div>
     </li>
   );
 });

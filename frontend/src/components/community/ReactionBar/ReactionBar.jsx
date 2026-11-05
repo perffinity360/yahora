@@ -15,7 +15,7 @@
 // onReact(emoji | null); what that does to the post is the caller's business.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { CirclePlus, Heart } from "lucide-react";
+import { CirclePlus, Smile } from "lucide-react";
 import Popover from "../Popover/Popover";
 import { EmojiPickerPanel } from "./EmojiPickerPopover";
 import {
@@ -184,7 +184,7 @@ export default function ReactionBar({ reaction, onReact }) {
           {reaction ? (
             <span className={styles.reactEmoji}>{reaction}</span>
           ) : (
-            <Heart size={14} strokeWidth={2} aria-hidden="true" />
+            <Smile size={15} strokeWidth={2} aria-hidden="true" />
           )}
         </span>
       </button>

@@ -11,7 +11,7 @@
   border: 1px solid var(--community-hairline);
   border-radius: 999px;
   background: var(--community-pill);
-  font: 500 11px/1 "Inter", sans-serif;
+  font: 500 12px/1 "Inter", sans-serif;
   font-variant-numeric: tabular-nums;
   color: var(--community-muted);
   cursor: pointer;
@@ -50,7 +50,7 @@
 .emojis {
   display: inline-flex;
   gap: 4px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
 }
 

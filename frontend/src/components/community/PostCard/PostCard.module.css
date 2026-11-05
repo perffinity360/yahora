@@ -4,14 +4,14 @@
 /* ── A post: a flat row with the avatar as a drop cap ──────────────────── */
 
 .post {
-  --text-line: 19px;
+  --text-line: 20px;
   display: flow-root; /* holds the floated avatar */
   /* The row fills the panel. Its content stops at 860 px, centred, so a panel
      opened full width still has readable lines. */
   padding: 9px max(12px, calc((100cqi - 860px) / 2)) 8px;
   border-bottom: 1px solid var(--community-hairline);
   transition: background-color 180ms var(--community-ease);
-  animation: postIn 320ms var(--community-ease) both;
+  animation: postIn 320ms var(--community-ease) backwards;
   animation-delay: calc(var(--post-i, 0) * 28ms);
 }
 
@@ -19,14 +19,73 @@
   background: var(--community-row-hover);
 }
 
+/* The row only rises; what's inside it fades. Fading anything around the glass
+   below would cut it off from the wallpaper it blurs, and it would pop in late. */
 @keyframes postIn {
   from {
-    opacity: 0;
     transform: translateY(4px);
   }
 }
 
+.post > :not(.readable, .thread),
+.reply > :not(.readable),
+.readable > * {
+  animation: contentIn 320ms var(--community-ease) backwards;
+  animation-delay: calc(var(--post-i, 0) * 28ms);
+}
+
+@keyframes contentIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── Keeping text readable on the wallpaper ────────────────────────────── */
+
+/* Frosted glass behind the author line and the text, one layer for each. Its
+   edges fade out, so no rectangle shows where the doodles turn sharp again. On
+   a pseudo-element because a mask on .readable would fade the text as well. */
+.readable {
+  position: relative;
+  isolation: isolate;
+}
+
+.readable::before {
+  content: "";
+  position: absolute;
+  inset: -2px -6px;
+  z-index: -1;
+  background: var(--community-text-glass);
+  -webkit-backdrop-filter: var(--community-text-blur);
+  backdrop-filter: var(--community-text-blur);
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 6px, #000 calc(100% - 6px), transparent),
+    linear-gradient(to bottom, transparent, #000 4px, #000 calc(100% - 4px), transparent);
+  mask-image:
+    linear-gradient(to right, transparent, #000 6px, #000 calc(100% - 6px), transparent),
+    linear-gradient(to bottom, transparent, #000 4px, #000 calc(100% - 4px), transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  pointer-events: none;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .readable::before {
+    background: var(--community-glass);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .readable::before {
+    background: var(--community-canvas);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
 .avatarLink {
+  position: relative; /* stays above the glass, whose box runs behind the float */
+  z-index: 1;
   float: left;
   display: block;
   width: 28px;
@@ -50,7 +109,7 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  min-height: 18px;
+  min-height: 20px;
   white-space: nowrap;
 }
 
@@ -59,7 +118,7 @@
   min-width: 32px;
   overflow: hidden;
   text-overflow: ellipsis;
-  font: 600 13px/18px "Inter", sans-serif;
+  font: 600 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
   text-decoration: none;
 }
@@ -77,7 +136,7 @@
 }
 
 .meta {
-  font: 400 12px/18px "Inter", sans-serif;
+  font: 400 13px/20px "Inter", sans-serif;
   color: var(--community-muted);
   text-decoration: none;
 }
@@ -118,7 +177,7 @@
   align-items: center;
   justify-content: center;
   width: 22px;
-  height: 18px;
+  height: 20px;
   margin: 0 -4px 0 auto;
   padding: 0;
   border: 0;
@@ -155,7 +214,7 @@
 /* ── Text ──────────────────────────────────────────────────────────────── */
 
 .text {
-  font: 400 13px/var(--text-line) "Inter", sans-serif;
+  font: 400 14px/var(--text-line) "Inter", sans-serif;
   color: var(--black-soft);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -179,7 +238,7 @@
   padding: 0;
   border: 0;
   background: none;
-  font: 600 12px/18px "Inter", sans-serif;
+  font: 600 13px/20px "Inter", sans-serif;
   color: var(--purple);
   cursor: pointer;
 }
@@ -313,7 +372,7 @@
   border-radius: 999px;
   background: var(--community-pill);
   color: var(--community-muted);
-  font: 500 11px/1 "Inter", sans-serif;
+  font: 500 12px/1 "Inter", sans-serif;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: background-color 160ms var(--community-ease), color 160ms var(--community-ease),
@@ -337,29 +396,43 @@
 
 /* ── The thread ────────────────────────────────────────────────────────── */
 
-/* The rail sits under the post's avatar, at its centre (14 px). Each reply draws
-   its own piece: a curved elbow into its avatar, and, unless it is the last, a
-   straight run on to the next. */
+/* One continuous line. It sits under the post's avatar, at its centre, and starts
+   against the action row. Each reply draws its own piece: a curved elbow that
+   touches its avatar, and, unless it is the last, a straight run on to the next.
+   The rows touch, and the colour is opaque, so the pieces join with no gap and no
+   darker overlap. */
 .thread {
   --rail-x: -13px;
   --rail: 1.5px solid var(--community-rail);
+  --elbow: 14px; /* from the row's top to the middle of its avatar */
   clear: both;
-  margin: 4px 0 0;
+  margin: 0;
   padding: 0 0 0 26px;
   list-style: none;
 }
 
 .reply,
 .threadMore {
+  --post-i: 0;
   position: relative;
-  display: flow-root;
-  padding: 6px 0 3px;
-  animation: replyIn 260ms var(--community-ease) both;
+  margin: 0; /* footer.module.css has a bare `li` rule that leaks 0.6rem everywhere */
+}
+
+.reply {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 8px;
+  padding: 4px 0 2px;
+  animation: replyIn 260ms var(--community-ease) backwards;
+}
+
+.threadMore {
+  --elbow: 13px;
+  padding-top: 2px;
 }
 
 @keyframes replyIn {
   from {
-    opacity: 0;
     transform: translateY(-3px);
   }
 }
@@ -370,8 +443,8 @@
   position: absolute;
   top: 0;
   left: var(--rail-x);
-  width: 10px;
-  height: 17px;
+  width: calc(-1 * var(--rail-x));
+  height: var(--elbow);
   border-left: var(--rail);
   border-bottom: var(--rail);
   border-bottom-left-radius: 10px;
@@ -387,11 +460,12 @@
 }
 
 .replyAvatarLink {
-  float: left;
+  position: relative;
+  z-index: 1;
   display: block;
   width: 22px;
   height: 22px;
-  margin-right: 6px;
+  margin-top: -1px; /* centres it on the 20 px author line */
   border-radius: 50%;
 }
 
@@ -403,13 +477,21 @@
   object-fit: cover;
 }
 
+.replyBody {
+  min-width: 0;
+}
+
 .replyHeader {
   display: flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
-  min-height: 18px;
+  min-height: 20px;
   white-space: nowrap;
+}
+
+.replyHeader .meta {
+  font-size: 12px;
 }
 
 .replyUsername {
@@ -417,7 +499,7 @@
   min-width: 32px;
   overflow: hidden;
   text-overflow: ellipsis;
-  font: 600 12px/18px "Inter", sans-serif;
+  font: 600 13px/20px "Inter", sans-serif;
   color: var(--black-soft);
   text-decoration: none;
 }
@@ -426,9 +508,11 @@
   text-decoration: underline;
 }
 
-/* The post's own author, replying to themselves. */
+/* The post's own author, replying to themselves. The negative margin keeps the
+   name itself in line with the text below; only the pill reaches out. */
 .replyUsernameAuthor {
-  padding: 0 6px;
+  margin-left: -5px;
+  padding: 0 5px;
   border-radius: 999px;
   background: var(--reaction-mine-bg);
   color: var(--purple);
@@ -453,7 +537,7 @@
   border-radius: 999px;
   background: transparent;
   color: var(--community-muted);
-  font: 500 11px/1 "Inter", sans-serif;
+  font: 500 12px/1 "Inter", sans-serif;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: background-color 140ms var(--community-ease), color 140ms var(--community-ease);
@@ -524,12 +608,8 @@
 }
 
 .replyText {
-  --text-line: 18px;
-  font-size: 12.5px;
-}
-
-.replyGif {
-  clear: both;
+  --text-line: 19px;
+  font-size: 13px;
 }
 
 .replyGif .gif {
@@ -541,12 +621,11 @@
   align-items: center;
   gap: 4px;
   height: 22px;
-  margin-top: 3px;
   padding: 0 6px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  font: 600 12px/16px "Inter", sans-serif;
+  font: 600 13px/16px "Inter", sans-serif;
   color: var(--purple);
   cursor: pointer;
   transition: background-color 140ms var(--community-ease);
@@ -593,12 +672,18 @@
   .showMore {
     height: 36px;
   }
+
+  .threadMore {
+    --elbow: 20px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .post,
+  .post > :not(.readable, .thread),
   .reply,
-  .threadMore,
+  .reply > :not(.readable),
+  .readable > *,
   .likePop {
     animation: none;
   }

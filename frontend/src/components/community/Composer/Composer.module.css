@@ -58,7 +58,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 500 11px/15px "Inter", sans-serif;
+  font: 500 12px/16px "Inter", sans-serif;
   color: var(--community-muted);
 }
 
@@ -71,7 +71,7 @@
   padding: 0 2px 0 7px;
   border-radius: 999px;
   background: var(--reaction-mine-bg);
-  font: 500 11px/18px "Inter", sans-serif;
+  font: 500 12px/18px "Inter", sans-serif;
   color: var(--purple);
 }
 
@@ -132,7 +132,7 @@
   background: transparent;
   resize: none;
   overflow-y: auto;
-  font: 400 13px/18px "Inter", sans-serif;
+  font: 400 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
 }
 
@@ -290,7 +290,7 @@
   padding: 2px 7px;
   border-radius: 999px;
   background: var(--input-bg);
-  font: 500 11px/15px "Inter", sans-serif;
+  font: 500 12px/16px "Inter", sans-serif;
   color: var(--black-soft);
 }
 
@@ -380,7 +380,7 @@
   border-radius: 12px;
   background: var(--pink-light);
   box-shadow: var(--community-float-shadow);
-  font: 400 13px/19px "Inter", sans-serif;
+  font: 400 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
   animation: supportIn 260ms var(--community-ease);
 }

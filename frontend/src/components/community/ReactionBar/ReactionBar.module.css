@@ -25,7 +25,7 @@
 .reactBtn:hover {
   background: var(--reaction-mine-bg);
   border-color: var(--reaction-mine-border);
-  color: var(--community-like);
+  color: var(--purple);
 }
 
 .reactBtn:active {
@@ -52,7 +52,7 @@
 }
 
 .reactEmoji {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
 }
 

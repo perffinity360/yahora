@@ -15,9 +15,18 @@ the variables in `src/styles/global.css`.
 3. Decide, and write down why.
 4. Build it, then add anything reusable to this file.
 
+## Tools and our own assets
+
+- **Installing or adding a design skill or package is allowed and encouraged.** We want the best possible
+  design: modern, premium, attractive and beautiful. Don't settle for less to avoid adding a dependency.
+- **If what we need doesn't exist, create our own:** animations, motion graphics, stickers, or any similar
+  component.
+- The stack rules in `frontend/CLAUDE.md` §16 still apply, so a Tailwind-based library gets re-implemented in
+  CSS Modules rather than installed.
+
 ## Density
 
-- **Compact by default.** Body 13/19, secondary 12, small labels 11. Panel headers 36 px, controls 24–28 px.
+- **Compact by default.** Body 14/20, secondary 13, small labels 12. Panel headers 36 px, controls 24–28 px.
   Developer tools like LeetCode are the reference for how tight a working surface can be.
 - Don't make things bigger to fill space. Let the content have the room.
 
@@ -27,7 +36,8 @@ the variables in `src/styles/global.css`.
 - **Floating chrome.** Headers, switchers and composers float on glass (white at about 74%, blur 14),
   and content passes underneath. It feels more spacious than a solid bar.
 - Radii stay small on working surfaces: panels 8, menus and dialogs 10–12. Pills are for small actions.
-- Text on a patterned background needs a light tint or note behind it.
+- Text on a patterned background needs something behind it. On trial on the community page: frosted glass
+  (white at about 32%, blur 6) on a pseudo-element, with its edges faded by a mask so no rectangle shows.
 
 ## Icons over words
 
@@ -38,8 +48,9 @@ the variables in `src/styles/global.css`.
 
 ## Using width well
 
-- **An avatar is a drop cap, not a column.** Float it in the corner so only the first lines sit beside it.
-  Text wraps below it, and media gets the full width.
+- **A post's avatar is a drop cap, not a column.** Float it in the corner so only the first lines sit beside
+  it. Text wraps below it, and media gets the full width. Short nested rows, like replies, are the exception:
+  avatar in its own column, and every line starts in the same place.
 - **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
   context already says, such as a campus name in that campus's own feed.
 - **Components respond to their container, not the window.** Use `@container` and `cqi`, because a panel
@@ -71,5 +82,10 @@ the variables in `src/styles/global.css`.
 - Text contrast at least 4.5:1 (3:1 for large text and icons). `--muted-text` is 4.44:1 on the chat
   wallpaper, so use `--community-muted` there.
 - New colours become variables, never hardcoded values, and each one is listed with its app token name.
+- Anything that fades (`opacity`, `filter`, `mask`) cuts the `backdrop-filter` inside it off from what's
+  behind, so it blurs nothing and pops in late. Fade the glass's contents and move its parent with `transform`.
+- Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every
+  overlap as a darker patch.
+- A bare element selector in a `.module.css` file isn't scoped; it leaks to the whole site. Use a class.
 - A `position: fixed` element inside a `backdrop-filter` or `@container` parent is trapped by it, so render
   it in a portal.

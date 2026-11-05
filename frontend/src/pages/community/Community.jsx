@@ -440,28 +440,31 @@ function NarrowLayout({
           >
             <CampusIcon size={17} />
           </button>
-          <button
-            type="button"
-            aria-pressed={onWorld}
-            className={`${styles.segment} ${onWorld ? styles.segmentActive : ""}`}
-            onClick={() => setSegment("world")}
-          >
-            <WorldGlyph value={world} size={15} />
-            <span className={styles.segmentName}>{label}</span>
-          </button>
-          {/* Its own button: choosing a country is never a hidden second tap. */}
-          <button
-            ref={setMenuAnchor}
-            type="button"
-            aria-haspopup="listbox"
-            aria-expanded={menuOpen}
-            aria-label="Choose a feed"
-            title="Choose a feed"
-            className={styles.segmentChevron}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            <ChevronDown size={14} aria-hidden="true" className={menuOpen ? styles.chevronOpen : styles.chevron} />
-          </button>
+          <div className={`${styles.worldSegment} ${onWorld ? styles.worldSegmentActive : ""}`}>
+            <button
+              type="button"
+              aria-pressed={onWorld}
+              className={styles.segment}
+              onClick={() => setSegment("world")}
+            >
+              <WorldGlyph value={world} size={15} />
+              <span className={styles.segmentName}>{label}</span>
+            </button>
+            {/* Its own button, inside the purple, and only once you're on this feed. */}
+            <button
+              ref={setMenuAnchor}
+              type="button"
+              inert={!onWorld}
+              aria-haspopup="listbox"
+              aria-expanded={menuOpen}
+              aria-label="Choose a feed"
+              title="Choose a feed"
+              className={styles.segmentChevron}
+              onClick={() => setMenuOpen((o) => !o)}
+            >
+              <ChevronDown size={14} aria-hidden="true" className={menuOpen ? styles.chevronOpen : styles.chevron} />
+            </button>
+          </div>
         </div>
         {onWorld && (
           <div className={styles.switcherSort}>
