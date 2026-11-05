@@ -1,0 +1,67 @@
+/* frontend/src/components/community/AnimatedIcons/AnimatedIcons.module.css
+   docs/design/COMMUNITY_SPEC.md §1.1. */
+
+.icon {
+  flex: 0 0 auto;
+  display: block;
+  overflow: visible;
+}
+
+.draw,
+.drawLate {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: iconDraw 520ms var(--community-ease) both;
+}
+
+.drawLate {
+  animation-delay: 180ms;
+}
+
+@keyframes iconDraw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Any header or button around the icon can be the hover target. */
+header:hover .campus,
+button:hover > .campus {
+  animation: capHop 420ms var(--community-spring);
+}
+
+@keyframes capHop {
+  40% {
+    transform: translateY(-2px) rotate(-5deg);
+  }
+}
+
+.meridian {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+header:hover .meridian,
+button:hover .meridian {
+  animation: globeTurn 720ms var(--community-ease);
+}
+
+@keyframes globeTurn {
+  50% {
+    transform: scaleX(0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw,
+  .drawLate,
+  header:hover .campus,
+  button:hover > .campus,
+  header:hover .meridian,
+  button:hover .meridian {
+    animation: none;
+  }
+}

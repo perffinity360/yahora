@@ -4,10 +4,11 @@
 //
 //   ≥ 1024 px  two panels (react-resizable-panels): My campus on the left,
 //              a country or Global on the right. Drag, double-click for
-//              50 / 50, keyboard on the divider, collapse to a 44 px bar,
-//              ⤢ for full width. The layout is remembered.
-//   < 1024 px  one feed at a time behind a sticky segmented switcher, like
-//              the app.
+//              50 / 50, keyboard on the divider, collapse to a 36 px bar,
+//              ⤢ for full width. The layout is remembered. Your avatar rides
+//              on the divider, between the two composers.
+//   < 1024 px  one feed at a time, with a floating switcher and composer that
+//              the posts pass underneath.
 //
 // Only one layout is mounted (useMediaQuery), so the feeds load once. Both
 // layouts offer the same feeds and the same actions (frontend/CLAUDE.md §18).
@@ -15,11 +16,21 @@
 // ⚠ Part 1: everything here runs on ./sampleData.js. Part 2 replaces it with
 // the posts API and deletes that file.
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
-import { ChevronDown, ChevronLeft, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Flame,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
+import AvatarImg from "../../components/AvatarImg/AvatarImg";
+import { CampusIcon } from "../../components/community/AnimatedIcons/AnimatedIcons";
 import CommunityFeed from "./CommunityFeed";
-import CountryMenu, { GLOBAL, worldLabel } from "./CountryMenu";
+import CountryMenu, { GLOBAL, WorldGlyph, worldLabel } from "./CountryMenu";
 import useMediaQuery from "../../hooks/useMediaQuery";
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 import {
@@ -33,6 +44,8 @@ import styles from "./Community.module.css";
 const LAYOUT_KEY = "yahora.community.layout";
 const LEFT = "campus";
 const RIGHT = "world";
+/* A little longer than the panels' 280 ms transition (Community.module.css). */
+const PANEL_ANIMATION_MS = 320;
 
 /* The saved layout, or undefined for the 50 / 50 default. Anything that
    doesn't look like our two panels is ignored rather than trusted. */
@@ -54,30 +67,34 @@ function saveLayout(layout) {
   }
 }
 
-/** Hot · New (spec §1.1), only on the country / Global side. */
+/** Hot · New (spec §1.1), as two icons, only on the country / Global side. */
 function SortSwitch({ sort, onChange }) {
+  const options = [
+    ["hot", "Hot", Flame],
+    ["new", "New", Clock],
+  ];
   return (
-    <div className={styles.sortSwitch} role="group" aria-label="Sort posts">
-      {[
-        ["hot", "Hot"],
-        ["new", "New"],
-      ].map(([value, label]) => (
+    <div className={styles.sortSwitch} role="group" aria-label="Sort posts" data-sort={sort}>
+      <span className={styles.sortThumb} aria-hidden="true" />
+      {options.map(([value, label, Icon]) => (
         <button
           key={value}
           type="button"
           aria-pressed={sort === value}
+          aria-label={label}
+          title={label}
           className={`${styles.sortBtn} ${sort === value ? styles.sortBtnActive : ""}`}
           onClick={() => onChange(value)}
         >
-          {label}
+          <Icon size={14} aria-hidden="true" />
         </button>
       ))}
     </div>
   );
 }
 
-/** A panel collapsed to its 44 px bar: the name written vertically and an
-    expand button (spec §1.1). */
+/** A panel collapsed to its 36 px bar: an expand button and the name written
+    vertically (spec §1.1). */
 function CollapsedBar({ label, side, onExpand }) {
   const Icon = side === "left" ? ChevronRight : ChevronLeft;
   return (
@@ -89,7 +106,7 @@ function CollapsedBar({ label, side, onExpand }) {
         aria-label={`Expand ${label}`}
         title="Expand"
       >
-        <Icon size={18} aria-hidden="true" />
+        <Icon size={15} aria-hidden="true" />
       </button>
       <button type="button" className={styles.verticalLabel} onClick={onExpand} tabIndex={-1}>
         {label}
@@ -105,6 +122,15 @@ export default function Community() {
   const countries = SAMPLE_COUNTRIES;
   const myCountry = countries.find((c) => c.is_mine)?.code ?? GLOBAL;
   const campusName = SAMPLE_VIEWER.university;
+  const viewer = useMemo(
+    () => ({
+      username: SAMPLE_VIEWER.username,
+      name: SAMPLE_VIEWER.name,
+      avatar: SAMPLE_VIEWER.avatar,
+      campus: SAMPLE_VIEWER.university,
+    }),
+    [],
+  );
 
   // View state that changes what is on screen lives in the history entry, so
   // Back returns to the same feed (frontend/CLAUDE.md §13).
@@ -128,25 +154,23 @@ export default function Community() {
     }));
   }, []);
 
-  const worldName = world === GLOBAL ? "Global" : countries.find((c) => c.code === world)?.name ?? world;
+  const worldName = worldLabel(world, countries);
 
-  // Spec §2.1 and §9: the words for each feed.
+  // Spec §9: the words for each feed.
   const campusFeed = {
     kind: "campus",
-    composerText: "What's happening on campus?",
-    emptyText: `No posts from ${campusName} yet. Be the first to say hello 👋`,
+    emptyText: `No posts from ${campusName} yet. Be the first to say hello.`,
   };
   const worldFeed =
     world === GLOBAL
       ? {
           kind: "global",
-          composerText: "Share with students everywhere",
-          emptyText: "Nothing here yet. Start the conversation 🌍",
+          emptyText: "Nothing here yet. Start the conversation.",
         }
       : {
           kind: "country",
           country: world,
-          composerText: `Share with students in ${worldName}`,
+          countryName: worldName,
           emptyText:
             world === myCountry
               ? `No posts from students in ${worldName} yet. Start the conversation.`
@@ -154,7 +178,7 @@ export default function Community() {
           viewOnlyName: worldName,
         };
 
-  const shared = { countries, patches, onReact };
+  const shared = { patches, onReact, viewer };
 
   return wide ? (
     <WideLayout
@@ -165,6 +189,8 @@ export default function Community() {
       setWorld={setWorld}
       sort={sort}
       setSort={setSort}
+      countries={countries}
+      viewer={viewer}
       shared={shared}
     />
   ) : (
@@ -177,6 +203,7 @@ export default function Community() {
       setSort={setSort}
       segment={segment}
       setSegment={setSegment}
+      countries={countries}
       shared={shared}
     />
   );
@@ -184,27 +211,55 @@ export default function Community() {
 
 /* ── ≥ 1024 px: two panels ─────────────────────────────────────────────── */
 
-function WideLayout({ campusName, campusFeed, worldFeed, world, setWorld, sort, setSort, shared }) {
-  const { countries } = shared;
+function WideLayout({
+  campusName,
+  campusFeed,
+  worldFeed,
+  world,
+  setWorld,
+  sort,
+  setSort,
+  countries,
+  viewer,
+  shared,
+}) {
   const leftRef = usePanelRef();
   const rightRef = usePanelRef();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
-  const [leftScroll, setLeftScroll] = useState(null);
-  const [rightScroll, setRightScroll] = useState(null);
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  const animationTimer = useRef(null);
   const defaultLayout = useMemo(readLayout, []);
 
+  useEffect(() => () => clearTimeout(animationTimer.current), []);
+
   const isCollapsed = (size) => size.inPixels <= LAYOUT_COLLAPSED_PX + 2;
+
+  // The panels glide only for a button press. During a drag they must follow
+  // the pointer exactly, so the transition is switched on just for this.
+  const glide = () => {
+    setAnimating(true);
+    clearTimeout(animationTimer.current);
+    animationTimer.current = setTimeout(() => setAnimating(false), PANEL_ANIMATION_MS);
+  };
+  const collapse = (ref) => {
+    glide();
+    ref.current?.collapse();
+  };
+  const expand = (ref) => {
+    glide();
+    ref.current?.expand();
+  };
 
   // ⤢ opens this panel full width by collapsing the other; pressed again
   // (the other one is collapsed) it restores both.
   const toggleMax = (otherRef) => {
     const other = otherRef.current;
     if (!other) return;
-    if (other.isCollapsed()) other.expand();
-    else other.collapse();
+    if (other.isCollapsed()) expand(otherRef);
+    else collapse(otherRef);
   };
 
   const label = worldLabel(world, countries);
@@ -213,7 +268,8 @@ function WideLayout({ campusName, campusFeed, worldFeed, world, setWorld, sort, 
     <div className={styles.wide}>
       <Group
         orientation="horizontal"
-        className={styles.group}
+        className={`${styles.group} ${animating ? styles.groupGliding : ""}`}
+        style={{ overflow: "visible" }}
         defaultLayout={defaultLayout}
         onLayoutChanged={(layout, meta) => saveLayout(meta?.requestedLayout ?? layout)}
       >
@@ -226,26 +282,28 @@ function WideLayout({ campusName, campusFeed, worldFeed, world, setWorld, sort, 
           collapsedSize={LAYOUT_COLLAPSED_PX}
           onResize={(size) => setLeftCollapsed(isCollapsed(size))}
           className={styles.panel}
+          style={{ overflow: "hidden" }}
         >
           {leftCollapsed && (
-            <CollapsedBar label="My campus" side="left" onExpand={() => leftRef.current?.expand()} />
+            <CollapsedBar label="My campus" side="left" onExpand={() => expand(leftRef)} />
           )}
           {/* Kept mounted while collapsed, so expanding again finds the feed
               where it was instead of reloading it. */}
           <section className={styles.panelInner} hidden={leftCollapsed} aria-label="My campus">
             <header className={styles.panelHeader}>
               <h2 className={styles.campusTitle}>
-                <span aria-hidden="true">🏫</span> {campusName}
+                <CampusIcon size={17} className={styles.campusIcon} />
+                <span>{campusName}</span>
               </h2>
               <div className={styles.panelTools}>
                 <button
                   type="button"
                   className={styles.iconBtn}
-                  onClick={() => leftRef.current?.collapse()}
+                  onClick={() => collapse(leftRef)}
                   aria-label="Collapse My campus"
                   title="Collapse"
                 >
-                  <ChevronLeft size={18} aria-hidden="true" />
+                  <ChevronLeft size={15} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
@@ -254,17 +312,21 @@ function WideLayout({ campusName, campusFeed, worldFeed, world, setWorld, sort, 
                   aria-label={rightCollapsed ? "Restore both panels" : "Open My campus full width"}
                   title={rightCollapsed ? "Restore" : "Full width"}
                 >
-                  {rightCollapsed ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+                  {rightCollapsed ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
                 </button>
               </div>
             </header>
-            <div ref={setLeftScroll} className={styles.panelScroll}>
-              <CommunityFeed key="campus" {...campusFeed} scrollRoot={leftScroll} {...shared} />
-            </div>
+            <CommunityFeed key="campus" {...campusFeed} inPanel side="left" {...shared} />
           </section>
         </Panel>
 
-        <Separator className={styles.handle} />
+        {/* The avatar is a child of the divider, so it moves with it for free. */}
+        <Separator className={styles.handle}>
+          <span className={styles.handleGrip} aria-hidden="true" />
+          <span className={styles.handleAvatar} aria-hidden="true">
+            <AvatarImg src={viewer.avatar} name={viewer.name} size={36} className={styles.handleAvatarImg} />
+          </span>
+        </Separator>
 
         <Panel
           id={RIGHT}
@@ -275,9 +337,10 @@ function WideLayout({ campusName, campusFeed, worldFeed, world, setWorld, sort, 
           collapsedSize={LAYOUT_COLLAPSED_PX}
           onResize={(size) => setRightCollapsed(isCollapsed(size))}
           className={styles.panel}
+          style={{ overflow: "hidden" }}
         >
           {rightCollapsed && (
-            <CollapsedBar label={label} side="right" onExpand={() => rightRef.current?.expand()} />
+            <CollapsedBar label={label} side="right" onExpand={() => expand(rightRef)} />
           )}
           <section className={styles.panelInner} hidden={rightCollapsed} aria-label={label}>
             <header className={styles.panelHeader}>
@@ -285,13 +348,15 @@ function WideLayout({ campusName, campusFeed, worldFeed, world, setWorld, sort, 
                 <button
                   ref={setMenuAnchor}
                   type="button"
-                  className={styles.countryBtn}
+                  className={styles.worldBtn}
                   aria-haspopup="listbox"
                   aria-expanded={menuOpen}
+                  aria-label={`${label}. Choose a feed`}
                   onClick={() => setMenuOpen((o) => !o)}
                 >
-                  <span>{label}</span>
-                  <ChevronDown size={16} aria-hidden="true" />
+                  <WorldGlyph value={world} size={15} />
+                  <span className={styles.worldName}>{label}</span>
+                  <ChevronDown size={13} aria-hidden="true" className={menuOpen ? styles.chevronOpen : styles.chevron} />
                 </button>
                 <SortSwitch sort={sort} onChange={setSort} />
               </div>
@@ -303,28 +368,27 @@ function WideLayout({ campusName, campusFeed, worldFeed, world, setWorld, sort, 
                   aria-label={leftCollapsed ? "Restore both panels" : `Open ${label} full width`}
                   title={leftCollapsed ? "Restore" : "Full width"}
                 >
-                  {leftCollapsed ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+                  {leftCollapsed ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
                 </button>
                 <button
                   type="button"
                   className={styles.iconBtn}
-                  onClick={() => rightRef.current?.collapse()}
+                  onClick={() => collapse(rightRef)}
                   aria-label={`Collapse ${label}`}
                   title="Collapse"
                 >
-                  <ChevronRight size={18} aria-hidden="true" />
+                  <ChevronRight size={15} aria-hidden="true" />
                 </button>
               </div>
             </header>
-            <div ref={setRightScroll} className={styles.panelScroll}>
-              <CommunityFeed
-                key={`${worldFeed.kind}:${worldFeed.country ?? ""}:${sort}`}
-                {...worldFeed}
-                sort={sort}
-                scrollRoot={rightScroll}
-                {...shared}
-              />
-            </div>
+            <CommunityFeed
+              key={`${worldFeed.kind}:${worldFeed.country ?? ""}:${sort}`}
+              {...worldFeed}
+              sort={sort}
+              inPanel
+              side="right"
+              {...shared}
+            />
           </section>
         </Panel>
       </Group>
@@ -353,46 +417,57 @@ function NarrowLayout({
   setSort,
   segment,
   setSegment,
+  countries,
   shared,
 }) {
-  const { countries } = shared;
-  const [worldSeg, setWorldSeg] = useState(null);
+  const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const label = worldLabel(world, countries);
   const onWorld = segment === "world";
 
   return (
     <div className={styles.narrow}>
+      {/* Transparent and floating: the posts scroll underneath it. */}
       <div className={styles.switcher}>
-        {/* The feed's own column, so the switcher lines up with the posts. */}
-        <div className={styles.switcherInner}>
-          <div className={styles.segments} role="tablist" aria-label="Community feeds">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!onWorld}
-              className={`${styles.segment} ${!onWorld ? styles.segmentActive : ""}`}
-              onClick={() => setSegment("campus")}
-            >
-              Campus
-            </button>
-            <button
-              ref={setWorldSeg}
-              type="button"
-              role="tab"
-              aria-selected={onWorld}
-              aria-haspopup="listbox"
-              aria-expanded={menuOpen}
-              className={`${styles.segment} ${onWorld ? styles.segmentActive : ""}`}
-              // Spec §1.2: tapping it again, once selected, opens the dropdown.
-              onClick={() => (onWorld ? setMenuOpen((o) => !o) : setSegment("world"))}
-            >
-              <span>{label}</span>
-              <ChevronDown size={16} aria-hidden="true" />
-            </button>
-          </div>
-          {onWorld && <SortSwitch sort={sort} onChange={setSort} />}
+        <div className={styles.segments} role="group" aria-label="Community feeds">
+          <button
+            type="button"
+            aria-pressed={!onWorld}
+            aria-label="My campus"
+            title="My campus"
+            className={`${styles.segment} ${styles.segmentIcon} ${!onWorld ? styles.segmentActive : ""}`}
+            onClick={() => setSegment("campus")}
+          >
+            <CampusIcon size={17} />
+          </button>
+          <button
+            type="button"
+            aria-pressed={onWorld}
+            className={`${styles.segment} ${onWorld ? styles.segmentActive : ""}`}
+            onClick={() => setSegment("world")}
+          >
+            <WorldGlyph value={world} size={15} />
+            <span className={styles.segmentName}>{label}</span>
+          </button>
+          {/* Its own button: choosing a country is never a hidden second tap. */}
+          <button
+            ref={setMenuAnchor}
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={menuOpen}
+            aria-label="Choose a feed"
+            title="Choose a feed"
+            className={styles.segmentChevron}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <ChevronDown size={14} aria-hidden="true" className={menuOpen ? styles.chevronOpen : styles.chevron} />
+          </button>
         </div>
+        {onWorld && (
+          <div className={styles.switcherSort}>
+            <SortSwitch sort={sort} onChange={setSort} />
+          </div>
+        )}
       </div>
 
       {onWorld ? (
@@ -408,10 +483,13 @@ function NarrowLayout({
 
       {menuOpen && (
         <CountryMenu
-          anchorEl={worldSeg}
+          anchorEl={menuAnchor}
           value={world}
           countries={countries}
-          onChange={setWorld}
+          onChange={(code) => {
+            setWorld(code);
+            setSegment("world");
+          }}
           onClose={() => setMenuOpen(false)}
         />
       )}

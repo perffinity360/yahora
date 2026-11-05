@@ -85,6 +85,25 @@
   --reaction-mine-border: rgba(128,0,128,0.35);
   --quick-bar-shadow: 0 6px 20px rgba(11,11,11,0.16);
 
+  /* Community redesign — docs/design/COMMUNITY_SPEC.md §12 (Block V-P).
+     Canvas and tile strength are the chat's (MESSAGES_SPEC §2), so the two
+     screens share one wallpaper. */
+  --input-bg: #F3F0EF;
+  --community-canvas: #EDE6F5;
+  --community-canvas-veil: rgba(237,230,245,0.5);
+  --community-row-campus: rgba(255,250,246,0.5);
+  --community-row-world: rgba(255,255,255,0.24);
+  --community-row-hover: rgba(128,0,128,0.035);
+  --community-glass: rgba(255,255,255,0.74);
+  --community-pill: rgba(255,255,255,0.72);
+  --community-hairline: rgba(128,0,128,0.1);
+  --community-rail: rgba(128,0,128,0.26);
+  --community-muted: #5C5969;
+  --community-like: #D81E5B;
+  --community-float-shadow: 0 4px 16px rgba(42,8,42,0.12);
+  --community-ease: cubic-bezier(0.2,0.8,0.2,1);
+  --community-spring: cubic-bezier(0.34,1.56,0.64,1);
+
   /* Text & background */
   --black: #0B0B0B;
   --black-soft: #1A1A1A;

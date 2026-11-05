@@ -1,15 +1,14 @@
 /* frontend/src/components/community/GifPicker/GifPicker.module.css
-   docs/design/COMMUNITY_SPEC.md §6. Plain on purpose: V-P redesigns it. */
+   docs/design/COMMUNITY_SPEC.md §6. */
 
 .picker {
-  --gif-input-bg: #F3F0EF; /* inputBg */
   display: flex;
   flex-direction: column;
-  width: 340px;
+  width: 320px;
   max-width: calc(100vw - 16px);
-  height: 420px;
+  height: 380px;
   max-height: calc(100dvh - 32px);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--white);
   box-shadow: var(--quick-bar-shadow);
   overflow: hidden;
@@ -18,29 +17,30 @@
 .searchRow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px;
+  gap: 4px;
+  padding: 8px;
 }
 
 .search {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--gif-input-bg);
-  color: var(--muted-text);
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--community-muted);
+  transition: box-shadow 140ms var(--community-ease);
 }
 
 .searchInput {
   flex: 1 1 auto;
   min-width: 0;
-  height: 36px;
+  height: 30px;
   border: 0;
   background: transparent;
-  font: 400 14px/20px "Inter", sans-serif;
+  font: 400 13px/18px "Inter", sans-serif;
   color: var(--black-soft);
   outline: none;
 }
@@ -53,12 +53,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 6px;
   background: transparent;
-  color: var(--muted-text);
+  color: var(--community-muted);
   cursor: pointer;
 }
 
@@ -75,20 +75,21 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 10px;
+  padding: 0 8px;
+  scrollbar-width: thin;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
 }
 
 .tile,
 .tileSkeleton {
   aspect-ratio: 1 / 1;
-  border-radius: 8px;
-  background: var(--gif-input-bg);
+  border-radius: 6px;
+  background: var(--input-bg);
 }
 
 .tile {
@@ -103,27 +104,28 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 220ms var(--community-ease);
 }
 
 .tile:hover img {
-  opacity: 0.85;
+  transform: scale(1.06);
 }
 
 .tile:focus-visible {
   outline: 2px solid var(--purple);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .message {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
-  padding: 32px 12px;
+  padding: 28px 12px;
   text-align: center;
-  font: 400 14px/20px "Inter", sans-serif;
-  color: var(--muted-text);
+  font: 400 13px/18px "Inter", sans-serif;
+  color: var(--community-muted);
 }
 
 .message p {
@@ -131,20 +133,37 @@
 }
 
 .retry {
-  padding: 6px 14px;
+  height: 28px;
+  padding: 0 12px;
   border: 1px solid var(--reaction-mine-border);
   border-radius: 999px;
   background: var(--white);
-  font: 600 13px/20px "Inter", sans-serif;
+  font: 600 12px/16px "Inter", sans-serif;
   color: var(--purple);
   cursor: pointer;
 }
 
+.retry:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
 .credit {
   margin: 0;
-  padding: 8px 12px;
+  padding: 5px 10px;
   text-align: right;
-  font: 500 11px/16px "Inter", sans-serif;
-  color: var(--muted-text);
-  border-top: 1px solid var(--reaction-pill-border);
+  font: 500 10px/14px "Inter", sans-serif;
+  color: var(--community-muted);
+  border-top: 1px solid var(--community-hairline);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search,
+  .tile img {
+    transition: none;
+  }
+
+  .tile:hover img {
+    transform: none;
+  }
 }

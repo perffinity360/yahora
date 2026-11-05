@@ -15,11 +15,14 @@ export const NEW_POSTS_POLL_MS = 30000;
 export const QUICK_REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
 export const DEFAULT_REACTION = "❤️";
 export const REACTION_HOVER_DELAY_MS = 300;
+export const REACTION_LONG_PRESS_MS = 450;
 export const GIF_SEARCH_DEBOUNCE_MS = 300;
 export const LAYOUT_MIN_PANEL_PX = 320;
-export const LAYOUT_COLLAPSED_PX = 44;
+export const LAYOUT_COLLAPSED_PX = 36;
 export const LAYOUT_BREAKPOINT_PX = 1024;
 export const REPORT_DETAILS_MAX = 500;
+export const REPLY_PREVIEW_COUNT = 2;
+export const REACTION_SUMMARY_COUNT = 4;
 
 /* Runbook §1.12: count code points, the way Postgres char_length() does, so
    the counter and the database agree about emoji. */
@@ -78,7 +81,7 @@ export function sortedReactions(counts) {
 }
 
 /* Spec §5.3: the top emojis by count, for the summary pill. */
-export function topReactions(counts, n = 3) {
+export function topReactions(counts, n = REACTION_SUMMARY_COUNT) {
   return sortedReactions(counts)
     .slice(0, n)
     .map(([emoji]) => emoji);

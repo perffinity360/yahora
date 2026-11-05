@@ -1972,9 +1972,7 @@ Read first: docs/design/COMMUNITY_SPEC.md (all of it), runbook §0.7, §1.1
 and §1.13, frontend/CLAUDE.md, and Neeraj's N-S changelog entry (his notes
 on what looks wrong). Open /community and /dev/community.
 
-⛔ IGNORE the colours and fonts in frontend/DESIGN.md, and the "Never Inter"
-line in frontend/CLAUDE.md §15. They describe a rebrand that was never
-adopted (highlighter yellow, Khand, Instrument Sans). The decided brand,
+The decided brand,
 the same on the website and the app: Inter for text; Bree Serif, regular
 400 only, for headings and prices; the colour variables already in
 src/styles/global.css. Everything else in frontend/CLAUDE.md applies.
@@ -1997,15 +1995,10 @@ THE RULES (runbook Block V-P):
 4. Quality: visible keyboard focus on every control; text contrast at least
    4.5:1 (3:1 for large text and icons); respect prefers-reduced-motion.
 
-Start by telling me, in one sentence, the direction you propose, and the 5
-biggest problems you see in the current page and in Neeraj's notes. Then
-wait for my answer before changing any code.
-
 VERIFY AFTER each round — report:
 1. npm run build passes.
-2. Screenshots at 1440 and 390 px wide (Playwright), with your critique.
-3. The files you changed — all from the loan list.
-4. The spec sections you updated.
+2. The files you changed — all from the loan list.
+3. The spec sections you updated.
 ```
 
 ## CC-V3 — Messages: reactions and GIFs; demo usernames; campus countries

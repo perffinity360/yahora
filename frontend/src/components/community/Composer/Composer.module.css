@@ -1,100 +1,173 @@
 /* frontend/src/components/community/Composer/Composer.module.css
-   docs/design/COMMUNITY_SPEC.md §2. Plain on purpose: V-P redesigns it. */
+   docs/design/COMMUNITY_SPEC.md §2. */
 
 .root {
-  --composer-input-bg: #F3F0EF; /* inputBg */
-  --composer-hairline: rgba(128, 0, 128, 0.12);
   position: relative; /* for the AppToast */
   width: 100%;
 }
 
-/* §2.1 */
-.closed {
+.shell {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--composer-hairline);
+  flex-direction: column;
+  border: 1px solid var(--community-hairline);
   border-radius: 16px;
   background: var(--white);
-  text-align: left;
-  font: 400 15px/22px "Inter", sans-serif;
-  color: var(--muted-text);
-  cursor: text;
+  transition: border-color 180ms var(--community-ease), box-shadow 220ms var(--community-ease),
+    border-radius 220ms var(--community-ease);
 }
 
-.closed:hover {
+.shell:hover {
   border-color: var(--reaction-mine-border);
 }
 
-.closed:focus-visible {
+.shellOpen {
+  border-color: var(--reaction-mine-border);
+  border-radius: 12px;
+  box-shadow: var(--community-float-shadow);
+}
+
+/* The parts that appear when it opens. Grid rows can animate to the content's
+   own height, which height: auto can't. */
+.reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms var(--community-ease);
+}
+
+.revealOpen {
+  grid-template-rows: 1fr;
+}
+
+.revealInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.topLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 0;
+}
+
+.postingAs {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11px/15px "Inter", sans-serif;
+  color: var(--community-muted);
+}
+
+.replyChip {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 0 7px;
+  border-radius: 999px;
+  background: var(--reaction-mine-bg);
+  font: 500 11px/18px "Inter", sans-serif;
+  color: var(--purple);
+}
+
+.replyChipName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replyCancel {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--purple);
+  cursor: pointer;
+}
+
+.replyCancel:hover {
+  background: var(--reaction-mine-bg);
+}
+
+.replyCancel:focus-visible {
   outline: 2px solid var(--purple);
-  outline-offset: 2px;
+}
+
+.inputRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 10px;
 }
 
 .avatar {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   object-fit: cover;
 }
 
-/* §2.2 */
-.open {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--reaction-mine-border);
-  border-radius: 16px;
-  background: var(--white);
-}
-
-.postingAs {
-  margin: 0;
-  font: 500 12px/16px "Inter", sans-serif;
-  color: var(--muted-text);
-}
-
 .textarea {
-  width: 100%;
-  min-height: 44px;
-  max-height: 320px;
-  padding: 8px 10px;
-  border: 1px solid var(--composer-hairline);
-  border-radius: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  max-height: min(240px, 35vh);
+  padding: 3px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   resize: none;
   overflow-y: auto;
-  font: 400 15px/22px "Inter", sans-serif;
+  font: 400 13px/18px "Inter", sans-serif;
   color: var(--black-soft);
 }
 
-.textarea:focus {
-  outline: none;
-  border-color: var(--purple);
+.textarea::placeholder {
+  color: var(--community-muted);
+  opacity: 1;
 }
 
 .previews {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
-  padding: 0;
+  padding: 4px 10px;
   list-style: none;
 }
 
 .preview,
 .gifPreview {
   position: relative;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  background: var(--composer-input-bg);
+  background: var(--input-bg);
 }
 
 .preview {
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
+  animation: previewIn 220ms var(--community-spring);
+}
+
+@keyframes previewIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
 }
 
 .preview img,
@@ -106,30 +179,32 @@
 }
 
 .gifPreview {
-  width: 120px;
-  height: 120px;
+  width: 88px;
+  height: 88px;
+  margin: 4px 10px;
+  animation: previewIn 220ms var(--community-spring);
 }
 
 .gifBadge {
   position: absolute;
-  left: 6px;
-  bottom: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
   background: var(--toast-bg);
   color: var(--white);
-  font: 700 10px/14px "Inter", sans-serif;
+  font: 700 9px/13px "Inter", sans-serif;
 }
 
 .remove {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -146,42 +221,52 @@
 /* §2.3: the limit message, inline above Post; also the photo checks. */
 .inlineMessage {
   margin: 0;
-  font: 400 13px/18px "Inter", sans-serif;
+  padding: 2px 10px;
+  font: 400 12px/16px "Inter", sans-serif;
   color: var(--error-text);
 }
 
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  padding: 2px 6px 6px;
 }
 
 .tools {
   display: flex;
-  gap: 2px;
+  gap: 1px;
   margin-right: auto;
 }
 
 .tool {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 6px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--purple);
   cursor: pointer;
+  transition: background-color 140ms var(--community-ease), transform 120ms var(--community-ease);
 }
 
 .tool:hover {
   background: var(--reaction-mine-bg);
 }
 
+.tool:active {
+  transform: scale(0.92);
+}
+
+/* -2 px: .revealInner clips, so a ring outside the button would be cut off. */
 .tool:focus-visible {
   outline: 2px solid var(--purple);
+  outline-offset: -2px;
 }
 
 .tool[aria-disabled="true"] {
@@ -195,21 +280,28 @@
 }
 
 .gifTool {
-  font: 700 12px/1 "Inter", sans-serif;
+  font: 700 10px/1 "Inter", sans-serif;
   letter-spacing: 0.02em;
 }
 
 .chip {
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
   border-radius: 999px;
-  background: var(--composer-input-bg);
-  font: 500 11px/16px "Inter", sans-serif;
+  background: var(--input-bg);
+  font: 500 11px/15px "Inter", sans-serif;
   color: var(--black-soft);
 }
 
+.chipIcon {
+  padding: 3px 6px;
+  color: var(--purple);
+}
+
 .counter {
-  font: 500 13px/20px "Inter", sans-serif;
-  color: var(--muted-text);
+  font: 500 12px/18px "Inter", sans-serif;
+  color: var(--community-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -218,18 +310,27 @@
 }
 
 .post {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 72px;
-  height: 36px;
-  padding: 0 16px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--purple);
   color: var(--white);
-  font: 600 14px/20px "Inter", sans-serif;
   cursor: pointer;
+  transition: opacity 160ms var(--community-ease), transform 180ms var(--community-spring);
+}
+
+.post:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.06);
+}
+
+.post:active:not(:disabled) {
+  transform: scale(0.92);
 }
 
 .post:disabled {
@@ -238,8 +339,8 @@
 }
 
 .post:focus-visible {
-  outline: 2px solid var(--purple);
-  outline-offset: 2px;
+  outline: 2px solid var(--purple-dark);
+  outline-offset: -3px;
 }
 
 .spinner {
@@ -252,20 +353,49 @@
   }
 }
 
-/* §2.4: Inter 400 14/20 on pinkLight, radius 16, padding 16. */
+/* A finger needs 44 px even though the controls stay thin to look at. */
+@media (pointer: coarse) {
+  .tool,
+  .post {
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .post {
+    width: 36px;
+  }
+
+  .replyCancel::after {
+    content: "";
+    position: absolute;
+    inset: -14px;
+  }
+}
+
+/* §2.4: Inter 400 13/19 on pinkLight, radius 12, padding 12. */
 .support {
   display: flex;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 16px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
   background: var(--pink-light);
-  font: 400 14px/20px "Inter", sans-serif;
+  box-shadow: var(--community-float-shadow);
+  font: 400 13px/19px "Inter", sans-serif;
   color: var(--black-soft);
+  animation: supportIn 260ms var(--community-ease);
+}
+
+@keyframes supportIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .supportIcon {
-  font-size: 20px;
-  line-height: 20px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--purple);
 }
 
 .supportBody {
@@ -274,7 +404,7 @@
 }
 
 .supportBody p {
-  margin: 0 0 4px;
+  margin: 0 0 3px;
 }
 
 .supportBody a {
@@ -283,22 +413,24 @@
 }
 
 .supportTitle {
-  margin: 0 0 6px;
-  font: 600 15px/20px "Inter", sans-serif;
+  margin: 0 0 4px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .supportActions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .supportClose {
-  padding: 6px 16px;
+  height: 28px;
+  padding: 0 14px;
   border: 1px solid var(--reaction-mine-border);
   border-radius: 999px;
   background: var(--white);
-  font: 600 13px/20px "Inter", sans-serif;
+  font: 600 12px/16px "Inter", sans-serif;
   color: var(--purple);
   cursor: pointer;
 }
@@ -309,6 +441,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell,
+  .reveal,
+  .tool,
+  .post {
+    transition: none;
+  }
+
+  .preview,
+  .gifPreview,
+  .support {
+    animation: none;
+  }
+
   .spinner {
     animation-duration: 2s;
   }
