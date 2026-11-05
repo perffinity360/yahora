@@ -3010,10 +3010,11 @@ reported in Phase 7.** The review side arrives with the admin screen in Phase 9.
   - reason: string, required — `spam` | `harassment` | `hate_speech` | `sexual_content` |
     `child_safety` | `violence` | `self_harm` | `impersonation` | `misinformation` |
     `prohibited_item` | `other`
-  - details: string, optional, **at most 500 characters** (code points)
+  - details: string, optional, **at most 500 characters** (code points), counted after trimming.
+    Blank counts as no details; anything that isn't a string → `INVALID_FORMAT`
 **201:** `{ "reported": true }` — always this, whatever the report caused
 **400:** `{ "error": "INVALID_FORMAT", "message": "Only posts can be reported for now." }` —
-`target_type` is not `post`
+`target_type` is missing or not `post`
 **400:** `{ "error": "INVALID_FORMAT" }` — `target_id` is not a uuid, `reason` is not one of the
 eleven values, or `details` is too long
 **400:** `{ "error": "CANNOT_REPORT_OWN" }` — the caller wrote the post
