@@ -9,21 +9,22 @@
 .shell {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--community-hairline);
-  border-radius: 16px;
+  padding: 0 var(--composer-pad-end, 6px) 0 var(--composer-pad-start, 12px);
+  border: 1.5px solid var(--community-rail);
+  border-radius: var(--composer-radius, 20px);
   background: var(--white);
-  transition: border-color 180ms var(--community-ease), box-shadow 220ms var(--community-ease),
-    border-radius 220ms var(--community-ease);
+  transition: border-color 180ms var(--community-ease), box-shadow 220ms var(--community-ease);
 }
 
 .shell:hover {
   border-color: var(--reaction-mine-border);
 }
 
-.shellOpen {
-  border-color: var(--reaction-mine-border);
-  border-radius: 12px;
-  box-shadow: var(--community-float-shadow);
+/* Purple on the campus side and pink on the other (spec §2.1). */
+.shellActive,
+.shellActive:hover {
+  border-color: var(--composer-accent, var(--purple));
+  box-shadow: 0 0 0 3px var(--composer-tint, var(--reaction-mine-bg));
 }
 
 /* The parts that appear when it opens. Grid rows can animate to the content's
@@ -48,7 +49,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px 0;
+  padding: 6px 0 0;
 }
 
 .postingAs {
@@ -106,27 +107,31 @@
   outline: 2px solid var(--purple);
 }
 
+/* The tools stay at the end of the last line as the text grows. In a very narrow
+   panel they drop to a row of their own instead of squeezing the text. */
 .inputRow {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 3px 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px 8px;
+  padding: 3px 0;
 }
 
 .avatar {
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
+  margin-bottom: 3px;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .textarea {
-  flex: 1 1 auto;
+  flex: 1 1 140px;
   min-width: 0;
   display: block;
   max-height: min(240px, 35vh);
-  padding: 3px 0;
+  padding: 5px 0;
   border: 0;
   outline: none;
   background: transparent;
@@ -145,7 +150,7 @@
   display: flex;
   gap: 6px;
   margin: 0;
-  padding: 4px 10px;
+  padding: 4px 0;
   list-style: none;
 }
 
@@ -181,7 +186,7 @@
 .gifPreview {
   width: 88px;
   height: 88px;
-  margin: 4px 10px;
+  margin: 4px 0;
   animation: previewIn 220ms var(--community-spring);
 }
 
@@ -221,22 +226,36 @@
 /* §2.3: the limit message, inline above Post; also the photo checks. */
 .inlineMessage {
   margin: 0;
-  padding: 2px 10px;
+  padding: 2px 0;
   font: 400 12px/16px "Inter", sans-serif;
   color: var(--error-text);
 }
 
-.toolbar {
+.tools {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 6px 6px;
+  gap: 1px;
+  margin-left: auto;
 }
 
-.tools {
+/* Grid columns can animate to the content's own width, which width: auto can't. */
+.extras {
+  display: grid;
+  grid-template-columns: 0fr;
+  transition: grid-template-columns 220ms var(--community-ease);
+}
+
+.extrasOpen {
+  grid-template-columns: 1fr;
+}
+
+.extrasInner {
+  min-width: 0;
   display: flex;
+  align-items: center;
   gap: 1px;
-  margin-right: auto;
+  overflow: hidden;
 }
 
 .tool {
@@ -250,9 +269,16 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--purple);
+  color: var(--composer-solid, var(--purple));
+  opacity: 0.65;
   cursor: pointer;
-  transition: background-color 140ms var(--community-ease), transform 120ms var(--community-ease);
+  transition: background-color 140ms var(--community-ease), opacity 160ms var(--community-ease),
+    transform 120ms var(--community-ease);
+}
+
+.shellActive .tool,
+.tool:hover {
+  opacity: 1;
 }
 
 .tool:hover {
@@ -263,10 +289,11 @@
   transform: scale(0.92);
 }
 
-/* -2 px: .revealInner clips, so a ring outside the button would be cut off. */
+/* -2 px: .extrasInner clips, so a ring outside the button would be cut off. */
 .tool:focus-visible {
-  outline: 2px solid var(--purple);
+  outline: 2px solid var(--composer-solid, var(--purple));
   outline-offset: -2px;
+  opacity: 1;
 }
 
 .tool[aria-disabled="true"] {
@@ -314,13 +341,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  min-width: 52px;
   height: 28px;
-  padding: 0;
+  margin-left: 5px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 50%;
-  background: var(--purple);
+  border-radius: 999px;
+  background: var(--composer-solid, var(--purple));
   color: var(--white);
+  font: 600 13px/1 "Inter", sans-serif;
   cursor: pointer;
   transition: opacity 160ms var(--community-ease), transform 180ms var(--community-spring);
 }
@@ -339,8 +368,8 @@
 }
 
 .post:focus-visible {
-  outline: 2px solid var(--purple-dark);
-  outline-offset: -3px;
+  outline: 2px solid var(--white);
+  outline-offset: -4px;
 }
 
 .spinner {
@@ -355,14 +384,13 @@
 
 /* A finger needs 44 px even though the controls stay thin to look at. */
 @media (pointer: coarse) {
-  .tool,
-  .post {
+  .tool {
     min-width: 36px;
     height: 36px;
   }
 
   .post {
-    width: 36px;
+    height: 36px;
   }
 
   .replyCancel::after {
@@ -376,7 +404,7 @@
 .support {
   display: flex;
   gap: 10px;
-  padding: 12px;
+  padding: 12px var(--composer-pad-end, 12px) 12px var(--composer-pad-start, 12px);
   border-radius: 12px;
   background: var(--pink-light);
   box-shadow: var(--community-float-shadow);
@@ -443,6 +471,7 @@
 @media (prefers-reduced-motion: reduce) {
   .shell,
   .reveal,
+  .extras,
   .tool,
   .post {
     transition: none;

@@ -101,6 +101,9 @@
   --community-text-glass: rgba(255,255,255,0.32);
   --community-text-blur: blur(6px) saturate(1.15);
   --community-grip-border: #8E8B99;
+  --community-dock: #F9EEF8;
+  --community-world-strong: #C92C66;
+  --community-world-tint: rgba(235,72,127,0.16);
   --community-muted: #5C5969;
   --community-like: #D81E5B;
   --community-float-shadow: 0 4px 16px rgba(42,8,42,0.12);

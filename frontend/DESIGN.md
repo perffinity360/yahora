@@ -19,8 +19,8 @@ the variables in `src/styles/global.css`.
 
 - **Installing or adding a design skill or package is allowed and encouraged.** We want the best possible
   design: modern, premium, attractive and beautiful. Don't settle for less to avoid adding a dependency.
-- **If what we need doesn't exist, create our own:** animations, motion graphics, stickers, or any similar
-  component.
+- **Look for something pre-built first. If we can't add one from somewhere, create it ourselves:** animations,
+  motion graphics, stickers, or any other web or app component.
 - The stack rules in `frontend/CLAUDE.md` §16 still apply, so a Tailwind-based library gets re-implemented in
   CSS Modules rather than installed.
 

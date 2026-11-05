@@ -167,7 +167,7 @@
   content: "";
   position: absolute;
   top: 6px;
-  bottom: 40px;
+  bottom: 112px;
   left: 50%;
   width: 1px;
   background: transparent;
@@ -193,55 +193,155 @@
   box-shadow: 0 0 0 3px var(--reaction-mine-bg);
 }
 
+/* Sits on the cap above the avatar: three dots in a white pill. */
 .handleGrip {
   position: absolute;
-  top: 50%;
+  bottom: 84px;
   left: 50%;
-  width: 6px;
-  height: 28px;
+  width: 8px;
+  height: 24px;
   border-radius: 999px;
-  background: var(--white);
+  background:
+    radial-gradient(circle, var(--purple-dark) 1.2px, transparent 1.7px) 50% 3px / 100% 6px no-repeat,
+    radial-gradient(circle, var(--purple-dark) 1.2px, transparent 1.7px) 50% 9px / 100% 6px no-repeat,
+    radial-gradient(circle, var(--purple-dark) 1.2px, transparent 1.7px) 50% 15px / 100% 6px no-repeat,
+    var(--white);
   box-shadow: inset 0 0 0 1px var(--community-grip-border);
-  transform: translate(-50%, -50%);
-  transition: height 200ms var(--community-spring), box-shadow 140ms var(--community-ease);
+  transform: translateX(-50%);
+  transform-origin: bottom;
+  transition: transform 200ms var(--community-spring), box-shadow 140ms var(--community-ease);
 }
 
 .handle:hover .handleGrip,
 .handle[data-separator="hover"] .handleGrip,
 .handle[data-separator="active"] .handleGrip {
-  height: 44px;
   box-shadow: inset 0 0 0 1px var(--purple);
+  transform: translateX(-50%) scale(1.12);
 }
 
-/* Not a control: presses go through to the divider, so it drags from here too. */
-.handleAvatar {
+/* Your avatar, joining the divider and the two composers. Its collar is the dock's
+   colour, so it looks cut into the composers tucked in behind it. */
+.hub {
+  --hub-accent: var(--community-rail);
+  --hub-tint: transparent;
   position: absolute;
-  bottom: 3px;
+  bottom: 22px;
   left: 50%;
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  box-shadow: 0 0 0 3px var(--white), var(--community-float-shadow);
+  background: var(--white);
+  box-shadow:
+    0 0 0 5px var(--community-dock),
+    0 0 0 6.5px var(--hub-accent),
+    0 0 0 6.5px var(--hub-tint),
+    var(--community-float-shadow);
   transform: translateX(-50%);
-  pointer-events: none;
-  transition: transform 220ms var(--community-spring);
+  cursor: col-resize;
+  touch-action: none;
+  transition: box-shadow 200ms var(--community-ease), transform 220ms var(--community-spring);
 }
 
-.handle:hover .handleAvatar,
-.handle[data-separator="hover"] .handleAvatar {
-  transform: translateX(-50%) scale(1.05);
+.hub[data-active="left"] {
+  --hub-accent: var(--purple-dark);
+  --hub-tint: var(--reaction-mine-bg);
 }
 
-.handle[data-separator="active"] .handleAvatar {
-  transform: translateX(-50%) scale(1.1);
+.hub[data-active="right"] {
+  --hub-accent: var(--pink-dark);
+  --hub-tint: var(--community-world-tint);
 }
 
-.handleAvatarImg {
+.hub[data-active] {
+  box-shadow:
+    0 0 0 3px var(--white),
+    0 0 0 6px var(--hub-accent),
+    0 0 0 9px var(--hub-tint),
+    var(--community-float-shadow);
+}
+
+/* The cap above, joining the grip to the collar. */
+.hub::before {
+  content: "";
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 14px;
+  height: 9px;
+  border-radius: 5px 5px 2px 2px;
+  background: var(--purple-dark);
+  transform: translateX(-50%);
+}
+
+/* The stem below, running on to the bottom of the panel. */
+.hub::after {
+  content: "";
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  width: 2px;
+  height: 17px;
+  background: var(--community-rail);
+  transform: translateX(-50%);
+}
+
+.handle:hover .hub,
+.handle[data-separator="hover"] .hub {
+  transform: translateX(-50%) scale(1.03);
+}
+
+.handle[data-separator="active"] .hub {
+  transform: translateX(-50%) scale(1.06);
+}
+
+.hubAvatar {
   display: block;
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
+  border: 2.5px solid var(--white);
   border-radius: 50%;
   object-fit: cover;
+}
+
+/* Where you're writing, only as an icon. Springs out on the side in use. */
+.hubBadge {
+  position: absolute;
+  z-index: 1;
+  top: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  border-radius: 999px;
+  color: var(--white);
+  box-shadow: var(--community-float-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.7);
+  transition: opacity 160ms var(--community-ease), transform 240ms var(--community-spring);
+}
+
+.hubBadgeCampus {
+  right: calc(100% + 2px);
+  background: var(--purple-dark);
+  transform-origin: right center;
+}
+
+.hubBadgeWorld {
+  left: calc(100% + 2px);
+  background: var(--pink-dark);
+  transform-origin: left center;
+}
+
+.hubBadgeWorld .worldIcon {
+  color: var(--white);
+}
+
+.hub[data-active="left"] .hubBadgeCampus,
+.hub[data-active="right"] .hubBadgeWorld {
+  opacity: 1;
+  transform: scale(1);
 }
 
 /* A panel collapsed to LAYOUT_COLLAPSED_PX (36). */
@@ -274,21 +374,43 @@
 
 .dock {
   flex: 0 0 auto;
-  min-height: 42px;
-  padding: 5px 8px;
-  border-top: 1px solid var(--community-hairline);
-  background: var(--community-glass);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  min-height: 58px;
+  padding: 9px 8px;
+  border-top: 1.5px solid var(--community-rail);
+  background: var(--community-dock);
 }
 
-/* Room for the avatar on the divider. */
+/* What each side's composer looks like while it's in use (Composer.module.css). */
+.dockCampus {
+  --composer-accent: var(--purple-dark);
+  --composer-solid: var(--purple-dark);
+  --composer-tint: var(--reaction-mine-bg);
+}
+
+.dockWorld {
+  --composer-accent: var(--pink-dark);
+  --composer-solid: var(--community-world-strong);
+  --composer-tint: var(--community-world-tint);
+}
+
+/* Each composer ends 13 px from the divider's centre, tucked in under the avatar,
+   with enough padding to keep the text and the tools clear of it. */
 .dockLeft {
-  padding-right: 24px;
+  padding-right: 10px;
+  --composer-radius: 20px 18px 18px 20px;
+  --composer-pad-start: 12px;
+  --composer-pad-end: 26px;
 }
 
 .dockRight {
-  padding-left: 24px;
+  padding-left: 10px;
+  --composer-radius: 18px 20px 20px 18px;
+  --composer-pad-start: 26px;
+  --composer-pad-end: 6px;
+}
+
+.dockRight .viewOnly {
+  padding-left: 26px;
 }
 
 /* < 1024 px: floats at the bottom of the window until the footer arrives. */
@@ -823,7 +945,8 @@
   .menuOption,
   .handle::before,
   .handleGrip,
-  .handleAvatar {
+  .hub,
+  .hubBadge {
     transition: none;
   }
 }

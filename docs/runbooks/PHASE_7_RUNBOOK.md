@@ -1309,6 +1309,17 @@ git checkout -b v-c-messages-reactions
 
 Run **CC-V3**.
 
+**Added to this block: `top_replies` on a PostItem** (decided after V-P, `COMMUNITY_SPEC.md` §4). CC-V3 doesn't
+cover it and says "No SQL" and "don't touch `posts/*`", so do it as its own step:
+
+1. A new migration (`supabase migration new feed_top_replies`): the feeds return `top_replies`, up to
+   `REPLY_PREVIEW_COUNT` (2) reply PostItems, most liked first, oldest first when tied. It must show only what
+   `get_post_replies` would show that viewer.
+2. `toPostItem` in `posts.controller.js` has to pass the field on. That file is **on loan to Neeraj**, so agree
+   with him who makes that one change.
+3. `backend/API.md`.
+4. You push the migration to production by hand, like V-B, before Neeraj's CC-N4b uses it.
+
 **👁️ CHECKPOINT V-C — with curl, against your local API**
 
 Paste this once. It's the same set of helpers as 6B:

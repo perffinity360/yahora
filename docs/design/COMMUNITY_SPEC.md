@@ -8,8 +8,8 @@
 > reply can only be liked, icons instead of words, and no emoji in the interface itself.
 > Generic rules from this redesign are in `frontend/DESIGN.md` and `mobile/DESIGN.md`.
 >
-> **⚠ Needs an API change before it works on real data:** `top_replies` on a PostItem (§4). Until
-> then a post shows only `Show more replies`.
+> **⚠ Needs an API change before it works on real data:** `top_replies` on a PostItem (§4), decided
+> for Block V-C. Until then a post shows only `Show more replies`.
 >
 > **Changed in version 2:** each feed shows only its own posts, so the scope chip is gone
 > (§1.1, §3), and a covered post shows only a notice, with no "View anyway" (§3.1).
@@ -36,10 +36,11 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 │ post                                 ││ post                                 │
 │ ──────────────────────────────────── ││ ──────────────────────────────────── │
 │ post                                 ││ post                                 │
-│ …  (posts pass under header and dock)││ …                                    │
-│ ─────────────────────────────────── ╭──╮ ─────────────────────────────────── │
-│ What's happening on campus?         │me│  Share with students in India       │ ← 42
-└─────────────────────────────────────╰──╯─────────────────────────────────────┘
+│ …  (posts pass under the header)     ││ …                                    │
+│                                     ╭──╮                                     │
+│ ───────────────────────────────────(│me│)─────────────────────────────────── │
+│ ( What's happening…    🖼 ( Post ) )╰──╯( Share with students…  🖼 ( Post ) ) │ ← 58
+└──────────────────────────────────────┴┴──────────────────────────────────────┘
         left: My campus          avatar on the divider     right: country or Global
 ```
 
@@ -64,15 +65,23 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   the cap a small hop and turns the globe. Flags stay emoji, because they are worked out from the code.
 - **The divider** (react-resizable-panels), **6 px** wide:
   - white at rest, the same as the 4 px frame around the panels, so nothing shows between them but white;
-  - a white grip in the middle, 6 × 28, with a 1 px `communityGripBorder` outline;
-  - while hovered, dragged or focused, a purple line runs down to your avatar and the grip's outline
-    turns purple;
+  - a white grip just above your avatar, 8 × 24, with three `purpleDark` dots and a 1 px
+    `communityGripBorder` outline;
+  - while hovered, dragged or focused, a purple line runs down to the grip and its outline turns purple;
   - drag it to resize; each panel is at least **320 px** wide;
   - double-click it to go back to 50 / 50;
   - keyboard: focus it with Tab, move it with the arrow keys.
-- **Your avatar on the divider:** 36 px, 3 px from the bottom, with a white ring. It is a child of the
-  divider, so it moves with it as you resize, and it grows slightly on hover and while dragging. It
-  isn't a button: pressing it drags the divider.
+- **Your avatar on the divider:** 48 px with a 2.5 px white border, 22 px from the bottom, so it sits across
+  the top edge of the composer bar. It is a child of the divider, so it moves with it as you resize, and it
+  grows slightly on hover and while dragging. It isn't a button: pressing anywhere on it drags the divider.
+  - **The joints:** a `purpleDark` cap (14 × 9) joins the grip to the avatar's collar, and a 2 px
+    `communityRail` stem runs from the collar to the bottom of the panel.
+  - **At rest,** the collar is 5 px of `communityDock` with a 1.5 px `communityRail` line outside it.
+  - **While you write,** the collar becomes 3 px of white, a 3 px accent ring and a 3 px soft tint: `purpleDark`
+    for the left composer, `pinkDark` for the right.
+  - **A badge springs out on that side,** 28 × 22, at the avatar's upper corner: a white graduation cap on
+    `purpleDark` on the left; on the right, the flag (or a globe for Global) on `pinkDark`. **Icons only, no
+    words.** It's hidden from screen readers, because the composer's own label says where the post goes.
 - **Panel buttons (26 × 26):**
   - **‹** or **›** collapses that panel to a **36 px** bar. The bar shows the panel's name
     written vertically and an expand button. The panels glide over 280 ms when a button moves them,
@@ -143,10 +152,15 @@ floats on glass like the composer.
 
 ### 2.1 Closed
 
-The composer is **always at the bottom of the feed**, separately for each panel: a dock of 42 px
-with a white one-line field, radius 16, Inter 400 14/20. On a laptop the shared avatar sits on the
-divider between the two docks (§1.1). On a narrow window the composer floats over the posts, with
-your avatar (24) inside the field. Grey text depends on the feed:
+The composer is **always at the bottom of the feed**, separately for each panel: a 58 px dock in
+`communityDock` with a 1.5 px `communityRail` top line, holding a white one-line field 38 px tall, with a
+1.5 px `communityRail` outline and Inter 400 14/20 text. **At the end of the line:** the photo icon, faded
+to 65%, and the `Post` pill.
+
+On a laptop each field ends 13 px from the divider's centre, tucked in under the shared avatar (§1.1). Its
+corners are radius 20 on the outer side and 18 on the side by the avatar, and its padding keeps the text and
+tools clear of the avatar. On a narrow window the composer floats over the posts, radius 20, with your avatar
+(24) inside the field. Grey text depends on the feed:
 
 | Feed | Grey text |
 |---|---|
@@ -154,32 +168,36 @@ your avatar (24) inside the field. Grey text depends on the feed:
 | Your country | `Share with students in India` |
 | Global | `Share with students everywhere` |
 
-Clicking it opens the composer upward, in place, over 220 ms: inline on the website, a full-screen
-compose page in the app (`app/compose.tsx`, opened as a modal). The feed shrinks to make room.
-Pressing elsewhere, or Esc, folds an **empty** composer back to its line. Anything written keeps it
-open.
+**Clicking it highlights it, and it stays one line.** The outline turns to the feed's accent with a 3 px soft
+tint around it: `purpleDark` on the campus feed, `pinkDark` on a country or Global feed. Both layouts do this.
+The tools come to full strength, and GIF and emoji slide in beside the photo icon over 220 ms. Pressing
+elsewhere, Tab or Esc ends the highlight. In the app, tapping opens a full-screen compose page
+(`app/compose.tsx`, opened as a modal).
 
-### 2.2 Open
+### 2.2 In use
 
 ```
-┌────────────────────────────────────────────────────┐
-│ Posting as @rahul.verma · IIITDM Kurnool           │  ← always visible
-│ text…                                              │  ← grows with the text
-│ [photo][photo][photo]   or   [GIF preview]         │  ← each with an ✕
-│ (image) (GIF) (smile, web only)   (cap)   87   (↑) │
-└────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Posting as @rahul.verma · IIITDM Kurnool                │  ← once there's anything to post
+│ [photo][photo][photo]   or   [GIF preview]              │  ← each with an ✕
+│ text…  (grows with the text)   🖼 GIF ☺ (cap) 87 ( Post ) │  ← tools stay at the end of the last line
+└─────────────────────────────────────────────────────────┘
 ```
 
-- **"Posting as @username · Campus name"** is always shown, in Inter 500 12, communityMuted.
-  Seeing your own name is the cheapest moderation there is.
+- **"Posting as @username · Campus name"** slides in as soon as there is text, a photo or a GIF, in Inter
+  500 12, communityMuted, so it's always in view before you can press Post. Seeing your own name is the
+  cheapest moderation there is.
+- **Very narrow space:** if the line can't give the text at least 140 px, the tools drop to a row of their own.
+  On a 390 px phone that happens when the composer comes into use.
 - **Text:** up to **1,000 characters**, counted the way runbook §1.12 explains (one emoji
   is one character).
   - The counter appears only when 100 or fewer are left. It turns errorText at 0, and Post
     is disabled above 1,000.
-- **Where the post goes** is a small chip: a graduation-cap icon for campus, a globe icon for Global,
-  or the country's name. It always matches the feed you opened the composer from, and can't be
-  changed inside the composer.
-- **Post** is a 28 px purple circle with an up arrow. On the website, Ctrl or Cmd + Enter also posts.
+- **Where the post goes** is shown only as an icon: a graduation cap for campus, a globe for Global, or the
+  country's flag. On a laptop it's the badge on your avatar (§1.1); on a narrow window it's a small chip with
+  the tools. It always matches the feed you're in, and can't be changed inside the composer.
+- **Post** is a 28 px pill with the word `Post` (`Reply` for a reply), Inter 600 13 in white, on `purpleDark` on
+  the campus feed and `communityWorldStrong` on the others. On the website, Ctrl or Cmd + Enter also posts.
 - **Photos:** up to **3**; JPEG, PNG or WebP; at most 5 MB each.
   - Previews are 56 × 56 with radius 8 and an ✕ to remove.
   - Too big: `That photo is bigger than 5 MB.`
@@ -332,9 +350,9 @@ Replies now show **under each post in the feed,** as well as on the post's page.
 - **A post's page:** website `/post/:id`, app `app/post/[id].tsx` (CC-N4c). The same post and thread
   with all replies paged, and text at 15/22.
 
-**⚠ API change needed (not built).** `top_replies` is new. Each PostItem needs `top_replies`: up to
-`REPLY_PREVIEW_COUNT` reply PostItems, most liked first. That means a change to the feed SQL
-functions (Vishwajeet), `backend/API.md`, and the posts routes. Until it exists, a post with replies
+**⚠ API change needed (decided for Block V-C, not built).** `top_replies` is new. Each PostItem needs
+`top_replies`: up to `REPLY_PREVIEW_COUNT` reply PostItems, most liked first. That means a change to the feed
+SQL functions (Vishwajeet), `backend/API.md`, and the posts controller. Until it exists, a post with replies
 shows only `Show more replies`, which already works from `GET /api/posts/:id/replies`. `sampleData.js`
 already sends the field, so the screens are ready.
 
@@ -562,6 +580,9 @@ A **Posts** tab sits next to the existing tabs:
 | `communityTextGlass` | `--community-text-glass` | `rgba(255,255,255,0.32)` | on trial: the tint behind post and reply text |
 | `communityTextBlur` | `--community-text-blur` | `blur(6px) saturate(1.15)` | on trial: that layer's blur (app: `expo-blur`, nearest match) |
 | `communityGripBorder` | `--community-grip-border` | `#8E8B99` | outline of the divider's grip (3.3:1 on white) |
+| `communityDock` | `--community-dock` | `#F9EEF8` | the composer bar, and the avatar's collar at rest |
+| `communityWorldStrong` | `--community-world-strong` | `#C92C66` | Post and tools on the country / Global side (white on it is 5.2:1; `pinkDark` is too low for text) |
+| `communityWorldTint` | `--community-world-tint` | `rgba(235,72,127,0.16)` | soft ring around that side's composer and the avatar |
 | `communityMuted` | `--community-muted` | `#5C5969` | secondary text on the wallpaper (5.58:1 on `chatCanvas`; `mutedText` is 4.44:1, too low) |
 | `communityLike` | `--community-like` | `#D81E5B` | a liked reply, the ring when a reaction pops |
 | `communityFloatShadow` | `--community-float-shadow` | `0 4px 16px rgba(42,8,42,0.12)` | anything floating over the feed |

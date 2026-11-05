@@ -6,7 +6,8 @@
 //              a country or Global on the right. Drag, double-click for
 //              50 / 50, keyboard on the divider, collapse to a 36 px bar,
 //              ⤢ for full width. The layout is remembered. Your avatar rides
-//              on the divider, between the two composers.
+//              on the divider, the two composers tucked in under it, and lights
+//              up on the side you're writing on.
 //   < 1024 px  one feed at a time, with a floating switcher and composer that
 //              the posts pass underneath.
 //
@@ -24,6 +25,7 @@ import {
   ChevronRight,
   Clock,
   Flame,
+  GraduationCap,
   Maximize2,
   Minimize2,
 } from "lucide-react";
@@ -232,6 +234,33 @@ function WideLayout({
   const [animating, setAnimating] = useState(false);
   const animationTimer = useRef(null);
   const defaultLayout = useMemo(readLayout, []);
+  const [activeSide, setActiveSide] = useState(null); // null | "left" | "right"
+  const onLeftActive = useCallback(
+    (on) => setActiveSide((side) => (on ? "left" : side === "left" ? null : side)),
+    [],
+  );
+  const onRightActive = useCallback(
+    (on) => setActiveSide((side) => (on ? "right" : side === "right" ? null : side)),
+    [],
+  );
+
+  // The avatar is much wider than the divider, and the library only starts a drag
+  // on the divider itself, so a press on the rest of the avatar drags from here.
+  const hubDrag = useRef(null);
+  const onHubDown = (e) => {
+    const left = leftRef.current;
+    if (!left) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    hubDrag.current = { x: e.clientX, size: left.getSize().inPixels };
+  };
+  const onHubMove = (e) => {
+    if (!hubDrag.current) return;
+    leftRef.current?.resize(hubDrag.current.size + e.clientX - hubDrag.current.x);
+  };
+  const onHubUp = () => {
+    hubDrag.current = null;
+  };
 
   useEffect(() => () => clearTimeout(animationTimer.current), []);
 
@@ -316,15 +345,38 @@ function WideLayout({
                 </button>
               </div>
             </header>
-            <CommunityFeed key="campus" {...campusFeed} inPanel side="left" {...shared} />
+            <CommunityFeed
+              key="campus"
+              {...campusFeed}
+              inPanel
+              side="left"
+              onComposerActive={onLeftActive}
+              {...shared}
+            />
           </section>
         </Panel>
 
-        {/* The avatar is a child of the divider, so it moves with it for free. */}
+        {/* The avatar is a child of the divider, so it moves with it for free.
+            The badge says where you're writing; the composer's own label says it
+            to a screen reader. */}
         <Separator className={styles.handle}>
           <span className={styles.handleGrip} aria-hidden="true" />
-          <span className={styles.handleAvatar} aria-hidden="true">
-            <AvatarImg src={viewer.avatar} name={viewer.name} size={36} className={styles.handleAvatarImg} />
+          <span
+            className={styles.hub}
+            data-active={activeSide ?? undefined}
+            aria-hidden="true"
+            onPointerDown={onHubDown}
+            onPointerMove={onHubMove}
+            onPointerUp={onHubUp}
+            onPointerCancel={onHubUp}
+          >
+            <AvatarImg src={viewer.avatar} name={viewer.name} size={48} className={styles.hubAvatar} />
+            <span className={`${styles.hubBadge} ${styles.hubBadgeCampus}`}>
+              <GraduationCap size={14} />
+            </span>
+            <span className={`${styles.hubBadge} ${styles.hubBadgeWorld}`}>
+              <WorldGlyph value={world} size={14} />
+            </span>
           </span>
         </Separator>
 
@@ -387,6 +439,7 @@ function WideLayout({
               sort={sort}
               inPanel
               side="right"
+              onComposerActive={onRightActive}
               {...shared}
             />
           </section>

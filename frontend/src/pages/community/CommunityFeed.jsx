@@ -50,6 +50,7 @@ export default function CommunityFeed({
   viewOnlyName,
   patches,
   onReact,
+  onComposerActive,
 }) {
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -143,10 +144,12 @@ export default function CommunityFeed({
   const composerProps = {
     feed: kind,
     countryName,
+    countryCode: country,
     viewer,
     showAvatar: !inPanel, // on a laptop the avatar is the one on the divider
     onSubmit: samplePost,
     onPosted,
+    onActiveChange: onComposerActive,
   };
 
   const dock =
@@ -220,11 +223,13 @@ export default function CommunityFeed({
     </div>
   );
 
+  const accent = kind === "campus" ? styles.dockCampus : styles.dockWorld;
+
   if (!inPanel) {
     return (
       <>
         {feed}
-        <div className={styles.dockFloat}>{dock}</div>
+        <div className={`${styles.dockFloat} ${accent}`}>{dock}</div>
       </>
     );
   }
@@ -234,7 +239,7 @@ export default function CommunityFeed({
       <div ref={setScroller} className={styles.panelScroll}>
         {feed}
       </div>
-      <div className={`${styles.dock} ${side === "left" ? styles.dockLeft : styles.dockRight}`}>
+      <div className={`${styles.dock} ${accent} ${side === "left" ? styles.dockLeft : styles.dockRight}`}>
         {dock}
       </div>
     </div>
