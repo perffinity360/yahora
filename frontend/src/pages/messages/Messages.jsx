@@ -38,8 +38,11 @@ import {
   SquareCheck,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
+import FormattedText from "../../components/FormattedText/FormattedText";
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
+import { pasteFormatted } from "../../utils/pasteFormat";
 import { welcomeStickerFor } from "../../utils/stickers";
+import { plainText } from "../../utils/textFormat";
 import {
   canDeleteForEveryone,
   firstName,
@@ -396,8 +399,9 @@ function ReplyQuote({ msg, isMine, name, onJump }) {
   const body = (
     <>
       <span className={styles.quoteName}>{name}</span>
+      {/* Without the formatting symbols (TEXT_FORMAT_SPEC.md §3). */}
       <span className={`${styles.quoteText} ${gone ? styles.quoteGone : ""}`}>
-        {gone ? "Original message was deleted" : msg.reply_preview}
+        {gone ? "Original message was deleted" : plainText(msg.reply_preview)}
       </span>
     </>
   );
@@ -417,9 +421,24 @@ function ReplyQuote({ msg, isMine, name, onJump }) {
   );
 }
 
+/* Plain runs of a message, with each emoji at EMOJI_SIZES.inline. */
+function withInlineEmoji(text) {
+  return splitEmoji(text).map((run, i) =>
+    run.emoji ? (
+      <span key={i} className={styles.emojiInline}>
+        {run.text}
+      </span>
+    ) : (
+      <React.Fragment key={i}>{run.text}</React.Fragment>
+    ),
+  );
+}
+
+/* Message body: WhatsApp's formatting and links (TEXT_FORMAT_SPEC.md, through
+   FormattedText), with emoji drawn larger inside text, and a message of only
+   one to three emoji drawn whole at the jumbo size. */
 const MessageText = memo(function MessageText({ content }) {
   const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
-  const runs = useMemo(() => (jumbo ? null : splitEmoji(content)), [content, jumbo]);
 
   if (jumbo) {
     const size = EMOJI_SIZES.jumbo[jumbo];
@@ -434,15 +453,7 @@ const MessageText = memo(function MessageText({ content }) {
   }
   return (
     <p className={styles.messageText}>
-      {runs.map((run, i) =>
-        run.emoji ? (
-          <span key={i} className={styles.emojiInline}>
-            {run.text}
-          </span>
-        ) : (
-          <React.Fragment key={i}>{run.text}</React.Fragment>
-        ),
-      )}
+      <FormattedText content={content} renderText={withInlineEmoji} linkClassName={styles.messageLink} />
     </p>
   );
 });
@@ -2711,7 +2722,7 @@ export default function Messages() {
                           <span className={styles.inboxPreview}>
                             {chat?.last_message == null
                               ? "Start the conversation ✨"
-                              : `${chat.last_sender_id === currentUserId ? "You: " : ""}${chat.last_message}`}
+                              : `${chat.last_sender_id === currentUserId ? "You: " : ""}${plainText(chat.last_message)}`}
                           </span>
                         )}
                         {unread > 0 && (
@@ -3407,7 +3418,7 @@ export default function Messages() {
                           : firstName(activeChat?.contact_name)}
                       </span>
                       <span className={styles.replyBarPreview}>
-                        {replyTo.content}
+                        {plainText(replyTo.content)}
                       </span>
                     </div>
                     <button
@@ -3500,6 +3511,9 @@ export default function Messages() {
                         e.currentTarget.form?.requestSubmit();
                       }
                     }}
+                    // Copied bold, italic, lists … arrive as *bold*, _italic_,
+                    // "- " … (TEXT_FORMAT_SPEC.md §4).
+                    onPaste={pasteFormatted}
                     className={styles.chatInput}
                     onFocus={() => setShowEmojiPicker(false)}
                   />

@@ -1192,6 +1192,29 @@
   line-height: 20px;
 }
 
+/* Links in a message (spec §2 Bubbles): blueLight on the sent bubble, blueDark on
+   the received one, underlined (FormattedText). Hover is set too, because
+   footer.module.css leaks a bare `a:hover` that turns every link pinkLight. */
+.bubbleMine .messageLink,
+.bubbleMine .messageLink:hover {
+  color: var(--blue-light);
+}
+
+.bubbleTheirs .messageLink,
+.bubbleTheirs .messageLink:hover {
+  color: var(--blue-dark);
+}
+
+.messageLink:hover {
+  text-decoration-thickness: 2px;
+}
+
+.messageLink:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
 /* The tombstone (spec §10.8): Ban 14, gap 6, italic 400 14/20, in the
    bubble's usual shape, side and background. */
 .tombstone {

@@ -46,6 +46,7 @@ import GifPicker from "../GifPicker/GifPicker";
 import SupportCard from "./SupportCard";
 import useComposer, { COMPOSER_TEXT } from "../../../hooks/useComposer";
 import { flagEmoji } from "../../../utils/community";
+import { pasteFormatted } from "../../../utils/pasteFormat";
 import styles from "./Composer.module.css";
 
 /* Spec §2.1 (and §4 for a reply). */
@@ -338,6 +339,9 @@ export default function Composer({
               rememberSelection();
             }}
             onKeyDown={onTextKeyDown}
+            // Copied bold, italic, lists … arrive as *bold*, _italic_, "- " …
+            // (TEXT_FORMAT_SPEC.md §4).
+            onPaste={pasteFormatted}
             onSelect={rememberSelection}
             onKeyUp={rememberSelection}
             onClick={rememberSelection}

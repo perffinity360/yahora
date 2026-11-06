@@ -106,23 +106,5 @@ export function formatPostTime(iso) {
   return formatShortDate(iso);
 }
 
-/* Spec §3 "Text": links are tappable, with no previews. Splits text into
-   [{ text, href }] runs; href is null for plain text. Trailing punctuation
-   stays out of the link, so "see example.com." links "example.com". */
-const LINK = /\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
-const TRAILING = /[.,!?;:)\]'"]+$/;
-
-export function splitLinks(text) {
-  const runs = [];
-  let last = 0;
-  for (const match of (text ?? "").matchAll(LINK)) {
-    let url = match[0];
-    const trail = url.match(TRAILING)?.[0] ?? "";
-    if (trail) url = url.slice(0, -trail.length);
-    if (match.index > last) runs.push({ text: text.slice(last, match.index), href: null });
-    runs.push({ text: url, href: url.startsWith("www.") ? `https://${url}` : url });
-    last = match.index + url.length;
-  }
-  if (last < (text ?? "").length) runs.push({ text: text.slice(last), href: null });
-  return runs;
-}
+/* Spec §3 "Text": links are tappable, with no previews. They are found by
+   src/utils/textFormat.js, with the rest of the formatting. */

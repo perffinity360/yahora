@@ -42,6 +42,13 @@ the variables in `src/styles/global.css`.
 - On a busy background, make the structure stronger too: a line between rows you can actually see, and
   one left edge for everything in a row.
 
+## Text people write
+
+- **Messages and posts are drawn with WhatsApp's formatting** (`*bold*`, `_italic_`, lists, quotes, links)
+  through `components/FormattedText`, and stored exactly as typed. Previews on one line use `plainText()`
+  from `utils/textFormat.js`. A composer for them takes `onPaste={pasteFormatted}`
+  (`utils/pasteFormat.js`). See `docs/design/TEXT_FORMAT_SPEC.md`.
+
 ## Icons over words
 
 - Our students know these icons. Use an icon for an obvious action (react, reply, sort, send), with an

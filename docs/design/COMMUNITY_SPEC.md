@@ -234,6 +234,8 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
   the tools. It always matches the feed you're in, and can't be changed inside the composer.
 - **Post** is a 26 px pill with the word `Post` (`Reply` for a reply), Inter 600 13 in white, on `purpleDark` on
   the campus feed and `communityWorldStrong` on the others.
+- **Pasting rich text** (a Google Doc, ChatGPT, a web page) brings its bold, italic, lists … in as
+  WhatsApp's symbols, on the website (`TEXT_FORMAT_SPEC.md` §4).
 - **Enter posts, Shift + Enter starts a new line,** on the website, the same as the chat (MESSAGES_SPEC §2
   "Composer"). On a touch keyboard Enter is a new line and the Post pill posts; Ctrl or Cmd + Enter still
   posts there. Nothing is sent while an input method is still composing, and Enter on an empty composer
@@ -318,8 +320,10 @@ with a soft tint on hover. Compact, like a code editor's panels.
   - the username also goes at 300 px or less (a very narrow panel only).
 - **Time:** `now`, `5m`, `2h`, `3d`; then `12 Oct`, or `12 Oct 2025` for an earlier year.
   Reuse the message time formatter.
-- **Text:** links are tappable; there are no link previews. A long post folds after
-  **6 lines** behind `See more`, which expands it in place.
+- **Text:** drawn with WhatsApp's formatting (`*bold*`, `_italic_`, `~strike~`, code, `- ` bullets,
+  `1. ` numbers, `> ` quotes), exactly as in a chat bubble; the rules and the look are in
+  `TEXT_FORMAT_SPEC.md`. Links are tappable, in `purple`; there are no link previews. A long post
+  folds after **6 lines** behind `See more`, which expands it in place.
 - **Photos** (radius 8, 2 px gaps, at most 560 px wide; tapping one opens the existing image viewer):
   - **1 photo:** full width, its own shape, but between 4:5 and 16:9 and never taller than
     420 px;
