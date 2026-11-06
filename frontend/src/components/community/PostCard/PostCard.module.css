@@ -8,6 +8,8 @@
 .post {
   --text-line: 20px;
   --thread-rail: var(--community-rail);
+  --rail-hit: 7.5px; /* what takes the pointer: the 1.5 px line and 3 px either side */
+  --rail-r: 14px; /* the curve into a reply's avatar: RAIL_RADIUS in PostThread.jsx */
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   column-gap: 8px;
@@ -86,8 +88,13 @@
   text-decoration: none;
 }
 
+/* footer.module.css leaks a bare `a:hover` that turns every link --pink-light,
+   which nearly vanishes here. Every link in a post says its own hover colour. */
 .name:hover {
+  color: var(--purple);
   text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
 }
 
 .name:focus-visible,
@@ -129,8 +136,10 @@
   flex: 0 0 auto;
 }
 
-.time:hover {
+a.time:hover {
+  color: var(--purple);
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .moreBtn {
@@ -193,6 +202,11 @@
   color: var(--purple);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--purple-dark);
+  text-decoration-thickness: 2px;
 }
 
 .seeMore {
@@ -281,7 +295,6 @@
 
 /* ── GIF ───────────────────────────────────────────────────────────────── */
 
-/* Opaque, so the doodles don't show through a GIF with transparent parts. */
 .gif {
   position: relative;
   width: min(100%, 280px);
@@ -289,7 +302,7 @@
   margin-top: 6px;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--community-canvas);
+  background: var(--reaction-pill-border);
 }
 
 .gifMedia {
@@ -357,10 +370,14 @@
 /* ── The thread ────────────────────────────────────────────────────────── */
 
 /* One continuous line, from just under the post's avatar to the last reply. The
-   stem runs down the avatar's column; each reply draws its own piece: a curved
-   elbow that touches its avatar, and, unless it is the last, a straight run on to
-   the next. The rows touch and the colour is opaque, so the pieces join with no gap
-   and no darker overlap. Pointing at any piece darkens the whole line. */
+   stem runs down the avatar's column; each reply draws its own piece (Rail in
+   PostThread.jsx): a straight run through the row, and a curve that peels off
+   it as a quarter circle of --rail-r and runs on to stop 4 px short of the
+   reply's avatar, at its middle. In the last row the straight run stops where
+   the curve begins, so the line ends in its curve. The rows touch and the
+   colour is opaque, so the pieces join with no gap and no darker overlap.
+   Pointing at any piece darkens the whole line; each piece takes the pointer
+   only 3 px either side of what you see. */
 .thread {
   --rail-x: -22px; /* from the text column back to the middle of the post's avatar */
   --elbow: 14px; /* from the row's top to the middle of its avatar */
@@ -371,33 +388,34 @@
   list-style: none;
 }
 
-/* Wider than the line it draws, because 1.5 px is too thin to point at. */
+/* Its line is in the middle of the post's 28 px avatar, 14 px in. */
 .stem {
   display: none;
   position: relative;
   grid-column: 1;
   grid-row: 1;
   justify-self: start;
-  width: 10px;
-  margin: 32px 0 0 9px;
+  width: var(--rail-hit);
+  margin: 32px 0 0 calc(14px - var(--rail-hit) / 2);
 }
 
 .post:has(> .thread) .stem {
   display: block;
 }
 
-.stem::before {
+.stem::before,
+.railTrunk::before {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 5px;
+  left: calc(50% - 0.75px);
   border-left: 1.5px solid var(--thread-rail);
   transition: border-color 140ms var(--community-ease);
 }
 
 @media (hover: hover) {
-  .post:has(.stem:hover, .rail:hover) {
+  .post:has(.stem:hover, .railTrunk:hover, .railHit:hover) {
     --thread-rail: var(--community-rail-hover);
   }
 }
@@ -417,9 +435,12 @@
   animation: replyIn 260ms var(--community-ease) backwards;
 }
 
+/* Folding the thread brings this row back on screen; the margins keep it clear
+   of the floating header and composer. */
 .threadMore {
   --elbow: 13px;
   padding-top: 2px;
+  scroll-margin: 48px 0 72px;
 }
 
 @keyframes replyIn {
@@ -429,42 +450,44 @@
   }
 }
 
-.rail {
+.railTrunk {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--rail-x) - 5px);
-  width: calc(5px - var(--rail-x));
+  left: calc(var(--rail-x) - var(--rail-hit) / 2);
+  width: var(--rail-hit);
 }
 
-:last-child > .rail {
+:last-child > .railTrunk {
   bottom: auto;
-  height: var(--elbow);
+  height: max(0px, calc(var(--elbow) - var(--rail-r)));
 }
 
-.rail::before,
-.rail::after {
-  content: "";
+/* The curve starts on the line, --rail-r above the avatar's middle. Only its
+   wide transparent copy takes the pointer. */
+.railBranch {
   position: absolute;
-  top: 0;
-  left: 5px;
-  border-left: 1.5px solid var(--thread-rail);
-  transition: border-color 140ms var(--community-ease);
+  top: calc(var(--elbow) - var(--rail-r));
+  left: var(--rail-x);
+  overflow: visible;
+  pointer-events: none;
 }
 
-.rail::before {
-  right: 0;
-  height: var(--elbow);
-  border-bottom: 1.5px solid var(--thread-rail);
-  border-bottom-left-radius: 10px;
+.railLine,
+.railHit {
+  fill: none;
 }
 
-.rail::after {
-  bottom: 0;
+.railLine {
+  stroke: var(--thread-rail);
+  stroke-width: 1.5;
+  transition: stroke 140ms var(--community-ease);
 }
 
-:last-child > .rail::after {
-  display: none;
+.railHit {
+  stroke: transparent;
+  stroke-width: 7.5; /* --rail-hit */
+  pointer-events: stroke;
 }
 
 .replyAvatarLink {
@@ -502,6 +525,8 @@
   font-size: 12px;
 }
 
+/* Pointing at a username turns it purple, and an underline rises into place
+   under it (it waits, transparent, 5 px down). */
 .replyUsername {
   flex: 0 1 auto;
   min-width: 32px;
@@ -509,11 +534,18 @@
   text-overflow: ellipsis;
   font: 600 13px/20px "Inter", sans-serif;
   color: var(--black-soft);
-  text-decoration: none;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: transparent;
+  text-underline-offset: 5px;
+  transition: color 160ms var(--community-ease), background-color 160ms var(--community-ease),
+    text-decoration-color 160ms var(--community-ease), text-underline-offset 220ms var(--community-ease);
 }
 
 .replyUsername:hover {
-  text-decoration: underline;
+  color: var(--purple);
+  text-decoration-color: currentColor;
+  text-underline-offset: 2px;
 }
 
 /* The post's own author, replying to themselves. The negative margin keeps the
@@ -525,6 +557,11 @@
   background: var(--reaction-mine-bg);
   color: var(--purple);
   text-shadow: none; /* it has a ground of its own */
+}
+
+.replyUsernameAuthor:hover {
+  background: var(--community-author-hover);
+  color: var(--purple-dark);
 }
 
 .replyTools {
@@ -645,6 +682,22 @@
   background: var(--reaction-mine-bg);
 }
 
+.threadButtons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Quieter than "Show more replies", which stays the thing to press. */
+.hideReplies {
+  color: var(--community-muted);
+}
+
+.hideReplies:hover {
+  color: var(--purple);
+}
+
 .showMore:disabled {
   cursor: progress;
 }
@@ -697,8 +750,9 @@
 
   .post,
   .stem::before,
-  .rail::before,
-  .rail::after,
+  .railTrunk::before,
+  .railLine,
+  .replyUsername,
   .photo,
   .moreBtn,
   .replyPill,

@@ -44,10 +44,12 @@
   overflow: hidden;
 }
 
+/* --composer-topline-start: on a laptop the right-hand composer starts the chip
+   past the badge on your avatar, which springs out over this corner (spec §4). */
 .topLine {
   display: flex;
   align-items: center;
-  padding: 6px 0 0;
+  padding: 6px 0 0 var(--composer-topline-start, 0px);
 }
 
 .replyChip {
@@ -454,6 +456,12 @@
 .supportBody a {
   color: var(--purple);
   font-weight: 600;
+}
+
+/* footer.module.css has a bare `a:hover` rule that leaks to every link on the
+   site and turns it --pink-light, which nearly vanishes on a light ground. */
+.supportBody a:hover {
+  color: var(--purple-dark);
 }
 
 .supportTitle {

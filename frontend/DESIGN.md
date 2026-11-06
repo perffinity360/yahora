@@ -54,7 +54,11 @@ the variables in `src/styles/global.css`.
 - **An avatar gets a column of its own.** Everything in the row, text, media, actions and nested replies,
   starts at one left edge. We tried a drop cap (text wrapping under the avatar); it saved width but made
   rows hard to scan.
-- **Thin lines people can point at** get a hit area wider than the line, and respond on hover.
+- **Thin lines people can point at** get a hit area wider than the line, and respond on hover. Keep it
+  to about 3 px either side, and make it follow the line: a curve is an SVG path with a wide transparent
+  copy (`pointer-events: stroke`), not a box, so the empty corner inside the curve doesn't react.
+- **Scrollbars on a working panel stay see-through until it scrolls,** then fade about a second after the
+  last scroll. Keep their room the whole time (`scrollbar-color: transparent`), so nothing shifts.
 - **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
   context already says, such as a campus name in that campus's own feed.
 - **Components respond to their container, not the window.** Use `@container` and `cqi`, because a panel
@@ -91,5 +95,7 @@ the variables in `src/styles/global.css`.
 - Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every
   overlap as a darker patch.
 - A bare element selector in a `.module.css` file isn't scoped; it leaks to the whole site. Use a class.
+  `footer.module.css` already leaks `a { transition: all }`, `a:hover { color: var(--pink-light) }`, `ul`
+  and `li`, so **every link in a new component sets its own `:hover` colour**, or it turns near-white.
 - A `position: fixed` element inside a `backdrop-filter` or `@container` parent is trapped by it, so render
   it in a portal.

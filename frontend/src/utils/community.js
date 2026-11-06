@@ -22,6 +22,9 @@ export const LAYOUT_COLLAPSED_PX = 36;
 export const LAYOUT_BREAKPOINT_PX = 1024;
 export const REPORT_DETAILS_MAX = 500;
 export const REPLY_PREVIEW_COUNT = 2;
+/* "Show more replies" needs at least this many replies on the post, and is
+   never left standing for fewer than this many unloaded ones (spec §4). */
+export const REPLIES_FOLD_MIN = 3;
 export const REACTION_SUMMARY_COUNT = 4;
 
 /* Runbook §1.12: count code points, the way Postgres char_length() does, so

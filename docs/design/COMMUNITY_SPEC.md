@@ -1,7 +1,15 @@
 # Community — design spec (Phase 7)
 
-**Version 3 · 4 November 2026 · for the website and the app**
+**Version 3.1 · 6 November 2026 · for the website and the app**
 
+> **Changed in version 3.1 (owner's review of the redesign, 6 Nov):** one side is always selected on a
+> laptop, the campus side by default, with the cursor waiting in it (§1.1, §2.1); pressing your avatar
+> switches sides; a thinner divider with a new grip (§1.1); the panels' scrollbar shows only while they
+> scroll (§1.1); a drawn colour globe for Global (§1.1); the thread curves like a quarter circle and
+> darkens more on hover (§4); `Hide replies`, and no `Show more replies` for fewer than 3 replies (§4);
+> Enter posts (§2.2); usernames get a hover of their own (§3, §4); GIFs are back on a see-through tint
+> (§3); a tighter composer bar (§2.1).
+>
 > **Changed in version 3 (the redesign, runbook Block V-P):** flat posts on the chat's wallpaper,
 > thin and compact everywhere, the avatar in a column of its own with a text halo over the doodles,
 > a composer docked at the bottom of each feed with your avatar on the divider, replies shown under
@@ -64,34 +72,53 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 - **Right panel:** the title is the dropdown (§1.3) that picks a country or Global. Next to it is a
   **Hot · New** switch made of two icons (flame, clock), with a thumb that slides between them. Hot is
   the default (ranking: runbook §1.3).
-- **Icons, not emoji:** the panel icons are drawn in when they first appear. Hovering the header gives
-  the cap a small hop and turns the globe. Flags stay emoji, because they are worked out from the code.
-- **The divider** (react-resizable-panels), **6 px** wide:
+- **Icons, not emoji:** the campus icon is drawn in when it first appears, and hovering the header gives
+  the cap a small hop. Flags stay emoji, because they are worked out from the code.
+- **The Global globe** sits among flag emoji (the dropdown, the panel title, the badge on your avatar),
+  so it is drawn in colour to match them, not as a line icon: an ocean from `blueLight` at the upper left
+  into `blueDark` at the edge, `communityGlobeLand` continents (the Americas, Europe and Africa, Asia and
+  Australia at the rim), a `communityGlobeShade` shadow towards the lower right, a white shine at 42%, and
+  a thin `blueDark` rim at 55%. It pops in (scale 0.7 → 1, 360 ms, `communitySpring`) and, when its header
+  or button is hovered, turns once: the land slides one face to the left over 900 ms.
+- **The panels' scrollbar shows only while they scroll.** It's see-through at rest and keeps its room, so
+  nothing moves when it appears: `communityScrollbar`, thin, then it fades 900 ms after the last scroll.
+  (Website only; the app uses the phone's own indicator.)
+- **The divider** (react-resizable-panels), **4 px** wide (the library still gives a mouse 10 px to grab,
+  a finger 20):
   - white at rest, down to the composer bar, where it takes `communityDock` so the two bars read as one.
     The panels' corners there are square;
-  - a white grip in the middle of its height, 8 × 24, with three `purpleDark` dots and a 1 px
-    `communityGripBorder` outline;
-  - while hovered, dragged or focused, a purple line runs its length, down to the composer bar, and the
-    grip's outline turns purple;
+  - **the grip,** in the middle of its height: a white pill, 10 × 30, with a 1 px `communityGripBorder`
+    outline, a `communityGripShadow`, and two grooves, 1.5 × 12, 2 px apart, in `communityGripBorder`;
+  - while hovered, dragged or focused, a purple line runs its length, down to the composer bar; the grip's
+    outline and grooves turn purple, a 3 px `reactionMineBg` ring comes up, the grip grows to 1.06 and the
+    grooves stretch to 1.25;
   - drag it to resize; each panel is at least **320 px** wide;
   - double-click it to go back to 50 / 50;
   - keyboard: focus it with Tab, move it with the arrow keys.
-- **Your avatar on the divider:** 56 px across, 7 px from the bottom, so it sits across the top edge of the
+- **One side is always selected:** the side you're writing on. The page opens with the **campus side**
+  selected and, with a mouse, the cursor already in its composer (not on a touch screen, where it would raise
+  the keyboard). Using either composer selects its side, and it **stays selected when you click away**: its
+  composer keeps its highlight (§2.1) and your avatar keeps that half filled in. A collapsed panel, or a
+  view-only country (§1.4), can't be selected; the other side is shown instead until it can.
+- **Your avatar on the divider:** 56 px across, 4.5 px from the bottom, so it sits across the top edge of the
   composer bar with the two composers tucked in under it. Nothing runs below it. It is a child of the
-  divider, so it moves with it as you resize, and it grows slightly on hover and while dragging. It isn't a
-  button: pressing anywhere on it drags the divider. From the outside in:
-  - **a 2.5 px ring:** `communityRail` at rest; `purpleDark` while you write on the left, `pinkDark` on the right;
-  - **a 2.5 px band, split down the middle:** `chatCanvas` at rest. The half on the side you're writing on fills
+  divider, so it moves with it as you resize, and it grows slightly on hover and while dragging. **Pressing it
+  switches sides** (and puts the cursor in that composer), so the pointer is a hand; its tooltip says
+  `Post in India` (or `Post in My campus`). A press that moves drags the divider instead, with the resize
+  cursor. From the outside in:
+  - **a 2.5 px ring:** `purpleDark` while the left side is selected, `pinkDark` for the right;
+    `communityRail` only when neither side has a composer;
+  - **a 2.5 px band, split down the middle:** `chatCanvas` at rest. The half on the selected side fills
     in over 200 ms: solid `purple` on the left; on the right, `pinkDark` at the top and bottom running to `purple`
     at its outer edge (a conic gradient). The other half stays `chatCanvas`;
   - **a 2.5 px white gap,** then the **photo, 41 px,** with a 1 px `communityGripBorder` edge instead of the
     usual avatar ring;
   - **a `purpleDark` cap** on top, 11 × 10, rounded at the top, sitting over the ring;
-  - **a soft glow** in the side's tint (`reactionMineBg` or `communityWorldTint`) while you write.
+  - **a soft glow** in the side's tint (`reactionMineBg` or `communityWorldTint`).
   - **A badge springs out on that side,** 30 × 20, over the ring's upper corner, 20 px from the centre: a white
-    graduation cap on `purpleDark` on the left; on the right, the flag (or a globe for Global) on `pinkDark`.
+    graduation cap on `purpleDark` on the left; on the right, the flag (or the globe for Global) on `pinkDark`.
     **Icons only, no words.** It's hidden from screen readers, because the composer's own label says where the
-    post goes.
+    post goes. Tab reaches both composers, so pressing the avatar is only a shortcut for a mouse.
 - **Panel buttons (26 × 26):**
   - **‹** or **›** collapses that panel to a **36 px** bar. The bar shows the panel's name
     written vertically and an expand button. The panels glide over 280 ms when a button moves them,
@@ -162,10 +189,10 @@ floats on glass like the composer.
 
 ### 2.1 Closed
 
-The composer is **always at the bottom of the feed**, separately for each panel: a 42 px dock in
-`communityDock` with a 1.5 px `communityRail` top line, holding a white one-line field 32 px tall, with a
-1.5 px `communityRail` outline and Inter 400 14/20 text. **At the end of the line:** the photo icon, faded
-to 65%, and the `Post` pill.
+The composer is **always at the bottom of the feed**, separately for each panel: a 38.5 px dock in
+`communityDock` with a 1.5 px `communityRail` top line, holding a white one-line field 33 px tall, 2.5 px
+under the line and 1.5 px above the bottom, with a 1.5 px `communityRail` outline and Inter 400 14/20 text.
+**At the end of the line:** the photo icon, faded to 65%, and the `Post` pill.
 
 On a laptop each field ends 13 px from the divider's centre, tucked in under the shared avatar (§1.1). Its
 corners are radius 20 on the outer side and 18 on the side by the avatar, and its padding keeps the text and
@@ -181,8 +208,10 @@ tools clear of the avatar. On a narrow window the composer floats over the posts
 **Clicking it highlights it, and it stays one line.** The outline turns to the feed's accent with a 3 px soft
 tint around it: `purpleDark` on the campus feed, `pinkDark` on a country or Global feed. Both layouts do this.
 The tools come to full strength, and GIF and emoji slide in beside the photo icon over 220 ms. Pressing
-elsewhere, Tab or Esc ends the highlight. In the app, tapping opens a full-screen compose page
-(`app/compose.tsx`, opened as a modal).
+elsewhere, Tab or Esc puts GIF and emoji away again. **On a narrow window** that also ends the highlight.
+**On a laptop** the highlight stays on the selected side's composer (§1.1) whether or not it's in use, so
+one of the two composers is always lit; the campus one when the page opens. In the app, tapping opens a
+full-screen compose page (`app/compose.tsx`, opened as a modal).
 
 ### 2.2 In use
 
@@ -204,7 +233,11 @@ elsewhere, Tab or Esc ends the highlight. In the app, tapping opens a full-scree
   country's flag. On a laptop it's the badge on your avatar (§1.1); on a narrow window it's a small chip with
   the tools. It always matches the feed you're in, and can't be changed inside the composer.
 - **Post** is a 26 px pill with the word `Post` (`Reply` for a reply), Inter 600 13 in white, on `purpleDark` on
-  the campus feed and `communityWorldStrong` on the others. On the website, Ctrl or Cmd + Enter also posts.
+  the campus feed and `communityWorldStrong` on the others.
+- **Enter posts, Shift + Enter starts a new line,** on the website, the same as the chat (MESSAGES_SPEC §2
+  "Composer"). On a touch keyboard Enter is a new line and the Post pill posts; Ctrl or Cmd + Enter still
+  posts there. Nothing is sent while an input method is still composing, and Enter on an empty composer
+  does nothing.
   - **With a mouse, once there's something to post,** pointing at it slides the word up and out and an arrow
     (lucide `ArrowUp`, 15) up into its place, over 200 ms. The pill keeps its size and its label. Touch screens
     and a disabled pill keep the word.
@@ -292,9 +325,12 @@ with a soft tint on hover. Compact, like a code editor's panels.
     420 px;
   - **2 photos:** two squares side by side;
   - **3 photos:** one large photo on the left, two stacked on the right, 16:10 overall.
-- **GIF:** at most 280 px wide, on `chatCanvas`, so the doodles don't show through a transparent GIF.
-  Plays muted and on a loop while on screen, and pauses when it scrolls away. It carries a small `GIF`
-  badge in the corner.
+- **GIF:** at most 280 px wide, on a see-through `reactionPillBorder` tint (the doodles show through a GIF's
+  transparent parts; the owner preferred that to a solid backing, 6 Nov). Plays muted and on a loop while on
+  screen, and pauses when it scrolls away. It carries a small `GIF` badge in the corner.
+- **Links in a post say their own hover colour** (website): the name turns `purple` with a 1.5 px underline,
+  the time turns `purple` and underlines, a link in the text turns `purpleDark`. `footer.module.css` has a bare
+  `a:hover` that turns every link on the site `pinkLight`, which nearly vanishes on the wallpaper.
 - **Actions: icons in pills, no words,** 24 px tall, with 4 px between them:
   - **The reaction summary** (§5.3), when there are reactions.
   - **React:** your current emoji, or a line-drawn smiley icon (lucide `Smile`, Feather `smile` in the app)
@@ -328,7 +364,7 @@ Replies now show **under each post in the feed,** as well as on the post's page.
  │        Reply text, Inter 400 13/19. Every line starts under the username.
  ╰───(av) [@rahul.verma] · 1h                               ♥ 3   ⋯
  │        The highlighted name is the post's own author.
- ╰─── ⌄ Show more replies
+ ╰─── ⌄ Show more replies  ⌃ Hide replies   ← Hide only once Show more was pressed
 ```
 
 - **Top replies show by default:** the **2** most-liked (`REPLY_PREVIEW_COUNT`), oldest first when
@@ -337,18 +373,34 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   leaving the feed, then shows again while there are more. It disappears when there are none left. The
   API's default page is 20, so the client sends `?limit=REPLIES_PAGE_SIZE`. A top reply isn't shown
   twice, so a page that includes one adds one fewer.
+  - **Not for fewer than 3 replies** (`REPLIES_FOLD_MIN`): a post with 1 or 2 replies shows them all in
+    its preview and never shows the button. (Until the API sends `top_replies`, see below, the button shows
+    for any post with replies, because nothing else could show them.)
+  - **Never for one or two left over:** if a page would leave only 1 or 2 replies unloaded, the same press
+    loads them too (at most 3 pages a press).
+- **`Hide replies`** (chevron up, `communityMuted`, purple on hover) appears beside `Show more replies` once
+  that has been pressed, and stays alone at the end of the thread when everything is loaded. It folds the
+  thread back to the preview (plus anything you just replied); the loaded replies are kept, so
+  `Show more replies` unfolds them again at once, without loading. If folding leaves the end of the thread
+  above the screen, the feed scrolls back to it, as little as needed.
 - **The thread:** one unbroken 1.5 px `communityRail` line runs down the post's avatar column, from 3 px
-  under the avatar. Each reply curves off it (radius 10) until it touches the middle of its own avatar.
+  under the avatar, centred on it. Each reply's piece **peels off it as a quarter circle of radius 14**
+  (`--rail-r`), starting on the line 14 px above the middle of the reply's avatar, and runs on straight to
+  stop **4 px short** of the avatar, at its middle. The line itself carries straight on to the next reply.
   The last one ends in its curve, and doesn't continue. The colour is opaque, so joins never show as a
-  darker patch.
+  darker patch. (Owner's reference, 6 Nov: a broad curve like a quarter of a circle, not a tight corner.)
 - **Pointing at the line** (with a mouse) darkens all of that post's line to `communityRailHover` over
-  140 ms. Each piece is 10 px wider than it looks, so it's easy to point at.
+  140 ms. Each piece takes the pointer **3 px either side** of the line (7.5 px in all), following the
+  curve; the empty corner inside a curve doesn't.
 - **Each reply:** 45 px from the top of one to the top of the next when it has one line: 4 above, a
   20 px author line, a 19 px text line, 2 below. It starts at the post's text edge: a 22 px avatar in its
   own column, then 8 px, and every line of text starts directly under the username.
   `@username` in Inter 600 13; `campus · time` in Inter 400 12; text in Inter 400 13/19, with an optional
   GIF up to 180 px wide.
 - **Usernames, not full names.** The campus shows only under the rule in §3.
+- **Pointing at a username** turns it `purple`, and a 1.5 px underline rises into place under it (it waits
+  see-through 5 px down and moves up to 2 px, over 220 ms). The author's pill (below) deepens to
+  `communityAuthorHover` with `purpleDark` text.
 - **The post's author is highlighted:** when they reply to their own post, their username sits on
   a `reactionMineBg` pill in purple. The pill reaches out to the left, so the name itself stays in line
   with the text below.
@@ -360,7 +412,8 @@ Replies now show **under each post in the feed,** as well as on the post's page.
 - **Writing a reply:** the post's 💬 pill switches that panel's docked composer to reply mode, with the
   cursor in it: grey text `Reply to @username…`, up to 1,000 characters, a GIF button, and a
   `Replying to @username ✕` chip. A half-written post is kept and comes back afterwards. An empty
-  reply closes when you press elsewhere.
+  reply closes when you press elsewhere. On a laptop, the right-hand composer starts its chip 16 px
+  further in, past the flag badge on your avatar (§1.1), which springs out over that corner.
 - **In a feed where you can only view,** the view-only line stays (§1.4), and the 💬 pill loads more
   replies instead.
 - **A post's page:** website `/post/:id`, app `app/post/[id].tsx` (CC-N4c). The same post and thread
@@ -594,7 +647,12 @@ A **Posts** tab sits next to the existing tabs:
 | `communityHairline` | `--community-hairline` | `rgba(128,0,128,0.1)` | lines between posts, outlines |
 | `communityPostRule` | `--community-post-rule` | `rgba(128,0,128,0.22)` | the line between posts, strong enough to see over the doodles |
 | `communityRail` | `--community-rail` | `#D1AAD7` | the reply thread (opaque, so its pieces join cleanly) |
-| `communityRailHover` | `--community-rail-hover` | `#B07FBA` | the thread while you point at it |
+| `communityRailHover` | `--community-rail-hover` | `#9552A3` | the thread while you point at it (was `#B07FBA`, too faint) |
+| `communityAuthorHover` | `--community-author-hover` | `rgba(128,0,128,0.18)` | the author's username pill under the pointer |
+| `communityScrollbar` | `--community-scrollbar` | `rgba(128,0,128,0.3)` | the panels' scrollbar while they scroll (website only) |
+| `communityGlobeLand` | `--community-globe-land` | `#3FB873` | the continents on the Global globe |
+| `communityGlobeShade` | `--community-globe-shade` | `rgba(5,40,90,0.38)` | the globe's shadow towards the lower right |
+| `communityGripShadow` | `--community-grip-shadow` | `0 1px 2px rgba(42,8,42,0.14)` | the divider's grip (website only) |
 | `communityHalo` | `--community-halo` | `#F8F3F9` | the halo around text on the wallpaper |
 | `communityTextHalo` | `--community-text-halo` | five `communityHalo` shadows, 1, 2, 3, 4 and 6 px, no offset | that halo (app: one shadow, radius 4) |
 | `communityGripBorder` | `--community-grip-border` | `#8E8B99` | outline of the divider's grip (3.3:1 on white) |
@@ -607,8 +665,8 @@ A **Posts** tab sits next to the existing tabs:
 | `communityEase` | `--community-ease` | `cubic-bezier(0.2,0.8,0.2,1)` | movement and fades |
 | `communitySpring` | `--community-spring` | `cubic-bezier(0.34,1.56,0.64,1)` | small things that pop (the app uses a real spring) |
 
-Everything else uses existing tokens: purple, purpleDark, errorText, pinkLight, blackSoft, toastBg and
-scrim.
+Everything else uses existing tokens: purple, purpleDark, errorText, pinkLight, blackSoft, toastBg,
+scrim, and blueLight and blueDark for the globe's ocean.
 
 ## 13. Constants (same names and values on both platforms)
 
@@ -626,6 +684,7 @@ REACTION_SUMMARY_COUNT    = 4
 REACTION_HOVER_DELAY_MS   = 300
 REACTION_LONG_PRESS_MS    = 450
 REPLY_PREVIEW_COUNT       = 2
+REPLIES_FOLD_MIN          = 3
 GIF_SEARCH_DEBOUNCE_MS    = 300
 LAYOUT_MIN_PANEL_PX       = 320
 LAYOUT_COLLAPSED_PX       = 36

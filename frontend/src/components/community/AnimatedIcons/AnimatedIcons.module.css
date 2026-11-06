@@ -39,29 +39,56 @@ button:hover > .campus {
   }
 }
 
-.meridian {
-  transform-box: fill-box;
-  transform-origin: center;
+/* ── The Global globe ──────────────────────────────────────────────────── */
+
+.globe {
+  animation: globeIn 360ms var(--community-spring) both;
 }
 
-header:hover .meridian,
-button:hover .meridian {
-  animation: globeTurn 720ms var(--community-ease);
+@keyframes globeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-20deg);
+  }
+}
+
+.globeLand {
+  fill: var(--community-globe-land);
+}
+
+/* One face to the left: the land's second copy slides into the first one's
+   place, so the turn ends exactly where it started. */
+header:hover .globeLand,
+button:hover .globeLand {
+  animation: globeTurn 900ms var(--community-ease);
 }
 
 @keyframes globeTurn {
-  50% {
-    transform: scaleX(0.2);
+  to {
+    transform: translateX(-20px);
   }
+}
+
+.globeShine {
+  fill: var(--white);
+  opacity: 0.42;
+}
+
+.globeRim {
+  fill: none;
+  stroke: var(--blue-dark);
+  stroke-opacity: 0.55;
+  stroke-width: 0.75;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .draw,
   .drawLate,
+  .globe,
   header:hover .campus,
   button:hover > .campus,
-  header:hover .meridian,
-  button:hover .meridian {
+  header:hover .globeLand,
+  button:hover .globeLand {
     animation: none;
   }
 }

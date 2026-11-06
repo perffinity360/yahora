@@ -7,7 +7,10 @@
 //              50 / 50, keyboard on the divider, collapse to a 36 px bar,
 //              ⤢ for full width. The layout is remembered. Your avatar rides
 //              on the divider, the two composers tucked in under it, and lights
-//              up on the side you're writing on.
+//              up on the side you're writing on. One side is always selected:
+//              the left one when the page opens (with the cursor in it if
+//              there's a mouse), then whichever composer you last used.
+//              Pressing the avatar switches sides.
 //   < 1024 px  one feed at a time, with a floating switcher and composer that
 //              the posts pass underneath.
 //
@@ -48,6 +51,8 @@ const LEFT = "campus";
 const RIGHT = "world";
 /* A little longer than the panels' 280 ms transition (Community.module.css). */
 const PANEL_ANIMATION_MS = 320;
+/* A press on the avatar that moves less than this is a click, not a drag. */
+const HUB_CLICK_SLOP_PX = 4;
 
 /* The saved layout, or undefined for the 50 / 50 default. Anything that
    doesn't look like our two panels is ignored rather than trusted. */
@@ -234,32 +239,61 @@ function WideLayout({
   const [animating, setAnimating] = useState(false);
   const animationTimer = useRef(null);
   const defaultLayout = useMemo(readLayout, []);
-  const [activeSide, setActiveSide] = useState(null); // null | "left" | "right"
-  const onLeftActive = useCallback(
-    (on) => setActiveSide((side) => (on ? "left" : side === "left" ? null : side)),
-    [],
-  );
-  const onRightActive = useCallback(
-    (on) => setActiveSide((side) => (on ? "right" : side === "right" ? null : side)),
-    [],
-  );
+
+  // The side you're writing on (spec §1.1). It stays selected when you click
+  // away, so the avatar and that composer always say where a post would go.
+  const [selectedSide, setSelectedSide] = useState("left");
+  const [rightCanPost, setRightCanPost] = useState(null); // null while loading
+  const [focusSignals, setFocusSignals] = useState({ left: 0, right: 0 });
+  const onLeftActive = useCallback((on) => on && setSelectedSide("left"), []);
+  const onRightActive = useCallback((on) => on && setSelectedSide("right"), []);
+  // A side can be selected only while its composer is there: not collapsed,
+  // and not another country's view-only feed.
+  const available = { left: !leftCollapsed, right: !rightCollapsed && rightCanPost !== false };
+  const side = available[selectedSide]
+    ? selectedSide
+    : available.left
+      ? "left"
+      : available.right
+        ? "right"
+        : null;
+  const otherSide = side === "left" ? "right" : "left";
+
+  // When the page opens, the cursor waits in the campus composer. Only with a
+  // mouse: on a touch screen it would raise the keyboard (frontend/CLAUDE.md §18).
+  const [focusOnOpen] = useState(() => window.matchMedia("(pointer: fine)").matches);
 
   // The avatar is much wider than the divider, and the library only starts a drag
   // on the divider itself, so a press on the rest of the avatar drags from here.
+  // A press that doesn't move is a click, and switches sides.
   const hubDrag = useRef(null);
+  const [hubDragging, setHubDragging] = useState(false);
   const onHubDown = (e) => {
     const left = leftRef.current;
-    if (!left) return;
+    if (!left || e.button !== 0) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    hubDrag.current = { x: e.clientX, size: left.getSize().inPixels };
+    hubDrag.current = { x: e.clientX, size: left.getSize().inPixels, moved: false };
   };
   const onHubMove = (e) => {
-    if (!hubDrag.current) return;
-    leftRef.current?.resize(hubDrag.current.size + e.clientX - hubDrag.current.x);
+    const drag = hubDrag.current;
+    if (!drag) return;
+    if (!drag.moved && Math.abs(e.clientX - drag.x) < HUB_CLICK_SLOP_PX) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      setHubDragging(true);
+    }
+    leftRef.current?.resize(drag.size + e.clientX - drag.x);
   };
-  const onHubUp = () => {
+  const onHubUp = (e) => {
+    const drag = hubDrag.current;
     hubDrag.current = null;
+    setHubDragging(false);
+    if (!drag || drag.moved || e.type === "pointercancel") return;
+    const next = available[otherSide] ? otherSide : side;
+    if (!next) return;
+    setSelectedSide(next);
+    setFocusSignals((s) => ({ ...s, [next]: s[next] + 1 }));
   };
 
   useEffect(() => () => clearTimeout(animationTimer.current), []);
@@ -351,6 +385,9 @@ function WideLayout({
               inPanel
               side="left"
               onComposerActive={onLeftActive}
+              selected={side === "left"}
+              focusSignal={focusSignals.left}
+              autoFocusComposer={focusOnOpen}
               {...shared}
             />
           </section>
@@ -358,13 +395,19 @@ function WideLayout({
 
         {/* The avatar is a child of the divider, so it moves with it for free.
             The badge says where you're writing; the composer's own label says it
-            to a screen reader. */}
+            to a screen reader, and Tab reaches both composers, so pressing the
+            avatar is only a shortcut for a mouse. */}
         <Separator className={styles.handle}>
-          <span className={styles.handleGrip} aria-hidden="true" />
+          <span className={styles.handleGrip} aria-hidden="true">
+            <span className={styles.handleGroove} />
+            <span className={styles.handleGroove} />
+          </span>
           <span
             className={styles.hub}
-            data-active={activeSide ?? undefined}
+            data-active={side ?? undefined}
+            data-dragging={hubDragging || undefined}
             aria-hidden="true"
+            title={available[otherSide] ? `Post in ${otherSide === "left" ? "My campus" : label}` : undefined}
             onPointerDown={onHubDown}
             onPointerMove={onHubMove}
             onPointerUp={onHubUp}
@@ -444,6 +487,9 @@ function WideLayout({
               inPanel
               side="right"
               onComposerActive={onRightActive}
+              selected={side === "right"}
+              focusSignal={focusSignals.right}
+              onCanPostChange={setRightCanPost}
               {...shared}
             />
           </section>

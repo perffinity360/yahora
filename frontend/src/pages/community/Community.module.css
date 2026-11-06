@@ -121,6 +121,11 @@
   flex-direction: column;
 }
 
+/* The scrollbar is see-through at rest and shows only while the panel scrolls
+   (CommunityFeed sets data-scrolling, then clears it 900 ms after the last
+   scroll). Its room is kept the whole time, so nothing shifts when it shows.
+   scrollbar-color for Chrome and Firefox; the ::-webkit- rules for Safari, which
+   doesn't read it (Chrome ignores them once scrollbar-color is set). */
 .panelScroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -128,7 +133,31 @@
   overscroll-behavior: contain;
   padding-top: 36px; /* the header's height: the first post starts under it */
   scrollbar-width: thin;
-  scrollbar-color: rgba(128, 0, 128, 0.18) transparent;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 240ms var(--community-ease);
+}
+
+.panelScroll[data-scrolling] {
+  scrollbar-color: var(--community-scrollbar) transparent;
+}
+
+.panelScroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.panelScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panelScroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  background-clip: padding-box;
+}
+
+.panelScroll[data-scrolling]::-webkit-scrollbar-thumb {
+  background-color: var(--community-scrollbar);
 }
 
 .iconBtn {
@@ -164,12 +193,13 @@
 /* ── The divider, carrying your avatar ─────────────────────────────────── */
 
 /* White, down to the composer bars, where it takes their colour so they read as
-   one bar with your avatar sitting on it. */
+   one bar with your avatar sitting on it. 4 px to look at; the library still
+   gives a mouse 10 px to grab and a finger 20 (resizeTargetMinimumSize). */
 .handle {
-  --dock-height: 42px;
+  --dock-height: 38.5px;
   position: relative;
   z-index: 3;
-  width: 6px;
+  width: 4px;
   outline: none;
   background: linear-gradient(to top, var(--community-dock) var(--dock-height), var(--white) var(--dock-height));
   cursor: col-resize;
@@ -206,39 +236,62 @@
   box-shadow: 0 0 0 3px var(--reaction-mine-bg);
 }
 
-/* Three dots in a white pill, in the middle of the divider. */
+/* The grip: a white pill with two grooves, the usual sign for "drag sideways",
+   in the middle of the divider. In use, the outline and grooves turn purple, a
+   soft ring comes up and the grooves stretch a little. */
 .handleGrip {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 8px;
-  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 10px;
+  height: 30px;
   border-radius: 999px;
-  background:
-    radial-gradient(circle, var(--purple-dark) 1.2px, transparent 1.7px) 50% 3px / 100% 6px no-repeat,
-    radial-gradient(circle, var(--purple-dark) 1.2px, transparent 1.7px) 50% 9px / 100% 6px no-repeat,
-    radial-gradient(circle, var(--purple-dark) 1.2px, transparent 1.7px) 50% 15px / 100% 6px no-repeat,
-    var(--white);
-  box-shadow: inset 0 0 0 1px var(--community-grip-border);
+  background: var(--white);
+  box-shadow: inset 0 0 0 1px var(--community-grip-border), var(--community-grip-shadow);
   transform: translate(-50%, -50%);
-  transition: transform 200ms var(--community-spring), box-shadow 140ms var(--community-ease);
+  transition: transform 200ms var(--community-spring), box-shadow 160ms var(--community-ease);
+}
+
+.handleGroove {
+  width: 1.5px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--community-grip-border);
+  transition: background-color 160ms var(--community-ease), transform 220ms var(--community-spring);
 }
 
 .handle:hover .handleGrip,
 .handle[data-separator="hover"] .handleGrip,
-.handle[data-separator="active"] .handleGrip {
-  box-shadow: inset 0 0 0 1px var(--purple);
-  transform: translate(-50%, -50%) scale(1.12);
+.handle[data-separator="active"] .handleGrip,
+.handle[data-separator="focus"] .handleGrip,
+.handle:focus-visible .handleGrip {
+  box-shadow: inset 0 0 0 1px var(--purple), 0 0 0 3px var(--reaction-mine-bg);
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.handle:hover .handleGroove,
+.handle[data-separator="hover"] .handleGroove,
+.handle[data-separator="active"] .handleGroove,
+.handle[data-separator="focus"] .handleGroove,
+.handle:focus-visible .handleGroove {
+  background: var(--purple);
+  transform: scaleY(1.25);
 }
 
 /* Your avatar, joining the two composers tucked in behind it. From the outside in:
    a ring in the accent of the side in use, a band whose half on that side fills in,
    a white gap, then the photo. */
+/* A hand, because pressing it switches sides; while it drags the divider, the
+   resize arrows. */
 .hub {
   --hub-accent: var(--community-rail);
   --hub-glow: transparent;
   position: absolute;
-  bottom: 7px;
+  bottom: 4.5px;
   left: 50%;
   display: grid;
   place-items: center;
@@ -249,10 +302,14 @@
   background: var(--community-canvas);
   box-shadow: 0 2px 14px var(--hub-glow), var(--community-float-shadow);
   transform: translateX(-50%);
-  cursor: col-resize;
+  cursor: pointer;
   touch-action: none;
   transition: border-color 200ms var(--community-ease), box-shadow 220ms var(--community-ease),
     transform 220ms var(--community-spring);
+}
+
+.hub[data-dragging] {
+  cursor: col-resize;
 }
 
 .hub[data-active="left"] {
@@ -284,8 +341,13 @@
   transform: translateX(-50%) scale(1.03);
 }
 
-.handle[data-separator="active"] .hub {
+.handle[data-separator="active"] .hub,
+.handle .hub[data-dragging] {
   transform: translateX(-50%) scale(1.06);
+}
+
+.hub:active:not([data-dragging]) {
+  transform: translateX(-50%) scale(0.97);
 }
 
 .hubHalf {
@@ -405,10 +467,11 @@
 
 /* ── The docked composer ───────────────────────────────────────────────── */
 
+/* 38.5 px: the 1.5 px line, 2.5 above the 33 px composer and 1.5 below it. */
 .dock {
   flex: 0 0 auto;
-  min-height: 42px;
-  padding: 3.5px 8px 4px;
+  min-height: 38.5px;
+  padding: 2.5px 8px 1.5px;
   border-top: 1.5px solid var(--community-rail);
   background: var(--community-dock);
 }
@@ -426,20 +489,25 @@
   --composer-tint: var(--community-world-tint);
 }
 
-/* Each composer ends 13 px from the divider's centre, tucked in under the avatar,
-   with enough padding to keep the text and the tools clear of it. */
+/* Each composer ends 13 px from the divider's centre (2 px of divider, then 11),
+   tucked in under the avatar, with enough padding to keep the text and the
+   tools clear of it. */
 .dockLeft {
-  padding-right: 10px;
+  padding-right: 11px;
   --composer-radius: 20px 18px 18px 20px;
   --composer-pad-start: 12px;
   --composer-pad-end: 26px;
 }
 
+/* The right side's badge on the avatar reaches 50 px past the divider's centre,
+   over this composer's top corner, so its "Replying to" chip starts 16 px
+   further in and clears it. */
 .dockRight {
-  padding-left: 10px;
+  padding-left: 11px;
   --composer-radius: 18px 20px 20px 18px;
   --composer-pad-start: 26px;
   --composer-pad-end: 6px;
+  --composer-topline-start: 16px;
 }
 
 .dockRight .viewOnly {
@@ -978,9 +1046,11 @@
   .menuOption,
   .handle::before,
   .handleGrip,
+  .handleGroove,
   .hub,
   .hubHalf,
-  .hubBadge {
+  .hubBadge,
+  .panelScroll {
     transition: none;
   }
 }

@@ -99,10 +99,21 @@
   --community-hairline: rgba(128,0,128,0.1);
   --community-post-rule: rgba(128,0,128,0.22);
   --community-rail: #D1AAD7;
-  --community-rail-hover: #B07FBA;
+  /* Darker than the first #B07FBA, which the owner found too faint (6 Nov). */
+  --community-rail-hover: #9552A3;
+  /* A reply username under the pointer: the author's pill deepens to this. */
+  --community-author-hover: rgba(128,0,128,0.18);
+  /* The panels' scrollbar, shown only while they scroll (web only; the app
+     uses the phone's own indicator). */
+  --community-scrollbar: rgba(128,0,128,0.3);
+  /* The Global globe: land and the shading over it. The ocean is
+     --blue-light into --blue-dark. */
+  --community-globe-land: #3FB873;
+  --community-globe-shade: rgba(5,40,90,0.38);
   --community-halo: #F8F3F9;
   --community-text-halo: 0 0 1px var(--community-halo), 0 0 2px var(--community-halo), 0 0 3px var(--community-halo), 0 0 4px var(--community-halo), 0 0 6px var(--community-halo);
   --community-grip-border: #8E8B99;
+  --community-grip-shadow: 0 1px 2px rgba(42,8,42,0.14);
   --community-dock: #F9EEF8;
   --community-world-strong: #C92C66;
   --community-world-tint: rgba(235,72,127,0.16);

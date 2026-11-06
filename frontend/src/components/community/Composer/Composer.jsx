@@ -17,6 +17,9 @@
 //   parentId        set for a reply: always open, text and a GIF, no photos
 //   replyToUsername the parent post's author, for the reply's grey text
 //   autoFocus       put the cursor in the text on mount
+//   focusSignal     optional number — each new value puts the cursor in the text
+//   selected        optional — keep the highlight while not in use, because this
+//                   is the side you're writing on (the laptop's two composers)
 //   onCancelReply   optional () — shows the ✕ on "Replying to", and is called
 //                   when an empty reply is left
 //   onSubmit        (formData, { confirm }) → Promise<{ status, body }>
@@ -27,7 +30,6 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   GraduationCap,
-  Globe,
   ImagePlus,
   Loader2,
   MessageCircleWarning,
@@ -37,6 +39,7 @@ import {
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import AppToast, { useToast } from "../../AppToast/AppToast";
 import ConfirmDialog from "../../ConfirmDialog/ConfirmDialog";
+import { GlobeIcon } from "../AnimatedIcons/AnimatedIcons";
 import Popover from "../Popover/Popover";
 import EmojiPickerPopover from "../ReactionBar/EmojiPickerPopover";
 import GifPicker from "../GifPicker/GifPicker";
@@ -63,16 +66,24 @@ function Destination({ feed, countryName, countryCode }) {
         aria-label={`Posting to ${countryName}`}
         title={countryName}
       >
-        {flagEmoji(countryCode) || <Globe size={13} aria-hidden="true" />}
+        {flagEmoji(countryCode) || <GlobeIcon size={14} />}
       </span>
     );
   }
-  const [Icon, label] = feed === "global" ? [Globe, "Global"] : [GraduationCap, "Campus"];
+  const label = feed === "global" ? "Global" : "Campus";
   return (
     <span className={`${styles.chip} ${styles.chipIcon}`} role="img" aria-label={`Posting to ${label}`} title={label}>
-      <Icon size={13} aria-hidden="true" />
+      {feed === "global" ? <GlobeIcon size={14} /> : <GraduationCap size={13} aria-hidden="true" />}
     </span>
   );
+}
+
+/* Spec §2.2: Enter posts and Shift+Enter starts a new line, as in the chat
+   (MESSAGES_SPEC §2 "Composer"). On a touch keyboard Enter is a new line and
+   the Post button posts. Never while an input method is still composing. */
+function isSendKey(e) {
+  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
+  return !window.matchMedia("(pointer: coarse)").matches || e.metaKey || e.ctrlKey;
 }
 
 export default function Composer({
@@ -84,6 +95,8 @@ export default function Composer({
   parentId = null,
   replyToUsername,
   autoFocus = false,
+  focusSignal = 0,
+  selected = false,
   onCancelReply,
   onSubmit,
   onPosted,
@@ -116,6 +129,16 @@ export default function Composer({
     if (autoFocus) textareaRef.current?.focus({ preventScroll: true });
     // A new reply target puts the cursor back in the reply.
   }, [autoFocus, parentId]);
+
+  // The page asks for the cursor here (pressing your avatar on the divider).
+  // Only a new value counts: a feed that remounts (another sort or country)
+  // starts with the old one, and must not take the cursor for it.
+  const lastFocusSignal = useRef(focusSignal);
+  useEffect(() => {
+    if (focusSignal === lastFocusSignal.current) return;
+    lastFocusSignal.current = focusSignal;
+    textareaRef.current?.focus({ preventScroll: true });
+  }, [focusSignal]);
 
   // Tells the page, so the avatar on the divider can light up on this side.
   useEffect(() => {
@@ -199,7 +222,7 @@ export default function Composer({
   const post = () => c.submit(onSubmit);
 
   const onTextKeyDown = (e) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (isSendKey(e)) {
       e.preventDefault();
       if (c.canPost) post();
     } else if (e.key === "Escape" && isEmpty) {
@@ -232,7 +255,7 @@ export default function Composer({
 
   return (
     <div ref={rootRef} className={styles.root} onBlur={onBlur}>
-      <div className={`${styles.shell} ${active ? styles.shellActive : ""}`}>
+      <div className={`${styles.shell} ${active || selected ? styles.shellActive : ""}`}>
         <div className={`${styles.reveal} ${showTopLine ? styles.revealOpen : ""}`} inert={!showTopLine}>
           <div className={styles.revealInner}>
             <div className={styles.topLine}>

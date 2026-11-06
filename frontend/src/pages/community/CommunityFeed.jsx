@@ -15,8 +15,16 @@
 // `patches` holds reaction answers by post id. They live above the feeds, so a
 // reaction survives switching feeds and coming back (the feed remounts), and
 // each feed lays them over its own copy.
+//
+// On a laptop the page also says which side you're writing on: `selected`
+// keeps that side's composer highlighted while it isn't in use, `focusSignal`
+// puts the cursor in it, and `onCanPostChange` tells the page whether this
+// feed has a composer at all (another country's feed is view only).
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+/* Spec §1.1: a panel's scrollbar shows while it scrolls, then fades. */
+const SCROLLBAR_LINGER_MS = 900;
 import { Eye } from "lucide-react";
 import Composer from "../../components/community/Composer/Composer";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
@@ -51,6 +59,10 @@ export default function CommunityFeed({
   patches,
   onReact,
   onComposerActive,
+  selected = false,
+  focusSignal = 0,
+  autoFocusComposer = false,
+  onCanPostChange,
 }) {
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -107,6 +119,29 @@ export default function CommunityFeed({
     loadPage(null);
   }, [loadPage]);
 
+  // null while the first page loads: the page keeps your side selected
+  // through a reload instead of flicking to the other one and back.
+  useEffect(() => {
+    onCanPostChange?.(canPost);
+  }, [canPost, onCanPostChange]);
+
+  // The scrollbar is see-through until the panel scrolls (Community.module.css).
+  // Set on the element itself, so scrolling never re-renders the feed.
+  useEffect(() => {
+    if (!scroller) return undefined;
+    let timer = null;
+    const onScroll = () => {
+      scroller.dataset.scrolling = "";
+      clearTimeout(timer);
+      timer = setTimeout(() => delete scroller.dataset.scrolling, SCROLLBAR_LINGER_MS);
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      clearTimeout(timer);
+    };
+  }, [scroller]);
+
   const sentinelRef = useInfiniteScroll({
     hasMore: hasMore && !failed && !firstLoad,
     isLoading: loading,
@@ -150,6 +185,10 @@ export default function CommunityFeed({
     onSubmit: samplePost,
     onPosted,
     onActiveChange: onComposerActive,
+    selected,
+    // Both get it: the hidden one can't take the cursor, so it lands in
+    // whichever is showing.
+    focusSignal,
   };
 
   const dock =
@@ -166,7 +205,7 @@ export default function CommunityFeed({
         {/* Stays mounted while a reply is open, so a half-written post is
             still there afterwards (spec §2.3: text is never thrown away). */}
         <div hidden={Boolean(replyTo)}>
-          <Composer {...composerProps} />
+          <Composer {...composerProps} autoFocus={autoFocusComposer} />
         </div>
         {replyTo && (
           <Composer
