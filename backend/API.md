@@ -7,7 +7,7 @@ trust an entry.
 |---|---|---|
 | What it is | What the code does **today** | What the code **must** do when written |
 | Written from | Reading every controller | Transcribing `docs/YAHORA_BUILD_PLAN.md` |
-| Status | Live. Deployed. | **Nothing here is implemented yet.** |
+| Status | Live. Deployed. | Written before the code. **Built and live (7 Nov 2026): the user, reports and posts modules.** Not built yet: social, notifications, admin. The table of contents marks each. |
 | If code and doc disagree | The doc is wrong — fix the doc | The code is wrong — fix the code |
 
 **Part 1** documents the 38 routes that exist now, including their bugs. Where a controller
@@ -196,9 +196,10 @@ the request continues either way. Handlers branch on `req.user?.id` and must ren
 sensible for a caller who does not exist. Use it wherever a response is *personalised* but not
 *private*.
 
-⚠ **`docs/CURRENT_STATE.md` (25 Aug) still lists items 1 and 2 as open.** It is stale: item 1
-(`PUT /api/users/:userId/profile`) was fixed in Phase 3, and item 2 — the rest of the CC-4
-audit — is what Block V-A closed. This file and the code are the current record.
+`docs/CURRENT_STATE.md` (corrected 7 Nov 2026) lists both of the old open items, the
+`PUT /api/users/:userId/profile` hole (fixed in Phase 3) and the CC-4 audit (closed by Phase 4
+Block V-A), as resolved. Where it and this file disagree about a route, this file and the code
+are the record.
 
 **The Supabase client uses the service-role key** (`backend/src/config/supabase.js`),
 so every query bypasses RLS. RLS is not a backstop for this path.
@@ -258,7 +259,8 @@ environments. `X-Device-Id` is not a CORS-safelisted header, so without it every
 **Pagination does not exist.** No route accepts `limit`, `offset`, or `cursor`. Feeds, chat
 histories, and comment lists return every matching row.
 
-**Base URL** is the server root; `PORT` defaults to `5000` and the server binds `0.0.0.0`
+**Base URL** is the server root; `PORT` defaults to `5001` (`server.js`; never 5000, which macOS's
+AirPlay Receiver holds and answers with a bodiless 403) and the server binds `0.0.0.0`
 (override with `HOST`), so it is reachable over the LAN as well as on loopback. Routers mount at `/api/auth`,
 `/api/academic`, `/api/universities`, `/api/user`, `/api/products`, `/api/messages`.
 
@@ -389,16 +391,16 @@ response, not an error.
 - [PUT /api/messages/:id/reaction](#put-apimessagesidreaction-phase-7-block-v-c--not-built-yet) (Phase 7 Block V-C — not built yet)
 - [DELETE /api/messages/:id/reaction](#delete-apimessagesidreaction-phase-7-block-v-c--not-built-yet) (Phase 7 Block V-C — not built yet)
 
-### Part 2 — the contract, not yet implemented
+### Part 2 — the contract
 
-**[user module](#user-module)** — Neeraj · Phase 1
+**[user module](#user-module)** — Neeraj · Phase 1 · ✅ built
 - [GET /api/users/username-available](#get-apiusersusername-available---owner-neeraj--phase-1)
 - [GET /api/users/username-suggestions](#get-apiusersusername-suggestions---owner-neeraj--phase-1)
 - [GET /api/users/by-username/:username](#get-apiusersby-usernameusername---owner-neeraj--phase-1)
 - [GET /api/users/search](#get-apiuserssearch---owner-neeraj--phase-1)
 - [PATCH /api/users/me/username](#patch-apiusersmeusername---owner-neeraj--phase-1)
 
-**[social module](#social-module)** — Neeraj · Phase 3
+**[social module](#social-module)** — Neeraj · Phase 3 · not built yet
 - [POST /api/users/:id/follow](#post-apiusersidfollow---owner-neeraj--phase-3)
 - [DELETE /api/users/:id/follow](#delete-apiusersidfollow---owner-neeraj--phase-3)
 - [GET /api/users/:id/followers](#get-apiusersidfollowers---owner-neeraj--phase-3)
@@ -411,15 +413,15 @@ response, not an error.
 - [GET /api/users/me/blocks](#get-apiusersmeblocks---owner-neeraj--phase-3)
 - [PATCH /api/users/me/privacy](#patch-apiusersmeprivacy---owner-neeraj--phase-3)
 
-**[notifications module](#notifications-module)** — Neeraj · Phase 5
+**[notifications module](#notifications-module)** — Neeraj · Phase 5 · not built yet (the controller is a placeholder)
 - [GET /api/notifications](#get-apinotifications---owner-neeraj--phase-5)
 - [GET /api/notifications/unread-count](#get-apinotificationsunread-count---owner-neeraj--phase-5)
 - [POST /api/notifications/mark-read](#post-apinotificationsmark-read---owner-neeraj--phase-5)
 
-**[reports module](#reports-module-phase-7)** — Neeraj · Phase 7
+**[reports module](#reports-module-phase-7)** — Neeraj · Phase 7 · ✅ built (Block N-C)
 - [POST /api/reports](#post-apireports---owner-neeraj--phase-7)
 
-**[posts module](#posts-module-phase-7)** — Neeraj (on loan from Vishwajeet) · Phase 7
+**[posts module](#posts-module-phase-7)** — Neeraj (on loan from Vishwajeet) · Phase 7 · ✅ built (Block N-B)
 - [GET /api/posts/countries](#get-apipostscountries---owner-neeraj--phase-7)
 - [GET /api/posts/feed/campus](#get-apipostsfeedcampus---owner-neeraj--phase-7)
 - [GET /api/posts/feed/country/:code](#get-apipostsfeedcountrycode---owner-neeraj--phase-7)
@@ -433,7 +435,7 @@ response, not an error.
 - [PUT /api/posts/:id/reaction](#put-apipostsidreaction---owner-neeraj--phase-7)
 - [DELETE /api/posts/:id/reaction](#delete-apipostsidreaction---owner-neeraj--phase-7)
 
-**[admin module](#admin-module)** — Vishwajeet · Phase 9
+**[admin module](#admin-module)** — Vishwajeet · Phase 9 · not built yet
 - [GET /api/admin/reports](#get-apiadminreports---owner-vishwajeet--phase-9)
 - [POST /api/admin/reports/:id/action](#post-apiadminreportsidaction---owner-vishwajeet--phase-9)
 - [POST /api/admin/users/:id/restrict](#post-apiadminusersidrestrict---owner-vishwajeet--phase-9)
@@ -3596,7 +3598,9 @@ exist until migration 006, so every call would be a logged no-op anyway.
 
 **Left over from Part 1, unrelated to the plan:**
 
-- **`visitor_metrics` / `increment_page_view()`** — the RPC and table exist; nothing calls it.
+- **`visitor_metrics` / `increment_page_view()`** — no backend route reads or writes them. The
+  website's footer (`frontend/src/components/footer/footer.jsx`) calls the RPC itself, on every page
+  load, for its visitor counter.
 - **Saved-products list** — `product_saves` is written by `/save` but no endpoint reads it
   back as a list.
 - ~~**`products.sold_to`** — column exists, never written.~~ Dropped in Phase 6B V-B.

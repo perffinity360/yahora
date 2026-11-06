@@ -2308,7 +2308,7 @@ posts" pill. Read: spec §3.1, §4, §5.2, §5.4, §7, §8, §10; runbook §1.7,
 §1.8.
 
 1. From mobile/, install the emoji picker: npx expo install rn-emoji-keyboard
-   If it doesn't install cleanly on SDK 57, STOP and tell me. Don't choose
+   If it doesn't install cleanly on SDK 58, STOP and tell me. Don't choose
    another library on your own.
 2. ⊕ in ReactionBar opens the full picker (search, frequently used,
    categories), styled as spec §5.2. The chosen emoji becomes the reaction.
@@ -2587,7 +2587,7 @@ campus feed shows only campus posts, and the 🌍 chip goes.
 - **Notes for the redesign.** Open `/community` and `/dev/community` at laptop and phone
   width, and write 5–10 short points about what looks wrong or feels awkward. Put them in your
   entry below, and send Vishwajeet the screenshots directly. He starts from them tomorrow.
-- **Testing prep (30 minutes).** Check Expo Go on your phone supports SDK 57. Run
+- **Testing prep (30 minutes).** Check Expo Go on your phone supports SDK 58 (the app's SDK). Run
   `cd mobile && npm install && npx expo start` once from `main` and open the app. On
   production, make sure you have your own account and a campus-mate's test account ready for
   T1 and T5.

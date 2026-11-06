@@ -69,10 +69,15 @@ frontend/
     │   └── AuthContext.jsx      # useAuth() -> { isAuthenticated, login, logout, loading }
     ├── styles/
     │   └── global.css           # CSS variable design tokens + resets
+    ├── hooks/                   # useMediaQuery, useInfiniteScroll, useScrollRestoration, useComposer …
+    ├── utils/                   # community.js, emoji.js, textFormat.js, pasteFormat.js … (several are
+    │                            #   twins of mobile/src/lib — change both together)
     ├── components/
     │   ├── navbar/              # navbar.jsx + navbar.module.css
-    │   ├── footer/
+    │   ├── footer/              # ⚠ its .module.css leaks bare a / a:hover / ul / li rules site-wide
     │   ├── modal/               # UniversityModal (list of supported campuses)
+    │   ├── community/           # Phase 7: PostCard, Composer, ReactionBar, GifPicker, ReportModal …
+    │   ├── FormattedText/       # WhatsApp-style formatting for messages and posts
     │   └── ProductCard/
     └── pages/
         ├── Home/                # landing page
@@ -83,7 +88,9 @@ frontend/
         ├── sell/                # Sell.jsx — create/edit listing (multipart image upload)
         ├── messages/            # Messages.jsx — inbox + realtime chat
         ├── dashboard/           # Dashboard.jsx — user's own listings/purchases/saved
-        └── publicProfile/       # PublicProfile.jsx — another user's public profile
+        ├── publicProfile/       # PublicProfile.jsx — another user's public profile
+        ├── community/           # Community.jsx — /community, Phase 7 (spec: docs/design/COMMUNITY_SPEC.md)
+        └── dev/                 # CommunitySandbox.jsx — /dev/community, development builds only
 ```
 
 **Component/page pattern:** each lives in its own folder containing `Name.jsx` + `Name.module.css`. Note the repo currently mixes casing (`Home/Home.jsx` vs `navbar/navbar.jsx`). **For new components, use PascalCase** (`FolderName/FolderName.jsx`), but do not rename existing folders unless asked.
@@ -151,13 +158,16 @@ When you need the current user or campus in a component, read from these keys (t
 Use these CSS variables; never hardcode the hex values:
 
 ```
-Purple:  --purple #800080 | --purple-dark #4f014f | --purple-light #d700d7
-Pink:    --pink #FF78A6 | --pink-dark #EB487F | --pink-light #FFF4F7 | --pink-emphasis #300B15
+Purple:  --purple #800080 | --purple-dark #4f014f | --purple-light #d700d7 | --purple-emphasis #2a082a
+Pink:    --pink #FF78A6 | --pink-dark #EB487F | --pink-light #f4e0e4 | --pink-bg #fef4f6 | --pink-emphasis #300B15
 Blue:    --blue #2BB7FF | --blue-dark #0B93D8 | --blue-light #6FE1FF
-Neutral: --black #0B0B0B | --black-soft #1A1A1A | --white #FFFFFF | --bg #F8F9FB
+Neutral: --black #0B0B0B | --black-soft #1A1A1A | --white #FFFFFF | --bg #f2e5e1
 ```
 
-Global resets already applied: `box-sizing: border-box` on everything; base font stack `'Segoe UI', Roboto, Helvetica, Arial, sans-serif`; `body` background = `var(--bg)`.
+`global.css` also holds the chat (`--bubble-*`, `--chat-*`), reaction (`--reaction-*`) and community
+(`--community-*`) tokens; each block names its spec. Read the file rather than this list when in doubt.
+
+Global resets already applied: `box-sizing: border-box` on everything; body font `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`; headings in `'Bree Serif'` 400; `body` background = `var(--bg)`.
 
 ---
 
@@ -178,6 +188,9 @@ VITE_SUPABASE_ANON_KEY
 ## 11. Backend API Reference
 
 Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in the corresponding controller before use.
+
+**The full, current contract is `backend/API.md`** (usernames, posts, reports, message actions, Mark
+as Sold …). The list below is only the routes the first pages used.
 
 **Auth** (`auth.controller.js`)
 - `POST /auth/request-otp` — body `{ email }`
@@ -271,8 +284,9 @@ Aesthetic direction for this project: editorial student marketplace with sentime
 warmth — clean magazine-grade layout, one bold accent against soft neutrals, every
 listing framed like a keepsake ("Because Every Item Has a Memory.").
 
-- Typography: pair one characterful display font with a clean body font.
-  Never Inter, Roboto, Arial, Space Grotesk, or system-ui.
+- Typography: Inter for text, Bree Serif (regular 400 only) for headings, brand and prices, the
+  same as the app (`DESIGN.md`). Don't bring in another font, and never Roboto, Arial, Space
+  Grotesk or system-ui.
 - Color: one dominant tone + one sharp accent, defined as CSS variables /
   theme tokens. No purple-gradient-on-white, no timid evenly-spread palettes.
 - Motion: every screen gets entrance choreography (staggered reveals);
@@ -288,16 +302,19 @@ listing framed like a keepsake ("Because Every Item Has a Memory.").
 ## 16. UI stack & animation rules
 Before ANY UI work, read DESIGN.md fully. Its tokens are canonical — never hardcode colors, radii, or durations.
 
-- Styling: CSS Modules + tokens from src/styles/tokens.css via var(--…). Do NOT introduce Tailwind.
+- Styling: CSS Modules + tokens from `src/styles/global.css` via var(--…). Do NOT introduce Tailwind.
 - Micro-interactions & entrances: `motion` (Framer Motion) — hover lifts, press scale 0.98,
-  staggered whileInView reveals (once). Don't hand-roll keyframes for things Motion does declaratively.
+  staggered whileInView reveals (once). **It isn't installed yet:** the pages so far animate with CSS
+  transitions and keyframes on the `--community-ease` / `--community-spring` tokens (DESIGN.md
+  "Motion"). Add `motion` when a screen needs what CSS can't do.
 - Pre-built showpieces: ReactBits, plain-CSS variants only — restyle to our tokens/fonts before shipping.
 - shadcn/ui, Aceternity UI, Magic UI are Tailwind-based: never install here. If a component from them
   is wanted, re-implement its behavior in CSS Modules with our tokens.
 - GSAP + ScrollTrigger + Lenis: public landing/marketing pages ONLY. App surfaces use native scroll.
 - Every interactive element: hover + press + focus-visible. Every async surface: skeleton, empty, error, success.
 - Animate transform/opacity only. Respect prefers-reduced-motion.
-- After building a screen: screenshot via Playwright MCP at 1440px and 390px, self-critique, fix, re-verify.
+- After building a screen: don't verify it with screenshots (§2 rule 4, §14). Check it builds
+  (`npm run build`), then list what Vishwajeet should check in the browser at 1440 px and 390 px.
 
 ---
 
