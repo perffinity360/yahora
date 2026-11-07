@@ -112,6 +112,14 @@ export function GlobeIcon({ size = 16, className }) {
           </g>
         </g>
         <circle cx="12" cy="12" r="10" fill={`url(#${shade})`} />
+        {/* The grid of lines is what says "globe" at 14 px; without it, a
+            blue disc read as a ball (owner, 7 Nov). */}
+        <g className={styles.globeGrid}>
+          <path d="M2 12h20" />
+          <path d="M3.3 7.2h17.4M3.3 16.8h17.4" />
+          <ellipse cx="12" cy="12" rx="4.6" ry="10" />
+          <path d="M12 2v20" />
+        </g>
       </g>
       <ellipse className={styles.globeShine} cx="8.4" cy="7.4" rx="3.4" ry="2" transform="rotate(-30 8.4 7.4)" />
       <circle className={styles.globeRim} cx="12" cy="12" r="10" />

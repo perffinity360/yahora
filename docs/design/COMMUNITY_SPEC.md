@@ -1,6 +1,12 @@
 # Community — design spec (Phase 7)
 
-**Version 3.1 · 6 November 2026 · for the website and the app**
+**Version 3.2 · 7 November 2026 · for the website and the app**
+
+> **Changed in version 3.2 (owner's review, 7 Nov):** photos show one at a time, whole, in a smaller
+> frame, with swipe and chevrons (§3); a grid of lines on the Global globe (§1.1); an `AUTHOR` tag on the
+> author's replies and a profile glimpse on names instead of an underline (§4, §4.1); the hand cursor
+> covers the whole avatar (§1.1); no footer and no frame under the panels (§1.1); emoji in post text a
+> size up (§3); one or two replies never show `Show more replies`, whatever the API sends (§4).
 
 > **Changed in version 3.1 (owner's review of the redesign, 6 Nov):** one side is always selected on a
 > laptop, the campus side by default, with the cursor waiting in it (§1.1, §2.1); pressing your avatar
@@ -56,7 +62,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 - **Background of both panels:** the chat's wallpaper, pinned while posts scroll: `chatCanvas`
   with the shared doodle tile at 50% strength (`MESSAGES_SPEC.md` §2). The rows carry a light tint:
   warm on the campus side (`communityRowCampus`), a little lighter on the other (`communityRowWorld`).
-  The frame around the panels is `bg` (`#f2e5e1`).
+  The frame around the panels is `bg` (`#f2e5e1`), 4 px at the top and sides and **none at the bottom**:
+  the composer bar sits on the window's bottom edge, and the panels' bottom corners are square. **The site
+  footer isn't shown** on the Community page (nor on Messages).
 - **Text on the wallpaper: a halo,** the way maps keep labels readable over busy ground. The author line,
   the text of each post and reply, and `Show more replies` carry `communityTextHalo`: five stacked
   shadows of `communityHalo`, 1 to 6 px, with no offset, so the letters clear the doodles from just
@@ -77,8 +85,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 - **The Global globe** sits among flag emoji (the dropdown, the panel title, the badge on your avatar),
   so it is drawn in colour to match them, not as a line icon: an ocean from `blueLight` at the upper left
   into `blueDark` at the edge, `communityGlobeLand` continents (the Americas, Europe and Africa, Asia and
-  Australia at the rim), a `communityGlobeShade` shadow towards the lower right, a white shine at 42%, and
-  a thin `blueDark` rim at 55%. It pops in (scale 0.7 → 1, 360 ms, `communitySpring`) and, when its header
+  Australia at the rim), **a grid of white lines at 70%, 1.1 wide** (the equator, two parallels, one
+  meridian ellipse and the axis, the 🌐 sign everyone knows; without it the disc read as a ball), a
+  `communityGlobeShade` shadow towards the lower right, a white shine at 30%, and a thin `blueDark` rim at 55%. It pops in (scale 0.7 → 1, 360 ms, `communitySpring`) and, when its header
   or button is hovered, turns once: the land slides one face to the left over 900 ms.
 - **The panels' scrollbar shows only while they scroll.** It's see-through at rest and keeps its room, so
   nothing moves when it appears: `communityScrollbar`, thin, then it fades 900 ms after the last scroll.
@@ -103,7 +112,8 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 - **Your avatar on the divider:** 56 px across, 4.5 px from the bottom, so it sits across the top edge of the
   composer bar with the two composers tucked in under it. Nothing runs below it. It is a child of the
   divider, so it moves with it as you resize, and it grows slightly on hover and while dragging. **Pressing it
-  switches sides** (and puts the cursor in that composer), so the pointer is a hand; its tooltip says
+  switches sides** (and puts the cursor in that composer), so the pointer is a hand **on every part of it**
+  (the library's own resize cursor near the divider's line is overridden there); its tooltip says
   `Post in India` (or `Post in My campus`). A press that moves drags the divider instead, with the resize
   cursor. From the outside in:
   - **a 2.5 px ring:** `purpleDark` while the left side is selected, `pinkDark` for the right;
@@ -324,15 +334,23 @@ with a soft tint on hover. Compact, like a code editor's panels.
   `1. ` numbers, `> ` quotes), exactly as in a chat bubble; the rules and the look are in
   `TEXT_FORMAT_SPEC.md`. Links are tappable, in `purple`; there are no link previews. A long post
   folds after **6 lines** behind `See more`, which expands it in place.
-- **Photos** (radius 8, 2 px gaps, at most 560 px wide; tapping one opens the existing image viewer):
-  - **1 photo:** full width, its own shape, but between 4:5 and 16:9 and never taller than
-    420 px;
-  - **2 photos:** two squares side by side;
-  - **3 photos:** one large photo on the left, two stacked on the right, 16:10 overall.
+- **Photos: one at a time, like Instagram** (owner, 7 Nov; was a grid):
+  - **The frame** takes the first photo's shape, kept between 4:5 and 16:9, full width but at most
+    **480 × 380** (was 560 × 420), radius 8.
+  - **Each photo shows whole** (`object-fit: contain`) over a blur of itself (18 px, 55%), so a photo of
+    another shape is never cropped and never sits on bare bars.
+  - **More than one:** swipe or scroll sideways (snapping to each photo), or press the chevrons: 26 px
+    glass circles at the sides, only where there's somewhere to go, shown on hover with a mouse and always on
+    touch (44 px to tap). ← → work once it has focus. Dots sit at the bottom, 5 px, on a `toastBg` pill;
+    the current one is white, the others at 45%.
+  - **Pressing a photo** opens the existing image viewer at that photo, with its zoom.
 - **GIF:** at most 280 px wide, on a see-through `reactionPillBorder` tint (the doodles show through a GIF's
   transparent parts; the owner preferred that to a solid backing, 6 Nov). Plays muted and on a loop while on
   screen, and pauses when it scrolls away. It carries a small `GIF` badge in the corner.
-- **Links in a post say their own hover colour** (website): the name turns `purple` with a 1.5 px underline,
+- **Emoji inside the text are a size up,** 1.28 em (the chat's 18 on 14), line height 1: the emoji font
+  draws many of them smaller than the letters around them.
+- **Links in a post say their own hover colour** (website): the name and the @username turn `purple`, with
+  no underline, and resting on them opens the profile glimpse (§4.1);
   the time turns `purple` and underlines, a link in the text turns `purpleDark`. `footer.module.css` has a bare
   `a:hover` that turns every link on the site `pinkLight`, which nearly vanishes on the wallpaper.
 - **Actions: icons in pills, no words,** 24 px tall, with 4 px between them:
@@ -378,8 +396,8 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   API's default page is 20, so the client sends `?limit=REPLIES_PAGE_SIZE`. A top reply isn't shown
   twice, so a page that includes one adds one fewer.
   - **Not for fewer than 3 replies** (`REPLIES_FOLD_MIN`): a post with 1 or 2 replies shows them all in
-    its preview and never shows the button. (Until the API sends `top_replies`, see below, the button shows
-    for any post with replies, because nothing else could show them.)
+    its preview and never shows the button. Without `top_replies` (the API doesn't send it yet, see below)
+    such a post loads its replies by itself and shows them as its preview.
   - **Never for one or two left over:** if a page would leave only 1 or 2 replies unloaded, the same press
     loads them too (at most 3 pages a press).
 - **`Hide replies`** (chevron up, `communityMuted`, purple on hover) appears beside `Show more replies` once
@@ -402,12 +420,11 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   `@username` in Inter 600 13; `campus · time` in Inter 400 12; text in Inter 400 13/19, with an optional
   GIF up to 180 px wide.
 - **Usernames, not full names.** The campus shows only under the rule in §3.
-- **Pointing at a username** turns it `purple`, and a 1.5 px underline rises into place under it (it waits
-  see-through 5 px down and moves up to 2 px, over 220 ms). The author's pill (below) deepens to
-  `communityAuthorHover` with `purpleDark` text.
+- **Pointing at a username** turns it `purple`, with **no underline**, and resting on it opens the profile
+  glimpse (§4.1). The author's pill (below) deepens to `communityAuthorHover` with `purpleDark` text.
 - **The post's author is highlighted:** when they reply to their own post, their username sits on
-  a `reactionMineBg` pill in purple. The pill reaches out to the left, so the name itself stays in line
-  with the text below.
+  a `reactionMineBg` pill in purple, followed by an **`AUTHOR`** tag: Inter 700 10, letter-spacing 0.06 em,
+  capitals, `purple`. The pill reaches out to the left, so the name itself stays in line with the text below.
 - **A reply can only be liked.** A heart (not the post's smiley, because it is a like, not a choice of
   emoji) at the right of its line, with the count; it stores
   `DEFAULT_REACTION`, ❤️. No quick bar and no picker. Filled in `communityLike` when it's yours. The ⋯
@@ -430,6 +447,36 @@ shows only `Show more replies`, which already works from `GET /api/posts/:id/rep
 already sends the field, so the screens are ready.
 
 ---
+
+### 4.1 The profile glimpse (website, with a mouse)
+
+Resting the mouse on a name or @username, in a post or a reply, for **450 ms** opens a small card under it,
+after Instagram's. Moving onto the card keeps it open (it closes 180 ms after the mouse leaves both); Esc, a
+press elsewhere or scrolling the name away closes it. On a touch screen there's no hover: a tap on the name
+opens the profile, as before.
+
+```
+ ╭──────────────────────────────╮
+ │ ((av))  Priya Nair            │   52 px photo in a purple → pinkDark ring
+ │         @priya.nair           │
+ │         (cap) IIITDM Kurnool  │
+ │ ──────────────────────────── │
+ │    12        1.2K      402    │   posts · followers · following
+ │   posts   followers following │
+ │ [photo][photo][photo]         │   the latest photos they posted, if any
+ │ (        View profile       ) │
+ ╰──────────────────────────────╯
+```
+
+- 288 wide, padding 14, radius 14, white, `quickBarShadow` and a `communityHairline` edge.
+- Name Inter 600 15; @username 400 13 `communityMuted`; campus 500 12 `purple` with a graduation cap.
+- Counts Inter 700 15 over 400 12 `communityMuted` labels, between two hairlines; they shimmer while they load.
+- Up to 3 square photos, 2 px apart, radius 8 around them.
+- **View profile:** a 32 px `purpleDark` pill (`purple` on hover), to `/user/:id`. No Follow button until
+  follows exist.
+- **⚠ Needs an API before it works on real data:** posts, followers and following counts and the latest
+  photos, for one person. Nothing sends that yet; the social module (follows) isn't built. Until then
+  `sampleData.js` makes it up (`sampleProfile`). The name, photo, username and campus come with the post.
 
 ## 5. Reactions — on posts and messages
 
@@ -654,7 +701,7 @@ A **Posts** tab sits next to the existing tabs:
 | `communityRailHover` | `--community-rail-hover` | `#9552A3` | the thread while you point at it (was `#B07FBA`, too faint) |
 | `communityAuthorHover` | `--community-author-hover` | `rgba(128,0,128,0.18)` | the author's username pill under the pointer |
 | `communityScrollbar` | `--community-scrollbar` | `rgba(128,0,128,0.3)` | the panels' scrollbar while they scroll (website only) |
-| `communityGlobeLand` | `--community-globe-land` | `#3FB873` | the continents on the Global globe |
+| `communityGlobeLand` | `--community-globe-land` | `#2E9E5E` | the continents on the Global globe (was `#3FB873`, too light under the grid) |
 | `communityGlobeShade` | `--community-globe-shade` | `rgba(5,40,90,0.38)` | the globe's shadow towards the lower right |
 | `communityGripShadow` | `--community-grip-shadow` | `0 1px 2px rgba(42,8,42,0.14)` | the divider's grip (website only) |
 | `communityHalo` | `--community-halo` | `#F8F3F9` | the halo around text on the wallpaper |

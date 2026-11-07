@@ -30,7 +30,7 @@ import Composer from "../../components/community/Composer/Composer";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
 import PostCard from "../../components/community/PostCard/PostCard";
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
-import { samplePost, sampleFeed, sampleReplies } from "./sampleData";
+import { samplePost, sampleFeed, sampleProfile, sampleReplies } from "./sampleData";
 import styles from "./Community.module.css";
 
 const SkeletonPost = memo(function SkeletonPost() {
@@ -241,6 +241,7 @@ export default function CommunityFeed({
               onReact={onReact}
               onReply={startReply}
               loadReplies={loadReplies}
+              loadProfile={sampleProfile}
               addedReplies={addedReplies[p.id]}
             />
           ))}

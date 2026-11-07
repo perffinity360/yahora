@@ -2,7 +2,9 @@
 //
 // Spec §3 "Text": formatted the WhatsApp way (*bold*, _italic_, lists, links …,
 // docs/design/TEXT_FORMAT_SPEC.md), and folded after POST_FOLD_LINES behind
-// See more, which expands it in place. Used by posts and replies.
+// See more, which expands it in place. Used by posts and replies. Emoji inside
+// the text are drawn a size up (1.28 em, the chat's 18 on 14), because the
+// emoji font draws many of them smaller than the letters around them.
 //
 // It folds with a max-height and overflow: clip (see .folded in the CSS).
 //
@@ -11,7 +13,20 @@
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 import FormattedText from "../../FormattedText/FormattedText";
+import { splitEmoji } from "../../../utils/emoji";
 import styles from "./PostCard.module.css";
+
+function withEmoji(text) {
+  return splitEmoji(text).map((run, i) =>
+    run.emoji ? (
+      <span key={i} className={styles.emoji}>
+        {run.text}
+      </span>
+    ) : (
+      <React.Fragment key={i}>{run.text}</React.Fragment>
+    ),
+  );
+}
 
 export default function PostText({ content, className = "" }) {
   const boxRef = useRef(null);
@@ -36,7 +51,7 @@ export default function PostText({ content, className = "" }) {
     <>
       <div ref={boxRef} className={`${styles.text} ${className} ${expanded ? "" : styles.folded}`}>
         <div ref={innerRef}>
-          <FormattedText content={content} linkClassName={styles.link} />
+          <FormattedText content={content} renderText={withEmoji} linkClassName={styles.link} />
         </div>
       </div>
       {overflows && !expanded && (

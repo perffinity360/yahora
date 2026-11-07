@@ -16,9 +16,11 @@
 
 /* ── ≥ 1024 px: two panels ─────────────────────────────────────────────── */
 
+/* No frame below the panels: the composer bar sits on the bottom of the
+   window (owner, 7 Nov). */
 .wide {
   height: calc(100dvh - var(--app-chrome));
-  padding: 4px;
+  padding: 4px 4px 0;
   background: var(--bg);
 }
 
@@ -40,13 +42,12 @@
   box-shadow: inset 0 0 0 1px var(--community-hairline);
 }
 
-/* Square where the two composer bars meet, so they read as one bar. */
-.panelLeft {
-  border-bottom-right-radius: 0;
-}
-
+/* Square at the bottom: where the two composer bars meet, so they read as one
+   bar, and along the window's bottom edge, which they now sit on. */
+.panelLeft,
 .panelRight {
   border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .panelInner {
@@ -308,8 +309,17 @@
     transform 220ms var(--community-spring);
 }
 
-.hub[data-dragging] {
-  cursor: col-resize;
+/* !important, and doubled up: while the pointer is within 5 px of the divider,
+   react-resizable-panels puts `*, *:hover { cursor: col-resize !important }` on
+   the whole page, which turned the middle of the avatar into resize arrows. */
+.handle .hub,
+.handle .hub * {
+  cursor: pointer !important;
+}
+
+.handle .hub[data-dragging],
+.handle .hub[data-dragging] * {
+  cursor: col-resize !important;
 }
 
 .hub[data-active="left"] {

@@ -108,7 +108,7 @@
   --community-scrollbar: rgba(128,0,128,0.3);
   /* The Global globe: land and the shading over it. The ocean is
      --blue-light into --blue-dark. */
-  --community-globe-land: #3FB873;
+  --community-globe-land: #2E9E5E;
   --community-globe-shade: rgba(5,40,90,0.38);
   --community-halo: #F8F3F9;
   --community-text-halo: 0 0 1px var(--community-halo), 0 0 2px var(--community-halo), 0 0 3px var(--community-halo), 0 0 4px var(--community-halo), 0 0 6px var(--community-halo);

@@ -1,54 +1,124 @@
 // frontend/src/components/community/PostCard/PostPhotos.jsx
 //
-// Spec §3 "Photos": radius 12, 2 px gaps; tapping one opens the image viewer.
-//   1 photo  — full width in its own shape, kept between 4:5 and 16:9 and never
-//              taller than 480 px;
-//   2 photos — two squares side by side;
-//   3 photos — one large on the left, two stacked on the right.
+// Spec §3 "Photos": one photo at a time, like Instagram. The frame takes the
+// first photo's shape (kept between 4:5 and 16:9), at most 480 × 380, and each
+// photo shows whole inside it (object-fit: contain) over a soft blur of
+// itself, so a photo of another shape never gets cropped or sits on bare bars.
+//
+//   · more than one: swipe or scroll sideways (scroll-snap), or press the
+//     chevrons, or ← → once it has focus; dots show where you are;
+//   · pressing a photo opens the image viewer at that photo, as before.
 
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import styles from "./PostCard.module.css";
 
 const MIN_RATIO = 4 / 5;
 const MAX_RATIO = 16 / 9;
 
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 export default function PostPhotos({ urls, authorName, onOpen }) {
-  // The single photo's shape is only known once it loads; until then a 4:3
-  // box keeps the card from jumping by more than a little.
+  const trackRef = useRef(null);
+  const [index, setIndex] = useState(0);
+  // The frame's shape is only known once the first photo loads; until then a
+  // 4:3 box keeps the post from jumping by more than a little.
   const [ratio, setRatio] = useState(4 / 3);
-  const count = Math.min(urls.length, 3);
-  const layout = count === 1 ? styles.photos1 : count === 2 ? styles.photos2 : styles.photos3;
+  const count = urls.length;
+
+  const go = useCallback((i) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const next = Math.min(Math.max(i, 0), count - 1);
+    track.scrollTo({ left: next * track.clientWidth, behavior: reducedMotion() ? "auto" : "smooth" });
+  }, [count]);
+
+  const onScroll = () => {
+    const track = trackRef.current;
+    if (track?.clientWidth) setIndex(Math.round(track.scrollLeft / track.clientWidth));
+  };
+
+  const onKeyDown = (e) => {
+    if (count < 2) return;
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      go(index - 1);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      go(index + 1);
+    }
+  };
 
   return (
     <div
-      className={`${styles.photos} ${layout}`}
-      style={count === 1 ? { aspectRatio: String(ratio) } : undefined}
+      className={styles.carousel}
+      style={{ aspectRatio: String(ratio) }}
+      role={count > 1 ? "group" : undefined}
+      aria-roledescription={count > 1 ? "carousel" : undefined}
+      aria-label={count > 1 ? `${count} photos` : undefined}
+      onKeyDown={onKeyDown}
     >
-      {urls.slice(0, 3).map((url, i) => (
-        <button
-          key={url + i}
-          type="button"
-          className={styles.photoBtn}
-          aria-label={`Open photo ${i + 1} of ${count}`}
-          onClick={() => onOpen(i)}
-        >
-          <img
-            src={url}
-            alt={`Photo ${i + 1} from ${authorName}`}
-            loading="lazy"
-            decoding="async"
-            className={styles.photo}
-            onLoad={
-              count === 1
-                ? (e) => {
-                    const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
-                    if (w && h) setRatio(Math.min(Math.max(w / h, MIN_RATIO), MAX_RATIO));
-                  }
-                : undefined
-            }
-          />
-        </button>
-      ))}
+      <div ref={trackRef} className={styles.track} onScroll={onScroll}>
+        {urls.map((url, i) => (
+          <button
+            key={url + i}
+            type="button"
+            className={styles.slide}
+            aria-label={count > 1 ? `Open photo ${i + 1} of ${count}` : "Open the photo"}
+            onClick={() => onOpen(i)}
+          >
+            <img src={url} alt="" aria-hidden="true" loading="lazy" decoding="async" className={styles.slideBlur} />
+            <img
+              src={url}
+              alt={`Photo ${i + 1} from ${authorName}`}
+              loading={i === 0 ? "eager" : "lazy"}
+              decoding="async"
+              className={styles.slidePhoto}
+              onLoad={
+                i === 0
+                  ? (e) => {
+                      const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                      if (w && h) setRatio(Math.min(Math.max(w / h, MIN_RATIO), MAX_RATIO));
+                    }
+                  : undefined
+              }
+            />
+          </button>
+        ))}
+      </div>
+
+      {count > 1 && (
+        <>
+          {index > 0 && (
+            <button
+              type="button"
+              className={`${styles.chevron} ${styles.chevronPrev}`}
+              aria-label="Previous photo"
+              onClick={() => go(index - 1)}
+            >
+              <ChevronLeft size={16} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
+          {index < count - 1 && (
+            <button
+              type="button"
+              className={`${styles.chevron} ${styles.chevronNext}`}
+              aria-label="Next photo"
+              onClick={() => go(index + 1)}
+            >
+              <ChevronRight size={16} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
+          <div className={styles.dots} aria-hidden="true">
+            {urls.map((url, i) => (
+              <span key={url + i} className={`${styles.dot} ${i === index ? styles.dotOn : ""}`} />
+            ))}
+          </div>
+          <span className={styles.srOnly} aria-live="polite">
+            Photo {index + 1} of {count}
+          </span>
+        </>
+      )}
     </div>
   );
 }

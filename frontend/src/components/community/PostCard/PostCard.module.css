@@ -89,12 +89,25 @@
 }
 
 /* footer.module.css leaks a bare `a:hover` that turns every link --pink-light,
-   which nearly vanishes here. Every link in a post says its own hover colour. */
+   which nearly vanishes here. Every link in a post says its own hover colour.
+   A name only changes colour (no underline); resting on it opens the profile
+   glimpse (ProfileHover). */
+.name {
+  transition: color 160ms var(--community-ease);
+}
+
 .name:hover {
   color: var(--purple);
-  text-decoration: underline;
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
+}
+
+/* The post's @username opens the glimpse too, so it answers the pointer. */
+.username {
+  cursor: default;
+  transition: color 160ms var(--community-ease);
+}
+
+.username:hover {
+  color: var(--purple);
 }
 
 .name:focus-visible,
@@ -198,6 +211,13 @@ a.time:hover {
   overflow: clip;
 }
 
+/* An emoji inside text: the chat's ratio (18 on 14). line-height 1 keeps the
+   line box from growing. */
+.emoji {
+  font-size: 1.28em;
+  line-height: 1;
+}
+
 .link {
   color: var(--purple);
   text-decoration: underline;
@@ -231,66 +251,177 @@ a.time:hover {
 
 /* ── Photos ────────────────────────────────────────────────────────────── */
 
-.photos {
-  display: grid;
-  gap: 2px;
+/* One photo at a time (PostPhotos.jsx). The frame: the first photo's shape, at
+   most 480 × 380 (was a grid up to 560 × 420). */
+.carousel {
+  position: relative;
   width: 100%;
-  max-width: 560px;
-  max-height: 420px;
+  max-width: 480px;
+  max-height: 380px;
   margin-top: 6px;
   border-radius: 8px;
   overflow: hidden;
   background: var(--reaction-pill-border);
 }
 
-.photos1 {
-  grid-template-columns: 1fr;
+/* Native sideways scrolling, snapping to each photo: a finger swipes, a
+   trackpad scrolls, and the browser's back-swipe stays out of it. */
+.track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
 
-.photos2 {
-  grid-template-columns: 1fr 1fr;
+.track::-webkit-scrollbar {
+  display: none;
 }
 
-.photos2 .photoBtn {
-  aspect-ratio: 1 / 1;
-}
-
-.photos3 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  aspect-ratio: 16 / 10;
-}
-
-.photos3 .photoBtn:first-child {
-  grid-row: 1 / span 2;
-}
-
-.photoBtn {
+.slide {
   position: relative;
-  display: block;
-  min-height: 0;
+  flex: 0 0 100%;
+  height: 100%;
   padding: 0;
   border: 0;
   background: none;
-  cursor: zoom-in;
   overflow: hidden;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  cursor: zoom-in;
 }
 
-.photoBtn:focus-visible {
+.slide:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: -2px;
 }
 
-.photo {
-  display: block;
+/* The same photo, blurred, fills the room the whole photo leaves. */
+.slideBlur {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  filter: blur(18px) saturate(1.15);
+  opacity: 0.55;
+  transform: scale(1.15);
+}
+
+.slidePhoto {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   transition: transform 320ms var(--community-ease);
 }
 
-.photoBtn:hover .photo {
-  transform: scale(1.02);
+.slide:hover .slidePhoto {
+  transform: scale(1.015);
+}
+
+/* Instagram's chevrons: small white circles at the sides, shown on hover with
+   a mouse, always on a touch screen. Only where there's somewhere to go. */
+.chevron {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--community-glass);
+  box-shadow: var(--community-float-shadow);
+  color: var(--black-soft);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: opacity 160ms var(--community-ease), transform 140ms var(--community-ease),
+    background-color 140ms var(--community-ease);
+}
+
+.chevron:hover {
+  background: var(--white);
+}
+
+.chevron:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+.chevron:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.chevronPrev {
+  left: 8px;
+}
+
+.chevronNext {
+  right: 8px;
+}
+
+@media (hover: hover) {
+  .chevron {
+    opacity: 0;
+  }
+
+  .carousel:hover .chevron,
+  .carousel:focus-within .chevron {
+    opacity: 1;
+  }
+}
+
+/* A finger needs 44 px; the circle stays small to look at. */
+@media (pointer: coarse) {
+  .chevron::after {
+    content: "";
+    position: absolute;
+    inset: -9px;
+  }
+}
+
+.dots {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  display: flex;
+  gap: 4px;
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: var(--toast-bg);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--white);
+  opacity: 0.45;
+  transition: opacity 180ms var(--community-ease), transform 180ms var(--community-ease);
+}
+
+.dotOn {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ── GIF ───────────────────────────────────────────────────────────────── */
@@ -525,8 +656,8 @@ a.time:hover {
   font-size: 12px;
 }
 
-/* Pointing at a username turns it purple, and an underline rises into place
-   under it (it waits, transparent, 5 px down). */
+/* Pointing at a username turns it purple; no underline. Resting on it opens
+   the profile glimpse (ProfileHover). */
 .replyUsername {
   flex: 0 1 auto;
   min-width: 32px;
@@ -534,18 +665,12 @@ a.time:hover {
   text-overflow: ellipsis;
   font: 600 13px/20px "Inter", sans-serif;
   color: var(--black-soft);
-  text-decoration-line: underline;
-  text-decoration-thickness: 1.5px;
-  text-decoration-color: transparent;
-  text-underline-offset: 5px;
-  transition: color 160ms var(--community-ease), background-color 160ms var(--community-ease),
-    text-decoration-color 160ms var(--community-ease), text-underline-offset 220ms var(--community-ease);
+  text-decoration: none;
+  transition: color 160ms var(--community-ease), background-color 160ms var(--community-ease);
 }
 
 .replyUsername:hover {
   color: var(--purple);
-  text-decoration-color: currentColor;
-  text-underline-offset: 2px;
 }
 
 /* The post's own author, replying to themselves. The negative margin keeps the
@@ -562,6 +687,16 @@ a.time:hover {
 .replyUsernameAuthor:hover {
   background: var(--community-author-hover);
   color: var(--purple-dark);
+}
+
+/* AUTHOR, after the author's own username (owner's screenshot, 7 Nov). */
+.authorTag {
+  flex: 0 0 auto;
+  font: 700 10px/20px "Inter", sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--purple);
+  text-shadow: none;
 }
 
 .replyTools {
@@ -753,7 +888,9 @@ a.time:hover {
   .railTrunk::before,
   .railLine,
   .replyUsername,
-  .photo,
+  .slidePhoto,
+  .chevron,
+  .dot,
   .moreBtn,
   .replyPill,
   .likeBtn,
@@ -762,7 +899,7 @@ a.time:hover {
     transition: none;
   }
 
-  .photoBtn:hover .photo {
+  .slide:hover .slidePhoto {
     transform: none;
   }
 

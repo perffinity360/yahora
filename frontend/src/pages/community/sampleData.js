@@ -280,6 +280,37 @@ export function sampleReplies(postId, cursor = null) {
   );
 }
 
+/* ── The profile glimpse (spec §4.1) ─────────────────────────────────────
+   ⚠ No route sends this yet. Counts of posts, followers and following, and
+   the latest photos, need a small endpoint when profiles are built (the
+   social module, not built). Made-up follower numbers until then. */
+const FOLLOWS = {
+  rahul: [312, 180],
+  priya: [1240, 402],
+  arjun: [268, 245],
+  sneha: [890, 310],
+  lena: [154, 97],
+  karan: [431, 215],
+};
+
+export function sampleProfile(authorId) {
+  const key = Object.keys(AUTHORS).find((k) => AUTHORS[k].author_id === authorId);
+  const own = POSTS.filter((p) => p.author_id === authorId && !p.parent_post_id);
+  const [followers, following] = FOLLOWS[key] ?? [0, 0];
+  return new Promise((resolve) =>
+    setTimeout(
+      () =>
+        resolve({
+          posts_count: own.length,
+          followers_count: followers,
+          following_count: following,
+          recent_photos: own.flatMap((p) => p.image_urls).slice(0, 3),
+        }),
+      250,
+    ),
+  );
+}
+
 let postedCount = 0;
 
 /** POST /api/posts, always answering 201. Every other answer (nudge, held,
@@ -305,7 +336,11 @@ export async function samplePost(form) {
   } else {
     POSTS.unshift(created);
   }
-  return { status: 201, body: { post: created } };
+  // A copy, as a server's answer would be. Handing the feed this very object
+  // let the "server" and the feed both add the next reply to its count, so one
+  // reply read 2 and showed "Show more replies" (owner, 7 Nov). A new post has
+  // no replies yet, so its preview is empty, the way a feed sends it.
+  return { status: 201, body: { post: parent ? { ...created } : { ...created, top_replies: [] } } };
 }
 
 /* Runbook §1.3. */
