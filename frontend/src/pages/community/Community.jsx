@@ -392,15 +392,6 @@ function WideLayout({
                 <button
                   type="button"
                   className={styles.iconBtn}
-                  onClick={() => collapse(leftRef)}
-                  aria-label="Collapse My campus"
-                  title="Collapse"
-                >
-                  <ChevronLeft size={15} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className={styles.iconBtn}
                   onClick={() => toggleMax(rightRef)}
                   aria-label={rightCollapsed ? "Restore both panels" : "Open My campus full width"}
                   title={rightCollapsed ? "Restore" : "Full width"}
@@ -496,15 +487,6 @@ function WideLayout({
                   title={leftCollapsed ? "Restore" : "Full width"}
                 >
                   {leftCollapsed ? <Minimize2 size={13} aria-hidden="true" /> : <Maximize2 size={13} aria-hidden="true" />}
-                </button>
-                <button
-                  type="button"
-                  className={styles.iconBtn}
-                  onClick={() => collapse(rightRef)}
-                  aria-label={`Collapse ${label}`}
-                  title="Collapse"
-                >
-                  <ChevronRight size={15} aria-hidden="true" />
                 </button>
               </div>
             </header>
