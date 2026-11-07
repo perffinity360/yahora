@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export const colors = {
   purple: '#800080',
   purpleDark: '#4f014f',
@@ -91,6 +93,13 @@ export const colors = {
   chatQuoteMineText: 'rgba(255,255,255,0.85)',
   chatQuoteTheirsBg: 'rgba(128,0,128,0.06)', // quote inside a received bubble; also the reply bar
   chatTombstoneMine: 'rgba(255,255,255,0.90)', // "You deleted this message" (85% fails, §7)
+  // WhatsApp-style formatting (TEXT_FORMAT_SPEC.md §3): inline code sits on the
+  // text's own colour at 12%, and a quote's bar is that colour at 45%. The web
+  // gets the same values from color-mix(currentColor …).
+  formatCodeMine: 'rgba(255,255,255,0.12)',
+  formatCodeTheirs: 'rgba(26,26,26,0.12)',
+  formatQuoteBarMine: 'rgba(255,255,255,0.45)',
+  formatQuoteBarTheirs: 'rgba(26,26,26,0.45)',
   sheetHandle: 'rgba(128,0,128,0.15)',
   // The spec calls this one `scrim`, but `scrim` below (0.55) already backs
   // nine other sheets and modals. Renaming keeps them as they are.
@@ -216,9 +225,13 @@ export const font = {
     extrabold: 'Inter_800ExtraBold',
     serif: 'BreeSerif_400Regular',
     // Real italic faces: iOS won't slant a custom font for `fontStyle: 'italic'`.
-    // For deleted messages (MESSAGES_SPEC §10.8, §10.9).
+    // For deleted messages (MESSAGES_SPEC §10.8, §10.9), and _italic_ and
+    // *_bold italic_* in a message (TEXT_FORMAT_SPEC.md).
     italic: 'Inter_400Regular_Italic',
     mediumItalic: 'Inter_500Medium_Italic',
+    boldItalic: 'Inter_700Bold_Italic',
+    // `code` and ```monospace``` in a message: the phone's own monospace face.
+    mono: Platform.select({ ios: 'Menlo', default: 'monospace' }),
   },
   /**
    * THE TYPE SCALE. Phase 5 Block V-C, 2026-09-20.

@@ -23,6 +23,7 @@ import { useRealtime } from '../../src/contexts/RealtimeContext';
 import { useInbox } from '../../src/hooks/useMessages';
 import { formatInboxTime } from '../../src/lib/messages';
 import { hrefWithFrom } from '../../src/lib/nav';
+import { plainText } from '../../src/lib/textFormat';
 import { colors, font, spacing } from '../../src/theme';
 import type { InboxItem } from '../../src/types';
 
@@ -242,9 +243,10 @@ const ConversationRow = memo(function ConversationRow({
             </View>
           ) : (
             <AppText style={[styles.preview, isUnread && styles.previewUnread]} numberOfLines={1}>
+              {/* Formatting shows without its symbols (TEXT_FORMAT_SPEC.md §3). */}
               {row.last_message == null
                 ? 'Start the conversation ✨'
-                : `${lastFromMe ? 'You: ' : ''}${row.last_message}`}
+                : `${lastFromMe ? 'You: ' : ''}${plainText(row.last_message)}`}
             </AppText>
           )}
           {isUnread ? (

@@ -98,7 +98,9 @@ import {
   isGroupedWith,
   isSameDay,
 } from '../../src/lib/messages';
+import { FormattedText } from '../../src/components/FormattedText';
 import { jumboEmojiCount, splitEmoji } from '../../src/lib/emoji';
+import { plainText } from '../../src/lib/textFormat';
 import {
   canDeleteForEveryone,
   firstName,
@@ -2240,7 +2242,8 @@ function ReplyQuote({
         ]}
         numberOfLines={2}
       >
-        {gone ? 'Original message was deleted' : message.reply_preview}
+        {/* Without the formatting symbols (TEXT_FORMAT_SPEC.md §3). */}
+        {gone ? 'Original message was deleted' : plainText(message.reply_preview)}
       </AppText>
     </>
   );
@@ -2250,7 +2253,7 @@ function ReplyQuote({
     <Pressable
       onPress={() => onJump(target)}
       accessibilityRole="button"
-      accessibilityLabel={`Reply to ${name}: ${message.reply_preview}. Show the original`}
+      accessibilityLabel={`Reply to ${name}: ${plainText(message.reply_preview)}. Show the original`}
       style={({ pressed }) => [look, pressed && styles.quotePressed]}
     >
       {body}
@@ -2267,9 +2270,10 @@ function ReplyBar({ name, text, onClose }: { name: string; text: string; onClose
         <AppText style={styles.replyBarName} numberOfLines={1}>
           Replying to {name}
         </AppText>
-        {/* Plain text: an emoji-only message stays at this size (no jumbo). */}
+        {/* Plain text: an emoji-only message stays at this size (no jumbo), and
+            formatting shows without its symbols (TEXT_FORMAT_SPEC.md §3). */}
         <AppText style={styles.replyBarQuote} numberOfLines={1}>
-          {text}
+          {plainText(text)}
         </AppText>
       </View>
       <Pressable
@@ -2285,10 +2289,24 @@ function ReplyBar({ name, text, onClose }: { name: string; text: string; onClose
   );
 }
 
+/** Plain runs of a message, with each emoji drawn at emoji size (src/lib/emoji.ts). */
+function withInlineEmoji(text: string): ReactNode {
+  return splitEmoji(text).map((run, k) =>
+    run.emoji ? (
+      <AppText key={k} style={styles.emojiInline}>
+        {run.text}
+      </AppText>
+    ) : (
+      <Fragment key={k}>{run.text}</Fragment>
+    ),
+  );
+}
+
 /**
- * Message body: tappable links, and emoji drawn at emoji size (src/lib/emoji.ts).
- * A message of only one to three emoji is drawn jumbo instead, the whole text
- * at that size — WhatsApp's rule.
+ * Message body: WhatsApp's formatting and tappable links (TEXT_FORMAT_SPEC.md,
+ * through FormattedText), with emoji drawn at emoji size. A message of only
+ * one to three emoji is drawn jumbo instead, the whole text at that size —
+ * WhatsApp's rule.
  */
 function MessageText({
   content,
@@ -2300,21 +2318,6 @@ function MessageText({
   onOpenLink: (url: string) => void;
 }) {
   const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
-  const parts = useMemo(
-    () =>
-      jumbo
-        ? []
-        : content.split(/(https?:\/\/\S+|www\.\S+)/gi).map((part) => ({
-            part,
-            url: /^(https?:\/\/|www\.)/i.test(part)
-              ? part.startsWith('www.')
-                ? `https://${part}`
-                : part
-              : null,
-            runs: splitEmoji(part),
-          })),
-    [content, jumbo],
-  );
   const textStyle = [styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextTheirs];
 
   if (jumbo) {
@@ -2322,29 +2325,15 @@ function MessageText({
   }
 
   return (
-    <AppText style={textStyle}>
-      {parts.map(({ part, url, runs }, i) => {
-        const body = runs.map((run, k) =>
-          run.emoji ? (
-            <AppText key={k} style={styles.emojiInline}>
-              {run.text}
-            </AppText>
-          ) : (
-            run.text
-          ),
-        );
-        if (!url) return <Fragment key={i}>{body}</Fragment>;
-        return (
-          <AppText
-            key={`${part}-${i}`}
-            style={[styles.link, mine ? styles.linkMine : styles.linkTheirs]}
-            onPress={() => onOpenLink(url)}
-          >
-            {body}
-          </AppText>
-        );
-      })}
-    </AppText>
+    <FormattedText
+      content={content}
+      style={textStyle}
+      linkStyle={mine ? styles.linkMine : styles.linkTheirs}
+      onOpenLink={onOpenLink}
+      renderText={withInlineEmoji}
+      codeBackground={mine ? colors.formatCodeMine : colors.formatCodeTheirs}
+      quoteBar={mine ? colors.formatQuoteBarMine : colors.formatQuoteBarTheirs}
+    />
   );
 }
 
@@ -2772,7 +2761,6 @@ const styles = StyleSheet.create({
   },
   tombstoneMine: { color: colors.chatTombstoneMine },
   tombstoneTheirs: { color: colors.mutedText },
-  link: { textDecorationLine: 'underline' },
   linkMine: { color: colors.blueLight },
   linkTheirs: { color: colors.blueDark },
   bubbleMeta: {

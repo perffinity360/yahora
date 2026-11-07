@@ -5,6 +5,7 @@ import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
 import { Inter_500Medium_Italic } from '@expo-google-fonts/inter/500Medium_Italic';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { Inter_700Bold_Italic } from '@expo-google-fonts/inter/700Bold_Italic';
 import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
@@ -155,6 +156,7 @@ export default function RootLayout() {
     Inter_500Medium_Italic,
     Inter_600SemiBold,
     Inter_700Bold,
+    Inter_700Bold_Italic,
     Inter_800ExtraBold,
     BreeSerif_400Regular,
   });

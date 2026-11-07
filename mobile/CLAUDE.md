@@ -60,6 +60,8 @@ src/
     POST `/api/products` · plus like / save / comment / sold routes
   - Messages: GET `/api/messages/inbox/:userId` · GET `/api/messages/history` · POST `/api/messages/send`
   - Universities: GET `/api/universities` · Academic: GET `/api/academic/courses` · `/specializations`
+  - **The full, current contract is `backend/API.md`** (posts, reports, usernames, message actions …);
+    this list is only the oldest routes.
 - Supabase is used directly (anon key) for realtime messages/presence and the auth
   session, exactly like the web app.
 
@@ -104,16 +106,17 @@ like the backend being down. It has already cost an hour once. So:
 ## Monorepo file map
 ```
 frontend/src/
-  App.jsx · main.jsx · config/supabaseClient.js · contexts/AuthContext.jsx · styles/global.css
-  components/ ProductCard/ · footer/ · modal/UniversityModal · navbar/   (+ each .module.css)
+  App.jsx · main.jsx · config/(urls, supabaseClient).js · contexts/AuthContext.jsx · styles/global.css
+  components/ ProductCard/ · footer/ · modal/UniversityModal · navbar/ · community/ · FormattedText/ · …
   pages/ Home/ · auth/Auth · dashboard/Dashboard · marketplace/Marketplace · messages/Messages
          · onboarding/onboarding · product/ProductDetail · publicProfile/PublicProfile · sell/Sell
-         (+ each .module.css)
+         · community/ (Phase 7) · dev/CommunitySandbox (development only)   (+ each .module.css)
+  hooks/ · utils/   (emoji.js, textFormat.js … are the twins of mobile/src/lib)
 backend/src/
-  app.js · server.js · config/env.js · config/supabaseClient.js · utils/cronJobs.js
-  modules/ auth/(controller,routes,service) · academic/(controller,routes)
-           products/(controller,routes,service) · messages/(controller,routes)
-           university/(controller,routes) · user/(controller,routes)
+  app.js · server.js · config/(env, supabase).js
+  utils/ respond · notify · cronJobs · pagination · moderation · emoji · viewer
+  modules/ auth · academic · university · user · products · share · messages · posts · reports
+           · social · notifications · admin   (ownership: backend/CLAUDE.md)
 mobile/
   app.json · package.json · tsconfig.json · .env(.example)
   (No babel.config.js — Expo's default transformer applies babel-preset-expo, which
@@ -126,8 +129,10 @@ mobile/
     (tabs)/
       _layout.tsx                   tab bar (Feather icons: shopping-bag / message-square / user)
       index.tsx                     Marketplace: FlashList grid + swipe deck + filters/sort + campus switch
-      messages.tsx                  Messages placeholder
+      messages.tsx                  Inbox: conversations, search, unread badges, previews
       profile.tsx                   Dashboard (own profile + listings/purchases, avatar, bio)
+    chat/[contactId].tsx            a conversation: realtime, replies, reactions, delete, formatting
+    product/[id].tsx                product detail (comments, like/save, Mark as Sold)
     profile/[id].tsx                public profile (read-only)
     edit-profile.tsx                edit-profile form
     sell.tsx                        create/edit listing (multipart upload + live ProductCard preview)
@@ -139,14 +144,22 @@ mobile/
       supabase.ts                   Supabase client (AsyncStorage session; URL from config.ts)
       upload.ts                     toUploadFile(): FormData file part with .bytes() for Winter fetch
       marketplace.ts                filter/sort constants + isWithinPostingDate + formatRupees
+      emoji.ts · stickers.ts        emoji sizing in messages · welcome stickers (twins of the web's)
+      messages.ts · messageActions.ts  inbox time format · reply/copy/delete rules
+      textFormat.ts                 WhatsApp-style formatting rules (twin of the web's textFormat.js)
+      nav.ts · share.ts · avatar.ts · deviceId.ts · otpLedger.ts
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
     hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
                                     useProductActions (useToggleLike/Save — take a query key) ·
                                     useMarketplace (useMarketplaceFeed) · useMarketplaceFilters ·
-                                    useProduct · useAcademics · useAvatarActions
+                                    useProduct · useAcademics · useAvatarActions · useMessages ·
+                                    useComments · useProductDetail · useBuyerCandidates ·
+                                    useLeaveOnce · useFloatingTopInset
     components/                     ProductCard · Skeleton · ExpandableBio · AvatarSheet ·
                                     SearchablePicker · AuroraBackground · UniversitiesModal · DemoModal ·
-                                    FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert
+                                    FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
+                                    AppText · AppTextInput · Avatar · FormattedText · MessageActionMenu ·
+                                    DeleteMessagesDialog · CommentThread · ConfirmDialog · AppToast · …
     types/index.ts                  University, UserProfile, Product, MarketplaceProduct, …
 ```
 
@@ -220,16 +233,19 @@ confident accent on a soft neutral canvas.
   then make every choice serve it.
 
 ## UI stack & animation rules (Expo)
-Before ANY UI work, read DESIGN.md fully. Its tokens (src/theme/tokens.ts) are canonical.
+Before ANY UI work, read DESIGN.md fully. Its tokens (`src/theme/index.ts`) are canonical.
 
 - Animation default: react-native-reanimated (springs, entering/exiting, layout transitions) +
   react-native-gesture-handler for swipe/drag. All animation on the UI thread — never setState/JS timers.
 - Moti: simple one-off fade/slide only. Lottie: hero moments only (onboarding, success, empty states) — never on feeds.
 - Premium effects: @shopify/react-native-skia for gradients/glows/celebrations — never inside list rows.
   expo-blur + expo-linear-gradient for glass/depth.
-- Every Pressable: scale to 0.97 spring + expo-haptics light impact (use the shared PressableScale).
+- **Installed today:** reanimated, gesture-handler, expo-linear-gradient, expo-haptics. Moti, Lottie,
+  Skia and expo-blur are not installed yet; add one (`npx expo install …`) when a screen first needs it.
+- Every Pressable: press feedback (a 0.97 scale, or the pressed style the screen already uses) and an
+  expo-haptics light impact where it fits. There is no shared `PressableScale` component yet.
 - Lists: expo-image with blurhash placeholders and fixed 4:5 ratios; skeletons over spinners;
   no layout animations inside FlatList rows. Target 60fps on mid-range Android.
 - Safe areas + keyboard handling on every screen. Respect ReducedMotionConfig.
-- After building a screen: capture `xcrun simctl io booted screenshot /tmp/screen.png`,
-  read it, self-critique, fix, re-capture. Check light and dark mode.
+- After building a screen: **don't verify it with screenshots** (see Workflow). Run `npx tsc --noEmit`,
+  then list what the owner should check on the phone, light and dark mode included.

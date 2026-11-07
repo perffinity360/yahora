@@ -27,6 +27,13 @@ change both.
 - **Compact by default.** Body 14/20, secondary 13, small labels 12. Controls look 24–28 pt tall.
 - Don't make things bigger to fill space. Let the content have the room.
 
+## Text people write
+
+- **Messages and posts are drawn with WhatsApp's formatting** (`*bold*`, `_italic_`, lists, quotes, links)
+  through `src/components/FormattedText.tsx`, and stored exactly as typed. Previews on one line use
+  `plainText()` from `src/lib/textFormat.ts`. Bold and italic are real font files (`font.family.bold`,
+  `italic`, `boldItalic`), never `fontWeight` / `fontStyle`. See `docs/design/TEXT_FORMAT_SPEC.md`.
+
 ## Surfaces
 
 - **Avoid cards inside cards.** In a list, use flat rows split by a hairline.
