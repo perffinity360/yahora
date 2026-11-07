@@ -5,12 +5,13 @@
 
 /* Each post and its thread sit on a frosted card (owner, 7 Nov), so the text is
    always on a clean, light surface and the doodles show only in the gaps
-   between cards. Slim: 12 / 14 padding, cards 12 apart, 10 in from the panel
-   (.list in Community.module.css). Everything in the post hangs off one left
+   between cards. Slim: 10 / 12 / 8 padding, cards 6 apart, 6 in from the
+   panel (.list in Community.module.css). The zone's colour (--zone-*, set by
+   the panel) runs down the left edge and through the thread. Everything in the post hangs off one left
    edge, the text column, so the eye can find what belongs to what. */
 .post {
   --text-line: 20px;
-  --thread-rail: var(--community-rail);
+  --thread-rail: var(--zone-rail, var(--community-rail));
   --rail-hit: 7.5px; /* what takes the pointer: the 1.5 px line and 3 px either side */
   --rail-r: 14px; /* the curve into a reply's avatar: RAIL_RADIUS in PostThread.jsx */
   display: grid;
@@ -19,10 +20,12 @@
   /* At most 860 px, centred, so a panel opened full width still has readable
      lines. */
   max-width: 860px;
-  margin: 0 auto 12px;
-  padding: 12px 14px 10px;
+  margin: 0 auto 6px;
+  padding: 10px 12px 8px;
   border: 1px solid var(--community-card-border);
-  border-radius: 16px;
+  /* The zone's accent down the left edge: purple on campus, pink elsewhere. */
+  border-left: 3px solid var(--zone-accent, var(--community-card-border));
+  border-radius: 14px;
   background: var(--community-card);
   box-shadow: var(--community-card-shadow);
   backdrop-filter: blur(8px);
@@ -33,7 +36,9 @@
 }
 
 .post:hover {
-  border-color: var(--community-card-border-hover);
+  border-top-color: var(--community-card-border-hover);
+  border-right-color: var(--community-card-border-hover);
+  border-bottom-color: var(--community-card-border-hover);
 }
 
 @keyframes postIn {
@@ -559,7 +564,9 @@ a.time:hover {
   margin: 32px 0 0 calc(14px - var(--rail-hit) / 2);
 }
 
-.post:has(> .thread) .stem {
+/* Every card has its trunk (owner, 7 Nov): down from the avatar to the end of
+   the post, and on into the replies when there are any. */
+.stem {
   display: block;
 }
 
@@ -576,7 +583,7 @@ a.time:hover {
 
 @media (hover: hover) {
   .post:has(.stem:hover, .railTrunk:hover, .railHit:hover) {
-    --thread-rail: var(--community-rail-hover);
+    --thread-rail: var(--zone-rail-hover, var(--community-rail-hover));
   }
 }
 

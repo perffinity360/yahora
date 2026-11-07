@@ -475,10 +475,11 @@ function WideLayout({
                   <span className={styles.worldName}>{label}</span>
                   <ChevronDown size={13} aria-hidden="true" className={menuOpen ? styles.chevronOpen : styles.chevron} />
                 </button>
-                <SortSwitch sort={sort} onChange={setSort} />
                 <span className={`${styles.zoneBadge} ${styles.zoneBadgeWorld}`}>All campuses</span>
               </div>
               <div className={styles.panelTools}>
+                {/* Hot · New on the right, beside ⤢ (owner, 7 Nov). */}
+                <SortSwitch sort={sort} onChange={setSort} />
                 <button
                   type="button"
                   className={styles.iconBtn}
