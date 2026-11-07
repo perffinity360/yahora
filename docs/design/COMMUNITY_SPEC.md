@@ -1,6 +1,12 @@
 # Community — design spec (Phase 7)
 
-**Version 3.2 · 7 November 2026 · for the website and the app**
+**Version 3.3 · 7 November 2026 · for the website and the app**
+
+> **Changed in version 3.3 (owner's redesign brief, 7 Nov):** on a laptop the site navbar gives way to a
+> **centre brand pill** at the top of the divider, with a menu (§1.1); a **glow-bar grip** (§1.1); **two
+> zones** on one wallpaper, the doodles at 5%, with `CAMPUS` / `ALL CAMPUSES` badges in the headers (§1.1);
+> **posts on frosted cards** (§3) with the author's college as a pill in the world feeds; the text halo is
+> gone.
 
 > **Changed in version 3.2 (owner's review, 7 Nov):** photos show one at a time, whole, in a smaller
 > frame, with swipe and chevrons (§3); a grid of lines on the Global globe (§1.1); an `AUTHOR` tag on the
@@ -59,17 +65,37 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
         left: My campus          avatar on the divider     right: country or Global
 ```
 
-- **Background of both panels:** the chat's wallpaper, pinned while posts scroll: `chatCanvas`
-  with the shared doodle tile at 50% strength (`MESSAGES_SPEC.md` §2). The rows carry a light tint:
-  warm on the campus side (`communityRowCampus`), a little lighter on the other (`communityRowWorld`).
-  The frame around the panels is `bg` (`#f2e5e1`), 4 px at the top and sides and **none at the bottom**:
+- **Two zones, one wallpaper:** both panels keep the chat's doodle tile (`MESSAGES_SPEC.md` §2), pinned
+  while posts scroll, but at **5%** only, so its lines never meet the text. Each panel has its own ground:
+  `communityPanelCampus` (lilac) on the left, `communityPanelWorld` (blush) on the right. (The veil over the
+  tile is that ground at 95%: `communityPanelCampusVeil`, `communityPanelWorldVeil`.) A narrow window takes
+  the ground of the feed it shows. Posts sit on frosted cards (§3).
+- **The frame around the panels** is `bg` (`#f2e5e1`), 4 px at the top and sides and **none at the bottom**:
   the composer bar sits on the window's bottom edge, and the panels' bottom corners are square. **The site
   footer isn't shown** on the Community page (nor on Messages).
-- **Text on the wallpaper: a halo,** the way maps keep labels readable over busy ground. The author line,
-  the text of each post and reply, and `Show more replies` carry `communityTextHalo`: five stacked
-  shadows of `communityHalo`, 1 to 6 px, with no offset, so the letters clear the doodles from just
-  around themselves and the wallpaper stays sharp everywhere else. The app has one text shadow:
-  `communityHalo`, radius 4, no offset (the nearest match).
+- **No text halo any more** (owner, 7 Nov): the cards give the text its ground instead.
+- **The site navbar is hidden on a laptop** (1024 px and up), so the panels reach the top of the window.
+  It stays mounted, out of sight, because it keeps presence, delivery ticks and the unread count running.
+  A narrow window keeps the navbar.
+- **The centre brand pill** sits where the two headers meet, at the top of the divider, and moves with it
+  (`--split-pct`, measured from the divider; kept 84 px from the window's edges when a panel is collapsed):
+  top 7, 36 tall, padding 0 13 0 11, radius 999, white, a 1.5 px `communityPillBorder` outline (`purple`
+  on hover and while open), `communityPillShadow` plus a 4 px `communityPillRing`. Inside: the Yahora logo
+  (bag and wordmark, 22 tall), a 1 × 16 `communityPillDivider`, a ☰ that turns into ✕ while open, and the
+  unread count on a `pinkDark` pill. It lifts 1 px on hover and presses to 0.97.
+- **Its menu** opens under it (top 48, 250 wide), glass (`communityMenuGlass`, blur 18) with radius 16
+  and `communityMenuShadow`, springing from the pill while its rows arrive 22 ms apart: **Home**,
+  **Marketplace**, **Community** (current, white on `purpleDark`), **Messages** with the unread count,
+  **Saved / Cart** (to the dashboard, where the Watchlist is), **Notifications** (marked `Soon`; there is
+  nothing to open yet), then **you**: photo, name, `Your profile` (to the dashboard) and a log-out button.
+  Rows are 36 tall, Inter 500 14, `reactionMineBg` on hover. Esc or a press elsewhere closes it; Esc gives
+  the focus back to the pill.
+- **Header clearance:** the left header keeps 78 px clear on its right, the right header 78 px on its left,
+  so ‹ ⤢ › never slide under the pill.
+- **Zone badges:** `CAMPUS` after the campus name (`communityBadgeCampusBg`, `purpleDark` text,
+  `communityBadgeCampusBorder`), and `ALL CAMPUSES` after Hot · New (`communityBadgeWorldBg`,
+  `communityBadgeWorldText`, `communityBadgeWorldBorder`): Inter 700 10, capitals, padding 2 / 8, radius
+  999. A header narrower than 430 px drops its badge first.
 - **Hierarchy:** My campus is the main panel. Its title is Bree Serif 15 in purple-dark. The right
   title is Inter 600 14.
 - **Panel header:** **36 px**, glass (`communityGlass`, blur 14), radius 8 on the panel. It floats
@@ -96,11 +122,11 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   a finger 20):
   - white at rest, down to the composer bar, where it takes `communityDock` so the two bars read as one.
     The panels' corners there are square;
-  - **the grip,** in the middle of its height: a white pill, 10 × 30, with a 1 px `communityGripBorder`
-    outline, a `communityGripShadow`, and two grooves, 1.5 × 12, 2 px apart, in `communityGripBorder`;
-  - while hovered, dragged or focused, a purple line runs its length, down to the composer bar; the grip's
-    outline and grooves turn purple, a 3 px `reactionMineBg` ring comes up, the grip grows to 1.06 and the
-    grooves stretch to 1.25;
+  - **the glow-bar grip,** in the middle of its height: a white capsule, 12 × 46, with a 1.5 px
+    `communityGripGlowBorder` outline and `communityGripGlowShadow`, holding a 4 × 26 bar that runs
+    `purpleDark` → `purpleLight` → `pinkDark`, glowing (`communityGripGlow`, 8 px);
+  - while hovered, dragged or focused, a purple line runs its length, down to the composer bar, and the
+    grip grows to 1.08 with a `purple` outline and `communityGripGlowShadowHover`;
   - drag it to resize; each panel is at least **320 px** wide;
   - double-click it to go back to 50 / 50;
   - keyboard: focus it with Tab, move it with the arrow keys.
@@ -301,8 +327,10 @@ wait. While that post is held, the author's Posts tab shows this card directly u
 
 ## 3. The post
 
-No card. A post is a flat row split from the next by a 1 px `communityPostRule`, padding 11 / 12 / 9,
-with a soft tint on hover. Compact, like a code editor's panels.
+**A frosted card** (owner, 7 Nov; was a flat row): each post and its thread sit on `communityCard`
+(white at 94%, blur 8), a 1 px `communityCardBorder` (`communityCardBorderHover` on hover), radius 16,
+`communityCardShadow`. **Slim:** padding 12 / 14 / 10, cards 12 apart and 10 in from the panel's edges, so
+the doodles show only around them. At most 860 wide, centred.
 
 ```
 (av) Rahul Verma @rahul.verma · IIITDM Kurnool · 2h                 ⋯
@@ -324,7 +352,9 @@ with a soft tint on hover. Compact, like a code editor's panels.
   profile. Tapping the time opens the post's page.
 - **Campus name:**
   - **never in the campus feed,** where it's obvious;
-  - elsewhere, only if there is room: it's hidden when the feed is 420 px wide or less;
+  - elsewhere, only if there is room: it's hidden when the feed is 420 px wide or less. On a post it's a
+    compact pill: a graduation cap and the college, Inter 500 11, `communityCollegeText` on
+    `communityCollegeBg`, padding 0 7, radius 999 (replies keep the plain `· campus` text);
   - the username also goes at 300 px or less (a very narrow panel only).
 - **Time:** `now`, `5m`, `2h`, `3d`; then `12 Oct`, or `12 Oct 2025` for an earlier year.
   Reuse the message time formatter.
@@ -650,8 +680,8 @@ API reason values, in the same order: `spam`, `harassment`, `hate_speech`, `sexu
 
 The text sits on a small glass note, Inter 400 14/20, communityMuted, because it's on the wallpaper.
 
-While loading, show 3 flat skeleton rows, the same shape as a post (avatar circle, two text lines, a
-tinted block), split by hairlines.
+While loading, show 3 skeleton cards, the same shape and card as a post (avatar circle, two text lines, a
+tinted block).
 
 ## 10. Profile → Posts tab
 
@@ -685,23 +715,40 @@ A **Posts** tab sits next to the existing tabs:
 | `quickBarShadow` | `--quick-bar-shadow` | `0 6px 20px rgba(11,11,11,0.16)` | the quick bar |
 | `inputBg` (exists) | `--input-bg` | `#F3F0EF` | sort switch, chips, search fields |
 | `chatCanvas` (exists) | `--community-canvas` | `#EDE6F5` | the panels' ground, same as the chat |
-| `communityCanvasVeil` | `--community-canvas-veil` | `rgba(237,230,245,0.5)` | holds the tile at 50%, same as the chat |
-| `communityRowCampus` | `--community-row-campus` | `rgba(255,250,246,0.5)` | tint behind campus posts |
-| `communityRowWorld` | `--community-row-world` | `rgba(255,255,255,0.42)` | tint behind country and Global posts |
-| `communityRowHover` | `--community-row-hover` | `rgba(128,0,128,0.035)` | a hovered post |
 | `communityGlass` | `--community-glass` | `rgba(255,255,255,0.74)` | panel header, dock, floating pills |
 | `communityPill` | `--community-pill` | `rgba(255,255,255,0.72)` | action pills |
 | `communityHairline` | `--community-hairline` | `rgba(128,0,128,0.1)` | lines between posts, outlines |
-| `communityPostRule` | `--community-post-rule` | `rgba(128,0,128,0.22)` | the line between posts, strong enough to see over the doodles |
 | `communityRail` | `--community-rail` | `#D1AAD7` | the reply thread (opaque, so its pieces join cleanly) |
 | `communityRailHover` | `--community-rail-hover` | `#9552A3` | the thread while you point at it (was `#B07FBA`, too faint) |
+| `communityPanelCampus` | `--community-panel-campus` | `#F6ECF5` | the campus panel's ground |
+| `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(246,236,245,0.95)` | over the doodle tile, leaving it at 5% |
+| `communityPanelWorld` | `--community-panel-world` | `#FDF1F6` | the country / Global panel's ground |
+| `communityPanelWorldVeil` | `--community-panel-world-veil` | `rgba(253,241,246,0.95)` | the same, on that side |
+| `communityBadgeCampusBg` | `--community-badge-campus-bg` | `#F3E3F5` | the `CAMPUS` badge |
+| `communityBadgeCampusBorder` | `--community-badge-campus-border` | `rgba(128,0,128,0.18)` | its outline |
+| `communityBadgeWorldBg` | `--community-badge-world-bg` | `#FCE4EE` | the `ALL CAMPUSES` badge |
+| `communityBadgeWorldText` | `--community-badge-world-text` | `#C82863` | its text |
+| `communityBadgeWorldBorder` | `--community-badge-world-border` | `rgba(235,72,127,0.22)` | its outline |
+| `communityCollegeBg` | `--community-college-bg` | `#FAF0F9` | a post's college pill |
+| `communityCollegeText` | `--community-college-text` | `#6E2270` | its text |
+| `communityCard` | `--community-card` | `rgba(255,255,255,0.94)` | the frosted post card |
+| `communityCardBorder` | `--community-card-border` | `rgba(128,0,128,0.11)` | its outline |
+| `communityCardBorderHover` | `--community-card-border-hover` | `rgba(128,0,128,0.2)` | its outline under the pointer |
+| `communityCardShadow` | `--community-card-shadow` | `0 2px 10px rgba(79,1,79,0.04)` | its shadow |
+| `communityPillBorder` | `--community-pill-border` | `rgba(128,0,128,0.22)` | the brand pill's outline (website only) |
+| `communityPillShadow` | `--community-pill-shadow` | `0 4px 14px rgba(79,1,79,0.12)` | its shadow |
+| `communityPillRing` | `--community-pill-ring` | `#F7EBF5` | the 4 px ring around it |
+| `communityPillDivider` | `--community-pill-divider` | `rgba(128,0,128,0.16)` | the line between logo and ☰ |
+| `communityMenuGlass` | `--community-menu-glass` | `rgba(255,255,255,0.88)` | its menu |
+| `communityMenuShadow` | `--community-menu-shadow` | `0 12px 32px rgba(79,1,79,0.18)` | the menu's shadow |
+| `communityGripGlowBorder` | `--community-grip-glow-border` | `rgba(128,0,128,0.28)` | the glow-bar grip's outline (website only) |
+| `communityGripGlowShadow` | `--community-grip-glow-shadow` | `0 3px 12px rgba(79,1,79,0.12)` | its shadow |
+| `communityGripGlowShadowHover` | `--community-grip-glow-shadow-hover` | `0 4px 16px rgba(128,0,128,0.24)` | its shadow in use |
+| `communityGripGlow` | `--community-grip-glow` | `rgba(215,0,215,0.55)` | the glow around its bar |
 | `communityAuthorHover` | `--community-author-hover` | `rgba(128,0,128,0.18)` | the author's username pill under the pointer |
 | `communityScrollbar` | `--community-scrollbar` | `rgba(128,0,128,0.3)` | the panels' scrollbar while they scroll (website only) |
 | `communityGlobeLand` | `--community-globe-land` | `#2E9E5E` | the continents on the Global globe (was `#3FB873`, too light under the grid) |
 | `communityGlobeShade` | `--community-globe-shade` | `rgba(5,40,90,0.38)` | the globe's shadow towards the lower right |
-| `communityGripShadow` | `--community-grip-shadow` | `0 1px 2px rgba(42,8,42,0.14)` | the divider's grip (website only) |
-| `communityHalo` | `--community-halo` | `#F8F3F9` | the halo around text on the wallpaper |
-| `communityTextHalo` | `--community-text-halo` | five `communityHalo` shadows, 1, 2, 3, 4 and 6 px, no offset | that halo (app: one shadow, radius 4) |
 | `communityGripBorder` | `--community-grip-border` | `#8E8B99` | outline of the divider's grip (3.3:1 on white) |
 | `communityDock` | `--community-dock` | `#F9EEF8` | the composer bar, and the divider where it crosses it |
 | `communityWorldStrong` | `--community-world-strong` | `#C92C66` | Post and tools on the country / Global side (white on it is 5.2:1; `pinkDark` is too low for text) |

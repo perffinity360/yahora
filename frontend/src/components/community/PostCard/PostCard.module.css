@@ -1,10 +1,13 @@
 /* frontend/src/components/community/PostCard/PostCard.module.css
    docs/design/COMMUNITY_SPEC.md §3 (the post) and §4 (its replies). */
 
-/* ── A post: a flat row, the avatar in a column of its own ─────────────── */
+/* ── A post: a frosted card, the avatar in a column of its own ──────────── */
 
-/* Everything in the post hangs off one left edge, the text column, so the eye can
-   find what belongs to what over a busy wallpaper. */
+/* Each post and its thread sit on a frosted card (owner, 7 Nov), so the text is
+   always on a clean, light surface and the doodles show only in the gaps
+   between cards. Slim: 12 / 14 padding, cards 12 apart, 10 in from the panel
+   (.list in Community.module.css). Everything in the post hangs off one left
+   edge, the text column, so the eye can find what belongs to what. */
 .post {
   --text-line: 20px;
   --thread-rail: var(--community-rail);
@@ -13,17 +16,24 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   column-gap: 8px;
-  /* The row fills the panel. Its content stops at 860 px, centred, so a panel
-     opened full width still has readable lines. */
-  padding: 11px max(12px, calc((100cqi - 860px) / 2)) 9px;
-  border-bottom: 1px solid var(--community-post-rule);
-  transition: background-color 180ms var(--community-ease);
+  /* At most 860 px, centred, so a panel opened full width still has readable
+     lines. */
+  max-width: 860px;
+  margin: 0 auto 12px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--community-card-border);
+  border-radius: 16px;
+  background: var(--community-card);
+  box-shadow: var(--community-card-shadow);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 180ms var(--community-ease), box-shadow 180ms var(--community-ease);
   animation: postIn 320ms var(--community-ease) backwards;
   animation-delay: calc(var(--post-i, 0) * 28ms);
 }
 
 .post:hover {
-  background: var(--community-row-hover);
+  border-color: var(--community-card-border-hover);
 }
 
 @keyframes postIn {
@@ -37,15 +47,6 @@
   grid-column: 2;
   grid-row: 1;
   min-width: 0;
-}
-
-/* ── Keeping text readable on the wallpaper ────────────────────────────── */
-
-/* A halo, the way maps keep labels readable over busy ground: the letters wipe the
-   doodles from just around themselves, and the wallpaper stays sharp elsewhere.
-   It inherits, so everything inside .readable gets it. */
-.readable {
-  text-shadow: var(--community-text-halo);
 }
 
 .avatarLink {
@@ -146,6 +147,34 @@
 }
 
 .time {
+  flex: 0 0 auto;
+}
+
+/* A post's college, in the country and Global feeds: a compact pill with a
+   graduation cap, so the other campuses read at a glance (owner, 7 Nov). It
+   still gives way like the campus text it replaces (@container below). */
+.collegePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--community-college-bg);
+  font: 500 11px/18px "Inter", sans-serif;
+  color: var(--community-college-text);
+}
+
+.collegePill::before {
+  content: none;
+}
+
+.collegePill > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collegePill svg {
   flex: 0 0 auto;
 }
 
@@ -681,7 +710,6 @@ a.time:hover {
   border-radius: 999px;
   background: var(--reaction-mine-bg);
   color: var(--purple);
-  text-shadow: none; /* it has a ground of its own */
 }
 
 .replyUsernameAuthor:hover {
@@ -696,7 +724,6 @@ a.time:hover {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--purple);
-  text-shadow: none;
 }
 
 .replyTools {
@@ -808,7 +835,6 @@ a.time:hover {
   background: transparent;
   font: 600 13px/16px "Inter", sans-serif;
   color: var(--purple);
-  text-shadow: var(--community-text-halo);
   cursor: pointer;
   transition: background-color 140ms var(--community-ease);
 }

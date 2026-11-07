@@ -32,15 +32,18 @@ the variables in `src/styles/global.css`.
 
 ## Surfaces
 
-- **Avoid cards inside cards.** In a list, use flat rows split by a 1 px hairline, with a soft tint on hover.
+- **Avoid cards inside cards.** A list on a plain ground uses flat rows split by a 1 px hairline, with a soft
+  tint on hover. **A list on a patterned ground uses slim frosted cards** (the community, owner 7 Nov): white
+  at about 94%, radius 16, padding about 12 / 14, 12 apart, so the text always sits on a clean surface and the
+  pattern shows only between them. Keep the pattern itself faint there (about 5%).
 - **Floating chrome.** Headers, switchers and composers float on glass (white at about 74%, blur 14),
   and content passes underneath. It feels more spacious than a solid bar.
 - Radii stay small on working surfaces: panels 8, menus and dialogs 10–12. Pills are for small actions.
-- **Text on a patterned background gets a halo,** the way maps keep labels readable: a few stacked
-  `text-shadow`s with no offset (1–6 px), in the ground's own light colour. The letters clear the pattern
-  from just around themselves. Frosted glass behind the text was tried first and still looked busy.
-- On a busy background, make the structure stronger too: a line between rows you can actually see, and
-  one left edge for everything in a row.
+- **Never put text straight on a pattern.** A text halo (stacked `text-shadow`s) was tried in the community
+  and still read as messy; the owner removed it on 7 Nov in favour of the frosted cards above.
+- Give side-by-side areas their own identity: a slightly different ground each and a small badge in the
+  header saying what the area is (`CAMPUS`, `ALL CAMPUSES`).
+- Keep one left edge for everything in a row.
 
 ## Icons over words
 

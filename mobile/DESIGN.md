@@ -29,12 +29,13 @@ change both.
 
 ## Surfaces
 
-- **Avoid cards inside cards.** In a list, use flat rows split by a hairline.
+- **Avoid cards inside cards.** A list on a plain ground uses flat rows split by a hairline. **A list on a
+  patterned ground uses slim frosted cards** (the website's community, owner 7 Nov): white at about 94%,
+  radius 16, padding about 12 / 14, 12 apart, with the pattern itself faint (about 5%).
 - **Floating chrome.** Switchers and composers float, with content passing underneath. Use `expo-blur` for the
   glass. It feels more spacious than a solid bar.
-- **Text on a patterned background gets a halo,** the way maps keep labels readable: a `textShadow` with no
-  offset, radius about 4, in the ground's own light colour. The website tried frosted glass first; it still
-  looked busy.
+- **Never put text straight on a pattern.** The website's text halo still read as messy and was removed
+  (owner, 7 Nov) in favour of the frosted cards above.
 - Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every overlap
   as a darker patch.
 

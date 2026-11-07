@@ -20,7 +20,7 @@
 // ⚠ Part 1: everything here runs on ./sampleData.js. Part 2 replaces it with
 // the posts API and deletes that file.
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import {
   ChevronDown,
@@ -35,6 +35,7 @@ import {
 import AvatarImg from "../../components/AvatarImg/AvatarImg";
 import { CampusIcon } from "../../components/community/AnimatedIcons/AnimatedIcons";
 import CommunityFeed from "./CommunityFeed";
+import BrandMenu from "./BrandMenu";
 import CountryMenu, { GLOBAL, WorldGlyph, worldLabel } from "./CountryMenu";
 import useMediaQuery from "../../hooks/useMediaQuery";
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
@@ -298,6 +299,31 @@ function WideLayout({
 
   useEffect(() => () => clearTimeout(animationTimer.current), []);
 
+  // The brand pill (and its menu) sits over the divider's centre. The left
+  // panel's width changes on every drag, glide and window resize, so watching
+  // it keeps --split-pct exact without re-rendering anything.
+  const wideRef = useRef(null);
+  const separatorRef = useRef(null);
+  const leftPanelRef = useRef(null);
+  useLayoutEffect(() => {
+    const wideEl = wideRef.current;
+    const placeBrand = () => {
+      const sep = separatorRef.current;
+      if (!wideEl || !sep) return;
+      const w = wideEl.getBoundingClientRect();
+      const s = sep.getBoundingClientRect();
+      if (!w.width) return;
+      const pct = ((s.left + s.width / 2 - w.left) / w.width) * 100;
+      wideEl.style.setProperty("--split-pct", `${pct}%`);
+    };
+    placeBrand();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(placeBrand);
+    if (wideEl) ro.observe(wideEl);
+    if (leftPanelRef.current) ro.observe(leftPanelRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   const isCollapsed = (size) => size.inPixels <= LAYOUT_COLLAPSED_PX + 2;
 
   // The panels glide only for a button press. During a drag they must follow
@@ -328,7 +354,8 @@ function WideLayout({
   const label = worldLabel(world, countries);
 
   return (
-    <div className={styles.wide}>
+    <div ref={wideRef} className={styles.wide}>
+      <BrandMenu />
       <Group
         orientation="horizontal"
         className={`${styles.group} ${animating ? styles.groupGliding : ""}`}
@@ -339,6 +366,7 @@ function WideLayout({
         <Panel
           id={LEFT}
           panelRef={leftRef}
+          elementRef={leftPanelRef}
           defaultSize="50%"
           minSize={LAYOUT_MIN_PANEL_PX}
           collapsible
@@ -354,10 +382,13 @@ function WideLayout({
               where it was instead of reloading it. */}
           <section className={styles.panelInner} hidden={leftCollapsed} aria-label="My campus">
             <header className={styles.panelHeader}>
-              <h2 className={styles.campusTitle}>
-                <CampusIcon size={17} className={styles.campusIcon} />
-                <span>{campusName}</span>
-              </h2>
+              <div className={styles.panelControls}>
+                <h2 className={styles.campusTitle}>
+                  <CampusIcon size={17} className={styles.campusIcon} />
+                  <span>{campusName}</span>
+                </h2>
+                <span className={`${styles.zoneBadge} ${styles.zoneBadgeCampus}`}>Campus</span>
+              </div>
               <div className={styles.panelTools}>
                 <button
                   type="button"
@@ -397,11 +428,8 @@ function WideLayout({
             The badge says where you're writing; the composer's own label says it
             to a screen reader, and Tab reaches both composers, so pressing the
             avatar is only a shortcut for a mouse. */}
-        <Separator className={styles.handle}>
-          <span className={styles.handleGrip} aria-hidden="true">
-            <span className={styles.handleGroove} />
-            <span className={styles.handleGroove} />
-          </span>
+        <Separator className={styles.handle} elementRef={separatorRef}>
+          <span className={styles.handleGripGlow} aria-hidden="true" />
           <span
             className={styles.hub}
             data-active={side ?? undefined}
@@ -458,6 +486,7 @@ function WideLayout({
                   <ChevronDown size={13} aria-hidden="true" className={menuOpen ? styles.chevronOpen : styles.chevron} />
                 </button>
                 <SortSwitch sort={sort} onChange={setSort} />
+                <span className={`${styles.zoneBadge} ${styles.zoneBadgeWorld}`}>All campuses</span>
               </div>
               <div className={styles.panelTools}>
                 <button
@@ -529,7 +558,7 @@ function NarrowLayout({
   const onWorld = segment === "world";
 
   return (
-    <div className={styles.narrow}>
+    <div className={styles.narrow} data-feed={onWorld ? "world" : "campus"}>
       {/* Transparent and floating: the posts scroll underneath it. */}
       <div className={styles.switcher}>
         <div className={styles.segments} role="group" aria-label="Community feeds">
