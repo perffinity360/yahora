@@ -155,12 +155,10 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
     graduation cap on `purpleDark` on the left; on the right, the flag (or the globe for Global) on `pinkDark`.
     **Icons only, no words.** It's hidden from screen readers, because the composer's own label says where the
     post goes. Tab reaches both composers, so pressing the avatar is only a shortcut for a mouse.
-- **Panel buttons (26 × 26):**
-  - **‹** or **›** collapses that panel to a **36 px** bar. The bar shows the panel's name
-    written vertically and an expand button. The panels glide over 280 ms when a button moves them,
-    never during a drag.
-  - **⤢** opens that panel full width (the other one collapses). Pressing it again
-    restores both.
+- **Panel button (26 × 26): ⤢ only.** It opens that panel full width: the other one collapses to a
+  **36 px** bar showing its name written vertically and an expand button. Pressing ⤢ again (it shows as
+  restore), or the bar, brings both back. The panels glide over 280 ms when a button moves them, never during
+  a drag. (The separate ‹ / › collapse buttons were removed on 7 Nov: ⤢ on the other panel does the same.)
 - **Posts follow the panel's width,** not the window's. Rows always run edge to edge; their content
   stops at 860 px, centred, so a panel opened full width still has readable lines.
 - **The browser remembers the layout** (localStorage key `yahora.community.layout`), so
