@@ -514,13 +514,16 @@ a.time:hover {
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: background-color 160ms var(--community-ease), color 160ms var(--community-ease),
-    border-color 160ms var(--community-ease), transform 120ms var(--community-ease);
+    border-color 160ms var(--community-ease), box-shadow 160ms var(--community-ease),
+    transform 120ms var(--community-ease);
 }
 
 .replyPill:hover {
-  background: var(--reaction-mine-bg);
+  background: var(--community-pill-hover);
   border-color: var(--reaction-mine-border);
+  box-shadow: var(--community-pill-lift);
   color: var(--purple);
+  transform: translateY(-1px);
 }
 
 .replyPill:active {

@@ -41,6 +41,7 @@ import useMediaQuery from "../../hooks/useMediaQuery";
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 import {
   LAYOUT_BREAKPOINT_PX,
+  LAYOUT_COLLAPSE_THRESHOLD_PX,
   LAYOUT_COLLAPSED_PX,
   LAYOUT_MIN_PANEL_PX,
 } from "../../utils/community";
@@ -81,6 +82,11 @@ function SortSwitch({ sort, onChange }) {
     ["hot", "Hot", Flame],
     ["new", "New", Clock],
   ];
+  // The browser's own title tooltip waits over a second and can't be hurried,
+  // so the words are our own (data-tip, Community.module.css): after 350 ms of
+  // resting there, and not again once the button has been pressed, until the
+  // pointer leaves it.
+  const [pressed, setPressed] = useState(null);
   return (
     <div className={styles.sortSwitch} role="group" aria-label="Sort posts" data-sort={sort}>
       <span className={styles.sortThumb} aria-hidden="true" />
@@ -90,7 +96,10 @@ function SortSwitch({ sort, onChange }) {
           type="button"
           aria-pressed={sort === value}
           aria-label={label}
-          title={label}
+          data-tip={label}
+          data-quiet={pressed === value || undefined}
+          onPointerDown={() => setPressed(value)}
+          onPointerLeave={() => setPressed((p) => (p === value ? null : p))}
           className={`${styles.sortBtn} ${sort === value ? styles.sortBtnActive : ""}`}
           onClick={() => onChange(value)}
         >
@@ -371,6 +380,7 @@ function WideLayout({
           minSize={LAYOUT_MIN_PANEL_PX}
           collapsible
           collapsedSize={LAYOUT_COLLAPSED_PX}
+          collapsedThreshold={LAYOUT_COLLAPSE_THRESHOLD_PX}
           onResize={(size) => setLeftCollapsed(isCollapsed(size))}
           className={`${styles.panel} ${styles.panelLeft}`}
           style={{ overflow: "hidden" }}
@@ -452,6 +462,7 @@ function WideLayout({
           minSize={LAYOUT_MIN_PANEL_PX}
           collapsible
           collapsedSize={LAYOUT_COLLAPSED_PX}
+          collapsedThreshold={LAYOUT_COLLAPSE_THRESHOLD_PX}
           onResize={(size) => setRightCollapsed(isCollapsed(size))}
           className={`${styles.panel} ${styles.panelRight}`}
           style={{ overflow: "hidden" }}

@@ -94,6 +94,10 @@
   /* Every action pill under a post (summary, react, reply): pinkish, one look
      for all of them (owner, 7 Nov; was white at 72%). */
   --community-pill: #F8ECF5;
+  /* Under the pointer: a deeper pink, lifted 1 px with this shadow. */
+  --community-pill-hover: #EFD8EA;
+  --community-pill-mine-hover: rgba(128,0,128,0.17);
+  --community-pill-lift: 0 2px 6px rgba(79,1,79,0.14);
   --community-hairline: rgba(128,0,128,0.1);
   --community-rail: #D1AAD7;
   /* Darker than the first #B07FBA, which the owner found too faint (6 Nov). */
@@ -108,17 +112,23 @@
   --community-globe-land: #2E9E5E;
   /* Two zones (owner, 7 Nov): each panel's own ground, with the doodles at 5%
      (the veil is the ground at 95% over the tile). */
-  --community-panel-campus: #F6ECF5;
-  --community-panel-campus-veil: rgba(246,236,245,0.95);
-  --community-panel-world: #FDF1F6;
-  --community-panel-world-veil: rgba(253,241,246,0.95);
+  /* (8 Nov: a more purple campus, a pinker world, the doodles at 8%; were
+     #F6ECF5 / #FDF1F6 at 5%.) */
+  --community-panel-campus: #F0E5F7;
+  --community-panel-campus-veil: rgba(240,229,247,0.92);
+  --community-panel-world: #FCE9F1;
+  --community-panel-world-veil: rgba(252,233,241,0.92);
+  /* Each panel's header: glass that runs from the zone's tint at the outer
+     edge to white where the two headers meet. */
+  --community-header-campus: linear-gradient(90deg, rgba(232,212,244,0.95) 0%, rgba(255,255,255,0.88) 100%);
+  --community-header-world: linear-gradient(90deg, rgba(255,255,255,0.88) 0%, rgba(252,220,234,0.95) 100%);
   /* Each zone's reply thread and the accent down a card's left edge: purple on
      the campus side, pink on the other (owner, 7 Nov). The accents are
      --purple-dark and --pink-dark. */
   --community-rail-campus: #A86BBB;
-  --community-rail-campus-hover: #7E3C92;
+  --community-rail-campus-hover: #5C1D72;
   --community-rail-world: #D27AA3;
-  --community-rail-world-hover: #B04A7E;
+  --community-rail-world-hover: #8E2A5D;
   /* The badges in the panel headers, and a post's college in the world feed. */
   --community-badge-campus-bg: #F3E3F5;
   --community-badge-campus-border: rgba(128,0,128,0.18);

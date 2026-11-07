@@ -107,6 +107,16 @@
   container: head / inline-size;
 }
 
+/* A soft gradient on each header: the zone's tint at its outer edge, white where
+   the two meet under the brand pill (owner's mockup, 8 Nov). */
+.panelLeft .panelHeader {
+  background: var(--community-header-campus);
+}
+
+.panelRight .panelHeader {
+  background: var(--community-header-world);
+}
+
 /* Clear of the brand pill, which sits over the divider where the two headers
    meet (BrandMenu.module.css), so ⤢ never slides under it. */
 .panelLeft .panelHeader {
@@ -797,6 +807,34 @@
   color: var(--purple);
 }
 
+/* "Hot" / "New" under the button after 350 ms of resting on it (a mouse only),
+   and not after pressing it. */
+.sortBtn::before {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 50%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--toast-bg);
+  color: var(--white);
+  font: 500 11px/14px "Inter", sans-serif;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+  transition: opacity 120ms var(--community-ease), transform 120ms var(--community-ease);
+}
+
+@media (hover: hover) {
+  .sortBtn:hover:not([data-quiet])::before {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 350ms;
+  }
+}
+
 .sortBtn:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: 1px;
@@ -993,10 +1031,10 @@
   width: 100%;
 }
 
-/* The cards (PostCard.module.css) sit 6 px in from the panel's edges and 6 px
-   apart: just enough for the doodles to show around them. */
+/* The cards (PostCard.module.css) sit 10 px in on the left, 3 px on the right
+   (where the scrollbar's room already adds some) and 6 px apart. */
 .list {
-  padding: 6px 6px 0;
+  padding: 6px 3px 0 10px;
 }
 
 .empty {
