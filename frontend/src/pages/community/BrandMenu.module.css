@@ -16,9 +16,9 @@
   z-index: 60;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   height: 28px;
-  padding: 0 9px 0 8px;
+  padding: 0 8px 0 6px;
   border: 1.5px solid var(--community-pill-border);
   border-radius: 999px;
   background: var(--white);
@@ -50,7 +50,7 @@
 /* The bag and the "Yahora" wordmark, one image. */
 .logo {
   display: block;
-  height: 16px;
+  height: 23px; /* as tall as the pill allows inside its 1.5 px outline */
   width: auto;
 }
 

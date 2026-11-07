@@ -19,13 +19,20 @@
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   transition: background-color 160ms var(--community-ease), color 160ms var(--community-ease),
-    border-color 160ms var(--community-ease), transform 120ms var(--community-ease);
+    border-color 160ms var(--community-ease), box-shadow 160ms var(--community-ease),
+    transform 120ms var(--community-ease);
 }
 
 .reactBtn:hover {
-  background: var(--reaction-mine-bg);
+  background: var(--community-pill-hover);
   border-color: var(--reaction-mine-border);
+  box-shadow: var(--community-pill-lift);
   color: var(--purple);
+  transform: translateY(-1px);
+}
+
+.reacted:hover {
+  background: var(--community-pill-mine-hover);
 }
 
 .reactBtn:active {

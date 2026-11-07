@@ -17,7 +17,7 @@
   cursor: pointer;
   animation: pillIn 240ms var(--community-spring);
   transition: background-color 160ms var(--community-ease), border-color 160ms var(--community-ease),
-    transform 120ms var(--community-ease);
+    box-shadow 160ms var(--community-ease), transform 120ms var(--community-ease);
 }
 
 @keyframes pillIn {
@@ -27,8 +27,16 @@
   }
 }
 
+/* Pressable: a deeper pink, a stronger outline, and a 1 px lift. */
 .pill:hover {
+  background: var(--community-pill-hover);
   border-color: var(--reaction-mine-border);
+  box-shadow: var(--community-pill-lift);
+  transform: translateY(-1px);
+}
+
+.pillMine:hover {
+  background: var(--community-pill-mine-hover);
 }
 
 .pill:active {

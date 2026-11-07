@@ -1,6 +1,11 @@
 # Community — design spec (Phase 7)
 
-**Version 3.4 · 7 November 2026 · for the website and the app**
+**Version 3.5 · 8 November 2026 · for the website and the app**
+
+> **Changed in version 3.5 (owner, 8 Nov):** a more purple campus ground and a pinker world one, the doodles
+> at 8%, and a gradient on each header; the divider snaps a panel shut, or open, after 48 px instead of 142;
+> darker threads on hover; cards 10 px in on the left and 3 on the right; a bigger logo in the same pill; a
+> quicker Hot / New tooltip; a hover on every action pill.
 
 > **Changed in version 3.4 (owner, 7 Nov, evening):** no frame around the panels, and the page clips at its
 > edges; a smaller brand pill inside the headers; Hot · New on the right; the thread and a card's left edge
@@ -70,9 +75,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 ```
 
 - **Two zones, one wallpaper:** both panels keep the chat's doodle tile (`MESSAGES_SPEC.md` §2), pinned
-  while posts scroll, but at **5%** only, so its lines never meet the text. Each panel has its own ground:
-  `communityPanelCampus` (lilac) on the left, `communityPanelWorld` (blush) on the right. (The veil over the
-  tile is that ground at 95%: `communityPanelCampusVeil`, `communityPanelWorldVeil`.) A narrow window takes
+  while posts scroll, but faint, **8%**, so its lines never meet the text. Each panel has its own ground:
+  `communityPanelCampus` (purple tint) on the left, `communityPanelWorld` (pink tint) on the right. (The
+  veil over the tile is that ground at 92%: `communityPanelCampusVeil`, `communityPanelWorldVeil`.) A narrow window takes
   the ground of the feed it shows. Posts sit on frosted cards (§3).
 - **No frame around the panels** (owner, 7 Nov): they run to the window's edges, with square corners, and
   the composer bar sits on its bottom edge. The page clips anything at its edges (`overflow: clip`): with
@@ -87,7 +92,8 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   (`--split-pct`, measured from the divider; kept 64 px from the window's edges when a panel is collapsed).
   **It stays inside the 36 px headers it joins:** top 4, 28 tall, padding 0 9 0 8, radius 999, white, a
   1.5 px `communityPillBorder` outline (`purple` on hover and while open), `communityPillShadow` plus a 2 px
-  `communityPillRing`. Inside, 6 apart: the Yahora logo (bag and wordmark, 16 tall), a 1 × 14
+  `communityPillRing`. Inside, 5 apart, padding 0 8 0 6: the Yahora logo (bag and wordmark, **23 tall**, as
+  big as the pill allows), a 1 × 14
   `communityPillDivider`, a 14 × 10 ☰ that turns into ✕ while open, and the unread count on a 16 px
   `pinkDark` pill. It lifts 1 px on hover and presses to 0.97.
 - **Its menu** opens under it (top 40, 250 wide), glass (`communityMenuGlass`, blur 18) with radius 16
@@ -105,15 +111,18 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   name says it already).
 - **Hierarchy:** My campus is the main panel. Its title is Bree Serif 15 in purple-dark. The right
   title is Inter 600 14.
-- **Panel header:** **36 px**, glass (`communityGlass`, blur 14), radius 8 on the panel. It floats
-  over the feed, so posts pass underneath it.
+- **Panel header:** **36 px**, glass (blur 14) in a soft gradient: from the zone's tint at the outer edge to
+  white where the two headers meet under the brand pill (`communityHeaderCampus`, `communityHeaderWorld`;
+  owner's mockup, 8 Nov). It floats over the feed, so posts pass underneath it.
 - **Left panel, "My campus":** the campus feed. Its header shows an animated graduation-cap icon and
   your campus name. It shows **only campus posts**: a post appears only in the feed it was posted to,
   never in another.
 - **Right panel:** the title is the dropdown (§1.3) that picks a country or Global. **At the header's right
   end, beside ⤢,** is a **Hot · New** switch made of two icons (flame, clock), with a thumb that slides
   between them (owner, 7 Nov; it used to sit next to the title). Hot is
-  the default (ranking: runbook §1.3).
+  the default (ranking: runbook §1.3). Resting the mouse on one for **350 ms** shows `Hot` or `New` in a
+  small `toastBg` tip under it (the browser's own tooltip took over a second); it doesn't show again after
+  a press until the pointer leaves.
 - **Icons, not emoji:** the campus icon is drawn in when it first appears, and hovering the header gives
   the cap a small hop. Flags stay emoji, because they are worked out from the code.
 - **The Global globe** sits among flag emoji (the dropdown, the panel title, the badge on your avatar),
@@ -136,6 +145,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   - while hovered, dragged or focused, a purple line runs its length, down to the composer bar, and the
     grip grows to 1.08 with a `purple` outline and `communityGripGlowShadowHover`;
   - drag it to resize; each panel is at least **320 px** wide;
+  - **dragging a panel 48 px past its minimum snaps it shut, and dragging a shut panel 48 px out of its bar
+    opens it** (`LAYOUT_COLLAPSE_THRESHOLD_PX`; the library's own default, half the gap between the bar and
+    the minimum, was 142 px and felt like a wall, owner 8 Nov);
   - double-click it to go back to 50 / 50;
   - keyboard: focus it with Tab, move it with the arrow keys.
 - **One side is always selected:** the side you're writing on. The page opens with the **campus side**
@@ -338,8 +350,8 @@ wait. While that post is held, the author's Posts tab shows this card directly u
 **A frosted card** (owner, 7 Nov; was a flat row): each post and its thread sit on `communityCard`
 (white at 94%, blur 8), a 1 px `communityCardBorder` (`communityCardBorderHover` on hover) with **a 3 px
 accent down the left edge in the zone's colour** (`purpleDark` on campus, `pinkDark` on a country or Global),
-radius 14, `communityCardShadow`. **Slim:** padding 10 / 12 / 8, cards **6 apart and 6 in** from the panel's
-edges, so the doodles show only around them. At most 860 wide, centred. Skeletons use the same card.
+radius 14, `communityCardShadow`. **Slim:** padding 10 / 12 / 8, cards **6 apart, 10 px in on the left and
+3 px on the right** (the scrollbar's room adds a little there), so the doodles show only around them. At most 860 wide, centred. Skeletons use the same card.
 **Every card has its trunk:** the thread's line runs down from under the avatar to the end of the post, and on
 into the replies when there are any.
 
@@ -567,6 +579,9 @@ reaction; picking your current one again removes it. Replies have only a like (�
 - 24 px tall, emoji 14, Inter 500 12 with tabular numbers, communityMuted, on communityPill with a
   communityHairline outline, radius 999, padding 0 / 9 / 0 / 7.
 - **Once you've reacted,** the pill is tinted: `reactionMineBg`, `reactionMineBorder`, purple text.
+- **Every action pill answers the pointer** (the summary, React and 💬): `communityPillHover`, a
+  `reactionMineBorder` outline, a 1 px lift with `communityPillLift`, over 160 ms; one you've reacted with
+  deepens to `communityPillMineHover`. Pressing still shrinks it.
 - A new emoji springs in, and a new total rolls up.
 - Hidden when there are no reactions.
 - Tapping it opens the breakdown.
@@ -736,13 +751,18 @@ A **Posts** tab sits next to the existing tabs:
 | `communityRail` | `--community-rail` | `#D1AAD7` | the reply thread (opaque, so its pieces join cleanly) |
 | `communityRailHover` | `--community-rail-hover` | `#9552A3` | the thread while you point at it (was `#B07FBA`, too faint) |
 | `communityRailCampus` | `--community-rail-campus` | `#A86BBB` | the thread in the campus panel |
-| `communityRailCampusHover` | `--community-rail-campus-hover` | `#7E3C92` | the same, pointed at |
+| `communityRailCampusHover` | `--community-rail-campus-hover` | `#5C1D72` | the same, pointed at (was `#7E3C92`) |
 | `communityRailWorld` | `--community-rail-world` | `#D27AA3` | the thread in the country / Global panel |
-| `communityRailWorldHover` | `--community-rail-world-hover` | `#B04A7E` | the same, pointed at |
-| `communityPanelCampus` | `--community-panel-campus` | `#F6ECF5` | the campus panel's ground |
-| `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(246,236,245,0.95)` | over the doodle tile, leaving it at 5% |
-| `communityPanelWorld` | `--community-panel-world` | `#FDF1F6` | the country / Global panel's ground |
-| `communityPanelWorldVeil` | `--community-panel-world-veil` | `rgba(253,241,246,0.95)` | the same, on that side |
+| `communityRailWorldHover` | `--community-rail-world-hover` | `#8E2A5D` | the same, pointed at (was `#B04A7E`) |
+| `communityPanelCampus` | `--community-panel-campus` | `#F0E5F7` | the campus panel's ground, a purple tint |
+| `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(240,229,247,0.92)` | over the doodle tile, leaving it at 8% |
+| `communityPanelWorld` | `--community-panel-world` | `#FCE9F1` | the country / Global panel's ground, a pink tint |
+| `communityPanelWorldVeil` | `--community-panel-world-veil` | `rgba(252,233,241,0.92)` | the same, on that side |
+| `communityHeaderCampus` | `--community-header-campus` | `linear-gradient(90deg, rgba(232,212,244,0.95), rgba(255,255,255,0.88))` | the campus header |
+| `communityHeaderWorld` | `--community-header-world` | `linear-gradient(90deg, rgba(255,255,255,0.88), rgba(252,220,234,0.95))` | the country / Global header |
+| `communityPillHover` | `--community-pill-hover` | `#EFD8EA` | an action pill under the pointer |
+| `communityPillMineHover` | `--community-pill-mine-hover` | `rgba(128,0,128,0.17)` | one you've reacted with, under the pointer |
+| `communityPillLift` | `--community-pill-lift` | `0 2px 6px rgba(79,1,79,0.14)` | the shadow of that 1 px lift |
 | `communityBadgeCampusBg` | `--community-badge-campus-bg` | `#F3E3F5` | kept for later: the `CAMPUS` badge, removed 7 Nov |
 | `communityBadgeCampusBorder` | `--community-badge-campus-border` | `rgba(128,0,128,0.18)` | its outline (kept for later) |
 | `communityBadgeWorldBg` | `--community-badge-world-bg` | `#FCE4EE` | the `ALL CAMPUSES` badge |
@@ -801,6 +821,7 @@ REPLIES_FOLD_MIN          = 3
 GIF_SEARCH_DEBOUNCE_MS    = 300
 LAYOUT_MIN_PANEL_PX       = 320
 LAYOUT_COLLAPSED_PX       = 36
+LAYOUT_COLLAPSE_THRESHOLD_PX = 48
 LAYOUT_BREAKPOINT_PX      = 1024
 REPORT_DETAILS_MAX        = 500
 ```
