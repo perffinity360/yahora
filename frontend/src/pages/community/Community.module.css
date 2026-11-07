@@ -105,7 +105,7 @@
   padding-left: 78px;
 }
 
-/* Which zone this is: CAMPUS on the left, ALL CAMPUSES on the right. */
+/* ALL CAMPUSES on the right-hand header (the left one has no badge: owner, 7 Nov). */
 .zoneBadge {
   flex: 0 0 auto;
   padding: 2px 8px;
@@ -115,12 +115,6 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.zoneBadgeCampus {
-  border-color: var(--community-badge-campus-border);
-  background: var(--community-badge-campus-bg);
-  color: var(--purple-dark);
 }
 
 .zoneBadgeWorld {

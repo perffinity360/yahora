@@ -92,10 +92,10 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   the focus back to the pill.
 - **Header clearance:** the left header keeps 78 px clear on its right, the right header 78 px on its left,
   so ‹ ⤢ › never slide under the pill.
-- **Zone badges:** `CAMPUS` after the campus name (`communityBadgeCampusBg`, `purpleDark` text,
-  `communityBadgeCampusBorder`), and `ALL CAMPUSES` after Hot · New (`communityBadgeWorldBg`,
+- **Zone badge:** `ALL CAMPUSES` after Hot · New on the right (`communityBadgeWorldBg`,
   `communityBadgeWorldText`, `communityBadgeWorldBorder`): Inter 700 10, capitals, padding 2 / 8, radius
-  999. A header narrower than 430 px drops its badge first.
+  999. A header narrower than 430 px drops it first. The campus header has none (owner, 7 Nov: the campus
+  name says it already).
 - **Hierarchy:** My campus is the main panel. Its title is Bree Serif 15 in purple-dark. The right
   title is Inter 600 14.
 - **Panel header:** **36 px**, glass (`communityGlass`, blur 14), radius 8 on the panel. It floats
@@ -728,8 +728,8 @@ A **Posts** tab sits next to the existing tabs:
 | `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(246,236,245,0.95)` | over the doodle tile, leaving it at 5% |
 | `communityPanelWorld` | `--community-panel-world` | `#FDF1F6` | the country / Global panel's ground |
 | `communityPanelWorldVeil` | `--community-panel-world-veil` | `rgba(253,241,246,0.95)` | the same, on that side |
-| `communityBadgeCampusBg` | `--community-badge-campus-bg` | `#F3E3F5` | the `CAMPUS` badge |
-| `communityBadgeCampusBorder` | `--community-badge-campus-border` | `rgba(128,0,128,0.18)` | its outline |
+| `communityBadgeCampusBg` | `--community-badge-campus-bg` | `#F3E3F5` | kept for later: the `CAMPUS` badge, removed 7 Nov |
+| `communityBadgeCampusBorder` | `--community-badge-campus-border` | `rgba(128,0,128,0.18)` | its outline (kept for later) |
 | `communityBadgeWorldBg` | `--community-badge-world-bg` | `#FCE4EE` | the `ALL CAMPUSES` badge |
 | `communityBadgeWorldText` | `--community-badge-world-text` | `#C82863` | its text |
 | `communityBadgeWorldBorder` | `--community-badge-world-border` | `rgba(235,72,127,0.22)` | its outline |
