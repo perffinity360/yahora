@@ -1,6 +1,11 @@
 # Community — design spec (Phase 7)
 
-**Version 3.5 · 8 November 2026 · for the website and the app**
+**Version 3.6 · 8 November 2026 · for the website and the app**
+
+> **Changed in version 3.6 (owner, 8 Nov):** the doodles at 15%; the divider moves freely with no snap, a
+> panel's content stops adjusting at 320 px and is cut off (as on LeetCode); darker, thicker threads on
+> hover; equal space either side of the cards; the logo cropped to fill the pill; `(AUTHOR)`; a gallery grid
+> and a Follow button in the profile glimpse.
 
 > **Changed in version 3.5 (owner, 8 Nov):** a more purple campus ground and a pinker world one, the doodles
 > at 8%, and a gradient on each header; the divider snaps a panel shut, or open, after 48 px instead of 142;
@@ -75,9 +80,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 ```
 
 - **Two zones, one wallpaper:** both panels keep the chat's doodle tile (`MESSAGES_SPEC.md` §2), pinned
-  while posts scroll, but faint, **8%**, so its lines never meet the text. Each panel has its own ground:
+  while posts scroll, but faint, **15%**, so its lines never meet the text. Each panel has its own ground:
   `communityPanelCampus` (purple tint) on the left, `communityPanelWorld` (pink tint) on the right. (The
-  veil over the tile is that ground at 92%: `communityPanelCampusVeil`, `communityPanelWorldVeil`.) A narrow window takes
+  veil over the tile is that ground at 85%: `communityPanelCampusVeil`, `communityPanelWorldVeil`.) A narrow window takes
   the ground of the feed it shows. Posts sit on frosted cards (§3).
 - **No frame around the panels** (owner, 7 Nov): they run to the window's edges, with square corners, and
   the composer bar sits on its bottom edge. The page clips anything at its edges (`overflow: clip`): with
@@ -92,8 +97,8 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   (`--split-pct`, measured from the divider; kept 64 px from the window's edges when a panel is collapsed).
   **It stays inside the 36 px headers it joins:** top 4, 28 tall, padding 0 9 0 8, radius 999, white, a
   1.5 px `communityPillBorder` outline (`purple` on hover and while open), `communityPillShadow` plus a 2 px
-  `communityPillRing`. Inside, 5 apart, padding 0 8 0 6: the Yahora logo (bag and wordmark, **23 tall**, as
-  big as the pill allows), a 1 × 14
+  `communityPillRing`. Inside, 5 apart, padding 0 8 0 6: the Yahora logo (bag and wordmark), **cropped to its
+  artwork and 20 tall** (the image's artwork fills only its middle half, so at 23 tall it showed 11), a 1 × 14
   `communityPillDivider`, a 14 × 10 ☰ that turns into ✕ while open, and the unread count on a 16 px
   `pinkDark` pill. It lifts 1 px on hover and presses to 0.97.
 - **Its menu** opens under it (top 40, 250 wide), glass (`communityMenuGlass`, blur 18) with radius 16
@@ -103,8 +108,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   nothing to open yet), then **you**: photo, name, `Your profile` (to the dashboard) and a log-out button.
   Rows are 36 tall, Inter 500 14, `reactionMineBg` on hover. Esc or a press elsewhere closes it; Esc gives
   the focus back to the pill.
-- **Header clearance:** the left header keeps 64 px clear on its right, the right header 64 px on its left,
-  so ⤢ never slides under the pill.
+- **Header clearance:** each header keeps clear of the pill, so ⤢ never slides under it: 72 px at 50 / 50,
+  and more when the divider is near a window edge, where the pill stops 72 px short while the divider goes on
+  (`Community.jsx` measures how far the pill reaches over each header, plus 8 px).
 - **Zone badge:** `ALL CAMPUSES` after the country or Global on the right (`communityBadgeWorldBg`,
   `communityBadgeWorldText`, `communityBadgeWorldBorder`): Inter 700 10, capitals, padding 2 / 8, radius
   999. A header narrower than 430 px drops it first. The campus header has none (owner, 7 Nov: the campus
@@ -144,10 +150,11 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
     `purpleDark` → `purpleLight` → `pinkDark`, glowing (`communityGripGlow`, 8 px);
   - while hovered, dragged or focused, a purple line runs its length, down to the composer bar, and the
     grip grows to 1.08 with a `purple` outline and `communityGripGlowShadowHover`;
-  - drag it to resize; each panel is at least **320 px** wide;
-  - **dragging a panel 48 px past its minimum snaps it shut, and dragging a shut panel 48 px out of its bar
-    opens it** (`LAYOUT_COLLAPSE_THRESHOLD_PX`; the library's own default, half the gap between the bar and
-    the minimum, was 142 px and felt like a wall, owner 8 Nov);
+  - **drag it freely, with no snap** (owner, 8 Nov), from one edge to the other: a panel can be dragged all
+    the way into its 36 px bar and back out. Its **content stops adjusting at 320 px**
+    (`LAYOUT_MIN_PANEL_PX`) and is cut off at the divider beyond that, as on LeetCode. (The library's
+    collapse snap, at 142 px and then 48 px past a 320 px minimum, felt like a wall.) Restoring a panel that
+    was dragged into its bar opens it to half the width; one closed with ⤢ goes back to its old width;
   - double-click it to go back to 50 / 50;
   - keyboard: focus it with Tab, move it with the arrow keys.
 - **One side is always selected:** the side you're writing on. The page opens with the **campus side**
@@ -348,8 +355,9 @@ wait. While that post is held, the author's Posts tab shows this card directly u
 **A frosted card** (owner, 7 Nov; was a flat row): each post and its thread sit on `communityCard`
 (white at 94%, blur 8), a 1 px `communityCardBorder` (`communityCardBorderHover` on hover) with **a 3 px
 accent down the left edge in the zone's colour** (`purpleDark` on campus, `pinkDark` on a country or Global),
-radius 14, `communityCardShadow`. **Slim:** padding 10 / 12 / 8, cards **6 apart, 10 px in on the left and
-3 px on the right** (the scrollbar's room adds a little there), so the doodles show only around them. At most 860 wide, centred. Skeletons use the same card.
+radius 14, `communityCardShadow`. **Slim:** padding 10 / 12 / 8, cards **6 apart, with the same space either
+side:** 10 px, or the scrollbar's room if that is wider (the right side counts the scrollbar's room, which
+`scrollbar-gutter: stable` keeps constant), so the doodles show only around them. At most 860 wide, centred. Skeletons use the same card.
 **Every card has its trunk:** the thread's line runs down from under the avatar to the end of the post, and on
 into the replies when there are any.
 
@@ -460,7 +468,7 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   The last one ends in its curve, and doesn't continue. The colour is opaque, so joins never show as a
   darker patch. (Owner's reference, 6 Nov: a broad curve like a quarter of a circle, not a tight corner.)
 - **Pointing at the line** (with a mouse) darkens all of that post's line to its zone's hover colour (`communityRailCampusHover` or
-  `communityRailWorldHover`) over
+  `communityRailWorldHover`) **and thickens it from 1.5 to 2.5 px**, over
   140 ms. Each piece takes the pointer **3 px either side** of the line (7.5 px in all), following the
   curve; the empty corner inside a curve doesn't.
 - **Each reply:** 45 px from the top of one to the top of the next when it has one line: 4 above, a
@@ -472,7 +480,7 @@ Replies now show **under each post in the feed,** as well as on the post's page.
 - **Pointing at a username** turns it `purple`, with **no underline**, and resting on it opens the profile
   glimpse (§4.1). The author's pill (below) deepens to `communityAuthorHover` with `purpleDark` text.
 - **The post's author is highlighted:** when they reply to their own post, their username sits on
-  a `reactionMineBg` pill in purple, followed by an **`AUTHOR`** tag: Inter 700 10, letter-spacing 0.06 em,
+  a `reactionMineBg` pill in purple, followed by an **`(AUTHOR)`** tag, in brackets: Inter 700 10, letter-spacing 0.06 em,
   capitals, `purple`. The pill reaches out to the left, so the name itself stays in line with the text below.
 - **A reply can only be liked.** A heart (not the post's smiley, because it is a like, not a choice of
   emoji) at the right of its line, with the count; it stores
@@ -520,9 +528,11 @@ opens the profile, as before.
 - 288 wide, padding 14, radius 14, white, `quickBarShadow` and a `communityHairline` edge.
 - Name Inter 600 15; @username 400 13 `communityMuted`; campus 500 12 `purple` with a graduation cap.
 - Counts Inter 700 15 over 400 12 `communityMuted` labels, between two hairlines; they shimmer while they load.
-- Up to 3 square photos, 2 px apart, radius 8 around them.
-- **View profile:** a 32 px `purpleDark` pill (`purple` on hover), to `/user/:id`. No Follow button until
-  follows exist.
+- **Photos like a phone's gallery:** up to 8 small square tiles, four across, 2 px apart, rounded (6) only at
+  the grid's outer corners.
+- **Two buttons, 32 px, side by side:** **Follow** (`purpleDark`, `purple` on hover; not on your own card) and
+  **View profile** (white with a `reactionMineBorder` outline), to `/user/:id`. ⚠ Follows aren't built yet:
+  until then Follow says `Coming soon` for a moment when pressed.
 - **⚠ Needs an API before it works on real data:** posts, followers and following counts and the latest
   photos, for one person. Nothing sends that yet; the social module (follows) isn't built. Until then
   `sampleData.js` makes it up (`sampleProfile`). The name, photo, username and campus come with the post.
@@ -747,13 +757,13 @@ A **Posts** tab sits next to the existing tabs:
 | `communityRail` | `--community-rail` | `#D1AAD7` | the reply thread (opaque, so its pieces join cleanly) |
 | `communityRailHover` | `--community-rail-hover` | `#9552A3` | the thread while you point at it (was `#B07FBA`, too faint) |
 | `communityRailCampus` | `--community-rail-campus` | `#A86BBB` | the thread in the campus panel |
-| `communityRailCampusHover` | `--community-rail-campus-hover` | `#5C1D72` | the same, pointed at (was `#7E3C92`) |
+| `communityRailCampusHover` | `--community-rail-campus-hover` | `#3E0A50` | the same, pointed at (was `#7E3C92`, then `#5C1D72`) |
 | `communityRailWorld` | `--community-rail-world` | `#D27AA3` | the thread in the country / Global panel |
-| `communityRailWorldHover` | `--community-rail-world-hover` | `#8E2A5D` | the same, pointed at (was `#B04A7E`) |
+| `communityRailWorldHover` | `--community-rail-world-hover` | `#7A1747` | the same, pointed at (was `#B04A7E`, then `#8E2A5D`) |
 | `communityPanelCampus` | `--community-panel-campus` | `#F0E5F7` | the campus panel's ground, a purple tint |
-| `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(240,229,247,0.92)` | over the doodle tile, leaving it at 8% |
+| `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(240,229,247,0.85)` | over the doodle tile, leaving it at 15% |
 | `communityPanelWorld` | `--community-panel-world` | `#FCE9F1` | the country / Global panel's ground, a pink tint |
-| `communityPanelWorldVeil` | `--community-panel-world-veil` | `rgba(252,233,241,0.92)` | the same, on that side |
+| `communityPanelWorldVeil` | `--community-panel-world-veil` | `rgba(252,233,241,0.85)` | the same, on that side |
 | `communityHeaderCampus` | `--community-header-campus` | `linear-gradient(90deg, rgba(232,212,244,0.95), rgba(255,255,255,0.88))` | the campus header |
 | `communityHeaderWorld` | `--community-header-world` | `linear-gradient(90deg, rgba(255,255,255,0.88), rgba(252,220,234,0.95))` | the country / Global header |
 | `communityPillHover` | `--community-pill-hover` | `#EFD8EA` | an action pill under the pointer |
@@ -817,7 +827,6 @@ REPLIES_FOLD_MIN          = 3
 GIF_SEARCH_DEBOUNCE_MS    = 300
 LAYOUT_MIN_PANEL_PX       = 320
 LAYOUT_COLLAPSED_PX       = 36
-LAYOUT_COLLAPSE_THRESHOLD_PX = 48
 LAYOUT_BREAKPOINT_PX      = 1024
 REPORT_DETAILS_MAX        = 500
 ```

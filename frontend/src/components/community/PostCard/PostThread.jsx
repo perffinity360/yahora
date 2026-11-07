@@ -119,7 +119,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
             </Link>
           </ProfileHover>
           {/* The post's own author, replying (spec §4). */}
-          {isAuthor && <span className={styles.authorTag}>Author</span>}
+          {isAuthor && <span className={styles.authorTag}>(Author)</span>}
           {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
           {time && (
             <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>

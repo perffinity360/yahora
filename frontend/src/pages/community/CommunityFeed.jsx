@@ -126,9 +126,12 @@ export default function CommunityFeed({
   }, [canPost, onCanPostChange]);
 
   // The scrollbar is see-through until the panel scrolls (Community.module.css).
-  // Set on the element itself, so scrolling never re-renders the feed.
+  // Set on the element itself, so scrolling never re-renders the feed. Its room
+  // (0 where scrollbars overlay) is published too, so the cards' right margin
+  // plus that room equals their left margin.
   useEffect(() => {
     if (!scroller) return undefined;
+    scroller.style.setProperty("--scrollbar-room", `${scroller.offsetWidth - scroller.clientWidth}px`);
     let timer = null;
     const onScroll = () => {
       scroller.dataset.scrolling = "";

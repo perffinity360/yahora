@@ -12,7 +12,7 @@
 .centerBrandPill {
   position: absolute;
   top: 4px;
-  left: clamp(64px, var(--split-pct, 50%), calc(100% - 64px));
+  left: clamp(72px, var(--split-pct, 50%), calc(100% - 72px));
   z-index: 60;
   display: inline-flex;
   align-items: center;
@@ -47,11 +47,27 @@
   outline-offset: 3px;
 }
 
-/* The bag and the "Yahora" wordmark, one image. */
-.logo {
+/* The bag and the "Yahora" wordmark, one image (743 × 336) whose artwork fills
+   only x 61–599, y 84–247; the rest is transparent. The crop shows just the
+   artwork, --logo-h tall, so the logo is as big as the pill allows. */
+.logoCrop {
+  --logo-h: 20px;
+  position: relative;
   display: block;
-  height: 23px; /* as tall as the pill allows inside its 1.5 px outline */
+  flex: 0 0 auto;
+  width: calc(var(--logo-h) * 538 / 163);
+  height: var(--logo-h);
+  overflow: hidden;
+}
+
+.logo {
+  position: absolute;
+  top: calc(var(--logo-h) * -84 / 163);
+  left: calc(var(--logo-h) * -61 / 163);
+  display: block;
+  height: calc(var(--logo-h) * 336 / 163);
   width: auto;
+  max-width: none;
 }
 
 .pillDivider {
