@@ -12,6 +12,10 @@
 .narrow {
   --zone: var(--community-panel-campus);
   --zone-veil: var(--community-panel-campus-veil);
+  /* Read by the post cards (PostCard.module.css). */
+  --zone-rail: var(--community-rail-campus);
+  --zone-rail-hover: var(--community-rail-campus-hover);
+  --zone-accent: var(--purple-dark);
   background-color: var(--zone);
   background-image: linear-gradient(var(--zone-veil), var(--zone-veil)), url('/patterns/chat-pattern.svg');
   background-repeat: no-repeat, repeat;
@@ -22,6 +26,9 @@
 .narrow[data-feed="world"] {
   --zone: var(--community-panel-world);
   --zone-veil: var(--community-panel-world-veil);
+  --zone-rail: var(--community-rail-world);
+  --zone-rail-hover: var(--community-rail-world-hover);
+  --zone-accent: var(--pink-dark);
 }
 
 /* ── ≥ 1024 px: two panels ─────────────────────────────────────────────── */
@@ -29,11 +36,16 @@
 /* No frame below the panels: the composer bar sits on the bottom of the
    window (owner, 7 Nov). */
 /* The whole window on a laptop: the site navbar is hidden here (App.jsx), and
-   the brand pill (BrandMenu) sits at the top of the divider instead. */
+   the brand pill (BrandMenu) sits at the top of the divider instead. No frame
+   around the panels (owner, 7 Nov). Nothing may reach past the window: with the
+   divider at the right edge the avatar's badge sits at the window's edge, and an
+   overflow there would bring a page scrollbar in and out, which shakes the
+   divider. clip, not hidden, so nothing here becomes a scroller. */
 .wide {
   position: relative;
   height: calc(100dvh - var(--app-chrome));
-  padding: 4px 4px 0;
+  padding: 0;
+  overflow: clip;
   background: var(--bg);
 }
 
@@ -51,7 +63,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  border-radius: 8px;
+  border-radius: 0; /* they run to the window's edges */
   box-shadow: inset 0 0 0 1px var(--community-hairline);
 }
 
@@ -96,13 +108,13 @@
 }
 
 /* Clear of the brand pill, which sits over the divider where the two headers
-   meet (BrandMenu.module.css), so ‹ ⤢ › never slide under it. */
+   meet (BrandMenu.module.css), so ⤢ never slides under it. */
 .panelLeft .panelHeader {
-  padding-right: 78px;
+  padding-right: 64px;
 }
 
 .panelRight .panelHeader {
-  padding-left: 78px;
+  padding-left: 64px;
 }
 
 /* ALL CAMPUSES on the right-hand header (the left one has no badge: owner, 7 Nov). */
@@ -161,7 +173,13 @@
 .panelTools {
   flex: 0 0 auto;
   display: flex;
+  align-items: center;
   gap: 1px;
+}
+
+/* Hot · New sits first among the right header's tools, a little apart from ⤢. */
+.panelTools .sortSwitch {
+  margin-right: 5px;
 }
 
 .feedShell {
@@ -975,10 +993,10 @@
   width: 100%;
 }
 
-/* The cards (PostCard.module.css) sit 10 px in from the panel's edges and
-   12 px apart, so the doodles show around them. */
+/* The cards (PostCard.module.css) sit 6 px in from the panel's edges and 6 px
+   apart: just enough for the doodles to show around them. */
 .list {
-  padding: 10px 10px 0;
+  padding: 6px 6px 0;
 }
 
 .empty {
@@ -1024,10 +1042,11 @@
   flex-direction: column;
   gap: 8px;
   max-width: 860px;
-  margin: 0 auto 12px;
-  padding: 12px 14px;
+  margin: 0 auto 6px;
+  padding: 10px 12px;
   border: 1px solid var(--community-card-border);
-  border-radius: 16px;
+  border-left: 3px solid var(--zone-accent, var(--community-card-border));
+  border-radius: 14px;
   background: var(--community-card);
   box-shadow: var(--community-card-shadow);
 }

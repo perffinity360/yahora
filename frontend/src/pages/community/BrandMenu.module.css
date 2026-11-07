@@ -7,20 +7,22 @@
   display: contents;
 }
 
+/* Small enough to sit inside the 36 px headers it joins (owner, 7 Nov): 28 tall,
+   4 from the top, its ring 2 px. */
 .centerBrandPill {
   position: absolute;
-  top: 7px;
-  left: clamp(84px, var(--split-pct, 50%), calc(100% - 84px));
+  top: 4px;
+  left: clamp(64px, var(--split-pct, 50%), calc(100% - 64px));
   z-index: 60;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 13px 0 11px;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px 0 8px;
   border: 1.5px solid var(--community-pill-border);
   border-radius: 999px;
   background: var(--white);
-  box-shadow: var(--community-pill-shadow), 0 0 0 4px var(--community-pill-ring);
+  box-shadow: var(--community-pill-shadow), 0 0 0 2px var(--community-pill-ring);
   cursor: pointer;
   transform: translateX(-50%);
   transition: transform 160ms var(--community-ease), box-shadow 160ms var(--community-ease),
@@ -48,27 +50,27 @@
 /* The bag and the "Yahora" wordmark, one image. */
 .logo {
   display: block;
-  height: 22px;
+  height: 16px;
   width: auto;
 }
 
 .pillDivider {
   width: 1px;
-  height: 16px;
+  height: 14px;
   background: var(--community-pill-divider);
 }
 
 /* ☰, which turns into ✕ while the menu is open. */
 .burger {
   position: relative;
-  width: 16px;
-  height: 12px;
+  width: 14px;
+  height: 10px;
 }
 
 .burger i {
   position: absolute;
   left: 0;
-  width: 16px;
+  width: 14px;
   height: 2px;
   border-radius: 2px;
   background: var(--purple-dark);
@@ -81,15 +83,15 @@
 }
 
 .burger i:nth-child(2) {
-  top: 5px;
+  top: 4px;
 }
 
 .burger i:nth-child(3) {
-  top: 10px;
+  top: 8px;
 }
 
 .centerBrandPill[data-open] .burger i:nth-child(1) {
-  top: 5px;
+  top: 4px;
   transform: rotate(45deg);
 }
 
@@ -99,19 +101,19 @@
 }
 
 .centerBrandPill[data-open] .burger i:nth-child(3) {
-  top: 5px;
+  top: 4px;
   transform: rotate(-45deg);
 }
 
 .pillBadge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  margin-left: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: -1px;
   border-radius: 999px;
   background: var(--pink-dark);
   color: var(--white);
-  font: 700 10px/18px "Inter", sans-serif;
+  font: 700 10px/16px "Inter", sans-serif;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -120,7 +122,7 @@
 
 .menu {
   position: absolute;
-  top: 48px;
+  top: 40px;
   left: clamp(129px, var(--split-pct, 50%), calc(100% - 129px));
   z-index: 100;
   width: 250px;

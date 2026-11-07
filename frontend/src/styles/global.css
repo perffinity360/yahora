@@ -91,7 +91,9 @@
   --input-bg: #F3F0EF;
   --community-canvas: #EDE6F5;
   --community-glass: rgba(255,255,255,0.74);
-  --community-pill: rgba(255,255,255,0.72);
+  /* Every action pill under a post (summary, react, reply): pinkish, one look
+     for all of them (owner, 7 Nov; was white at 72%). */
+  --community-pill: #F8ECF5;
   --community-hairline: rgba(128,0,128,0.1);
   --community-rail: #D1AAD7;
   /* Darker than the first #B07FBA, which the owner found too faint (6 Nov). */
@@ -110,6 +112,13 @@
   --community-panel-campus-veil: rgba(246,236,245,0.95);
   --community-panel-world: #FDF1F6;
   --community-panel-world-veil: rgba(253,241,246,0.95);
+  /* Each zone's reply thread and the accent down a card's left edge: purple on
+     the campus side, pink on the other (owner, 7 Nov). The accents are
+     --purple-dark and --pink-dark. */
+  --community-rail-campus: #A86BBB;
+  --community-rail-campus-hover: #7E3C92;
+  --community-rail-world: #D27AA3;
+  --community-rail-world-hover: #B04A7E;
   /* The badges in the panel headers, and a post's college in the world feed. */
   --community-badge-campus-bg: #F3E3F5;
   --community-badge-campus-border: rgba(128,0,128,0.18);

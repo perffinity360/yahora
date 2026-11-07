@@ -1,6 +1,10 @@
 # Community — design spec (Phase 7)
 
-**Version 3.3 · 7 November 2026 · for the website and the app**
+**Version 3.4 · 7 November 2026 · for the website and the app**
+
+> **Changed in version 3.4 (owner, 7 Nov, evening):** no frame around the panels, and the page clips at its
+> edges; a smaller brand pill inside the headers; Hot · New on the right; the thread and a card's left edge
+> in the zone's colour, with a trunk on every card; slimmer gaps around the cards; every action pill pinkish.
 
 > **Changed in version 3.3 (owner's redesign brief, 7 Nov):** on a laptop the site navbar gives way to a
 > **centre brand pill** at the top of the divider, with a menu (§1.1); a **glow-bar grip** (§1.1); **two
@@ -70,29 +74,32 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   `communityPanelCampus` (lilac) on the left, `communityPanelWorld` (blush) on the right. (The veil over the
   tile is that ground at 95%: `communityPanelCampusVeil`, `communityPanelWorldVeil`.) A narrow window takes
   the ground of the feed it shows. Posts sit on frosted cards (§3).
-- **The frame around the panels** is `bg` (`#f2e5e1`), 4 px at the top and sides and **none at the bottom**:
-  the composer bar sits on the window's bottom edge, and the panels' bottom corners are square. **The site
+- **No frame around the panels** (owner, 7 Nov): they run to the window's edges, with square corners, and
+  the composer bar sits on its bottom edge. The page clips anything at its edges (`overflow: clip`): with
+  the divider at the right edge, the avatar's badge sits at the window's edge, and letting it reach past
+  could bring a page scrollbar in and out, which shakes the divider. **The site
   footer isn't shown** on the Community page (nor on Messages).
 - **No text halo any more** (owner, 7 Nov): the cards give the text its ground instead.
 - **The site navbar is hidden on a laptop** (1024 px and up), so the panels reach the top of the window.
   It stays mounted, out of sight, because it keeps presence, delivery ticks and the unread count running.
   A narrow window keeps the navbar.
 - **The centre brand pill** sits where the two headers meet, at the top of the divider, and moves with it
-  (`--split-pct`, measured from the divider; kept 84 px from the window's edges when a panel is collapsed):
-  top 7, 36 tall, padding 0 13 0 11, radius 999, white, a 1.5 px `communityPillBorder` outline (`purple`
-  on hover and while open), `communityPillShadow` plus a 4 px `communityPillRing`. Inside: the Yahora logo
-  (bag and wordmark, 22 tall), a 1 × 16 `communityPillDivider`, a ☰ that turns into ✕ while open, and the
-  unread count on a `pinkDark` pill. It lifts 1 px on hover and presses to 0.97.
-- **Its menu** opens under it (top 48, 250 wide), glass (`communityMenuGlass`, blur 18) with radius 16
+  (`--split-pct`, measured from the divider; kept 64 px from the window's edges when a panel is collapsed).
+  **It stays inside the 36 px headers it joins:** top 4, 28 tall, padding 0 9 0 8, radius 999, white, a
+  1.5 px `communityPillBorder` outline (`purple` on hover and while open), `communityPillShadow` plus a 2 px
+  `communityPillRing`. Inside, 6 apart: the Yahora logo (bag and wordmark, 16 tall), a 1 × 14
+  `communityPillDivider`, a 14 × 10 ☰ that turns into ✕ while open, and the unread count on a 16 px
+  `pinkDark` pill. It lifts 1 px on hover and presses to 0.97.
+- **Its menu** opens under it (top 40, 250 wide), glass (`communityMenuGlass`, blur 18) with radius 16
   and `communityMenuShadow`, springing from the pill while its rows arrive 22 ms apart: **Home**,
   **Marketplace**, **Community** (current, white on `purpleDark`), **Messages** with the unread count,
   **Saved / Cart** (to the dashboard, where the Watchlist is), **Notifications** (marked `Soon`; there is
   nothing to open yet), then **you**: photo, name, `Your profile` (to the dashboard) and a log-out button.
   Rows are 36 tall, Inter 500 14, `reactionMineBg` on hover. Esc or a press elsewhere closes it; Esc gives
   the focus back to the pill.
-- **Header clearance:** the left header keeps 78 px clear on its right, the right header 78 px on its left,
-  so ‹ ⤢ › never slide under the pill.
-- **Zone badge:** `ALL CAMPUSES` after Hot · New on the right (`communityBadgeWorldBg`,
+- **Header clearance:** the left header keeps 64 px clear on its right, the right header 64 px on its left,
+  so ⤢ never slides under the pill.
+- **Zone badge:** `ALL CAMPUSES` after the country or Global on the right (`communityBadgeWorldBg`,
   `communityBadgeWorldText`, `communityBadgeWorldBorder`): Inter 700 10, capitals, padding 2 / 8, radius
   999. A header narrower than 430 px drops it first. The campus header has none (owner, 7 Nov: the campus
   name says it already).
@@ -103,8 +110,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 - **Left panel, "My campus":** the campus feed. Its header shows an animated graduation-cap icon and
   your campus name. It shows **only campus posts**: a post appears only in the feed it was posted to,
   never in another.
-- **Right panel:** the title is the dropdown (§1.3) that picks a country or Global. Next to it is a
-  **Hot · New** switch made of two icons (flame, clock), with a thumb that slides between them. Hot is
+- **Right panel:** the title is the dropdown (§1.3) that picks a country or Global. **At the header's right
+  end, beside ⤢,** is a **Hot · New** switch made of two icons (flame, clock), with a thumb that slides
+  between them (owner, 7 Nov; it used to sit next to the title). Hot is
   the default (ranking: runbook §1.3).
 - **Icons, not emoji:** the campus icon is drawn in when it first appears, and hovering the header gives
   the cap a small hop. Flags stay emoji, because they are worked out from the code.
@@ -326,9 +334,12 @@ wait. While that post is held, the author's Posts tab shows this card directly u
 ## 3. The post
 
 **A frosted card** (owner, 7 Nov; was a flat row): each post and its thread sit on `communityCard`
-(white at 94%, blur 8), a 1 px `communityCardBorder` (`communityCardBorderHover` on hover), radius 16,
-`communityCardShadow`. **Slim:** padding 12 / 14 / 10, cards 12 apart and 10 in from the panel's edges, so
-the doodles show only around them. At most 860 wide, centred.
+(white at 94%, blur 8), a 1 px `communityCardBorder` (`communityCardBorderHover` on hover) with **a 3 px
+accent down the left edge in the zone's colour** (`purpleDark` on campus, `pinkDark` on a country or Global),
+radius 14, `communityCardShadow`. **Slim:** padding 10 / 12 / 8, cards **6 apart and 6 in** from the panel's
+edges, so the doodles show only around them. At most 860 wide, centred. Skeletons use the same card.
+**Every card has its trunk:** the thread's line runs down from under the avatar to the end of the post, and on
+into the replies when there are any.
 
 ```
 (av) Rahul Verma @rahul.verma · IIITDM Kurnool · 2h                 ⋯
@@ -429,13 +440,15 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   thread back to the preview (plus anything you just replied); the loaded replies are kept, so
   `Show more replies` unfolds them again at once, without loading. If folding leaves the end of the thread
   above the screen, the feed scrolls back to it, as little as needed.
-- **The thread:** one unbroken 1.5 px `communityRail` line runs down the post's avatar column, from 3 px
+- **The thread:** one unbroken 1.5 px line in the zone's colour (`communityRailCampus` on the left,
+  `communityRailWorld` on the right; `communityRail` where there is no zone) runs down the post's avatar column, from 3 px
   under the avatar, centred on it. Each reply's piece **peels off it as a quarter circle of radius 14**
   (`--rail-r`), starting on the line 14 px above the middle of the reply's avatar, and runs on straight to
   stop **4 px short** of the avatar, at its middle. The line itself carries straight on to the next reply.
   The last one ends in its curve, and doesn't continue. The colour is opaque, so joins never show as a
   darker patch. (Owner's reference, 6 Nov: a broad curve like a quarter of a circle, not a tight corner.)
-- **Pointing at the line** (with a mouse) darkens all of that post's line to `communityRailHover` over
+- **Pointing at the line** (with a mouse) darkens all of that post's line to its zone's hover colour (`communityRailCampusHover` or
+  `communityRailWorldHover`) over
   140 ms. Each piece takes the pointer **3 px either side** of the line (7.5 px in all), following the
   curve; the empty corner inside a curve doesn't.
 - **Each reply:** 45 px from the top of one to the top of the next when it has one line: 4 above, a
@@ -714,10 +727,14 @@ A **Posts** tab sits next to the existing tabs:
 | `inputBg` (exists) | `--input-bg` | `#F3F0EF` | sort switch, chips, search fields |
 | `chatCanvas` (exists) | `--community-canvas` | `#EDE6F5` | the panels' ground, same as the chat |
 | `communityGlass` | `--community-glass` | `rgba(255,255,255,0.74)` | panel header, dock, floating pills |
-| `communityPill` | `--community-pill` | `rgba(255,255,255,0.72)` | action pills |
+| `communityPill` | `--community-pill` | `#F8ECF5` | every action pill under a post: pinkish, all alike (was `rgba(255,255,255,0.72)`, owner 7 Nov) |
 | `communityHairline` | `--community-hairline` | `rgba(128,0,128,0.1)` | lines between posts, outlines |
 | `communityRail` | `--community-rail` | `#D1AAD7` | the reply thread (opaque, so its pieces join cleanly) |
 | `communityRailHover` | `--community-rail-hover` | `#9552A3` | the thread while you point at it (was `#B07FBA`, too faint) |
+| `communityRailCampus` | `--community-rail-campus` | `#A86BBB` | the thread in the campus panel |
+| `communityRailCampusHover` | `--community-rail-campus-hover` | `#7E3C92` | the same, pointed at |
+| `communityRailWorld` | `--community-rail-world` | `#D27AA3` | the thread in the country / Global panel |
+| `communityRailWorldHover` | `--community-rail-world-hover` | `#B04A7E` | the same, pointed at |
 | `communityPanelCampus` | `--community-panel-campus` | `#F6ECF5` | the campus panel's ground |
 | `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(246,236,245,0.95)` | over the doodle tile, leaving it at 5% |
 | `communityPanelWorld` | `--community-panel-world` | `#FDF1F6` | the country / Global panel's ground |
