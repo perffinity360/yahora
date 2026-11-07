@@ -387,7 +387,6 @@ function WideLayout({
                   <CampusIcon size={17} className={styles.campusIcon} />
                   <span>{campusName}</span>
                 </h2>
-                <span className={`${styles.zoneBadge} ${styles.zoneBadgeCampus}`}>Campus</span>
               </div>
               <div className={styles.panelTools}>
                 <button
