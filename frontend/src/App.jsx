@@ -3,6 +3,8 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Navbar from './components/navbar/navbar';
 import Footer from './components/footer/footer';
+
+const NO_FOOTER_PATHS = new Set(['/messages', '/community']);
 import Auth from './pages/auth/Auth';
 import Home from './pages/Home/Home';
 import Onboarding from './pages/onboarding/onboarding'; 
@@ -238,8 +240,9 @@ function App() {
         </Routes>
       </main>
 
-      {/* No footer on the messages page */}
-      {location.pathname !== '/messages' && <Footer />}
+      {/* No footer on the working pages that fill the window: messages and the
+          community (owner, 7 Nov). */}
+      {!NO_FOOTER_PATHS.has(location.pathname) && <Footer />}
     </div>
   );
 }

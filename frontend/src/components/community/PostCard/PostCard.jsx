@@ -17,6 +17,7 @@ import AvatarImg from "../../AvatarImg/AvatarImg";
 import ImageLightbox from "../../ImageLightbox/ImageLightbox";
 import ReactionBar from "../ReactionBar/ReactionBar";
 import ReactionSummary from "../ReactionSummary/ReactionSummary";
+import ProfileHover from "../ProfileHover/ProfileHover";
 import PostPhotos from "./PostPhotos";
 import PostGif from "./PostGif";
 import PostText from "./PostText";
@@ -35,12 +36,20 @@ function PostCard({
   onReact,
   onReply,
   loadReplies,
+  loadProfile,
   addedReplies,
 }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [moreRequest, setMoreRequest] = useState(0);
   const profile = `/user/${post.author_id}`;
   const time = formatPostTime(post.created_at);
+  const person = {
+    id: post.author_id,
+    name: post.author_name,
+    username: post.author_username,
+    avatar: post.author_avatar,
+    campus: post.author_university,
+  };
 
   const react = useCallback((emoji) => onReact(post.id, emoji), [onReact, post.id]);
 
@@ -69,10 +78,14 @@ function PostCard({
         {/* The text's halo keeps it readable on the wallpaper (spec §3). */}
         <div className={styles.readable}>
           <header className={styles.header}>
-            <Link to={profile} className={styles.name}>
-              {post.author_name}
-            </Link>
-            <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
+            <ProfileHover person={person} loadProfile={loadProfile}>
+              <Link to={profile} className={styles.name}>
+                {post.author_name}
+              </Link>
+            </ProfileHover>
+            <ProfileHover person={person} loadProfile={loadProfile}>
+              <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
+            </ProfileHover>
             {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{post.author_university}</span>}
             {time && (
               <Link
@@ -126,6 +139,7 @@ function PostCard({
         showCampus={showCampus}
         onReact={onReact}
         loadReplies={loadReplies}
+        loadProfile={loadProfile}
         addedReplies={addedReplies}
         moreRequest={moreRequest}
       />

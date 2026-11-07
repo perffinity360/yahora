@@ -26,6 +26,7 @@ import { ChevronDown, ChevronUp, Ellipsis, Heart, Loader2 } from "lucide-react";
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import PostGif from "./PostGif";
 import PostText from "./PostText";
+import ProfileHover from "../ProfileHover/ProfileHover";
 import {
   DEFAULT_REACTION,
   REPLIES_FOLD_MIN,
@@ -76,7 +77,7 @@ function Rail() {
   );
 }
 
-const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact }) {
+const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, loadProfile }) {
   const [mine, setMine] = useState(reply.viewer_reaction);
   const [total, setTotal] = useState(reply.reactions_total);
   const [popKey, setPopKey] = useState(0);
@@ -100,13 +101,25 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact }
 
       <div className={`${styles.replyBody} ${styles.readable}`}>
         <header className={styles.replyHeader}>
-          <Link
-            to={profile}
-            className={`${styles.replyUsername} ${isAuthor ? styles.replyUsernameAuthor : ""}`}
-            title={isAuthor ? "Author of this post" : undefined}
+          <ProfileHover
+            person={{
+              id: reply.author_id,
+              name: reply.author_name,
+              username: reply.author_username,
+              avatar: reply.author_avatar,
+              campus: reply.author_university,
+            }}
+            loadProfile={loadProfile}
           >
-            @{reply.author_username}
-          </Link>
+            <Link
+              to={profile}
+              className={`${styles.replyUsername} ${isAuthor ? styles.replyUsernameAuthor : ""}`}
+            >
+              @{reply.author_username}
+            </Link>
+          </ProfileHover>
+          {/* The post's own author, replying (spec §4). */}
+          {isAuthor && <span className={styles.authorTag}>Author</span>}
           {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
           {time && (
             <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>
@@ -150,6 +163,7 @@ export default function PostThread({
   showCampus,
   onReact,
   loadReplies,
+  loadProfile,
   addedReplies,
   moreRequest = 0,
 }) {
@@ -163,16 +177,19 @@ export default function PostThread({
   const moreRowRef = useRef(null);
   const folding = useRef(false);
 
-  // Without top_replies (the API doesn't send it yet, spec §4) nothing is
-  // known about the preview, so the button shows whenever there are replies.
+  // Without top_replies (the API doesn't send it yet, spec §4), a post with
+  // fewer than REPLIES_FOLD_MIN replies loads them by itself and shows them
+  // as its preview, so the button still never stands in for one or two.
   const previewKnown = Array.isArray(post.top_replies);
+  const [selfPreview, setSelfPreview] = useState(false);
 
   // Folded: the preview and what you just wrote. Unfolded: the pages too. A
   // preview reply comes round again in the oldest-first pages, so each id is
   // kept only once.
   const folded = useMemo(
-    () => distinct([...(post.top_replies ?? []), ...(addedReplies ?? [])]),
-    [post.top_replies, addedReplies],
+    () =>
+      distinct([...(post.top_replies ?? []), ...(selfPreview ? loaded : []), ...(addedReplies ?? [])]),
+    [post.top_replies, selfPreview, loaded, addedReplies],
   );
   const unfolded = useMemo(
     () => distinct([...(post.top_replies ?? []), ...loaded, ...(addedReplies ?? [])]),
@@ -183,11 +200,11 @@ export default function PostThread({
   const total = Math.max(post.replies_count ?? 0, unfolded.length);
   const canLoad = !exhausted && total > unfolded.length;
   const hasUnshownLoaded = unfolded.length > folded.length;
-  const showMore =
-    (!previewKnown || total >= REPLIES_FOLD_MIN) && (expanded ? canLoad : hasUnshownLoaded || canLoad);
+  // Spec §4: never for fewer than REPLIES_FOLD_MIN replies.
+  const showMore = total >= REPLIES_FOLD_MIN && (expanded ? canLoad : hasUnshownLoaded || canLoad);
   const showHide = expanded && hasUnshownLoaded;
 
-  const loadMore = useCallback(async () => {
+  const loadMore = useCallback(async ({ asPreview = false } = {}) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setLoading(true);
@@ -201,7 +218,8 @@ export default function PostThread({
         from = page.next_cursor;
         setLoaded((prev) => [...prev, ...page.items]);
         setCursor(from);
-        setExpanded(true);
+        if (asPreview) setSelfPreview(true);
+        else setExpanded(true);
         if (from === null) {
           setExhausted(true);
           break;
@@ -217,6 +235,14 @@ export default function PostThread({
       setLoading(false);
     }
   }, [loadReplies, post.id, cursor, unfolded, total]);
+
+  const fewWithoutPreview =
+    !previewKnown && (post.replies_count ?? 0) > 0 && (post.replies_count ?? 0) < REPLIES_FOLD_MIN;
+  useEffect(() => {
+    if (fewWithoutPreview && !selfPreview) loadMore({ asPreview: true });
+    // Once, when such a post appears; loadMore changes with every page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fewWithoutPreview]);
 
   const onShowMore = () => {
     // Folded with replies already here: unfold them first. The button stays
@@ -255,6 +281,7 @@ export default function PostThread({
           isAuthor={reply.author_id === post.author_id}
           showCampus={showCampus}
           onReact={onReact}
+          loadProfile={loadProfile}
         />
       ))}
       {(showMore || showHide) && (
