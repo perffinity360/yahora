@@ -3,8 +3,6 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Navbar from './components/navbar/navbar';
 import Footer from './components/footer/footer';
-
-const NO_FOOTER_PATHS = new Set(['/messages', '/community']);
 import Auth from './pages/auth/Auth';
 import Home from './pages/Home/Home';
 import Onboarding from './pages/onboarding/onboarding'; 
@@ -17,6 +15,10 @@ import Messages from "./pages/messages/Messages";
 import Community from "./pages/community/Community";
 import OnboardingRequired from "./components/OnboardingRequired/OnboardingRequired";
 import useScrollRestoration from "./hooks/useScrollRestoration";
+import useMediaQuery from "./hooks/useMediaQuery";
+import { LAYOUT_BREAKPOINT_PX } from "./utils/community";
+
+const NO_FOOTER_PATHS = new Set(['/messages', '/community']);
 
 // ⚠ Development only: the Block N-S test bench at /dev/community. DEV is
 // statically false in a production build, so Vite drops this import — and the
@@ -138,6 +140,12 @@ function App() {
   const location = useLocation(); // Get current route
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
   const chromeRef = useRef(null);
+  // On a laptop the Community page takes the whole window and puts the menu in
+  // a pill between its two panels (pages/community/BrandMenu.jsx). The navbar
+  // is only hidden there, never unmounted: it keeps presence, delivery ticks
+  // and the unread count running, which every page relies on.
+  const wideLayout = useMediaQuery(`(min-width: ${LAYOUT_BREAKPOINT_PX}px)`);
+  const hideNavbar = location.pathname === '/community' && wideLayout;
 
   // Publish the real height of the fixed app chrome (demo banner + navbar) as
   // --app-chrome so full-height pages can size themselves with
@@ -203,7 +211,9 @@ function App() {
         </div>
       )}
       
-      <Navbar />
+      <div style={hideNavbar ? { display: 'none' } : undefined}>
+        <Navbar />
+      </div>
 
       </div>
 

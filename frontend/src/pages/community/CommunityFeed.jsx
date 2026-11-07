@@ -230,7 +230,7 @@ export default function CommunityFeed({
       ) : shown.length === 0 && !failed ? (
         <p className={styles.empty}>{emptyText}</p>
       ) : (
-        <div className={`${styles.list} ${kind === "campus" ? styles.listCampus : styles.listWorld}`}>
+        <div className={styles.list}>
           {shown.map((p, i) => (
             <PostCard
               key={p.id}

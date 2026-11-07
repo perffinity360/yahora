@@ -12,6 +12,12 @@ import { API_BASE_URL } from '../../config/urls';
 // until the next full page refresh.
 export const PROFILE_UPDATED_EVENT = "yahora:profile-updated";
 
+// The navbar stays mounted on every page (it holds presence, delivery ticks and
+// the unread count), but the Community page hides it on a laptop and shows its
+// own menu instead (pages/community/BrandMenu.jsx). That menu reads what the
+// navbar knows from here, rather than opening a second Realtime channel.
+export const NAV_STATE_EVENT = "yahora:nav-state";
+
 // ─────────────────────────────────────────────
 // ICONS
 // ─────────────────────────────────────────────
@@ -266,6 +272,11 @@ function Navbar() {
       supabase.removeChannel(presenceChannel);
     };
   }, [isAuthenticated, sessionReady]);
+
+  useEffect(() => {
+    window.yahoraNavState = { unreadCount, avatarUrl, userName };
+    window.dispatchEvent(new CustomEvent(NAV_STATE_EVENT, { detail: window.yahoraNavState }));
+  }, [unreadCount, avatarUrl, userName]);
 
   const handleLogout = () => {
     logout();

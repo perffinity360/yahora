@@ -99,7 +99,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
         <AvatarImg src={reply.author_avatar} name={reply.author_name} size={22} className={styles.replyAvatar} />
       </Link>
 
-      <div className={`${styles.replyBody} ${styles.readable}`}>
+      <div className={styles.replyBody}>
         <header className={styles.replyHeader}>
           <ProfileHover
             person={{

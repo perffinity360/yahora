@@ -2,23 +2,36 @@
    docs/design/COMMUNITY_SPEC.md §1 (layout), §1.3 (dropdown), §1.4 (view-only
    line), §2.1 (dock) and §9 (empty and loading). */
 
-/* ── The chat's wallpaper (MESSAGES_SPEC §2), pinned while posts scroll ────── */
+/* ── Two zones on one wallpaper (owner, 7 Nov) ─────────────────────────────
+   Both feeds keep the chat's doodle tile, pinned while posts scroll, but at 5%
+   only, so its lines never meet the text: the veil is each zone's own ground
+   at 95% over the tile. Campus is a lilac ground, the other side a blush one.
+   Posts sit on frosted cards (PostCard.module.css). */
 
 .panel,
 .narrow {
-  background-color: var(--community-canvas);
-  background-image:
-    linear-gradient(var(--community-canvas-veil), var(--community-canvas-veil)),
-    url('/patterns/chat-pattern.svg');
+  --zone: var(--community-panel-campus);
+  --zone-veil: var(--community-panel-campus-veil);
+  background-color: var(--zone);
+  background-image: linear-gradient(var(--zone-veil), var(--zone-veil)), url('/patterns/chat-pattern.svg');
   background-repeat: no-repeat, repeat;
   background-size: 100% 100%, 420px 420px;
+}
+
+.panelRight,
+.narrow[data-feed="world"] {
+  --zone: var(--community-panel-world);
+  --zone-veil: var(--community-panel-world-veil);
 }
 
 /* ── ≥ 1024 px: two panels ─────────────────────────────────────────────── */
 
 /* No frame below the panels: the composer bar sits on the bottom of the
    window (owner, 7 Nov). */
+/* The whole window on a laptop: the site navbar is hidden here (App.jsx), and
+   the brand pill (BrandMenu) sits at the top of the divider instead. */
 .wide {
+  position: relative;
   height: calc(100dvh - var(--app-chrome));
   padding: 4px 4px 0;
   background: var(--bg);
@@ -79,6 +92,48 @@
   background: var(--community-glass);
   backdrop-filter: blur(14px) saturate(1.4);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  container: head / inline-size;
+}
+
+/* Clear of the brand pill, which sits over the divider where the two headers
+   meet (BrandMenu.module.css), so ‹ ⤢ › never slide under it. */
+.panelLeft .panelHeader {
+  padding-right: 78px;
+}
+
+.panelRight .panelHeader {
+  padding-left: 78px;
+}
+
+/* Which zone this is: CAMPUS on the left, ALL CAMPUSES on the right. */
+.zoneBadge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: 700 10px/12px "Inter", sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.zoneBadgeCampus {
+  border-color: var(--community-badge-campus-border);
+  background: var(--community-badge-campus-bg);
+  color: var(--purple-dark);
+}
+
+.zoneBadgeWorld {
+  border-color: var(--community-badge-world-border);
+  background: var(--community-badge-world-bg);
+  color: var(--community-badge-world-text);
+}
+
+/* A narrow panel keeps its name and controls; the badge goes first. */
+@container head (max-width: 430px) {
+  .zoneBadge {
+    display: none;
+  }
 }
 
 .campusTitle {
@@ -237,50 +292,44 @@
   box-shadow: 0 0 0 3px var(--reaction-mine-bg);
 }
 
-/* The grip: a white pill with two grooves, the usual sign for "drag sideways",
-   in the middle of the divider. In use, the outline and grooves turn purple, a
-   soft ring comes up and the grooves stretch a little. */
-.handleGrip {
+/* The glow-bar grip (owner, 7 Nov): a white capsule holding a short bar that
+   runs purple-dark → purple-light → pink-dark, glowing. In use, it grows a
+   little and its outline turns purple. */
+.handleGripGlow {
   position: absolute;
   top: 50%;
   left: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  width: 10px;
-  height: 30px;
+  width: 12px;
+  height: 46px;
+  border: 1.5px solid var(--community-grip-glow-border);
   border-radius: 999px;
   background: var(--white);
-  box-shadow: inset 0 0 0 1px var(--community-grip-border), var(--community-grip-shadow);
+  box-shadow: var(--community-grip-glow-shadow);
   transform: translate(-50%, -50%);
-  transition: transform 200ms var(--community-spring), box-shadow 160ms var(--community-ease);
+  transition: transform 150ms var(--community-ease), border-color 150ms var(--community-ease),
+    box-shadow 150ms var(--community-ease);
 }
 
-.handleGroove {
-  width: 1.5px;
-  height: 12px;
-  border-radius: 1px;
-  background: var(--community-grip-border);
-  transition: background-color 160ms var(--community-ease), transform 220ms var(--community-spring);
+.handleGripGlow::after {
+  content: "";
+  width: 4px;
+  height: 26px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--purple-dark) 0%, var(--purple-light) 50%, var(--pink-dark) 100%);
+  box-shadow: 0 0 8px var(--community-grip-glow);
 }
 
-.handle:hover .handleGrip,
-.handle[data-separator="hover"] .handleGrip,
-.handle[data-separator="active"] .handleGrip,
-.handle[data-separator="focus"] .handleGrip,
-.handle:focus-visible .handleGrip {
-  box-shadow: inset 0 0 0 1px var(--purple), 0 0 0 3px var(--reaction-mine-bg);
-  transform: translate(-50%, -50%) scale(1.06);
-}
-
-.handle:hover .handleGroove,
-.handle[data-separator="hover"] .handleGroove,
-.handle[data-separator="active"] .handleGroove,
-.handle[data-separator="focus"] .handleGroove,
-.handle:focus-visible .handleGroove {
-  background: var(--purple);
-  transform: scaleY(1.25);
+.handle:hover .handleGripGlow,
+.handle[data-separator="hover"] .handleGripGlow,
+.handle[data-separator="active"] .handleGripGlow,
+.handle[data-separator="focus"] .handleGripGlow,
+.handle:focus-visible .handleGripGlow {
+  border-color: var(--purple);
+  box-shadow: var(--community-grip-glow-shadow-hover);
+  transform: translate(-50%, -50%) scale(1.08);
 }
 
 /* Your avatar, joining the two composers tucked in behind it. From the outside in:
@@ -932,14 +981,10 @@
   width: 100%;
 }
 
-/* The tint behind the rows: warm on the campus side, quieter on the other.
-   It softens the wallpaper under the text without hiding it. */
-.listCampus {
-  background: var(--community-row-campus);
-}
-
-.listWorld {
-  background: var(--community-row-world);
+/* The cards (PostCard.module.css) sit 10 px in from the panel's edges and
+   12 px apart, so the doodles show around them. */
+.list {
+  padding: 10px 10px 0;
 }
 
 .empty {
@@ -979,13 +1024,18 @@
   outline-offset: 2px;
 }
 
-/* Spec §9: flat rows, the same shape as a loaded post. */
+/* Spec §9: the same shape as a loaded post, on the same card. */
 .skeleton {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--community-hairline);
+  max-width: 860px;
+  margin: 0 auto 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--community-card-border);
+  border-radius: 16px;
+  background: var(--community-card);
+  box-shadow: var(--community-card-shadow);
 }
 
 .skeletonHead {
@@ -1055,8 +1105,7 @@
   .chevronOpen,
   .menuOption,
   .handle::before,
-  .handleGrip,
-  .handleGroove,
+  .handleGripGlow,
   .hub,
   .hubHalf,
   .hubBadge,

@@ -1,0 +1,339 @@
+/* frontend/src/pages/community/BrandMenu.module.css
+   docs/design/COMMUNITY_SPEC.md §1.1 — the centre brand pill and its menu.
+   Both sit in .wide (Community.module.css), at --split-pct: the divider's
+   centre, kept clear of the window's edges when a panel is collapsed. */
+
+.root {
+  display: contents;
+}
+
+.centerBrandPill {
+  position: absolute;
+  top: 7px;
+  left: clamp(84px, var(--split-pct, 50%), calc(100% - 84px));
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 13px 0 11px;
+  border: 1.5px solid var(--community-pill-border);
+  border-radius: 999px;
+  background: var(--white);
+  box-shadow: var(--community-pill-shadow), 0 0 0 4px var(--community-pill-ring);
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: transform 160ms var(--community-ease), box-shadow 160ms var(--community-ease),
+    border-color 160ms var(--community-ease);
+}
+
+.centerBrandPill:hover,
+.centerBrandPill[data-open] {
+  border-color: var(--purple);
+}
+
+.centerBrandPill:hover {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.centerBrandPill:active {
+  transform: translateX(-50%) scale(0.97);
+}
+
+.centerBrandPill:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 3px;
+}
+
+/* The bag and the "Yahora" wordmark, one image. */
+.logo {
+  display: block;
+  height: 22px;
+  width: auto;
+}
+
+.pillDivider {
+  width: 1px;
+  height: 16px;
+  background: var(--community-pill-divider);
+}
+
+/* ☰, which turns into ✕ while the menu is open. */
+.burger {
+  position: relative;
+  width: 16px;
+  height: 12px;
+}
+
+.burger i {
+  position: absolute;
+  left: 0;
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--purple-dark);
+  transition: transform 260ms var(--community-spring), opacity 160ms var(--community-ease), top 200ms
+      var(--community-ease);
+}
+
+.burger i:nth-child(1) {
+  top: 0;
+}
+
+.burger i:nth-child(2) {
+  top: 5px;
+}
+
+.burger i:nth-child(3) {
+  top: 10px;
+}
+
+.centerBrandPill[data-open] .burger i:nth-child(1) {
+  top: 5px;
+  transform: rotate(45deg);
+}
+
+.centerBrandPill[data-open] .burger i:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0.2);
+}
+
+.centerBrandPill[data-open] .burger i:nth-child(3) {
+  top: 5px;
+  transform: rotate(-45deg);
+}
+
+.pillBadge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: -2px;
+  border-radius: 999px;
+  background: var(--pink-dark);
+  color: var(--white);
+  font: 700 10px/18px "Inter", sans-serif;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── The menu ──────────────────────────────────────────────────────────── */
+
+.menu {
+  position: absolute;
+  top: 48px;
+  left: clamp(129px, var(--split-pct, 50%), calc(100% - 129px));
+  z-index: 100;
+  width: 250px;
+  padding: 6px;
+  border: 1px solid var(--community-hairline);
+  border-radius: 16px;
+  background: var(--community-menu-glass);
+  box-shadow: var(--community-menu-shadow);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  transform-origin: 50% -12px;
+  /* Closed: invisible and out of the way. Its parent doesn't fade (the glass
+     would stop blurring), the menu itself does (DESIGN.md "Quality floor"). */
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(-50%) translateY(-6px) scale(0.96);
+  transition: opacity 160ms var(--community-ease), transform 240ms var(--community-spring),
+    visibility 0s linear 240ms;
+}
+
+.menu[data-open] {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%);
+  transition: opacity 160ms var(--community-ease), transform 260ms var(--community-spring), visibility 0s;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li {
+  margin: 0; /* footer.module.css leaks a margin onto every li */
+}
+
+/* Items arrive one after another, 22 ms apart. */
+.menu[data-open] .list li,
+.menu[data-open] .me {
+  animation: itemIn 260ms var(--community-ease) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms + 40ms);
+}
+
+@keyframes itemIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.item,
+.item:hover {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font: 500 14px/1 "Inter", sans-serif;
+  color: var(--black-soft);
+  text-decoration: none;
+  transition: background-color 120ms var(--community-ease), color 120ms var(--community-ease);
+}
+
+.item:hover {
+  background: var(--reaction-mine-bg);
+  color: var(--purple);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: -2px;
+}
+
+.itemIcon {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.itemLabel {
+  flex: 1 1 auto;
+}
+
+/* Where you are now. */
+.itemCurrent,
+.itemCurrent:hover {
+  background: var(--purple-dark);
+  color: var(--white);
+  font-weight: 600;
+}
+
+.count {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pink-dark);
+  color: var(--white);
+  font: 700 11px/18px "Inter", sans-serif;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.itemSoon,
+.itemSoon:hover {
+  background: transparent;
+  color: var(--community-muted);
+  cursor: default;
+}
+
+.soon {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--input-bg);
+  font: 600 10px/14px "Inter", sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.me {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--community-hairline);
+}
+
+.meLink,
+.meLink:hover {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  color: var(--black-soft);
+  text-decoration: none;
+  transition: background-color 120ms var(--community-ease);
+}
+
+.meLink:hover {
+  background: var(--reaction-mine-bg);
+}
+
+.meLink:focus-visible,
+.logout:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: -2px;
+}
+
+.meAvatar {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.meText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.meName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 14px/18px "Inter", sans-serif;
+}
+
+.meHint {
+  font: 400 12px/16px "Inter", sans-serif;
+  color: var(--community-muted);
+}
+
+.logout {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--community-muted);
+  cursor: pointer;
+  transition: background-color 120ms var(--community-ease), color 120ms var(--community-ease);
+}
+
+.logout:hover {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .centerBrandPill,
+  .burger i,
+  .menu,
+  .menu[data-open],
+  .item,
+  .meLink,
+  .logout {
+    transition: none;
+  }
+
+  .menu[data-open] .list li,
+  .menu[data-open] .me {
+    animation: none;
+  }
+}

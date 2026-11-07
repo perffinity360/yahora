@@ -12,7 +12,7 @@
 import React, { memo, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Ellipsis, MessageCircle } from "lucide-react";
+import { Ellipsis, GraduationCap, MessageCircle } from "lucide-react";
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import ImageLightbox from "../../ImageLightbox/ImageLightbox";
 import ReactionBar from "../ReactionBar/ReactionBar";
@@ -75,8 +75,7 @@ function PostCard({
       <span className={styles.stem} aria-hidden="true" />
 
       <div className={styles.postBody}>
-        {/* The text's halo keeps it readable on the wallpaper (spec §3). */}
-        <div className={styles.readable}>
+        <div>
           <header className={styles.header}>
             <ProfileHover person={person} loadProfile={loadProfile}>
               <Link to={profile} className={styles.name}>
@@ -86,7 +85,12 @@ function PostCard({
             <ProfileHover person={person} loadProfile={loadProfile}>
               <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
             </ProfileHover>
-            {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{post.author_university}</span>}
+            {showCampus && (
+              <span className={`${styles.campus} ${styles.collegePill}`} title={post.author_university}>
+                <GraduationCap size={11} aria-hidden="true" />
+                <span>{post.author_university}</span>
+              </span>
+            )}
             {time && (
               <Link
                 to={`/post/${post.id}`}
