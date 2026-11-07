@@ -91,13 +91,16 @@ export default function BrandMenu() {
         ref={pillRef}
         type="button"
         className={styles.centerBrandPill}
+        data-brand-pill=""
         data-open={open || undefined}
         aria-expanded={open}
         aria-controls={menuId}
         aria-label={unreadCount > 0 ? `Yahora menu, ${unreadCount} unread messages` : "Yahora menu"}
         onClick={() => setOpen((o) => !o)}
       >
-        <img src="/yahora_logo.svg" alt="" className={styles.logo} />
+        <span className={styles.logoCrop} aria-hidden="true">
+          <img src="/yahora_logo.svg" alt="" className={styles.logo} />
+        </span>
         <span className={styles.pillDivider} aria-hidden="true" />
         <span className={styles.burger} aria-hidden="true">
           <i />

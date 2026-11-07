@@ -304,7 +304,7 @@ export function sampleProfile(authorId) {
           posts_count: own.length,
           followers_count: followers,
           following_count: following,
-          recent_photos: own.flatMap((p) => p.image_urls).slice(0, 3),
+          recent_photos: own.flatMap((p) => p.image_urls).slice(0, 8),
         }),
       250,
     ),

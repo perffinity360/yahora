@@ -41,9 +41,7 @@ import useMediaQuery from "../../hooks/useMediaQuery";
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 import {
   LAYOUT_BREAKPOINT_PX,
-  LAYOUT_COLLAPSE_THRESHOLD_PX,
   LAYOUT_COLLAPSED_PX,
-  LAYOUT_MIN_PANEL_PX,
 } from "../../utils/community";
 import { SAMPLE_COUNTRIES, SAMPLE_VIEWER, sampleReact } from "./sampleData";
 import styles from "./Community.module.css";
@@ -53,6 +51,8 @@ const LEFT = "campus";
 const RIGHT = "world";
 /* A little longer than the panels' 280 ms transition (Community.module.css). */
 const PANEL_ANIMATION_MS = 320;
+/* How close to the window's edges the brand pill may sit (BrandMenu.module.css). */
+const BRAND_EDGE_PX = 72;
 /* A press on the avatar that moves less than this is a click, not a drag. */
 const HUB_CLICK_SLOP_PX = 4;
 
@@ -310,7 +310,10 @@ function WideLayout({
 
   // The brand pill (and its menu) sits over the divider's centre. The left
   // panel's width changes on every drag, glide and window resize, so watching
-  // it keeps --split-pct exact without re-rendering anything.
+  // it keeps --split-pct exact without re-rendering anything. Near a window edge
+  // the pill stops (BRAND_EDGE_PX) while the divider goes on, so it would cover
+  // the open header's ⤢: each header's clearance (--head-clear-left/-right) is
+  // how far the pill reaches over it, plus a gap.
   const wideRef = useRef(null);
   const separatorRef = useRef(null);
   const leftPanelRef = useRef(null);
@@ -322,14 +325,27 @@ function WideLayout({
       const w = wideEl.getBoundingClientRect();
       const s = sep.getBoundingClientRect();
       if (!w.width) return;
-      const pct = ((s.left + s.width / 2 - w.left) / w.width) * 100;
-      wideEl.style.setProperty("--split-pct", `${pct}%`);
+      const center = s.left + s.width / 2 - w.left;
+      wideEl.style.setProperty("--split-pct", `${(center / w.width) * 100}%`);
+      const pill = wideEl.querySelector("[data-brand-pill]");
+      const half = (pill?.offsetWidth ?? 0) / 2;
+      const pillAt = Math.min(Math.max(center, BRAND_EDGE_PX), w.width - BRAND_EDGE_PX);
+      const gap = 8;
+      // The left header ends at the divider's left edge, the right one starts
+      // at its right edge; each keeps clear of the part of the pill over it.
+      const leftHeadEnd = s.left - w.left;
+      const rightHeadStart = s.right - w.left;
+      wideEl.style.setProperty("--head-clear-left", `${Math.max(0, leftHeadEnd - (pillAt - half)) + gap}px`);
+      wideEl.style.setProperty("--head-clear-right", `${Math.max(0, pillAt + half - rightHeadStart) + gap}px`);
     };
     placeBrand();
     if (typeof ResizeObserver === "undefined") return undefined;
     const ro = new ResizeObserver(placeBrand);
     if (wideEl) ro.observe(wideEl);
     if (leftPanelRef.current) ro.observe(leftPanelRef.current);
+    // The unread badge changes the pill's width.
+    const pillEl = wideEl?.querySelector("[data-brand-pill]");
+    if (pillEl) ro.observe(pillEl);
     return () => ro.disconnect();
   }, []);
 
@@ -346,9 +362,15 @@ function WideLayout({
     glide();
     ref.current?.collapse();
   };
+  // A panel shut with ⤢ goes back to its old width (the library remembers it).
+  // One dragged all the way into its bar was never "collapsed" in the library's
+  // sense, so expand() leaves it there; that one opens to half the width.
   const expand = (ref) => {
+    const panel = ref.current;
+    if (!panel) return;
     glide();
-    ref.current?.expand();
+    panel.expand();
+    if (panel.getSize().inPixels <= LAYOUT_COLLAPSED_PX + 2) panel.resize("50%");
   };
 
   // ⤢ opens this panel full width by collapsing the other; pressed again
@@ -356,7 +378,7 @@ function WideLayout({
   const toggleMax = (otherRef) => {
     const other = otherRef.current;
     if (!other) return;
-    if (other.isCollapsed()) expand(otherRef);
+    if (other.isCollapsed() || other.getSize().inPixels <= LAYOUT_COLLAPSED_PX + 2) expand(otherRef);
     else collapse(otherRef);
   };
 
@@ -377,10 +399,9 @@ function WideLayout({
           panelRef={leftRef}
           elementRef={leftPanelRef}
           defaultSize="50%"
-          minSize={LAYOUT_MIN_PANEL_PX}
+          minSize={LAYOUT_COLLAPSED_PX}
           collapsible
           collapsedSize={LAYOUT_COLLAPSED_PX}
-          collapsedThreshold={LAYOUT_COLLAPSE_THRESHOLD_PX}
           onResize={(size) => setLeftCollapsed(isCollapsed(size))}
           className={`${styles.panel} ${styles.panelLeft}`}
           style={{ overflow: "hidden" }}
@@ -459,10 +480,9 @@ function WideLayout({
           id={RIGHT}
           panelRef={rightRef}
           defaultSize="50%"
-          minSize={LAYOUT_MIN_PANEL_PX}
+          minSize={LAYOUT_COLLAPSED_PX}
           collapsible
           collapsedSize={LAYOUT_COLLAPSED_PX}
-          collapsedThreshold={LAYOUT_COLLAPSE_THRESHOLD_PX}
           onResize={(size) => setRightCollapsed(isCollapsed(size))}
           className={`${styles.panel} ${styles.panelRight}`}
           style={{ overflow: "hidden" }}

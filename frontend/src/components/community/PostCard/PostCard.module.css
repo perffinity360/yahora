@@ -13,6 +13,7 @@
   --text-line: 20px;
   --thread-rail: var(--zone-rail, var(--community-rail));
   --rail-hit: 7.5px; /* what takes the pointer: the 1.5 px line and 3 px either side */
+  --rail-w: 1.5px; /* the line; 2.5 while pointed at */
   --rail-r: 14px; /* the curve into a reply's avatar: RAIL_RADIUS in PostThread.jsx */
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
@@ -579,14 +580,16 @@ a.time:hover {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(50% - 0.75px);
-  border-left: 1.5px solid var(--thread-rail);
-  transition: border-color 140ms var(--community-ease);
+  left: calc(50% - var(--rail-w) / 2);
+  border-left: var(--rail-w) solid var(--thread-rail);
+  transition: border-color 140ms var(--community-ease), border-width 140ms var(--community-ease),
+    left 140ms var(--community-ease);
 }
 
 @media (hover: hover) {
   .post:has(.stem:hover, .railTrunk:hover, .railHit:hover) {
     --thread-rail: var(--zone-rail-hover, var(--community-rail-hover));
+    --rail-w: 2.5px;
   }
 }
 
@@ -650,8 +653,8 @@ a.time:hover {
 
 .railLine {
   stroke: var(--thread-rail);
-  stroke-width: 1.5;
-  transition: stroke 140ms var(--community-ease);
+  stroke-width: var(--rail-w);
+  transition: stroke 140ms var(--community-ease), stroke-width 140ms var(--community-ease);
 }
 
 .railHit {

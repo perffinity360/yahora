@@ -128,11 +128,14 @@
   }
 }
 
+/* A phone's gallery: small square tiles, four across, 2 px apart, square
+   inside, rounded only at the grid's outer corners. */
 .photos {
   display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 2px;
   margin-top: 10px;
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -144,29 +147,56 @@
   background: var(--reaction-pill-border);
 }
 
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.follow,
 .viewProfile,
 .viewProfile:hover {
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 32px;
-  margin-top: 12px;
   border-radius: 999px;
-  background: var(--purple-dark);
   font: 600 13px/1 "Inter", sans-serif;
-  color: var(--white);
   text-decoration: none;
-  transition: transform 140ms var(--community-ease), background-color 140ms var(--community-ease);
+  cursor: pointer;
+  transition: transform 140ms var(--community-ease), background-color 140ms var(--community-ease),
+    border-color 140ms var(--community-ease);
 }
 
-.viewProfile:hover {
+/* Follow is the main action, as on Instagram. */
+.follow {
+  border: 0;
+  background: var(--purple-dark);
+  color: var(--white);
+}
+
+.follow:hover {
   background: var(--purple);
 }
 
+.viewProfile,
+.viewProfile:hover {
+  border: 1px solid var(--reaction-mine-border);
+  background: var(--white);
+  color: var(--purple-dark);
+}
+
+.viewProfile:hover {
+  background: var(--reaction-mine-bg);
+}
+
+.follow:active,
 .viewProfile:active {
   transform: scale(0.98);
 }
 
+.follow:focus-visible,
 .viewProfile:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: 2px;
@@ -177,6 +207,7 @@
     animation: none;
   }
 
+  .follow,
   .viewProfile {
     transition: none;
   }

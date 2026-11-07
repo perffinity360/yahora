@@ -75,10 +75,15 @@
   border-bottom-right-radius: 0;
 }
 
+/* The content never lays itself out narrower than LAYOUT_MIN_PANEL_PX (320).
+   The panel can still be dragged narrower, down to its 36 px bar, with no snap:
+   past this point its content stops adjusting and is cut off at the divider,
+   as on LeetCode (owner, 8 Nov). */
 .panelInner {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
 }
@@ -118,13 +123,15 @@
 }
 
 /* Clear of the brand pill, which sits over the divider where the two headers
-   meet (BrandMenu.module.css), so ⤢ never slides under it. */
+   meet (BrandMenu.module.css), so ⤢ never slides under it. Community.jsx
+   measures how far the pill reaches over each header (it stops short of the
+   window's edges while the divider doesn't). */
 .panelLeft .panelHeader {
-  padding-right: 64px;
+  padding-right: var(--head-clear-left, 72px);
 }
 
 .panelRight .panelHeader {
-  padding-left: 64px;
+  padding-left: var(--head-clear-right, 72px);
 }
 
 /* ALL CAMPUSES on the right-hand header (the left one has no badge: owner, 7 Nov). */
@@ -211,6 +218,7 @@
   overscroll-behavior: contain;
   padding-top: 36px; /* the header's height: the first post starts under it */
   scrollbar-width: thin;
+  scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
   transition: scrollbar-color 240ms var(--community-ease);
 }
@@ -1031,10 +1039,11 @@
   width: 100%;
 }
 
-/* The cards (PostCard.module.css) sit 10 px in on the left, 3 px on the right
-   (where the scrollbar's room already adds some) and 6 px apart. */
+/* The cards (PostCard.module.css) sit 10 px in from both edges and 6 px apart.
+   On the right the scrollbar's own room counts towards the 10: CommunityFeed
+   measures it into --scrollbar-room, and scrollbar-gutter keeps it constant. */
 .list {
-  padding: 6px 3px 0 10px;
+  padding: 6px max(0px, calc(10px - var(--scrollbar-room, 0px))) 0 max(10px, var(--scrollbar-room, 0px));
 }
 
 .empty {

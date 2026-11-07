@@ -8,7 +8,9 @@
 //
 // The name, photo, username and campus come with the post, so they show at
 // once; the counts and the latest photos load (loadProfile), with a shimmer
-// meanwhile. "View profile" opens the profile page.
+// meanwhile. The photos are a small gallery grid, four across, like a phone's.
+// "Follow" is a placeholder until follows exist (it says so when pressed);
+// "View profile" opens the profile page.
 //
 // Mouse only: it opens after resting HOVER_OPEN_MS on the name, and stays while
 // the mouse moves onto the card, so its button can be pressed. A touch screen
@@ -20,6 +22,9 @@
 //              recent_photos }>
 
 import React, { cloneElement, useEffect, useRef, useState } from "react";
+
+const MAX_PHOTOS = 8;
+const SOON_MS = 1600;
 import { Link } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
 import AvatarImg from "../../AvatarImg/AvatarImg";
@@ -46,6 +51,14 @@ function Stat({ value, label }) {
 function ProfileCard({ person, loadProfile }) {
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [soon, setSoon] = useState(false);
+  const isMe = person.id === localStorage.getItem("yahora_user_id");
+
+  useEffect(() => {
+    if (!soon) return undefined;
+    const t = setTimeout(() => setSoon(false), SOON_MS);
+    return () => clearTimeout(t);
+  }, [soon]);
 
   useEffect(() => {
     let alive = true;
@@ -58,7 +71,7 @@ function ProfileCard({ person, loadProfile }) {
   }, [person.id, loadProfile]);
 
   const profile = `/user/${person.id}`;
-  const photos = data?.recent_photos ?? [];
+  const photos = (data?.recent_photos ?? []).slice(0, MAX_PHOTOS);
 
   return (
     <div className={styles.card}>
@@ -89,16 +102,31 @@ function ProfileCard({ person, loadProfile }) {
       )}
 
       {photos.length > 0 && (
-        <div className={styles.photos} style={{ gridTemplateColumns: `repeat(${photos.length}, 1fr)` }}>
+        <div className={styles.photos}>
           {photos.map((url, i) => (
             <img key={url + i} src={url} alt="" loading="lazy" decoding="async" className={styles.photo} />
           ))}
         </div>
       )}
 
-      <Link to={profile} className={styles.viewProfile}>
-        View profile
-      </Link>
+      <div className={styles.buttons}>
+        {!isMe && (
+          // ⚠ Follows aren't built yet (the social module): until they are,
+          // the button only says so.
+          <button
+            type="button"
+            className={styles.follow}
+            title="Following is coming soon"
+            aria-live="polite"
+            onClick={() => setSoon(true)}
+          >
+            {soon ? "Coming soon" : "Follow"}
+          </button>
+        )}
+        <Link to={profile} className={styles.viewProfile}>
+          View profile
+        </Link>
+      </div>
     </div>
   );
 }

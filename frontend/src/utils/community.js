@@ -17,13 +17,13 @@ export const DEFAULT_REACTION = "❤️";
 export const REACTION_HOVER_DELAY_MS = 300;
 export const REACTION_LONG_PRESS_MS = 450;
 export const GIF_SEARCH_DEBOUNCE_MS = 300;
+/* The narrowest a panel's CONTENT lays itself out. The panel itself can be
+   dragged narrower, down to its 36 px bar, with no snap: past this its content
+   just stops adjusting and is cut off at the divider, as on LeetCode (owner,
+   8 Nov). Community.module.css repeats it on .panelInner. */
 export const LAYOUT_MIN_PANEL_PX = 320;
 export const LAYOUT_COLLAPSED_PX = 36;
 export const LAYOUT_BREAKPOINT_PX = 1024;
-/* How far past its minimum a panel is dragged before it snaps shut, and how far
-   out of its 36 px bar before it opens again. The library's default is half the
-   gap between the two (142 px here), which felt like a wall (owner, 8 Nov). */
-export const LAYOUT_COLLAPSE_THRESHOLD_PX = 48;
 export const REPORT_DETAILS_MAX = 500;
 export const REPLY_PREVIEW_COUNT = 2;
 /* "Show more replies" needs at least this many replies on the post, and is
