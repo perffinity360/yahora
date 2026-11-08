@@ -1,4 +1,11 @@
-# Current state — rewritten 15 Sep 2026, corrected 13 Oct 2026
+# Current state — rewritten 15 Sep 2026, corrected 13 Oct and 8 Nov 2026
+
+> **8 Nov 2026 update, at commit `aec41ca` (Phase 7, branch `v-p-web-community-redesign`).** Brought
+> forward over Phase 6B (signed off 29 Oct) and Phase 7 so far: the migration list (18 → 26 files), the
+> RLS table (17 → 22 tables), open issue 2 (closed by 6B), open issues 4 and 5 re-checked, the ownership
+> loans, and two new sections, "What Phase 6B shipped" and "Phase 7 so far". Same rule as before: a
+> migration file proves what was *written*. That all four Phase 7 migrations are on production is from
+> Vishwajeet's V-B changelog entry (3 Nov), not from this session.
 
 > **13 Oct 2026 correction pass, at commit `46c8fb0` (Phase 6B, Day 2).** Only claims that the
 > repository now contradicts were changed: the migration list (14 → 18 files), open issue 1
@@ -31,7 +38,7 @@ PROD_DB_URL_FILE=/path/outside/the/repo node backend/scripts/schema-drift.mjs
 
 ---
 
-## Migrations — 18 files in `supabase/migrations/`
+## Migrations — 26 files in `supabase/migrations/`
 
 Applied state is `[not re-verified]` for every row: the filenames are verifiable from the
 repo, the ledger is not.
@@ -56,6 +63,35 @@ repo, the ledger is not.
 | 016 | `20260916072324_suggest_usernames_bounded_topup` | Phase 4 |
 | 017 | `20260919093440_search_users_full_name_cast` | Phase 4 bug, committed 19 Sep |
 | 018 | `20261001122844_search_demo_isolation` | Phase 6A (V-A) |
+| — | `20261016061043_message_actions` | Phase 6B (V-B) |
+| — | `20261016061047_product_views` | Phase 6B (V-B) |
+| — | `20261016061050_mark_sold` | Phase 6B (V-B) |
+| — | `20261027062548_search_users_word_match` | Phase 6B (V-F) |
+| — | `20261103053142_community_posts` | Phase 7 (V-B, 1 of 4) |
+| — | `20261103053143_reactions_and_reports` | Phase 7 (V-B, 2 of 4) |
+| — | `20261103053144_message_reactions_gifs` | Phase 7 (V-B, 3 of 4) |
+| — | `20261103053145_demo_usernames` | Phase 7 (V-B, 4 of 4) |
+
+The eight since 13 Oct carry no conversational number in their headers, so the table shows `—`. Their
+timestamps decide the order, as always.
+
+- **`message_actions`** — reply (a frozen quote filled by a trigger), delete for everyone (the row is
+  kept as a tombstone and every quote of it is wiped), and delete for me (`public.message_hides`, not in
+  the Realtime publication and with no grants).
+- **`product_views`** — `products.views` now counts different students, once each, through
+  `record_product_view()` called by the backend. `increment_product_views()` is closed to the public key.
+- **`mark_sold`** — one buyer per listing, `products.sold_at` stamped by a trigger, `products.sold_to`
+  dropped, and four functions that hold every Mark as Sold rule.
+- **`search_users_word_match`** — a piece of a name or handle (`.ver`, `@rah`) now finds the person.
+- **`community_posts`** — `universities.country_code`, `public.posts` reworked for posts and replies,
+  `public.community_settings` (rate limits and report thresholds as rows), the insert trigger, feeds,
+  and the `refresh-hot-scores` cron job (every 5 minutes).
+- **`reactions_and_reports`** — `public.post_reactions`, `public.reports`, `react_to_post()`,
+  `create_report()` and the trigger that covers a reported post.
+- **`message_reactions_gifs`** — `messages.reactions` and `messages.gif`, `react_to_message()`, and
+  `last_message_has_gif` in the inbox.
+- **`demo_usernames`** — every demo account's username starts `demo.`; no real one starts `demo.`,
+  `demo-` or `demo_`. Enforced both ways by a trigger.
 
 **There is no 014.** No migration header carries that number; the labels jump from 013 to 015.
 That is a numbering gap, not a missing file.
@@ -111,10 +147,8 @@ image. Do not regenerate it.
 
 ### Row Level Security — what the migrations declare
 
-Counted from `alter table ... enable row level security` across all 18 files (015–018 add
-none): **17 public
-tables**, one more than the 16 the 25 Aug file reported, because `public.otp_requests` arrived
-with 008.
+Counted from `alter table ... enable row level security` across all 26 files: **22 public
+tables**. 015–018 add none; 6B adds two and Phase 7 three (`posts` already had it from 003).
 
 | Migration | Tables it enables RLS on |
 |---|---|
@@ -122,8 +156,10 @@ with 008.
 | 004 | `users`, `messages` (2) |
 | 005 | `reserved_usernames`, `username_history`, `auth_attempts` (3) |
 | 008 | `otp_requests` (1) |
+| 6B `message_actions`, `product_views` | `message_hides`, `product_views` (2) |
+| 7 `community_posts`, `reactions_and_reports` | `community_settings`, `post_reactions`, `reports` (3) |
 
-**Three of the 17 carry a policy.** The other 14 have RLS on with no policy, which is
+**Three of the 22 carry a policy.** The other 19 have RLS on with no policy, which is
 deliberate — they are backend-only, reached solely through the service-role key, and a
 policy-less table denies every row to `anon` and `authenticated`.
 
@@ -133,7 +169,10 @@ policy-less table denies every row to `anon` and `authenticated`.
 | `public.messages` | `messages_select_own` — `authenticated`, `sender_id = uid OR receiver_id = uid` | own threads only |
 | `public.visitor_metrics` | `visitor_metrics_select_all` (from 003) | footer counter |
 
-No migration after 004 adds a policy to any table. Storage carries seven policies, all from
+No migration after 004 adds a policy to any table (re-checked 8 Nov: none of the eight new files has a
+`create policy`). Every table added since 13 Oct also has `revoke all ... from anon, authenticated`, and
+every new function is revoked from `public, anon, authenticated`; the backend's service-role key is the
+only caller. Storage carries seven policies, all from
 002 and 003/004: product uploads/viewing/delete, post uploads/viewing/delete, and
 `"Avatar uploads"` — INSERT only (see open issue 3).
 
@@ -149,11 +188,15 @@ grants EXECUTE to PUBLIC by default and `anon` inherits it — is applied in 005
 the grant surface was re-pinned again by 010–012. The 25 Aug audit found exactly two functions
 anon-reachable, `increment_page_view` and `increment_product_views`, both `SECURITY DEFINER`
 and both deliberate. **`[not re-verified]`** that this is still the live grant set; migrations
-010–012 changed function definitions after that audit.
+010–012 changed function definitions after that audit. **On 8 Nov, from the files:** 6B's
+`product_views` revokes `increment_product_views` from `public, anon, authenticated`, so of those two
+only `increment_page_view` should still be anon-reachable.
 
 ### Realtime
 
-`public.messages` is the only table in the `supabase_realtime` publication `[not re-verified]`.
+`public.messages` is the only table in the `supabase_realtime` publication `[not re-verified]` (no
+migration since has added one; `message_hides` is deliberately left out). Message reactions and
+delete-for-everyone arrive as UPDATEs of `messages` rows, so they need no new subscription.
 Both clients subscribe **unfiltered** — `frontend/src/pages/messages/Messages.jsx:1306`
 (`.channel("realtime:messages")`) and `mobile/src/contexts/RealtimeContext.tsx:215` — and
 `messages_select_own` is what makes that safe, because Realtime re-checks the SELECT policy per
@@ -181,7 +224,12 @@ The 15 Sep check, `grep "\.range("`, still prints 0. That is expected: the code 
 cursors (`.limit()` plus a comparison on the cursor column), not `.range()`, and `OFFSET` is
 banned by `backend/API.md`. Don't use the grep as a test for pagination.
 
-### 2. `products.views` is incremented by two independent paths
+### 2. ✅ Resolved in Phase 6B — `products.views` was incremented by two independent paths
+
+*Kept under its old number. Migration `product_views` (16 Oct) closed it: one path, the backend's
+`record_product_view()` (`products.controller.js:739`), once per student per listing, and
+`increment_product_views()` is closed to the public key. The website's ProductCard no longer calls it.
+The 13 Oct text follows.*
 
 `frontend/src/components/ProductCard/ProductCard.jsx:233` (direct RPC from the browser) and
 `backend/src/modules/products/products.controller.js:656` (on `GET /products/:id`). Different
@@ -201,18 +249,22 @@ bucket, in 003 and again in 004, and both are `with check (bucket_id = 'avatars'
 There is still no SELECT and no DELETE. Reads work only because the bucket is `public = true`,
 and nothing can delete an old avatar through RLS. Partially resolved; the other half is open.
 
-### 4. `utils/notify.js` writes to a table that does not exist
+### 4. `utils/notify.js` writes to a table that does not exist — still open on 8 Nov
 
 `backend/src/utils/notify.js:61` does `supabase.from('notifications').upsert(...)`. There is
 **no `create table ... notifications`** anywhere under `supabase/` — the only two mentions are
 a comment in 003 and a reserved-word row in 005. `notify()` is wrapped so a failure never
-breaks the calling action, so this fails silently today. Phase 7 per the Phase 3 runbook.
+breaks the calling action, so this fails silently today. Phase 7 per the Phase 3 runbook. **Still true
+on 8 Nov:** none of the four Phase 7 migrations creates `notifications`, and the Phase 7 report trigger
+doesn't write notifications (`backend/API.md`). The file's own header still says the table arrives in
+"migration 006", which is stale.
 
 ### 5. `backend/API.md` is wrong about `increment_page_view()`
 
-`backend/API.md:3055` still says *"the RPC and table exist; nothing calls it."* (13 Oct)
+`backend/API.md:3599` still says *"the RPC and table exist; nothing calls it."* (8 Nov; it was line
+3055 on 13 Oct)
 `frontend/src/components/footer/footer.jsx:56` calls it on every page load. One-line doc fix.
-The 25 Aug file cited line 2448, and the 15 Sep file line 2807; API.md keeps growing. Phase 8
+The 25 Aug file cited line 2448, the 15 Sep file line 2807; API.md keeps growing. Phase 8
 housekeeping.
 
 ### 6. 👁️ Block G5 browser verification is still outstanding `[not re-verified]`
@@ -325,6 +377,51 @@ handoff entry is in `docs/CHANGELOG.md` (15 Sep, reconstructed).
 
 ---
 
+## What Phase 6B shipped (13–29 Oct)
+
+From `docs/changelog/releases/phase-6B.md` (27 entries) and the four 6B migrations above.
+
+- **Identity rule:** a demo account never sees a real student, and hidden sellers, commenters and
+  profiles show privacy states, in `products`, `share` and `user` (backend) and on both clients.
+- **Message actions:** reply, delete for everyone (60 minutes), delete for me; a WhatsApp-style
+  long-press menu and multi-select, on web and app.
+- **Views:** one view per student per listing (open issue 2, closed).
+- **Mark as Sold, reworked:** the buyer is found by search, "Off Yahora" is an answer, a wrongly tagged
+  buyer can remove themselves; sold cards and a buyer picker on web and app.
+- **Smaller fixes:** you can't message yourself; photo and avatar file names no longer contain user ids;
+  visitor mode hides like and save on another campus.
+
+## Phase 7 so far (as of 8 Nov) — the community
+
+Plan: `docs/runbooks/PHASE_7_RUNBOOK.md`. Contract: `backend/API.md`, "posts module (Phase 7)" and
+"reports module (Phase 7)".
+
+| Block | What | State on 8 Nov |
+|---|---|---|
+| V-A | Moderation (`utils/moderation.js`, OpenAI), emoji and pagination helpers; the API contract | Done |
+| V-B | The four migrations | On production since 3 Nov |
+| N-S | Composer, GIF picker (KLIPY), report form, `/dev/community` test page (website) | Merged, PR #94 |
+| N-B | `/api/posts`: 8 reading routes, posting, deleting, reacting | Merged, PR #96 |
+| N-C | `POST /api/reports` | Merged, PR #98 |
+| T1 | Posts and reports API on production | Passed 6 Nov (country view-only check skipped: every live campus is in India) |
+| V-P | Website community redesign, on `sampleData.js` | In review, branch `v-p-web-community-redesign` |
+| V-C | Message reactions and GIFs, demo usernames at login, campus countries | Not started. `API.md` marks its routes "not built yet" |
+| V-D – V-G, N-D part 2 … | The app community, the website on the real API, sign-off | Not started |
+
+**What's true on production right now:**
+
+- The posts and reports APIs are live; the website's `/community` still runs on sample data until N-D
+  part 2, and the app has no Community tab yet.
+- Every post with text or photos goes through OpenAI moderation. If a check can't run, the post is
+  held (`pending`). There is **no re-check job yet** (it's in V-C), so a held post stays held.
+- `refresh-hot-scores` runs every 5 minutes (`cron.schedule` in `community_posts`).
+- Until V-C, `backend/scripts/seedDemo.js` fails with `USERNAME_RESERVED`, and a new demo account gets
+  no username at login (**Skip for now** still works).
+- Post photos are in a public bucket under random names; a held post's photos are reachable by URL
+  (accepted for Phase 7, private storage is on the Phase 9 list).
+
+---
+
 ## Facts established by audit
 
 - **`on_auth_user_created` EXISTS on `auth.users`** and creates the `public.users` row inside
@@ -370,11 +467,19 @@ carries an `OWNER:` banner.
 **Phase 4 loan — ended.** Neeraj wrote the cursor pagination in the READ handlers of
 `products` and `messages`. The loan ended with Phase 4. Written up in `docs/CHANGELOG.md`, 15 Sep.
 
-**Phase 6B loan — current.** `backend/src/modules/products/` and `backend/src/modules/share/`
-are lent to Neeraj from Day 2 (13 Oct) until 6B sign-off. Vishwajeet does not edit them in
-that time, and the `OWNER:` banners stay unchanged. See `docs/runbooks/PHASE_6B_RUNBOOK.md`
-§2.2. Vishwajeet files the loan entry in Block V-A; as of 13 Oct it isn't in `docs/changelog/`
-yet.
+**Phase 6B loan — ended.** `products` and `share` were lent to Neeraj from 15 Oct and came back
+with the 6B sign-off entry (29 Oct, `docs/changelog/releases/phase-6B.md`).
+
+**Phase 7 loans — current** (`docs/runbooks/PHASE_7_RUNBOOK.md` §2.2):
+
+- `backend/src/modules/posts/*` is lent to **Neeraj** until Phase 7 sign-off. The `OWNER:` banners
+  stay Vishwajeet's; the database stays Vishwajeet's.
+- The website's community files are lent to **Vishwajeet** for the redesign (Block V-P), from the
+  moment `v-p-web-community-redesign` opened until it merges: `frontend/src/pages/community/*`,
+  `frontend/src/components/community/*`, `frontend/src/utils/community.js`, the community variables in
+  `frontend/src/styles/global.css`, `pages/dev/CommunitySandbox.jsx` and `docs/design/COMMUNITY_SPEC.md`.
+  V-P also changed `frontend/src/App.jsx` (the navbar is hidden on `/community`), which is outside
+  the loan.
 
 ---
 

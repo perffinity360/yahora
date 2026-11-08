@@ -1,13 +1,16 @@
 // frontend/src/pages/community/BrandMenu.jsx
 //
-// The centre brand pill — docs/design/COMMUNITY_SPEC.md §1.1. On a laptop the
+// The centre brand pill — docs/design/COMMUNITY_SPEC.md §1.1 and §1.2. The
 // Community page hides the site navbar to give the feeds the whole window, and
-// this pill takes its place at the top of the divider, where the two panel
-// headers meet. It moves with the divider (--split-pct, set by Community.jsx).
+// this pill takes its place. On a laptop it sits at the top of the divider,
+// where the two panel headers meet, and moves with it (--split-pct, set by
+// Community.jsx). On a phone (`inBar`) it sits in the floating switcher, between
+// the feeds and Hot · New, and the menu opens under it (owner, 8 Nov).
 //
 // Pressing it opens the menu under it: Home, Marketplace, Community (here),
-// Messages with its unread count, Saved / Cart, Notifications, and you. Esc or a
-// press elsewhere closes it; Esc gives the focus back to the pill.
+// Messages with its unread count, Saved / Cart, Notifications and Settings (both
+// "Soon"), and you. Esc or a press elsewhere closes it; Esc gives the focus back
+// to the pill.
 //
 // The unread count, your name and photo come from the navbar, which stays
 // mounted, hidden, and publishes them (NAV_STATE_EVENT), so there is still only
@@ -20,6 +23,7 @@ import {
   House,
   LogOut,
   MessageSquare,
+  Settings,
   ShoppingCart,
   Store,
   Users,
@@ -42,7 +46,7 @@ function useNavState() {
 
 const badge = (n) => (n > 99 ? "99+" : String(n));
 
-export default function BrandMenu() {
+export default function BrandMenu({ inBar = false }) {
   const { unreadCount, avatarUrl, userName } = useNavState();
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -84,9 +88,16 @@ export default function BrandMenu() {
     // Watchlist tab of the dashboard.
     { to: "/dashboard", label: "Saved / Cart", Icon: ShoppingCart },
   ];
+  // Nothing to open yet. The navbar's bell does nothing either, and its Settings
+  // link goes to /settings, which has no page (no route in App.jsx), so here
+  // they say so instead (owner, 8 Nov: Settings added).
+  const soon = [
+    { label: "Notifications", Icon: Bell },
+    { label: "Settings", Icon: Settings },
+  ];
 
   return (
-    <div ref={rootRef} className={styles.root}>
+    <div ref={rootRef} className={`${styles.root} ${inBar ? styles.inBar : ""}`}>
       <button
         ref={pillRef}
         type="button"
@@ -137,17 +148,18 @@ export default function BrandMenu() {
               </Link>
             </li>
           ))}
-          <li style={{ "--i": items.length }}>
-            {/* Nothing to open yet, the same as the navbar's bell. */}
-            <span className={`${styles.item} ${styles.itemSoon}`} aria-disabled="true">
-              <Bell size={16} aria-hidden="true" className={styles.itemIcon} />
-              <span className={styles.itemLabel}>Notifications</span>
-              <span className={styles.soon}>Soon</span>
-            </span>
-          </li>
+          {soon.map(({ label, Icon }, i) => (
+            <li key={label} style={{ "--i": items.length + i }}>
+              <span className={`${styles.item} ${styles.itemSoon}`} aria-disabled="true">
+                <Icon size={16} aria-hidden="true" className={styles.itemIcon} />
+                <span className={styles.itemLabel}>{label}</span>
+                <span className={styles.soon}>Soon</span>
+              </span>
+            </li>
+          ))}
         </ul>
 
-        <div className={styles.me} style={{ "--i": items.length + 1 }}>
+        <div className={styles.me} style={{ "--i": items.length + soon.length }}>
           <Link to="/dashboard" className={styles.meLink} onClick={close}>
             <AvatarImg src={avatarUrl} name={name} size={34} className={styles.meAvatar} />
             <span className={styles.meText}>

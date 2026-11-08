@@ -115,9 +115,9 @@
   /* (8 Nov: a more purple campus, a pinker world; the doodles at 15%, after
      5% and 8% left them invisible.) */
   --community-panel-campus: #F0E5F7;
-  --community-panel-campus-veil: rgba(240,229,247,0.85);
+  --community-panel-campus-veil: rgba(240,229,247,0.75);
   --community-panel-world: #FCE9F1;
-  --community-panel-world-veil: rgba(252,233,241,0.85);
+  --community-panel-world-veil: rgba(252,233,241,0.75);
   /* Each panel's header: glass that runs from the zone's tint at the outer
      edge to white where the two headers meet. */
   --community-header-campus: linear-gradient(90deg, rgba(232,212,244,0.95) 0%, rgba(255,255,255,0.88) 100%);
@@ -126,12 +126,10 @@
      the campus side, pink on the other (owner, 7 Nov). The accents are
      --purple-dark and --pink-dark. */
   --community-rail-campus: #A86BBB;
-  --community-rail-campus-hover: #3E0A50;
   --community-rail-world: #D27AA3;
-  --community-rail-world-hover: #7A1747;
-  /* The badges in the panel headers, and a post's college in the world feed. */
-  --community-badge-campus-bg: #F3E3F5;
-  --community-badge-campus-border: rgba(128,0,128,0.18);
+  /* The badge in the world panel's header, and a post's college in the world
+     feed. (8 Nov: the campus badge's two tokens are gone; nothing used them
+     since the CAMPUS badge left on 7 Nov.) */
   --community-badge-world-bg: #FCE4EE;
   --community-badge-world-text: #C82863;
   --community-badge-world-border: rgba(235,72,127,0.22);

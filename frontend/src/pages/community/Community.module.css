@@ -14,7 +14,7 @@
   --zone-veil: var(--community-panel-campus-veil);
   /* Read by the post cards (PostCard.module.css). */
   --zone-rail: var(--community-rail-campus);
-  --zone-rail-hover: var(--community-rail-campus-hover);
+  /* The card's left edge; also the thread's colour while pointed at. */
   --zone-accent: var(--purple-dark);
   background-color: var(--zone);
   background-image: linear-gradient(var(--zone-veil), var(--zone-veil)), url('/patterns/chat-pattern.svg');
@@ -27,7 +27,6 @@
   --zone: var(--community-panel-world);
   --zone-veil: var(--community-panel-world-veil);
   --zone-rail: var(--community-rail-world);
-  --zone-rail-hover: var(--community-rail-world-hover);
   --zone-accent: var(--pink-dark);
 }
 
@@ -371,7 +370,7 @@
   --hub-accent: var(--community-rail);
   --hub-glow: transparent;
   position: absolute;
-  bottom: 4.5px;
+  bottom: 5px; /* where it was against the composers, which moved up 0.5 px */
   left: 50%;
   display: grid;
   place-items: center;
@@ -556,11 +555,12 @@
 
 /* ── The docked composer ───────────────────────────────────────────────── */
 
-/* 38.5 px: the 1.5 px line, 2.5 above the 33 px composer and 1.5 below it. */
+/* 38.5 px: the 1.5 px line, then 2 above the 33 px composer and 2 below it, the
+   same room either side (owner, 8 Nov; was 2.5 above and 1.5 below). */
 .dock {
   flex: 0 0 auto;
   min-height: 38.5px;
-  padding: 2.5px 8px 1.5px;
+  padding: 2px 8px;
   border-top: 1.5px solid var(--community-rail);
   background: var(--community-dock);
 }
@@ -595,7 +595,8 @@
   padding-left: 11px;
   --composer-radius: 18px 20px 20px 18px;
   --composer-pad-start: 26px;
-  --composer-pad-end: 6px;
+  /* No --composer-pad-end: the Post pill sits concentric in the field's end
+     (Composer.module.css; owner, 8 Nov; was 6 px). */
   --composer-topline-start: 16px;
 }
 
@@ -603,13 +604,15 @@
   padding-left: 26px;
 }
 
-/* < 1024 px: floats at the bottom of the window until the footer arrives. */
+/* < 1024 px: floats at the bottom of the window until the footer arrives.
+   14 px in from each side, like the brand pill, so a curved or rounded screen
+   doesn't cut its ends (owner, 8 Nov; was 8). */
 .dockFloat {
   position: sticky;
   z-index: 15;
   bottom: 0;
   min-height: 48px;
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
   pointer-events: none;
 }
 
@@ -890,6 +893,18 @@
 .switcherSort {
   flex: 0 0 auto;
   padding: 3px;
+}
+
+/* Hot · New (country / Global only) and the brand pill, together at the right
+   end; the pill is always last (owner, 8 Nov). See-through like the bar, so
+   only the pills take presses. */
+.switcherEnd {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  pointer-events: none;
 }
 
 .switcherSort .sortSwitch {

@@ -10,7 +10,6 @@
 // Props
 //   feed            "campus" | "country" | "global" — where the post goes
 //   countryName     the country's name, for a country feed ("India")
-//   countryCode     its two-letter code, for the flag where the post goes
 //   viewer          { username, name?, avatar? }
 //   showAvatar      the avatar inside the line; off on a laptop, where the page
 //                   shows one shared avatar on the panels' divider
@@ -29,7 +28,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
-  GraduationCap,
   ImagePlus,
   Loader2,
   MessageCircleWarning,
@@ -39,13 +37,12 @@ import {
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import AppToast, { useToast } from "../../AppToast/AppToast";
 import ConfirmDialog from "../../ConfirmDialog/ConfirmDialog";
-import { GlobeIcon } from "../AnimatedIcons/AnimatedIcons";
 import Popover from "../Popover/Popover";
 import EmojiPickerPopover from "../ReactionBar/EmojiPickerPopover";
 import GifPicker from "../GifPicker/GifPicker";
 import SupportCard from "./SupportCard";
 import useComposer, { COMPOSER_TEXT } from "../../../hooks/useComposer";
-import { flagEmoji } from "../../../utils/community";
+import useMediaQuery from "../../../hooks/useMediaQuery";
 import styles from "./Composer.module.css";
 
 /* Spec §2.1 (and §4 for a reply). */
@@ -54,28 +51,6 @@ function placeholderFor(feed, countryName, isReply, replyToUsername) {
   if (feed === "country") return `Share with students in ${countryName}`;
   if (feed === "global") return "Share with students everywhere";
   return "What's happening on campus?";
-}
-
-/* Spec §2.2, where the post goes: only an icon or a flag, never a word. */
-function Destination({ feed, countryName, countryCode }) {
-  if (feed === "country") {
-    return (
-      <span
-        className={`${styles.chip} ${styles.chipIcon}`}
-        role="img"
-        aria-label={`Posting to ${countryName}`}
-        title={countryName}
-      >
-        {flagEmoji(countryCode) || <GlobeIcon size={14} />}
-      </span>
-    );
-  }
-  const label = feed === "global" ? "Global" : "Campus";
-  return (
-    <span className={`${styles.chip} ${styles.chipIcon}`} role="img" aria-label={`Posting to ${label}`} title={label}>
-      {feed === "global" ? <GlobeIcon size={14} /> : <GraduationCap size={13} aria-hidden="true" />}
-    </span>
-  );
 }
 
 /* Spec §2.2: Enter posts and Shift+Enter starts a new line, as in the chat
@@ -89,7 +64,6 @@ function isSendKey(e) {
 export default function Composer({
   feed = "campus",
   countryName = "",
-  countryCode = "",
   viewer,
   showAvatar = true,
   parentId = null,
@@ -114,6 +88,11 @@ export default function Composer({
   const fileRef = useRef(null);
   const selection = useRef({ start: 0, end: 0 });
 
+  // The avatar is as tall as the Post pill, so it fills the field's left end the
+  // way the pill fills the right one (Composer.module.css). AvatarImg writes its
+  // size inline when there's no photo, so it's chosen here. Input type, not
+  // screen width: the same features on every size (frontend/CLAUDE.md §18).
+  const coarsePointer = useMediaQuery("(pointer: coarse)");
   const placeholder = placeholderFor(feed, countryName, isReply, replyToUsername);
   const isEmpty = c.text.trim() === "" && c.photos.length === 0 && !c.gif;
 
@@ -321,7 +300,7 @@ export default function Composer({
             <AvatarImg
               src={viewer?.avatar}
               name={viewer?.name || viewer?.username}
-              size={24}
+              size={coarsePointer ? 36 : 26}
               className={styles.avatar}
             />
           )}
@@ -401,10 +380,6 @@ export default function Composer({
                 >
                   <Smile size={16} aria-hidden="true" />
                 </button>
-                {/* On a laptop the badge on the divider's avatar says this. */}
-                {!isReply && showAvatar && (
-                  <Destination feed={feed} countryName={countryName} countryCode={countryCode} />
-                )}
               </div>
             </div>
 

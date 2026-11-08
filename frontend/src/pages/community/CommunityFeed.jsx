@@ -182,7 +182,6 @@ export default function CommunityFeed({
   const composerProps = {
     feed: kind,
     countryName,
-    countryCode: country,
     viewer,
     showAvatar: !inPanel, // on a laptop the avatar is the one on the divider
     onSubmit: samplePost,
