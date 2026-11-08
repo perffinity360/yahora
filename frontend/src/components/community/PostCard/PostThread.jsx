@@ -35,9 +35,10 @@ import {
 } from "../../../utils/community";
 import styles from "./PostCard.module.css";
 
-/* The curve from the line into an avatar: a quarter circle of RAIL_RADIUS
-   (the --rail-r in the CSS), then straight on, stopping RAIL_GAP short of the
-   avatar 22 px from the line. */
+/* Where the curve from the line into an avatar takes the pointer: a quarter
+   circle of RAIL_RADIUS (the --rail-r in the CSS), then straight on, stopping
+   RAIL_GAP short of the avatar 22 px from the line (--rail-end). The curve you
+   see is drawn by the CSS (.railTrunk::after), not here. */
 const RAIL_RADIUS = 14;
 const RAIL_GAP = 4;
 const RAIL_END = 22 - RAIL_GAP;
@@ -56,8 +57,12 @@ function distinct(list) {
 }
 
 /* One row's piece of the line: straight down through the row (only as far as
-   the curve, in the last row), and the curve. Each part takes the pointer 3 px
-   either side of what you see. */
+   the curve, in the last row), and the curve. Both are CSS borders on the same
+   element, so they snap to the screen's pixels together: an SVG curve was
+   anti-aliased at the exact position while the border snapped, and the curve
+   started a fraction of a pixel left of the line (owner, 8 Nov). Each part
+   takes the pointer 3 px either side of what you see; for the curve that's the
+   invisible SVG path. */
 function Rail() {
   return (
     <>
@@ -71,7 +76,6 @@ function Rail() {
         focusable="false"
       >
         <path className={styles.railHit} d={BRANCH} />
-        <path className={styles.railLine} d={BRANCH} />
       </svg>
     </>
   );

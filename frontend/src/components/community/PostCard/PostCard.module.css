@@ -13,8 +13,9 @@
   --text-line: 20px;
   --thread-rail: var(--zone-rail, var(--community-rail));
   --rail-hit: 7.5px; /* what takes the pointer: the 1.5 px line and 3 px either side */
-  --rail-w: 1.5px; /* the line; 2.5 while pointed at */
+  --rail-w: 1.5px; /* the line; 2 while pointed at */
   --rail-r: 14px; /* the curve into a reply's avatar: RAIL_RADIUS in PostThread.jsx */
+  --rail-end: 18px; /* how far the curve runs from the line: RAIL_END in PostThread.jsx */
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   column-gap: 8px;
@@ -545,8 +546,10 @@ a.time:hover {
    reply's avatar, at its middle. In the last row the straight run stops where
    the curve begins, so the line ends in its curve. The rows touch and the
    colour is opaque, so the pieces join with no gap and no darker overlap.
-   Pointing at any piece darkens the whole line; each piece takes the pointer
-   only 3 px either side of what you see. */
+   Pointing at any piece turns the whole line the colour of the card's left
+   edge (--zone-accent) and a little thicker, 2 px (owner, 8 Nov; was a darker
+   rail at 2.5 px). Each piece takes the pointer only 3 px either side of what
+   you see. */
 .thread {
   --rail-x: -22px; /* from the text column back to the middle of the post's avatar */
   --elbow: 14px; /* from the row's top to the middle of its avatar */
@@ -588,8 +591,8 @@ a.time:hover {
 
 @media (hover: hover) {
   .post:has(.stem:hover, .railTrunk:hover, .railHit:hover) {
-    --thread-rail: var(--zone-rail-hover, var(--community-rail-hover));
-    --rail-w: 2.5px;
+    --thread-rail: var(--zone-accent, var(--community-rail-hover));
+    --rail-w: 2px;
   }
 }
 
@@ -636,8 +639,28 @@ a.time:hover {
   height: max(0px, calc(var(--elbow) - var(--rail-r)));
 }
 
-/* The curve starts on the line, --rail-r above the avatar's middle. Only its
-   wide transparent copy takes the pointer. */
+/* The curve starts on the line, --rail-r above the avatar's middle: a box whose
+   left and bottom borders are the line, its corner rounded so the line's
+   centre runs on a circle of --rail-r. It sits at exactly the trunk's offset
+   (the same `left` as ::before, on the same element), so the two snap to the
+   same pixels and the curve leaves the line from inside it (owner, 8 Nov). */
+.railTrunk::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--elbow) - var(--rail-r));
+  left: calc(50% - var(--rail-w) / 2);
+  width: calc(var(--rail-end) + var(--rail-w) / 2);
+  height: calc(var(--rail-r) + var(--rail-w) / 2);
+  border-left: var(--rail-w) solid var(--thread-rail);
+  border-bottom: var(--rail-w) solid var(--thread-rail);
+  border-bottom-left-radius: calc(var(--rail-r) + var(--rail-w) / 2);
+  pointer-events: none;
+  transition: border-color 140ms var(--community-ease), border-width 140ms var(--community-ease),
+    left 140ms var(--community-ease), width 140ms var(--community-ease), height 140ms var(--community-ease),
+    border-radius 140ms var(--community-ease);
+}
+
+/* Only the curve's wide transparent copy takes the pointer. */
 .railBranch {
   position: absolute;
   top: calc(var(--elbow) - var(--rail-r));
@@ -646,18 +669,8 @@ a.time:hover {
   pointer-events: none;
 }
 
-.railLine,
 .railHit {
   fill: none;
-}
-
-.railLine {
-  stroke: var(--thread-rail);
-  stroke-width: var(--rail-w);
-  transition: stroke 140ms var(--community-ease), stroke-width 140ms var(--community-ease);
-}
-
-.railHit {
   stroke: transparent;
   stroke-width: 7.5; /* --rail-hit */
   pointer-events: stroke;
@@ -925,7 +938,7 @@ a.time:hover {
   .post,
   .stem::before,
   .railTrunk::before,
-  .railLine,
+  .railTrunk::after,
   .replyUsername,
   .slidePhoto,
   .chevron,

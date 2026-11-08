@@ -339,6 +339,53 @@
   color: var(--error-text);
 }
 
+/* ── On a phone: in the floating switcher (owner, 8 Nov) ─────────────────
+   Below 1024 px there's no divider, and the site navbar is hidden on a phone
+   too, so the pill joins the switcher (Community.module.css .switcherEnd),
+   always at its right end, after Hot · New when that's shown (owner, 8 Nov).
+   It's 34 tall there, like the pills beside it, with the same logo. The menu
+   opens under it, lined up with the bar's right edge (the switcher, sticky, is
+   its containing block), and grows from that corner. */
+/* 14 px from the screen's edge, not the bar's 8: with its 2 px ring and its
+   shadow it sat on the very edge, where a curved or rounded screen cuts it
+   (owner, 8 Nov). */
+.inBar {
+  display: block;
+  flex: 0 0 auto;
+  margin-right: 6px;
+  pointer-events: auto; /* the switcher lets presses through */
+}
+
+.inBar .centerBrandPill {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  height: 34px;
+  transform: none;
+}
+
+.inBar .centerBrandPill:hover {
+  transform: translateY(-1px);
+}
+
+.inBar .centerBrandPill:active {
+  transform: scale(0.97);
+}
+
+.inBar .menu {
+  top: calc(100% - 2px);
+  right: 14px; /* lined up with the pill */
+  left: auto;
+  max-width: calc(100% - 16px);
+  transform-origin: calc(100% - 24px) -12px;
+  transform: translateY(-6px) scale(0.96);
+}
+
+.inBar .menu[data-open] {
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .centerBrandPill,
   .burger i,

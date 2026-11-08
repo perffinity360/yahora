@@ -12,7 +12,8 @@
 //              there's a mouse), then whichever composer you last used.
 //              Pressing the avatar switches sides.
 //   < 1024 px  one feed at a time, with a floating switcher and composer that
-//              the posts pass underneath.
+//              the posts pass underneath. The site navbar is hidden here too
+//              (App.jsx); the brand pill sits in the switcher instead.
 //
 // Only one layout is mounted (useMediaQuery), so the feeds load once. Both
 // layouts offer the same feeds and the same actions (frontend/CLAUDE.md §18).
@@ -585,19 +586,29 @@ function NarrowLayout({
           >
             <CampusIcon size={17} />
           </button>
-          <div className={`${styles.worldSegment} ${onWorld ? styles.worldSegmentActive : ""}`}>
+          {/* The whole purple pill anchors the dropdown, so a press on either
+              button counts as inside it and toggles it, instead of closing it
+              and opening it again. */}
+          <div
+            ref={setMenuAnchor}
+            className={`${styles.worldSegment} ${onWorld ? styles.worldSegmentActive : ""}`}
+          >
+            {/* Off this feed it selects the feed; on it, it opens the dropdown,
+                like the chevron (owner, 8 Nov: the chevron alone was too small
+                a target on a phone). */}
             <button
               type="button"
               aria-pressed={onWorld}
+              aria-haspopup={onWorld ? "listbox" : undefined}
+              aria-expanded={onWorld ? menuOpen : undefined}
               className={styles.segment}
-              onClick={() => setSegment("world")}
+              onClick={() => (onWorld ? setMenuOpen((o) => !o) : setSegment("world"))}
             >
               <WorldGlyph value={world} size={15} />
               <span className={styles.segmentName}>{label}</span>
             </button>
             {/* Its own button, inside the purple, and only once you're on this feed. */}
             <button
-              ref={setMenuAnchor}
               type="button"
               inert={!onWorld}
               aria-haspopup="listbox"
@@ -611,11 +622,17 @@ function NarrowLayout({
             </button>
           </div>
         </div>
-        {onWorld && (
-          <div className={styles.switcherSort}>
-            <SortSwitch sort={sort} onChange={setSort} />
-          </div>
-        )}
+        {/* The site navbar is hidden here on a phone too (App.jsx); the menu is
+            this pill, always at the right end, with Hot · New just before it
+            on the country / Global side (owner, 8 Nov). */}
+        <div className={styles.switcherEnd}>
+          {onWorld && (
+            <div className={styles.switcherSort}>
+              <SortSwitch sort={sort} onChange={setSort} />
+            </div>
+          )}
+          <BrandMenu inBar />
+        </div>
       </div>
 
       {onWorld ? (

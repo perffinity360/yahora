@@ -96,7 +96,9 @@ export default function CountryMenu({ anchorEl, value, countries, onChange, onCl
       placement="bottom"
       onClose={(why) => {
         onClose();
-        if (why === "escape") anchorEl?.focus();
+        // The anchor can be a pill holding buttons (the phone switcher):
+        // focus goes back to its first one.
+        if (why === "escape") (anchorEl?.matches("button") ? anchorEl : anchorEl?.querySelector("button"))?.focus();
       }}
       role="presentation"
     >

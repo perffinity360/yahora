@@ -1,4 +1,11 @@
-# Current state — rewritten 15 Sep 2026, corrected 13 Oct and 7 Nov 2026
+# Current state — rewritten 15 Sep 2026, corrected 13 Oct, 7 Nov and 8 Nov 2026
+
+> **8 Nov 2026 update (Phase 7, written on `v-p-web-community-redesign` at `aec41ca`, merged with the
+> 7 Nov pass below on 8 Nov).** Adds what each of the eight new migrations does, open issue 4 re-checked
+> (still open), the Realtime and anon-function notes, two sections, "What Phase 6B shipped" and "Phase 7
+> so far", and the loans as they stand after V-P merged (PR #100). Same rule as before: a migration file
+> proves what was *written*. That all four Phase 7 migrations are on production is from Vishwajeet's V-B
+> changelog entry (3 Nov), not from this session.
 
 > **7 Nov 2026 correction pass, at commit `34f5e91` (Phase 7, during Block V-P).** Again only claims the
 > repository contradicts were changed: the migration list (18 → 26 files) and the RLS table count
@@ -71,21 +78,26 @@ repo, the ledger is not.
 | — | `20261103053144_message_reactions_gifs` | Phase 7 (V-B, 3 of 4) |
 | — | `20261103053145_demo_usernames` | Phase 7 (V-B, 4 of 4) |
 
-The eight since 13 Oct carry no conversational number in their headers, so they have none here. Their
-headers say:
+The eight since 13 Oct carry no conversational number in their headers, so the table shows `—`. Their
+timestamps decide the order, as always.
 
-- **`message_actions`** — reply (four columns on `messages`, filled by a trigger), delete for everyone
-  (a tombstone row) and delete for me (`message_hides`, deliberately not in the Realtime publication).
-- **`product_views`** — `products.views` counts distinct students: `record_product_view()`, called by the
-  backend only. `increment_product_views()` is closed to the public key.
-- **`mark_sold`** — one buyer per listing, `products.sold_at` stamped by a trigger, `products.sold_to` dropped.
-- **`search_users_word_match`** — a piece of a name or handle finds the person (`.ver` finds `rahul.verma`).
-- **`community_posts`** — `universities.country_code`, the reworked `posts` table, `community_settings`,
-  the insert trigger (campus, country, who may reply, rate limits) and `post_visibility`.
-- **`reactions_and_reports`** — `post_reactions`, `reports`, `react_to_post()`, `create_report()` and the
-  cover trigger.
-- **`message_reactions_gifs`** — `messages.reactions` and `messages.gif`, `react_to_message()`.
-- **`demo_usernames`** — demo accounts' names start with `demo.`, real students' never do.
+- **`message_actions`** — reply (a frozen quote filled by a trigger), delete for everyone (the row is
+  kept as a tombstone and every quote of it is wiped), and delete for me (`public.message_hides`, not in
+  the Realtime publication and with no grants).
+- **`product_views`** — `products.views` now counts different students, once each, through
+  `record_product_view()` called by the backend. `increment_product_views()` is closed to the public key.
+- **`mark_sold`** — one buyer per listing, `products.sold_at` stamped by a trigger, `products.sold_to`
+  dropped, and four functions that hold every Mark as Sold rule.
+- **`search_users_word_match`** — a piece of a name or handle (`.ver`, `@rah`) now finds the person.
+- **`community_posts`** — `universities.country_code`, `public.posts` reworked for posts and replies,
+  `public.community_settings` (rate limits and report thresholds as rows), the insert trigger, feeds,
+  and the `refresh-hot-scores` cron job (every 5 minutes).
+- **`reactions_and_reports`** — `public.post_reactions`, `public.reports`, `react_to_post()`,
+  `create_report()` and the trigger that covers a reported post.
+- **`message_reactions_gifs`** — `messages.reactions` and `messages.gif`, `react_to_message()`, and
+  `last_message_has_gif` in the inbox.
+- **`demo_usernames`** — every demo account's username starts `demo.`; no real one starts `demo.`,
+  `demo-` or `demo_`. Enforced both ways by a trigger.
 
 **Applied to production:** all four Phase 7 migrations on 3 Nov (changelog entry "Phase 7 migrations
 pushed to production"). The earlier ones `[not re-verified]` from this session.
@@ -169,7 +181,10 @@ policy-less table denies every row to `anon` and `authenticated`.
 | `public.messages` | `messages_select_own` — `authenticated`, `sender_id = uid OR receiver_id = uid` | own threads only |
 | `public.visitor_metrics` | `visitor_metrics_select_all` (from 003) | footer counter |
 
-No migration after 004 adds a policy to any table. Storage carries seven policies, all from
+No migration after 004 adds a policy to any table (re-checked 8 Nov: none of the eight new files has a
+`create policy`). Every table added since 13 Oct also has `revoke all ... from anon, authenticated`, and
+every new function is revoked from `public, anon, authenticated`; the backend's service-role key is the
+only caller. Storage carries seven policies, all from
 002 and 003/004: product uploads/viewing/delete, post uploads/viewing/delete, and
 `"Avatar uploads"` — INSERT only (see open issue 3).
 
@@ -185,13 +200,15 @@ grants EXECUTE to PUBLIC by default and `anon` inherits it — is applied in 005
 the grant surface was re-pinned again by 010–012. The 25 Aug audit found exactly two functions
 anon-reachable, `increment_page_view` and `increment_product_views`, both `SECURITY DEFINER`
 and both deliberate. **`[not re-verified]`** that this is still the live grant set; migrations
-010–012 changed function definitions after that audit.
+010–012 changed function definitions after that audit. **On 8 Nov, from the files:** 6B's
+`product_views` revokes `increment_product_views` from `public, anon, authenticated`, so of those two
+only `increment_page_view` should still be anon-reachable.
 
 ### Realtime
 
-`public.messages` is the only table in the `supabase_realtime` publication `[not re-verified]`.
-No migration since adds one: `message_hides` stays out on purpose, and message reactions ride on the
-`messages` row (7 Nov, from the migration files).
+`public.messages` is the only table in the `supabase_realtime` publication `[not re-verified]` (no
+migration since has added one; `message_hides` is deliberately left out). Message reactions and
+delete-for-everyone arrive as UPDATEs of `messages` rows, so they need no new subscription.
 Both clients subscribe **unfiltered** — `frontend/src/pages/messages/Messages.jsx:1306`
 (`.channel("realtime:messages")`) and `mobile/src/contexts/RealtimeContext.tsx:215` — and
 `messages_select_own` is what makes that safe, because Realtime re-checks the SELECT policy per
@@ -221,9 +238,10 @@ banned by `backend/API.md`. Don't use the grep as a test for pagination.
 
 ### 2. ✅ Resolved in Phase 6B — `products.views` was incremented by two independent paths
 
-*Re-checked 7 Nov: `20261016061047_product_views` makes the backend the one path
-(`record_product_view()`, `products.controller.js`), and revokes `increment_product_views()` from the
-public key. No client calls either any more. The 13 Oct text follows.*
+*Kept under its old number. Migration `product_views` (16 Oct) closed it: one path, the backend's
+`record_product_view()` (`products.controller.js:739`), once per student per listing, and
+`increment_product_views()` is closed to the public key. The website's ProductCard no longer calls it.
+The 13 Oct text follows.*
 
 `frontend/src/components/ProductCard/ProductCard.jsx:233` (direct RPC from the browser) and
 `backend/src/modules/products/products.controller.js:656` (on `GET /products/:id`). Different
@@ -245,7 +263,7 @@ bucket, in 003 and again in 004, and both are `with check (bucket_id = 'avatars'
 There is still no SELECT and no DELETE. Reads work only because the bucket is `public = true`,
 and nothing can delete an old avatar through RLS. Partially resolved; the other half is open.
 
-### 4. `utils/notify.js` writes to a table that does not exist
+### 4. `utils/notify.js` writes to a table that does not exist — still open on 8 Nov
 
 *Still open on 7 Nov: no migration creates `notifications`, and `modules/notifications/` is still a
 placeholder with no routes (backend/API.md marks it "not built yet").*
@@ -253,7 +271,10 @@ placeholder with no routes (backend/API.md marks it "not built yet").*
 `backend/src/utils/notify.js:61` does `supabase.from('notifications').upsert(...)`. There is
 **no `create table ... notifications`** anywhere under `supabase/` — the only two mentions are
 a comment in 003 and a reserved-word row in 005. `notify()` is wrapped so a failure never
-breaks the calling action, so this fails silently today. Phase 7 per the Phase 3 runbook.
+breaks the calling action, so this fails silently today. Phase 7 per the Phase 3 runbook. **Still true
+on 8 Nov:** none of the four Phase 7 migrations creates `notifications`, and the Phase 7 report trigger
+doesn't write notifications (`backend/API.md`). The file's own header still says the table arrives in
+"migration 006", which is stale.
 
 ### 5. ✅ Fixed 7 Nov — `backend/API.md` was wrong about `increment_page_view()`
 
@@ -376,7 +397,7 @@ handoff entry is in `docs/CHANGELOG.md` (15 Sep, reconstructed).
 
 ## What shipped since 15 Sep — where to read it
 
-This file doesn't retell it. In order:
+The full record, in order. Phase 6B and Phase 7 are also summarised in the two sections after this.
 
 - **Phases 4 and 5** — `docs/CHANGELOG.md` (frozen on 27 Sep; open it only to follow a link).
 - **Phase 6A** — `docs/changelog/releases/phase-6A.md`.
@@ -385,6 +406,49 @@ This file doesn't retell it. In order:
 - **Phase 7** (the community: posts, reactions, reports, moderation) — the entries in `docs/changelog/`
   (`node scripts/changelog.mjs recent`). Its migrations reached production on 3 Nov, and the posts and
   reports API passed T1 there on 6 Nov.
+
+## What Phase 6B shipped (13–29 Oct)
+
+From `docs/changelog/releases/phase-6B.md` (27 entries) and the four 6B migrations above.
+
+- **Identity rule:** a demo account never sees a real student, and hidden sellers, commenters and
+  profiles show privacy states, in `products`, `share` and `user` (backend) and on both clients.
+- **Message actions:** reply, delete for everyone (60 minutes), delete for me; a WhatsApp-style
+  long-press menu and multi-select, on web and app.
+- **Views:** one view per student per listing (open issue 2, closed).
+- **Mark as Sold, reworked:** the buyer is found by search, "Off Yahora" is an answer, a wrongly tagged
+  buyer can remove themselves; sold cards and a buyer picker on web and app.
+- **Smaller fixes:** you can't message yourself; photo and avatar file names no longer contain user ids;
+  visitor mode hides like and save on another campus.
+
+## Phase 7 so far (as of 8 Nov) — the community
+
+Plan: `docs/runbooks/PHASE_7_RUNBOOK.md`. Contract: `backend/API.md`, "posts module (Phase 7)" and
+"reports module (Phase 7)".
+
+| Block | What | State on 8 Nov |
+|---|---|---|
+| V-A | Moderation (`utils/moderation.js`, OpenAI), emoji and pagination helpers; the API contract | Done |
+| V-B | The four migrations | On production since 3 Nov |
+| N-S | Composer, GIF picker (KLIPY), report form, `/dev/community` test page (website) | Merged, PR #94 |
+| N-B | `/api/posts`: 8 reading routes, posting, deleting, reacting | Merged, PR #96 |
+| N-C | `POST /api/reports` | Merged, PR #98 |
+| T1 | Posts and reports API on production | Passed 6 Nov (country view-only check skipped: every live campus is in India) |
+| V-P | Website community redesign, on `sampleData.js` | Merged 8 Nov, PR #100 |
+| V-C | Message reactions and GIFs, demo usernames at login, campus countries | Not started. `API.md` marks its routes "not built yet" |
+| V-D – V-G, N-D part 2 … | The app community, the website on the real API, sign-off | Not started |
+
+**What's true on production right now:**
+
+- The posts and reports APIs are live; the website's `/community` still runs on sample data until N-D
+  part 2, and the app has no Community tab yet.
+- Every post with text or photos goes through OpenAI moderation. If a check can't run, the post is
+  held (`pending`). There is **no re-check job yet** (it's in V-C), so a held post stays held.
+- `refresh-hot-scores` runs every 5 minutes (`cron.schedule` in `community_posts`).
+- Until V-C, `backend/scripts/seedDemo.js` fails with `USERNAME_RESERVED`, and a new demo account gets
+  no username at login (**Skip for now** still works).
+- Post photos are in a public bucket under random names; a held post's photos are reachable by URL
+  (accepted for Phase 7, private storage is on the Phase 9 list).
 
 ---
 
@@ -437,14 +501,17 @@ carries an `OWNER:` banner.
 **Phase 6B loan — ended.** `products` and `share` were lent to Neeraj from 15 Oct and came back to
 Vishwajeet at the 6B sign-off on 29 Oct (`docs/changelog/releases/phase-6B.md`, entries 3 and 27).
 
-**Phase 7 loans — current (7 Nov):**
+**Phase 7 loans:**
 
-- **`backend/src/modules/posts/`** is lent to Neeraj until the Phase 7 sign-off (changelog entry
-  "Ownership loan: posts module to Neeraj for Phase 7", 2 Nov). The `OWNER:` banners stay unchanged.
-- **The website's community files** (`frontend/src/pages/community/*`,
-  `frontend/src/components/community/*`, `utils/community.js`, the community variables in
-  `global.css`, `pages/dev/CommunitySandbox.jsx`, `docs/design/COMMUNITY_SPEC.md`) are lent to
-  Vishwajeet until branch `v-p-web-community-redesign` merges (changelog entry, 3 Nov).
+- **`backend/src/modules/posts/*` — current.** Lent to **Neeraj** until the Phase 7 sign-off (changelog
+  entry "Ownership loan: posts module to Neeraj for Phase 7", 2 Nov). The `OWNER:` banners stay
+  Vishwajeet's; the database stays Vishwajeet's.
+- **The website's community files — ended 8 Nov.** `frontend/src/pages/community/*`,
+  `frontend/src/components/community/*`, `frontend/src/utils/community.js`, the community variables in
+  `frontend/src/styles/global.css`, `pages/dev/CommunitySandbox.jsx` and `docs/design/COMMUNITY_SPEC.md`
+  were lent to **Vishwajeet** for the redesign (Block V-P, changelog entry of 3 Nov) until
+  `v-p-web-community-redesign` merged, which it did in PR #100. They are Neeraj's again. V-P also
+  changed `frontend/src/App.jsx` (the navbar is hidden on `/community`), which was outside the loan.
 
 ---
 

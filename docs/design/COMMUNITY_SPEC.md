@@ -1,6 +1,17 @@
 # Community — design spec (Phase 7)
 
-**Version 3.6 · 8 November 2026 · for the website and the app**
+**Version 3.7 · 8 November 2026 · for the website and the app**
+
+> **Changed in version 3.7 (owner, 8 Nov):** each reply's curve leaves the thread from inside the line
+> (it started a fraction of a pixel to its left); pointed at, the thread takes the card's left-edge colour
+> and goes to 2 px, not 2.5 (§4); equal room above and below the laptop composer (§2.1); the Post pill sits
+> concentric in the composer's rounded end, your avatar mirrors it at the other end, and on a phone the text
+> line sits on its middle (§2.2); on a phone the site navbar is hidden too, and the brand
+> pill sits at the right end of the switcher, 14 px in from the screen's edge, and the floating composer 14 px
+> in from both (§1.2, §2.1); no cap or flag chip in the phone composer (§2.2); Settings in the brand menu,
+> marked `Soon` (§1.1); no strip of bare page
+> under a short feed on a phone (§1.2); on a phone, tapping the selected country's name opens the dropdown
+> (§1.2); the two unused campus badge tokens are gone (§12).
 
 > **Changed in version 3.6 (owner, 8 Nov):** the doodles at 15%; the divider moves freely with no snap, a
 > panel's content stops adjusting at 320 px and is cut off (as on LeetCode); darker, thicker threads on
@@ -90,9 +101,9 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   could bring a page scrollbar in and out, which shakes the divider. **The site
   footer isn't shown** on the Community page (nor on Messages).
 - **No text halo any more** (owner, 7 Nov): the cards give the text its ground instead.
-- **The site navbar is hidden on a laptop** (1024 px and up), so the panels reach the top of the window.
-  It stays mounted, out of sight, because it keeps presence, delivery ticks and the unread count running.
-  A narrow window keeps the navbar.
+- **The site navbar is hidden on the Community page** at every width (on a narrow window since 8 Nov, §1.2),
+  so the panels reach the top of the window. It stays mounted, out of sight, because it keeps presence,
+  delivery ticks and the unread count running.
 - **The centre brand pill** sits where the two headers meet, at the top of the divider, and moves with it
   (`--split-pct`, measured from the divider; kept 64 px from the window's edges when a panel is collapsed).
   **It stays inside the 36 px headers it joins:** top 4, 28 tall, padding 0 9 0 8, radius 999, white, a
@@ -104,8 +115,8 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 - **Its menu** opens under it (top 40, 250 wide), glass (`communityMenuGlass`, blur 18) with radius 16
   and `communityMenuShadow`, springing from the pill while its rows arrive 22 ms apart: **Home**,
   **Marketplace**, **Community** (current, white on `purpleDark`), **Messages** with the unread count,
-  **Saved / Cart** (to the dashboard, where the Watchlist is), **Notifications** (marked `Soon`; there is
-  nothing to open yet), then **you**: photo, name, `Your profile` (to the dashboard) and a log-out button.
+  **Saved / Cart** (to the dashboard, where the Watchlist is), **Notifications** and **Settings** (both marked
+  `Soon`; there is nothing to open yet, and the site has no settings page), then **you**: photo, name, `Your profile` (to the dashboard) and a log-out button.
   Rows are 36 tall, Inter 500 14, `reactionMineBg` on hover. Esc or a press elsewhere closes it; Esc gives
   the focus back to the pill.
 - **Header clearance:** each header keeps clear of the pill, so ⤢ never slides under it: 72 px at 50 / 50,
@@ -162,7 +173,7 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   the keyboard). Using either composer selects its side, and it **stays selected when you click away**: its
   composer keeps its highlight (§2.1) and your avatar keeps that half filled in. A collapsed panel, or a
   view-only country (§1.4), can't be selected; the other side is shown instead until it can.
-- **Your avatar on the divider:** 56 px across, 4.5 px from the bottom, so it sits across the top edge of the
+- **Your avatar on the divider:** 56 px across, 5 px from the bottom, so it sits across the top edge of the
   composer bar with the two composers tucked in under it. Nothing runs below it. It is a child of the
   divider, so it moves with it as you resize, and it grows slightly on hover and while dragging. **Pressing it
   switches sides** (and puts the cursor in that composer), so the pointer is a hand **on every part of it**
@@ -195,7 +206,7 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 
 ```
 ┌──────────────────────────────────┐
-│ ( (cap) [🇮🇳 India ⌄] )    ([🔥|🕐])│   ← two floating glass pills; posts pass underneath
+│ ( (cap) [🇮🇳 India ⌄] ) ([🔥|🕐]) (≡Y)│   ← floating pills: feeds, Hot · New, brand
 │ post                             │
 │ ──────────────────────────────── │
 │ post                             │
@@ -207,9 +218,20 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   Posts scroll underneath, which keeps the screen feeling open. It takes 50 px.
 - **The pill:** a campus icon, then the selected country or Global.
 - **The chevron shows only on the country / Global side,** inside the same purple as the country's
-  name. It slides open as you switch, and on the campus side it takes up no room. It stays its own
-  button: tapping the name selects the feed, and only the chevron opens the dropdown (§1.3).
-- **Hot · New** is the second pill, only on the country / Global side.
+  name. It slides open as you switch, and on the campus side it takes up no room. From the campus side,
+  tapping the name selects the country / Global feed; **once you're on it, tapping the name opens the
+  dropdown too**, like the chevron (§1.3; owner, 8 Nov: the chevron alone was too small a target on a
+  phone). The dropdown hangs from the whole purple pill.
+- **Hot · New** is the last pill, only on the country / Global side.
+- **The brand pill (website, owner 8 Nov):** the site navbar is hidden here on a phone too, so the brand
+  pill (§1.1) sits in the switcher, **always at its right end**, with Hot · New just before it on the country /
+  Global side, **14 px from the screen's edge** (the bar's other pills keep 8): with its 2 px ring and shadow
+  it sat on the very edge, where a curved or rounded screen cuts it. It is 34 tall here, like the pills
+  beside it, with the same logo, ☰ and unread count. Its menu (§1.1) opens under it, lined up with the pill's
+  right edge, so it never runs off a 360 px screen. If the feeds pill runs out of room, the country's name shortens with `…`.
+- **The page is exactly the visible screen** (`100dvh`) when its feed is short, so there is nothing to
+  scroll into under the floating composer or view-only line. At `100vh` a phone browser with its address
+  bar showing let a short feed scroll into a strip of bare page (owner, 8 Nov).
 - **The look stays thin; a finger still gets 44 px.** On a touch screen each control has an invisible
   hit area reaching 44 px tall. In the app, use `hitSlop`.
 - **App:** a new **Community** tab. The tabs are Marketplace, Community, Messages, Profile.
@@ -251,14 +273,15 @@ floats on glass like the composer.
 ### 2.1 Closed
 
 The composer is **always at the bottom of the feed**, separately for each panel: a 38.5 px dock in
-`communityDock` with a 1.5 px `communityRail` top line, holding a white one-line field 33 px tall, 2.5 px
-under the line and 1.5 px above the bottom, with a 1.5 px `communityRail` outline and Inter 400 14/20 text.
+`communityDock` with a 1.5 px `communityRail` top line, holding a white one-line field 33 px tall, 2 px
+under the line and 2 px above the bottom (the same room either side, owner 8 Nov; was 2.5 and 1.5), with a 1.5 px `communityRail` outline and Inter 400 14/20 text.
 **At the end of the line:** the photo icon, faded to 65%, and the `Post` pill.
 
 On a laptop each field ends 13 px from the divider's centre, tucked in under the shared avatar (§1.1). Its
 corners are radius 20 on the outer side and 18 on the side by the avatar, and its padding keeps the text and
-tools clear of the avatar. On a narrow window the composer floats over the posts, radius 20, with your avatar
-(24) inside the field. Grey text depends on the feed:
+tools clear of the avatar. On a narrow window the composer floats over the posts, 14 px in from each side of
+the screen (like the brand pill, so a curved screen doesn't cut its ends; was 8), radius 20, with your avatar
+(26, or 36 on a touch screen, §2.2) inside the field. Grey text depends on the feed:
 
 | Feed | Grey text |
 |---|---|
@@ -279,7 +302,7 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ [photo][photo][photo]   or   [GIF preview]              │  ← each with an ✕
-│ text…  (grows with the text)   🖼 GIF ☺ (cap) 87 ( Post ) │  ← tools stay at the end of the last line
+│ text…  (grows with the text)   🖼 GIF ☺ 87 ( Post )       │  ← tools stay at the end of the last line
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -290,11 +313,22 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
   is one character).
   - The counter appears only when 100 or fewer are left. It turns errorText at 0, and Post
     is disabled above 1,000.
-- **Where the post goes** is shown only as an icon: a graduation cap for campus, a globe for Global, or the
-  country's flag. On a laptop it's the badge on your avatar (§1.1); on a narrow window it's a small chip with
-  the tools. It always matches the feed you're in, and can't be changed inside the composer.
+- **Where the post goes** always matches the feed you're in, and can't be changed inside the composer. On a
+  laptop the badge on your avatar shows it (§1.1); on a narrow window the grey text and the switcher say it,
+  and there's no chip in the composer (owner, 8 Nov: the cap or flag beside the tools is gone).
 - **Post** is a 26 px pill with the word `Post` (`Reply` for a reply), Inter 600 13 in white, on `purpleDark` on
   the campus feed and `communityWorldStrong` on the others.
+- **It sits concentric in the field's rounded end** (owner, 8 Nov): the same gap above, below and after it,
+  and its radius is the field's end radius minus that gap, so the two curves run parallel. With a mouse the
+  field is 33 tall (end radius 16.5) and the pill sits 3.5 px in (radius 13); on a touch screen it's 41 tall
+  (radius 20), the pill 36 tall and 2.5 px in, radius 17.5. Only the left laptop composer, whose end is tucked
+  under your avatar, keeps its 26 px end padding.
+- **Your avatar mirrors the Post pill at the other end** (narrow window and app, owner 8 Nov): as tall as the
+  pill (26 with a mouse, 36 on a touch screen) and the same gap below and before it (3.5 / 2.5 px), so it sits
+  concentric in the field's left end. The reply chip and the previews keep the field's 12 px start padding.
+- **The text line sits on the Post pill's middle.** On a touch screen, where the tools are 36 tall, the text
+  box sits 4 px up from the row's bottom, so its line doesn't sit 4 px low. As the text grows, its last line
+  stays level with the pill.
 - **Pasting rich text** (a Google Doc, ChatGPT, a web page) brings its bold, italic, lists … in as
   WhatsApp's symbols, on the website (`TEXT_FORMAT_SPEC.md` §4).
 - **Enter posts, Shift + Enter starts a new line,** on the website, the same as the chat (MESSAGES_SPEC §2
@@ -471,8 +505,13 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   stop **4 px short** of the avatar, at its middle. The line itself carries straight on to the next reply.
   The last one ends in its curve, and doesn't continue. The colour is opaque, so joins never show as a
   darker patch. (Owner's reference, 6 Nov: a broad curve like a quarter of a circle, not a tight corner.)
-- **Pointing at the line** (with a mouse) darkens all of that post's line to its zone's hover colour (`communityRailCampusHover` or
-  `communityRailWorldHover`) **and thickens it from 1.5 to 2.5 px**, over
+  **On the website the curve is drawn by the same border painter as the line** (a box with a left and a
+  bottom border and a rounded corner, on the same element and at the same offset), so the two land on the
+  same screen pixels. As an SVG stroke it was anti-aliased at the exact position while the line snapped,
+  and the curve started a fraction of a pixel left of the line (owner, 8 Nov).
+- **Pointing at the line** (with a mouse) turns all of that post's line **the colour of the card's left
+  edge** (`purpleDark` on campus, `pinkDark` elsewhere; `communityRailHover` where there is no zone) **and
+  thickens it a little, from 1.5 to 2 px** (owner, 8 Nov; was a darker hover colour at 2.5 px), over
   140 ms. Each piece takes the pointer **3 px either side** of the line (7.5 px in all), following the
   curve; the empty corner inside a curve doesn't.
 - **Each reply:** 45 px from the top of one to the top of the next when it has one line: 4 above, a
@@ -761,9 +800,7 @@ A **Posts** tab sits next to the existing tabs:
 | `communityRail` | `--community-rail` | `#D1AAD7` | the reply thread (opaque, so its pieces join cleanly) |
 | `communityRailHover` | `--community-rail-hover` | `#9552A3` | the thread while you point at it (was `#B07FBA`, too faint) |
 | `communityRailCampus` | `--community-rail-campus` | `#A86BBB` | the thread in the campus panel |
-| `communityRailCampusHover` | `--community-rail-campus-hover` | `#3E0A50` | the same, pointed at (was `#7E3C92`, then `#5C1D72`) |
 | `communityRailWorld` | `--community-rail-world` | `#D27AA3` | the thread in the country / Global panel |
-| `communityRailWorldHover` | `--community-rail-world-hover` | `#7A1747` | the same, pointed at (was `#B04A7E`, then `#8E2A5D`) |
 | `communityPanelCampus` | `--community-panel-campus` | `#F0E5F7` | the campus panel's ground, a purple tint |
 | `communityPanelCampusVeil` | `--community-panel-campus-veil` | `rgba(240,229,247,0.85)` | over the doodle tile, leaving it at 15% |
 | `communityPanelWorld` | `--community-panel-world` | `#FCE9F1` | the country / Global panel's ground, a pink tint |
@@ -773,8 +810,6 @@ A **Posts** tab sits next to the existing tabs:
 | `communityPillHover` | `--community-pill-hover` | `#EFD8EA` | an action pill under the pointer |
 | `communityPillMineHover` | `--community-pill-mine-hover` | `rgba(128,0,128,0.17)` | one you've reacted with, under the pointer |
 | `communityPillLift` | `--community-pill-lift` | `0 2px 6px rgba(79,1,79,0.14)` | the shadow of that 1 px lift |
-| `communityBadgeCampusBg` | `--community-badge-campus-bg` | `#F3E3F5` | kept for later: the `CAMPUS` badge, removed 7 Nov |
-| `communityBadgeCampusBorder` | `--community-badge-campus-border` | `rgba(128,0,128,0.18)` | its outline (kept for later) |
 | `communityBadgeWorldBg` | `--community-badge-world-bg` | `#FCE4EE` | the `ALL CAMPUSES` badge |
 | `communityBadgeWorldText` | `--community-badge-world-text` | `#C82863` | its text |
 | `communityBadgeWorldBorder` | `--community-badge-world-border` | `rgba(235,72,127,0.22)` | its outline |
