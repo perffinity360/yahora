@@ -1,20 +1,39 @@
 // frontend/src/components/community/Composer/Composer.jsx
 //
-// The composer — docs/design/COMMUNITY_SPEC.md §2: the closed row, the open
-// composer, and every result of pressing Post (§2.3). All rules live in
-// hooks/useComposer.js; this file is only the look and the wiring.
+// The composer — docs/design/COMMUNITY_SPEC.md §2: one line with its tools at the
+// end, highlighted while in use, and every result of pressing Post (§2.3). All
+// rules live in hooks/useComposer.js; this file is only the look and the wiring.
+//
+// Its colours and end padding come from the dock around it, through
+// --composer-* variables (Community.module.css), with neutral defaults.
 //
 // Props
 //   feed            "campus" | "country" | "global" — where the post goes
 //   countryName     the country's name, for a country feed ("India")
-//   viewer          { username, campus, name?, avatar? }
+//   viewer          { username, name?, avatar? }
+//   showAvatar      the avatar inside the line; off on a laptop, where the page
+//                   shows one shared avatar on the panels' divider
 //   parentId        set for a reply: always open, text and a GIF, no photos
 //   replyToUsername the parent post's author, for the reply's grey text
+//   autoFocus       put the cursor in the text on mount
+//   focusSignal     optional number — each new value puts the cursor in the text
+//   selected        optional — keep the highlight while not in use, because this
+//                   is the side you're writing on (the laptop's two composers)
+//   onCancelReply   optional () — shows the ✕ on "Replying to", and is called
+//                   when an empty reply is left
 //   onSubmit        (formData, { confirm }) → Promise<{ status, body }>
 //   onPosted        optional (post) — a 201, so the feed can show it on top
+//   onActiveChange  optional (boolean) — this composer is in use, or no longer is
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ImagePlus, Loader2, MessageCircleWarning, Smile, X } from "lucide-react";
+import {
+  ArrowUp,
+  ImagePlus,
+  Loader2,
+  MessageCircleWarning,
+  Smile,
+  X,
+} from "lucide-react";
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import AppToast, { useToast } from "../../AppToast/AppToast";
 import ConfirmDialog from "../../ConfirmDialog/ConfirmDialog";
@@ -23,6 +42,7 @@ import EmojiPickerPopover from "../ReactionBar/EmojiPickerPopover";
 import GifPicker from "../GifPicker/GifPicker";
 import SupportCard from "./SupportCard";
 import useComposer, { COMPOSER_TEXT } from "../../../hooks/useComposer";
+import useMediaQuery from "../../../hooks/useMediaQuery";
 import styles from "./Composer.module.css";
 
 /* Spec §2.1 (and §4 for a reply). */
@@ -33,34 +53,48 @@ function placeholderFor(feed, countryName, isReply, replyToUsername) {
   return "What's happening on campus?";
 }
 
-/* Spec §2.2, the destination chip. */
-function chipFor(feed, countryName) {
-  if (feed === "country") return countryName;
-  if (feed === "global") return "Global";
-  return "Campus";
+/* Spec §2.2: Enter posts and Shift+Enter starts a new line, as in the chat
+   (MESSAGES_SPEC §2 "Composer"). On a touch keyboard Enter is a new line and
+   the Post button posts. Never while an input method is still composing. */
+function isSendKey(e) {
+  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
+  return !window.matchMedia("(pointer: coarse)").matches || e.metaKey || e.ctrlKey;
 }
 
 export default function Composer({
   feed = "campus",
   countryName = "",
   viewer,
+  showAvatar = true,
   parentId = null,
   replyToUsername,
+  autoFocus = false,
+  focusSignal = 0,
+  selected = false,
+  onCancelReply,
   onSubmit,
   onPosted,
+  onActiveChange,
 }) {
   const c = useComposer({ scope: feed, parentId });
   const isReply = c.isReply;
-  const [open, setOpen] = useState(isReply);
+  const [active, setActive] = useState(false);
   const [gifAnchor, setGifAnchor] = useState(null);
   const [emojiAnchor, setEmojiAnchor] = useState(null);
   const [picker, setPicker] = useState(null); // null | "gif" | "emoji"
   const { toast, showToast } = useToast();
+  const rootRef = useRef(null);
   const textareaRef = useRef(null);
   const fileRef = useRef(null);
   const selection = useRef({ start: 0, end: 0 });
 
+  // The avatar is as tall as the Post pill, so it fills the field's left end the
+  // way the pill fills the right one (Composer.module.css). AvatarImg writes its
+  // size inline when there's no photo, so it's chosen here. Input type, not
+  // screen width: the same features on every size (frontend/CLAUDE.md §18).
+  const coarsePointer = useMediaQuery("(pointer: coarse)");
   const placeholder = placeholderFor(feed, countryName, isReply, replyToUsername);
+  const isEmpty = c.text.trim() === "" && c.photos.length === 0 && !c.gif;
 
   // The textarea grows with the text (spec §2.2).
   useLayoutEffect(() => {
@@ -68,17 +102,43 @@ export default function Composer({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [c.text, open]);
+  }, [c.text]);
+
+  useEffect(() => {
+    if (autoFocus) textareaRef.current?.focus({ preventScroll: true });
+    // A new reply target puts the cursor back in the reply.
+  }, [autoFocus, parentId]);
+
+  // The page asks for the cursor here (pressing your avatar on the divider).
+  // Only a new value counts: a feed that remounts (another sort or country)
+  // starts with the old one, and must not take the cursor for it.
+  const lastFocusSignal = useRef(focusSignal);
+  useEffect(() => {
+    if (focusSignal === lastFocusSignal.current) return;
+    lastFocusSignal.current = focusSignal;
+    textareaRef.current?.focus({ preventScroll: true });
+  }, [focusSignal]);
+
+  // Tells the page, so the avatar on the divider can light up on this side.
+  useEffect(() => {
+    onActiveChange?.(active);
+  }, [active, onActiveChange]);
+  useEffect(() => () => onActiveChange?.(false), [onActiveChange]);
+
+  const rest = () => {
+    textareaRef.current?.blur();
+    setActive(false);
+  };
 
   // The results that are a moment, not a state: show, then let go.
   useEffect(() => {
     if (c.result === "posted") {
       if (c.post) onPosted?.(c.post);
-      if (!isReply) setOpen(false);
+      if (!isReply) rest();
       c.dismissResult();
     } else if (c.result === "held") {
       showToast(COMPOSER_TEXT.held);
-      if (!isReply) setOpen(false);
+      if (!isReply) rest();
       c.dismissResult();
     } else if (c.result === "error") {
       showToast(COMPOSER_TEXT.error);
@@ -87,6 +147,31 @@ export default function Composer({
     // Keyed on the result alone: each new result runs this once, and c.post
     // and onPosted are read as they are at that moment.
   }, [c.result]);
+
+  const leave = () => {
+    if (isReply) onCancelReply?.();
+    else setActive(false);
+  };
+
+  // Pressing elsewhere ends the highlight, and closes an EMPTY reply. Anything
+  // written stays where it is: text is never lost.
+  useEffect(() => {
+    if (!active || picker || c.result) return undefined;
+    const onDown = (e) => {
+      if (rootRef.current?.contains(e.target)) return;
+      if (isEmpty) leave();
+      else setActive(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [active, isEmpty, picker, c.result]);
+
+  // Tabbing out does the same. A press has no relatedTarget in Safari, and is
+  // handled above, so only a real move to something else counts here.
+  const onBlur = (e) => {
+    if (picker) return;
+    if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget)) setActive(false);
+  };
 
   const rememberSelection = () => {
     const el = textareaRef.current;
@@ -115,6 +200,16 @@ export default function Composer({
 
   const post = () => c.submit(onSubmit);
 
+  const onTextKeyDown = (e) => {
+    if (isSendKey(e)) {
+      e.preventDefault();
+      if (c.canPost) post();
+    } else if (e.key === "Escape" && isEmpty) {
+      e.currentTarget.blur();
+      leave();
+    }
+  };
+
   const inlineMessage =
     c.result === "rate-limited"
       ? COMPOSER_TEXT.rateLimited
@@ -133,146 +228,160 @@ export default function Composer({
     );
   }
 
-  return (
-    <div className={styles.root}>
-      {!open ? (
-        // Spec §2.1: the closed row.
-        <button
-          type="button"
-          className={styles.closed}
-          onClick={() => {
-            setOpen(true);
-            requestAnimationFrame(() => textareaRef.current?.focus());
-          }}
-        >
-          <AvatarImg
-            src={viewer?.avatar}
-            name={viewer?.name || viewer?.username}
-            size={32}
-            className={styles.avatar}
-          />
-          <span>{placeholder}</span>
-        </button>
-      ) : (
-        <div className={styles.open}>
-          {/* Always visible: seeing your own name is the cheapest moderation. */}
-          <p className={styles.postingAs}>
-            Posting as @{viewer?.username} · {viewer?.campus}
-          </p>
+  const postLabel = isReply ? "Reply" : "Post";
+  const showTopLine = isReply && Boolean(onCancelReply);
+  const showExtras = active || isReply || !isEmpty;
 
+  return (
+    <div ref={rootRef} className={styles.root} onBlur={onBlur}>
+      <div className={`${styles.shell} ${active || selected ? styles.shellActive : ""}`}>
+        <div className={`${styles.reveal} ${showTopLine ? styles.revealOpen : ""}`} inert={!showTopLine}>
+          <div className={styles.revealInner}>
+            <div className={styles.topLine}>
+              {showTopLine && (
+                <span className={styles.replyChip}>
+                  <span className={styles.replyChipName}>Replying to @{replyToUsername}</span>
+                  <button
+                    type="button"
+                    className={styles.replyCancel}
+                    onClick={onCancelReply}
+                    aria-label="Cancel the reply"
+                    title="Cancel"
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {c.photos.length > 0 && (
+          <ul className={styles.previews}>
+            {c.photos.map((p, i) => (
+              <li key={p.id} className={styles.preview}>
+                <img src={p.url} alt={`Photo ${i + 1}`} />
+                <button
+                  type="button"
+                  className={styles.remove}
+                  onClick={() => c.removePhoto(p.id)}
+                  aria-label={`Remove photo ${i + 1}`}
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {c.gif && (
+          <div className={styles.gifPreview}>
+            <img src={c.gif.preview_url} alt="Chosen GIF" />
+            <span className={styles.gifBadge} aria-hidden="true">GIF</span>
+            <button
+              type="button"
+              className={styles.remove}
+              onClick={c.removeGif}
+              aria-label="Remove the GIF"
+            >
+              <X size={12} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        {inlineMessage && (
+          <p className={styles.inlineMessage} role="alert">
+            {inlineMessage}
+          </p>
+        )}
+
+        <div className={styles.inputRow}>
+          {showAvatar && (
+            <AvatarImg
+              src={viewer?.avatar}
+              name={viewer?.name || viewer?.username}
+              size={coarsePointer ? 36 : 26}
+              className={styles.avatar}
+            />
+          )}
           <textarea
             ref={textareaRef}
             className={styles.textarea}
             value={c.text}
             placeholder={placeholder}
-            rows={isReply ? 1 : 3}
+            rows={1}
             aria-label={placeholder}
+            onFocus={() => setActive(true)}
             onChange={(e) => {
               c.setText(e.target.value);
               rememberSelection();
             }}
+            onKeyDown={onTextKeyDown}
             onSelect={rememberSelection}
             onKeyUp={rememberSelection}
             onClick={rememberSelection}
           />
 
-          {c.photos.length > 0 && (
-            <ul className={styles.previews}>
-              {c.photos.map((p, i) => (
-                <li key={p.id} className={styles.preview}>
-                  <img src={p.url} alt={`Photo ${i + 1}`} />
-                  <button
-                    type="button"
-                    className={styles.remove}
-                    onClick={() => c.removePhoto(p.id)}
-                    aria-label={`Remove photo ${i + 1}`}
-                  >
-                    <X size={14} aria-hidden="true" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className={styles.tools}>
+            {!isReply && (
+              <>
+                <button
+                  type="button"
+                  className={styles.tool}
+                  aria-disabled={Boolean(c.photosBlocked)}
+                  // A title on an aria-disabled (not disabled) button still
+                  // shows, so the hint explains why it's off (spec §2.2).
+                  title={c.photosBlocked ?? "Add photos"}
+                  aria-label={c.photosBlocked ?? "Add photos"}
+                  onClick={() => !c.photosBlocked && fileRef.current?.click()}
+                >
+                  <ImagePlus size={16} aria-hidden="true" />
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    c.addPhotos(e.target.files);
+                    e.target.value = ""; // so picking the same file again still fires
+                  }}
+                />
+              </>
+            )}
 
-          {c.gif && (
-            <div className={styles.gifPreview}>
-              <img src={c.gif.preview_url} alt="Chosen GIF" />
-              <span className={styles.gifBadge} aria-hidden="true">GIF</span>
-              <button
-                type="button"
-                className={styles.remove}
-                onClick={c.removeGif}
-                aria-label="Remove the GIF"
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
+            {/* These slide in beside it once the composer is in use. */}
+            <div className={`${styles.extras} ${showExtras ? styles.extrasOpen : ""}`} inert={!showExtras}>
+              <div className={styles.extrasInner}>
+                <button
+                  ref={setGifAnchor}
+                  type="button"
+                  className={`${styles.tool} ${styles.gifTool}`}
+                  aria-disabled={Boolean(c.gifBlocked)}
+                  title={c.gifBlocked ?? "Add a GIF"}
+                  aria-label={c.gifBlocked ?? "Add a GIF"}
+                  aria-expanded={picker === "gif"}
+                  onClick={() => !c.gifBlocked && setPicker((p) => (p === "gif" ? null : "gif"))}
+                >
+                  GIF
+                </button>
+                <button
+                  ref={setEmojiAnchor}
+                  type="button"
+                  className={styles.tool}
+                  title="Add an emoji"
+                  aria-label="Add an emoji"
+                  aria-expanded={picker === "emoji"}
+                  onClick={() => {
+                    rememberSelection();
+                    setPicker((p) => (p === "emoji" ? null : "emoji"));
+                  }}
+                >
+                  <Smile size={16} aria-hidden="true" />
+                </button>
+              </div>
             </div>
-          )}
-
-          {inlineMessage && (
-            <p className={styles.inlineMessage} role="alert">
-              {inlineMessage}
-            </p>
-          )}
-
-          <div className={styles.toolbar}>
-            <div className={styles.tools}>
-              {!isReply && (
-                <>
-                  <button
-                    type="button"
-                    className={styles.tool}
-                    aria-disabled={Boolean(c.photosBlocked)}
-                    // A title on an aria-disabled (not disabled) button still
-                    // shows, so the hint explains why it's off (spec §2.2).
-                    title={c.photosBlocked ?? "Add photos"}
-                    aria-label={c.photosBlocked ?? "Add photos"}
-                    onClick={() => !c.photosBlocked && fileRef.current?.click()}
-                  >
-                    <ImagePlus size={20} aria-hidden="true" />
-                  </button>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    multiple
-                    hidden
-                    onChange={(e) => {
-                      c.addPhotos(e.target.files);
-                      e.target.value = ""; // so picking the same file again still fires
-                    }}
-                  />
-                </>
-              )}
-              <button
-                ref={setGifAnchor}
-                type="button"
-                className={`${styles.tool} ${styles.gifTool}`}
-                aria-disabled={Boolean(c.gifBlocked)}
-                title={c.gifBlocked ?? "Add a GIF"}
-                aria-label={c.gifBlocked ?? "Add a GIF"}
-                aria-expanded={picker === "gif"}
-                onClick={() => !c.gifBlocked && setPicker((p) => (p === "gif" ? null : "gif"))}
-              >
-                GIF
-              </button>
-              <button
-                ref={setEmojiAnchor}
-                type="button"
-                className={styles.tool}
-                title="Add an emoji"
-                aria-label="Add an emoji"
-                aria-expanded={picker === "emoji"}
-                onClick={() => {
-                  rememberSelection();
-                  setPicker((p) => (p === "emoji" ? null : "emoji"));
-                }}
-              >
-                <Smile size={20} aria-hidden="true" />
-              </button>
-            </div>
-
-            {!isReply && <span className={styles.chip}>{chipFor(feed, countryName)}</span>}
 
             {c.showCounter && (
               <span
@@ -290,18 +399,20 @@ export default function Composer({
               disabled={!c.canPost}
               onClick={post}
               aria-busy={c.posting}
+              aria-label={c.posting ? "Posting" : postLabel}
             >
               {c.posting ? (
-                <Loader2 size={16} className={styles.spinner} aria-label="Posting" />
-              ) : isReply ? (
-                "Reply"
+                <Loader2 size={14} className={styles.spinner} aria-hidden="true" />
               ) : (
-                "Post"
+                <>
+                  <span className={styles.postWord}>{postLabel}</span>
+                  <ArrowUp size={15} strokeWidth={2.5} className={styles.postArrow} aria-hidden="true" />
+                </>
               )}
             </button>
           </div>
         </div>
-      )}
+      </div>
 
       {picker === "gif" && (
         <Popover anchorEl={gifAnchor} placement="top" onClose={closePicker} role="presentation">
@@ -339,7 +450,7 @@ export default function Composer({
         />
       )}
 
-      <AppToast toast={toast} bottom={8} />
+      <AppToast toast={toast} bottom={40} />
     </div>
   );
 }

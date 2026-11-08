@@ -1309,6 +1309,17 @@ git checkout -b v-c-messages-reactions
 
 Run **CC-V3**.
 
+**Added to this block: `top_replies` on a PostItem** (decided after V-P, `COMMUNITY_SPEC.md` §4). CC-V3 doesn't
+cover it and says "No SQL" and "don't touch `posts/*`", so do it as its own step:
+
+1. A new migration (`supabase migration new feed_top_replies`): the feeds return `top_replies`, up to
+   `REPLY_PREVIEW_COUNT` (2) reply PostItems, most liked first, oldest first when tied. It must show only what
+   `get_post_replies` would show that viewer.
+2. `toPostItem` in `posts.controller.js` has to pass the field on. That file is **on loan to Neeraj**, so agree
+   with him who makes that one change.
+3. `backend/API.md`.
+4. You push the migration to production by hand, like V-B, before Neeraj's CC-N4b uses it.
+
 **👁️ CHECKPOINT V-C — with curl, against your local API**
 
 Paste this once. It's the same set of helpers as 6B:
@@ -1393,7 +1404,7 @@ after its checkpoint, so the next starts from `main`.
 
 **👁️ CHECKPOINT V-D4b**
 1. Tap the composer in **Campus**: the compose screen shows
-   `Posting as @arjun.mehta · IIITDM Kurnool` and the chip **Campus**.
+   your avatar and the chip **Campus** (no "Posting as" line since V-P, spec §2.2).
 2. Type a long text: the counter appears at 100 left, and at 1,001 Post is disabled.
 3. Add 3 photos, then try GIF: the GIF button says to remove the photos first.
 4. Remove the photos, add a GIF, post: it appears at the top of Campus with the GIF playing.
@@ -1972,9 +1983,7 @@ Read first: docs/design/COMMUNITY_SPEC.md (all of it), runbook §0.7, §1.1
 and §1.13, frontend/CLAUDE.md, and Neeraj's N-S changelog entry (his notes
 on what looks wrong). Open /community and /dev/community.
 
-⛔ IGNORE the colours and fonts in frontend/DESIGN.md, and the "Never Inter"
-line in frontend/CLAUDE.md §15. They describe a rebrand that was never
-adopted (highlighter yellow, Khand, Instrument Sans). The decided brand,
+The decided brand,
 the same on the website and the app: Inter for text; Bree Serif, regular
 400 only, for headings and prices; the colour variables already in
 src/styles/global.css. Everything else in frontend/CLAUDE.md applies.
@@ -1997,15 +2006,10 @@ THE RULES (runbook Block V-P):
 4. Quality: visible keyboard focus on every control; text contrast at least
    4.5:1 (3:1 for large text and icons); respect prefers-reduced-motion.
 
-Start by telling me, in one sentence, the direction you propose, and the 5
-biggest problems you see in the current page and in Neeraj's notes. Then
-wait for my answer before changing any code.
-
 VERIFY AFTER each round — report:
 1. npm run build passes.
-2. Screenshots at 1440 and 390 px wide (Playwright), with your critique.
-3. The files you changed — all from the loan list.
-4. The spec sections you updated.
+2. The files you changed — all from the loan list.
+3. The spec sections you updated.
 ```
 
 ## CC-V3 — Messages: reactions and GIFs; demo usernames; campus countries
@@ -2242,7 +2246,7 @@ Appendix A "POST /api/posts".
 1. app/compose.tsx, opened as a modal route:
    router.push('/compose?feed=campus|country|global&country=IN&parent=<id>').
    It shows spec §2.2:
-   - "Posting as @username · campus", from the profile;
+   - your avatar from the profile (no "Posting as" line since V-P, spec §2.2);
    - a growing text input: the limit is 1,000 by codePointLength; the
      counter shows at 100 or fewer left; Post is disabled over the limit or
      when there is nothing to post;
@@ -2758,7 +2762,7 @@ renamed components or props are listed there.
 Use one branch per prompt (`n-d-web-community-2`, `-3`).
 
 **👁️ CHECKPOINT N-D2** — the same steps as Vishwajeet's V-D4b (Track 1), on the website:
-- "Posting as…"; the counter; 3 photos or a GIF, never both;
+- no "Posting as…" line (spec §2.2); the counter; 3 photos or a GIF, never both;
 - the nudge with **Edit** keeping the text;
 - the hold message;
 - the 16th campus post refused, with the text kept, while a Global post still goes through;

@@ -3,26 +3,36 @@
 // The country dropdown's list — docs/design/COMMUNITY_SPEC.md §1.3:
 //
 //   🇮🇳 India (your country)   ✓
-//   🌍 Global
+//   (globe) Global
 //   ──────────────
 //   🇩🇪 Germany …              (the other countries, A–Z)
 //
-// Only the list: the caller draws the trigger, because on a laptop it is a
-// dropdown button and on a narrow window it is the switcher's second segment.
+// Only the list: the caller draws the trigger, because on a laptop it is the
+// panel's title and on a narrow window it is the switcher's chevron.
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { Check } from "lucide-react";
+import { GlobeIcon } from "../../components/community/AnimatedIcons/AnimatedIcons";
 import Popover from "../../components/community/Popover/Popover";
 import { flagEmoji } from "../../utils/community";
 import styles from "./Community.module.css";
 
 export const GLOBAL = "GLOBAL";
 
-/** `🌍 Global` or `🇮🇳 India` — the label for the right-hand feed. */
+/** `Global` or `India` — the name of the right-hand feed. */
 export function worldLabel(value, countries) {
-  if (value === GLOBAL) return "🌍 Global";
-  const c = countries.find((x) => x.code === value);
-  return `${flagEmoji(value)} ${c?.name ?? value}`;
+  if (value === GLOBAL) return "Global";
+  return countries.find((x) => x.code === value)?.name ?? value;
+}
+
+/** The globe icon, or the country's flag (worked out from its code). */
+export function WorldGlyph({ value, size = 16 }) {
+  if (value === GLOBAL) return <GlobeIcon size={size} className={styles.worldIcon} />;
+  return (
+    <span className={styles.flag} aria-hidden="true">
+      {flagEmoji(value)}
+    </span>
+  );
 }
 
 export default function CountryMenu({ anchorEl, value, countries, onChange, onClose }) {
@@ -57,7 +67,7 @@ export default function CountryMenu({ anchorEl, value, countries, onChange, onCl
     items[next]?.focus();
   };
 
-  const option = (code, label, extra = null) => (
+  const option = (code, name, extra = null) => (
     <button
       key={code}
       type="button"
@@ -70,10 +80,13 @@ export default function CountryMenu({ anchorEl, value, countries, onChange, onCl
       }}
     >
       <span className={styles.menuLabel}>
-        {label}
-        {extra && <span className={styles.menuHint}> {extra}</span>}
+        <WorldGlyph value={code} />
+        <span>
+          {name}
+          {extra && <span className={styles.menuHint}> {extra}</span>}
+        </span>
       </span>
-      {value === code && <Check size={16} aria-hidden="true" className={styles.menuCheck} />}
+      {value === code && <Check size={14} aria-hidden="true" className={styles.menuCheck} />}
     </button>
   );
 
@@ -83,15 +96,17 @@ export default function CountryMenu({ anchorEl, value, countries, onChange, onCl
       placement="bottom"
       onClose={(why) => {
         onClose();
-        if (why === "escape") anchorEl?.focus();
+        // The anchor can be a pill holding buttons (the phone switcher):
+        // focus goes back to its first one.
+        if (why === "escape") (anchorEl?.matches("button") ? anchorEl : anchorEl?.querySelector("button"))?.focus();
       }}
       role="presentation"
     >
       <div ref={listRef} role="listbox" aria-label="Choose a feed" className={styles.menu} onKeyDown={onKeyDown}>
-        {mine && option(mine.code, `${flagEmoji(mine.code)} ${mine.name}`, "(your country)")}
-        {option(GLOBAL, "🌍 Global")}
+        {mine && option(mine.code, mine.name, "(your country)")}
+        {option(GLOBAL, "Global")}
         {others.length > 0 && <div className={styles.menuDivider} role="separator" />}
-        {others.map((c) => option(c.code, `${flagEmoji(c.code)} ${c.name}`))}
+        {others.map((c) => option(c.code, c.name))}
       </div>
     </Popover>
   );

@@ -1,100 +1,181 @@
 /* frontend/src/components/community/Composer/Composer.module.css
-   docs/design/COMMUNITY_SPEC.md §2. Plain on purpose: V-P redesigns it. */
+   docs/design/COMMUNITY_SPEC.md §2. */
 
 .root {
-  --composer-input-bg: #F3F0EF; /* inputBg */
-  --composer-hairline: rgba(128, 0, 128, 0.12);
   position: relative; /* for the AppToast */
   width: 100%;
 }
 
-/* §2.1 */
-.closed {
+/* The Post pill sits concentric in the field's rounded end (owner, 8 Nov): the
+   same gap above, below and after it (--post-inset plus the 1.5 px border), so
+   its curve runs parallel to the field's. With a mouse the field is 33 tall
+   (its end radius 16.5) and the 26 px pill sits 3.5 in: 13 + 3.5 = 16.5. On a
+   touch screen the field is 41 tall, radius 20, and the 36 px pill sits 2.5 in,
+   so its radius is 20 - 2.5 = 17.5 (below). A dock that keeps the end clear
+   for something else sets --composer-pad-end instead (the left one, under the
+   avatar). */
+.shell {
+  --post-inset: 2px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--composer-hairline);
-  border-radius: 16px;
+  flex-direction: column;
+  padding: 0 var(--composer-pad-end, var(--post-inset)) 0 var(--composer-pad-start, 12px);
+  border: 1.5px solid var(--community-rail);
+  border-radius: var(--composer-radius, 20px);
   background: var(--white);
-  text-align: left;
-  font: 400 15px/22px "Inter", sans-serif;
-  color: var(--muted-text);
-  cursor: text;
+  transition: border-color 180ms var(--community-ease), box-shadow 220ms var(--community-ease);
 }
 
-.closed:hover {
+.shell:hover {
   border-color: var(--reaction-mine-border);
 }
 
-.closed:focus-visible {
-  outline: 2px solid var(--purple);
-  outline-offset: 2px;
+/* Purple on the campus side and pink on the other (spec §2.1). */
+.shellActive,
+.shellActive:hover {
+  border-color: var(--composer-accent, var(--purple));
+  box-shadow: 0 0 0 3px var(--composer-tint, var(--reaction-mine-bg));
 }
 
+/* The parts that appear when it opens. Grid rows can animate to the content's
+   own height, which height: auto can't. */
+.reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms var(--community-ease);
+}
+
+.revealOpen {
+  grid-template-rows: 1fr;
+}
+
+.revealInner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* --composer-topline-start: on a laptop the right-hand composer starts the chip
+   past the badge on your avatar, which springs out over this corner (spec §4). */
+.topLine {
+  display: flex;
+  align-items: center;
+  padding: 6px 0 0 var(--composer-topline-start, 0px);
+}
+
+.replyChip {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 0 7px;
+  border-radius: 999px;
+  background: var(--reaction-mine-bg);
+  font: 500 12px/18px "Inter", sans-serif;
+  color: var(--purple);
+}
+
+.replyChipName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replyCancel {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--purple);
+  cursor: pointer;
+}
+
+.replyCancel:hover {
+  background: var(--reaction-mine-bg);
+}
+
+.replyCancel:focus-visible {
+  outline: 2px solid var(--purple);
+}
+
+/* The tools stay at the end of the last line as the text grows. In a very narrow
+   panel they drop to a row of their own instead of squeezing the text. */
+.inputRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px 8px;
+  padding: 1px 0;
+}
+
+/* The avatar mirrors the Post pill at the other end (owner, 8 Nov): as tall as
+   it, and the same gap below and before it, so it sits concentric in the
+   field's left end. It reaches out past the field's start padding, which the
+   reply chip and the previews keep. With a mouse: 26 tall, 3.5 in; on a touch
+   screen: 36 tall, 2.5 in (below). */
 .avatar {
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
+  margin: 0 0 1px calc(var(--post-inset) - var(--composer-pad-start, 12px));
   border-radius: 50%;
   object-fit: cover;
 }
 
-/* §2.2 */
-.open {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--reaction-mine-border);
-  border-radius: 16px;
-  background: var(--white);
-}
-
-.postingAs {
-  margin: 0;
-  font: 500 12px/16px "Inter", sans-serif;
-  color: var(--muted-text);
-}
-
 .textarea {
-  width: 100%;
-  min-height: 44px;
-  max-height: 320px;
-  padding: 8px 10px;
-  border: 1px solid var(--composer-hairline);
-  border-radius: 10px;
+  flex: 1 1 140px;
+  min-width: 0;
+  display: block;
+  max-height: min(240px, 35vh);
+  padding: 4px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   resize: none;
   overflow-y: auto;
-  font: 400 15px/22px "Inter", sans-serif;
+  font: 400 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
 }
 
-.textarea:focus {
-  outline: none;
-  border-color: var(--purple);
+.textarea::placeholder {
+  color: var(--community-muted);
+  opacity: 1;
 }
 
 .previews {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
-  padding: 0;
+  padding: 4px 0;
   list-style: none;
 }
 
 .preview,
 .gifPreview {
   position: relative;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  background: var(--composer-input-bg);
+  background: var(--input-bg);
 }
 
 .preview {
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
+  animation: previewIn 220ms var(--community-spring);
+}
+
+@keyframes previewIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
 }
 
 .preview img,
@@ -106,30 +187,32 @@
 }
 
 .gifPreview {
-  width: 120px;
-  height: 120px;
+  width: 88px;
+  height: 88px;
+  margin: 4px 0;
+  animation: previewIn 220ms var(--community-spring);
 }
 
 .gifBadge {
   position: absolute;
-  left: 6px;
-  bottom: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
   background: var(--toast-bg);
   color: var(--white);
-  font: 700 10px/14px "Inter", sans-serif;
+  font: 700 9px/13px "Inter", sans-serif;
 }
 
 .remove {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -146,42 +229,74 @@
 /* §2.3: the limit message, inline above Post; also the photo checks. */
 .inlineMessage {
   margin: 0;
-  font: 400 13px/18px "Inter", sans-serif;
+  padding: 2px 0;
+  font: 400 12px/16px "Inter", sans-serif;
   color: var(--error-text);
 }
 
-.toolbar {
+.tools {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 1px;
+  margin-left: auto;
 }
 
-.tools {
+/* Grid columns can animate to the content's own width, which width: auto can't. */
+.extras {
+  display: grid;
+  grid-template-columns: 0fr;
+  transition: grid-template-columns 220ms var(--community-ease);
+}
+
+.extrasOpen {
+  grid-template-columns: 1fr;
+}
+
+.extrasInner {
+  min-width: 0;
   display: flex;
-  gap: 2px;
-  margin-right: auto;
+  align-items: center;
+  gap: 1px;
+  overflow: hidden;
 }
 
 .tool {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
-  height: 36px;
-  padding: 0 6px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--purple);
+  color: var(--composer-solid, var(--purple));
+  opacity: 0.65;
   cursor: pointer;
+  transition: background-color 140ms var(--community-ease), opacity 160ms var(--community-ease),
+    transform 120ms var(--community-ease);
+}
+
+.shellActive .tool,
+.tool:hover {
+  opacity: 1;
 }
 
 .tool:hover {
   background: var(--reaction-mine-bg);
 }
 
+.tool:active {
+  transform: scale(0.92);
+}
+
+/* -2 px: .extrasInner clips, so a ring outside the button would be cut off. */
 .tool:focus-visible {
-  outline: 2px solid var(--purple);
+  outline: 2px solid var(--composer-solid, var(--purple));
+  outline-offset: -2px;
+  opacity: 1;
 }
 
 .tool[aria-disabled="true"] {
@@ -195,21 +310,13 @@
 }
 
 .gifTool {
-  font: 700 12px/1 "Inter", sans-serif;
+  font: 700 10px/1 "Inter", sans-serif;
   letter-spacing: 0.02em;
 }
 
-.chip {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--composer-input-bg);
-  font: 500 11px/16px "Inter", sans-serif;
-  color: var(--black-soft);
-}
-
 .counter {
-  font: 500 13px/20px "Inter", sans-serif;
-  color: var(--muted-text);
+  font: 500 12px/18px "Inter", sans-serif;
+  color: var(--community-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -218,18 +325,31 @@
 }
 
 .post {
+  position: relative;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 72px;
-  height: 36px;
-  padding: 0 16px;
+  min-width: 52px;
+  height: 26px;
+  margin-left: 5px;
+  overflow: hidden;
+  padding: 0 12px;
   border: 0;
   border-radius: 999px;
-  background: var(--purple);
+  background: var(--composer-solid, var(--purple));
   color: var(--white);
-  font: 600 14px/20px "Inter", sans-serif;
+  font: 600 13px/1 "Inter", sans-serif;
   cursor: pointer;
+  transition: opacity 160ms var(--community-ease), transform 180ms var(--community-spring);
+}
+
+.post:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.06);
+}
+
+.post:active:not(:disabled) {
+  transform: scale(0.92);
 }
 
 .post:disabled {
@@ -238,8 +358,35 @@
 }
 
 .post:focus-visible {
-  outline: 2px solid var(--purple);
-  outline-offset: 2px;
+  outline: 2px solid var(--white);
+  outline-offset: -4px;
+}
+
+/* Once there's something to post, pointing at the word turns it into an arrow. The
+   word keeps its place, so the button doesn't change size. */
+.postWord,
+.postArrow {
+  transition: opacity 140ms var(--community-ease), transform 200ms var(--community-ease);
+}
+
+.postArrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  opacity: 0;
+  transform: translate(-50%, 60%);
+}
+
+@media (hover: hover) {
+  .post:hover:not(:disabled) .postWord {
+    opacity: 0;
+    transform: translateY(-110%);
+  }
+
+  .post:hover:not(:disabled) .postArrow {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
 }
 
 .spinner {
@@ -252,20 +399,68 @@
   }
 }
 
-/* §2.4: Inter 400 14/20 on pinkLight, radius 16, padding 16. */
+/* A finger needs 44 px even though the controls stay thin to look at. */
+@media (pointer: coarse) {
+  .tool {
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .shell {
+    --post-inset: 1px;
+  }
+
+  /* The tools are 36 tall here, so the text line sits on the Post pill's
+     middle, 19 px up the row, not 4 px below it (owner, 8 Nov). A margin, not
+     padding: the box grows to its scrollHeight, and extra padding left a
+     pixel's scroll on a phone. As the text grows, its last line stays level
+     with the pill. */
+  .textarea {
+    margin-bottom: 4px;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 0;
+  }
+
+  .post {
+    height: 36px;
+    border-radius: 17.5px; /* concentric with the field's 20 px end (above) */
+  }
+
+  .replyCancel::after {
+    content: "";
+    position: absolute;
+    inset: -14px;
+  }
+}
+
+/* §2.4: Inter 400 13/19 on pinkLight, radius 12, padding 12. */
 .support {
   display: flex;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 16px;
+  gap: 10px;
+  padding: 12px var(--composer-pad-end, 12px) 12px var(--composer-pad-start, 12px);
+  border-radius: 12px;
   background: var(--pink-light);
+  box-shadow: var(--community-float-shadow);
   font: 400 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
+  animation: supportIn 260ms var(--community-ease);
+}
+
+@keyframes supportIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .supportIcon {
-  font-size: 20px;
-  line-height: 20px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--purple);
 }
 
 .supportBody {
@@ -274,7 +469,7 @@
 }
 
 .supportBody p {
-  margin: 0 0 4px;
+  margin: 0 0 3px;
 }
 
 .supportBody a {
@@ -282,23 +477,31 @@
   font-weight: 600;
 }
 
+/* footer.module.css has a bare `a:hover` rule that leaks to every link on the
+   site and turns it --pink-light, which nearly vanishes on a light ground. */
+.supportBody a:hover {
+  color: var(--purple-dark);
+}
+
 .supportTitle {
-  margin: 0 0 6px;
-  font: 600 15px/20px "Inter", sans-serif;
+  margin: 0 0 4px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .supportActions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .supportClose {
-  padding: 6px 16px;
+  height: 28px;
+  padding: 0 14px;
   border: 1px solid var(--reaction-mine-border);
   border-radius: 999px;
   background: var(--white);
-  font: 600 13px/20px "Inter", sans-serif;
+  font: 600 12px/16px "Inter", sans-serif;
   color: var(--purple);
   cursor: pointer;
 }
@@ -309,6 +512,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell,
+  .reveal,
+  .extras,
+  .tool,
+  .post,
+  .postWord,
+  .postArrow {
+    transition: none;
+  }
+
+  .preview,
+  .gifPreview,
+  .support {
+    animation: none;
+  }
+
   .spinner {
     animation-duration: 2s;
   }

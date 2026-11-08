@@ -8,6 +8,8 @@
    change. Photos and avatars are URLs the site already shows (Home.jsx); the
    GIF is one of the chat stickers in public/stickers. */
 
+import { DEFAULT_REACTION, REPLIES_PAGE_SIZE, REPLY_PREVIEW_COUNT } from "../../utils/community";
+
 const HOUR = 60 * 60 * 1000;
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
 
@@ -213,6 +215,134 @@ const POSTS = [
   }),
 ];
 
+/* ── Replies ───────────────────────────────────────────────────────────────
+   A reply is a PostItem with a parent. `top_replies` on a post is new in the
+   redesign (spec §4) and is NOT in the API yet: the most-liked replies, at most
+   REPLY_PREVIEW_COUNT. The screens work without it, showing only "Show more
+   replies", so CC-N4b can connect them before the API sends it. */
+const REPLY_TEXTS = [
+  "Check with the security desk near the main gate, they keep a lost and found box.",
+  "Thanks everyone, this helps a lot.",
+  "Same here. Let me know if you find out.",
+  "I can help with this after my 4 PM lab.",
+  "This is exactly what I was looking for.",
+  "Seconded. Worth doing before exams start.",
+  "Could you share more details? Happy to pitch in.",
+];
+const REPLY_AUTHORS = ["priya", "karan", "sneha", "rahul", "lena", "arjun"];
+/* Enough to show paging, without generating thousands for the big test counts. */
+const SAMPLE_REPLIES_MAX = 46;
+
+const REPLIES = new Map();
+
+function repliesOf(p) {
+  if (REPLIES.has(p.id)) return REPLIES.get(p.id);
+  const total = Math.min(p.replies_count, SAMPLE_REPLIES_MAX);
+  const authorKey = Object.keys(AUTHORS).find((k) => AUTHORS[k].author_id === p.author_id);
+  const list = Array.from({ length: total }, (_, i) => {
+    // The second reply is the post's own author, to show the highlight.
+    const author = i === 1 ? authorKey : REPLY_AUTHORS[i % REPLY_AUTHORS.length];
+    const likes = (i * 7 + 3) % 13;
+    return {
+      ...post(0, author, {
+        id: `${p.id.slice(0, -4)}${String(i).padStart(4, "0")}`.replace(/^p/, "r"),
+        parent_post_id: p.id,
+        scope: p.scope,
+        country_code: p.country_code,
+        content: REPLY_TEXTS[i % REPLY_TEXTS.length],
+        created_at: new Date(new Date(p.created_at).getTime() + (i + 1) * 60 * 1000).toISOString(),
+        reaction_counts: likes ? { [DEFAULT_REACTION]: likes } : {},
+      }),
+    };
+  });
+  REPLIES.set(p.id, list);
+  return list;
+}
+
+const byLikes = (a, b) => b.reactions_total - a.reactions_total || byOldest(a, b);
+const byOldest = (a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
+
+/* A copy of the post as a feed sends it: with its most-liked replies. */
+function feedItem(p) {
+  const top = [...repliesOf(p)].sort(byLikes).slice(0, REPLY_PREVIEW_COUNT);
+  return { ...p, top_replies: top.map((r) => ({ ...r })) };
+}
+
+/** GET /api/posts/:id/replies — oldest first, a page at a time. */
+export function sampleReplies(postId, cursor = null) {
+  const p = POSTS.find((x) => x.id === postId);
+  const list = p ? repliesOf(p) : [];
+  const start = cursor ? Number(cursor) : 0;
+  const items = list.slice(start, start + REPLIES_PAGE_SIZE).map((r) => ({ ...r }));
+  const end = start + REPLIES_PAGE_SIZE;
+  return new Promise((resolve) =>
+    setTimeout(() => resolve({ items, next_cursor: end < list.length ? String(end) : null }), 350),
+  );
+}
+
+/* ── The profile glimpse (spec §4.1) ─────────────────────────────────────
+   ⚠ No route sends this yet. Counts of posts, followers and following, and
+   the latest photos, need a small endpoint when profiles are built (the
+   social module, not built). Made-up follower numbers until then. */
+const FOLLOWS = {
+  rahul: [312, 180],
+  priya: [1240, 402],
+  arjun: [268, 245],
+  sneha: [890, 310],
+  lena: [154, 97],
+  karan: [431, 215],
+};
+
+export function sampleProfile(authorId) {
+  const key = Object.keys(AUTHORS).find((k) => AUTHORS[k].author_id === authorId);
+  const own = POSTS.filter((p) => p.author_id === authorId && !p.parent_post_id);
+  const [followers, following] = FOLLOWS[key] ?? [0, 0];
+  return new Promise((resolve) =>
+    setTimeout(
+      () =>
+        resolve({
+          posts_count: own.length,
+          followers_count: followers,
+          following_count: following,
+          recent_photos: own.flatMap((p) => p.image_urls).slice(0, 8),
+        }),
+      250,
+    ),
+  );
+}
+
+let postedCount = 0;
+
+/** POST /api/posts, always answering 201. Every other answer (nudge, held,
+    rate limit, and so on) is tried on /dev/community. */
+export async function samplePost(form) {
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  postedCount += 1;
+  const parentId = form.get("parent_post_id");
+  const parent = parentId ? POSTS.find((x) => x.id === parentId) : null;
+  const gif = form.get("gif");
+  const created = post(0, "arjun", {
+    id: `n0000000-0000-0000-0000-${String(postedCount).padStart(12, "0")}`,
+    parent_post_id: parentId,
+    scope: parent?.scope ?? form.get("scope") ?? "campus",
+    content: form.get("content") ?? "",
+    image_urls: form.getAll("images").map((file) => URL.createObjectURL(file)),
+    gif: gif ? JSON.parse(gif) : null,
+    created_at: new Date().toISOString(),
+  });
+  if (parent) {
+    repliesOf(parent).push(created);
+    parent.replies_count += 1;
+  } else {
+    POSTS.unshift(created);
+  }
+  // A copy, as a server's answer would be. Handing the feed this very object
+  // let the "server" and the feed both add the next reply to its count, so one
+  // reply read 2 and showed "Show more replies" (owner, 7 Nov). A new post has
+  // no replies yet, so its preview is empty, the way a feed sends it.
+  return { status: 201, body: { post: parent ? { ...created } : { ...created, top_replies: [] } } };
+}
+
 /* Runbook §1.3. */
 function hotScore(p) {
   const hours = (Date.now() - new Date(p.created_at).getTime()) / HOUR;
@@ -246,7 +376,7 @@ export function sampleFeed(kind, { country, sort = "new", cursor = null } = {}) 
   }
 
   const start = cursor ? Number(cursor) : 0;
-  const items = list.slice(start, start + SAMPLE_PAGE_SIZE).map((p) => ({ ...p }));
+  const items = list.slice(start, start + SAMPLE_PAGE_SIZE).map(feedItem);
   const next = start + SAMPLE_PAGE_SIZE < list.length ? String(start + SAMPLE_PAGE_SIZE) : null;
 
   // A little delay, so the skeletons and the paging spinner are visible.
@@ -258,7 +388,9 @@ export function sampleFeed(kind, { country, sort = "new", cursor = null } = {}) 
 /** PUT /api/posts/:id/reaction (emoji) or DELETE (emoji = null). Returns the
     same answer shape as the API. */
 export function sampleReact(postId, emoji) {
-  const p = POSTS.find((x) => x.id === postId);
+  const p =
+    POSTS.find((x) => x.id === postId) ??
+    [...REPLIES.values()].flat().find((x) => x.id === postId);
   if (!p) return null;
   const counts = { ...p.reaction_counts };
   if (p.viewer_reaction) {

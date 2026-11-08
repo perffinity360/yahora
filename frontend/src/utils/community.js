@@ -10,16 +10,26 @@ export const POST_FOLD_LINES = 6;
 export const POST_MAX_PHOTOS = 3;
 export const POST_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 export const FEED_PAGE_SIZE = 20;
-export const REPLIES_PAGE_SIZE = 20;
+export const REPLIES_PAGE_SIZE = 10;
 export const NEW_POSTS_POLL_MS = 30000;
 export const QUICK_REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
 export const DEFAULT_REACTION = "❤️";
 export const REACTION_HOVER_DELAY_MS = 300;
+export const REACTION_LONG_PRESS_MS = 450;
 export const GIF_SEARCH_DEBOUNCE_MS = 300;
+/* The narrowest a panel's CONTENT lays itself out. The panel itself can be
+   dragged narrower, down to its 36 px bar, with no snap: past this its content
+   just stops adjusting and is cut off at the divider, as on LeetCode (owner,
+   8 Nov). Community.module.css repeats it on .panelInner. */
 export const LAYOUT_MIN_PANEL_PX = 320;
-export const LAYOUT_COLLAPSED_PX = 44;
+export const LAYOUT_COLLAPSED_PX = 36;
 export const LAYOUT_BREAKPOINT_PX = 1024;
 export const REPORT_DETAILS_MAX = 500;
+export const REPLY_PREVIEW_COUNT = 2;
+/* "Show more replies" needs at least this many replies on the post, and is
+   never left standing for fewer than this many unloaded ones (spec §4). */
+export const REPLIES_FOLD_MIN = 3;
+export const REACTION_SUMMARY_COUNT = 4;
 
 /* Runbook §1.12: count code points, the way Postgres char_length() does, so
    the counter and the database agree about emoji. */
@@ -78,7 +88,7 @@ export function sortedReactions(counts) {
 }
 
 /* Spec §5.3: the top emojis by count, for the summary pill. */
-export function topReactions(counts, n = 3) {
+export function topReactions(counts, n = REACTION_SUMMARY_COUNT) {
   return sortedReactions(counts)
     .slice(0, n)
     .map(([emoji]) => emoji);

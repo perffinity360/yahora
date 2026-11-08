@@ -1,29 +1,60 @@
 /* frontend/src/pages/community/Community.module.css
    docs/design/COMMUNITY_SPEC.md §1 (layout), §1.3 (dropdown), §1.4 (view-only
-   banner), §2.1 (closed composer) and §9 (empty and loading). */
+   line), §2.1 (dock) and §9 (empty and loading). */
 
-.wide,
-.narrow,
-.menu {
-  /* .menu too: the country list renders in a portal, outside the page. */
-  --community-input-bg: #F3F0EF; /* inputBg */
-  --community-hairline: rgba(128, 0, 128, 0.12);
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+/* ── Two zones on one wallpaper (owner, 7 Nov) ─────────────────────────────
+   Both feeds keep the chat's doodle tile, pinned while posts scroll, but at 5%
+   only, so its lines never meet the text: the veil is each zone's own ground
+   at 95% over the tile. Campus is a lilac ground, the other side a blush one.
+   Posts sit on frosted cards (PostCard.module.css). */
+
+.panel,
+.narrow {
+  --zone: var(--community-panel-campus);
+  --zone-veil: var(--community-panel-campus-veil);
+  /* Read by the post cards (PostCard.module.css). */
+  --zone-rail: var(--community-rail-campus);
+  /* The card's left edge; also the thread's colour while pointed at. */
+  --zone-accent: var(--purple-dark);
+  background-color: var(--zone);
+  background-image: linear-gradient(var(--zone-veil), var(--zone-veil)), url('/patterns/chat-pattern.svg');
+  background-repeat: no-repeat, repeat;
+  background-size: 100% 100%, 420px 420px;
+}
+
+.panelRight,
+.narrow[data-feed="world"] {
+  --zone: var(--community-panel-world);
+  --zone-veil: var(--community-panel-world-veil);
+  --zone-rail: var(--community-rail-world);
+  --zone-accent: var(--pink-dark);
 }
 
 /* ── ≥ 1024 px: two panels ─────────────────────────────────────────────── */
 
+/* No frame below the panels: the composer bar sits on the bottom of the
+   window (owner, 7 Nov). */
+/* The whole window on a laptop: the site navbar is hidden here (App.jsx), and
+   the brand pill (BrandMenu) sits at the top of the divider instead. No frame
+   around the panels (owner, 7 Nov). Nothing may reach past the window: with the
+   divider at the right edge the avatar's badge sits at the window's edge, and an
+   overflow there would bring a page scrollbar in and out, which shakes the
+   divider. clip, not hidden, so nothing here becomes a scroller. */
 .wide {
+  position: relative;
   height: calc(100dvh - var(--app-chrome));
-  padding: 12px;
-  background:
-    radial-gradient(1200px 500px at 10% -10%, rgba(128, 0, 128, 0.06), transparent 60%),
-    radial-gradient(900px 400px at 100% 0%, rgba(255, 120, 166, 0.10), transparent 60%),
-    var(--bg);
+  padding: 0;
+  overflow: clip;
+  background: var(--bg);
 }
 
 .group {
   height: 100%;
+}
+
+/* Only for a button press: during a drag the panels follow the pointer. */
+.groupGliding > [data-panel] {
+  transition: flex-grow 280ms var(--community-ease);
 }
 
 /* Applied by the library to the panel's inner box. */
@@ -31,15 +62,27 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid var(--community-hairline);
+  border-radius: 0; /* they run to the window's edges */
+  box-shadow: inset 0 0 0 1px var(--community-hairline);
 }
 
+/* Square at the bottom: where the two composer bars meet, so they read as one
+   bar, and along the window's bottom edge, which they now sit on. */
+.panelLeft,
+.panelRight {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* The content never lays itself out narrower than LAYOUT_MIN_PANEL_PX (320).
+   The panel can still be dragged narrower, down to its 36 px bar, with no snap:
+   past this point its content stops adjusting and is cut off at the divider,
+   as on LeetCode (owner, 8 Nov). */
 .panelInner {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
 }
@@ -48,65 +91,174 @@
   display: none;
 }
 
+/* Floats over the feed, so posts pass underneath its glass. */
 .panelHeader {
-  flex: 0 0 auto;
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 56px;
-  padding: 8px 10px 8px 16px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 4px 0 10px;
   border-bottom: 1px solid var(--community-hairline);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--community-glass);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  container: head / inline-size;
+}
+
+/* A soft gradient on each header: the zone's tint at its outer edge, white where
+   the two meet under the brand pill (owner's mockup, 8 Nov). */
+.panelLeft .panelHeader {
+  background: var(--community-header-campus);
+}
+
+.panelRight .panelHeader {
+  background: var(--community-header-world);
+}
+
+/* Clear of the brand pill, which sits over the divider where the two headers
+   meet (BrandMenu.module.css), so ⤢ never slides under it. Community.jsx
+   measures how far the pill reaches over each header (it stops short of the
+   window's edges while the divider doesn't). */
+.panelLeft .panelHeader {
+  padding-right: var(--head-clear-left, 72px);
+}
+
+.panelRight .panelHeader {
+  padding-left: var(--head-clear-right, 72px);
+}
+
+/* ALL CAMPUSES on the right-hand header (the left one has no badge: owner, 7 Nov). */
+.zoneBadge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: 700 10px/12px "Inter", sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.zoneBadgeWorld {
+  border-color: var(--community-badge-world-border);
+  background: var(--community-badge-world-bg);
+  color: var(--community-badge-world-text);
+}
+
+/* A narrow panel keeps its name and controls; the badge goes first. */
+@container head (max-width: 430px) {
+  .zoneBadge {
+    display: none;
+  }
 }
 
 .campusTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   margin: 0;
   min-width: 0;
-  font-size: 18px;
-  line-height: 24px;
-  color: var(--black-soft);
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--purple-dark);
+}
+
+.campusTitle span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.campusIcon {
+  color: var(--purple);
+}
+
 .panelControls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  flex-wrap: wrap;
 }
 
 .panelTools {
   flex: 0 0 auto;
   display: flex;
-  gap: 2px;
+  align-items: center;
+  gap: 1px;
 }
 
+/* Hot · New sits first among the right header's tools, a little apart from ⤢. */
+.panelTools .sortSwitch {
+  margin-right: 5px;
+}
+
+.feedShell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The scrollbar is see-through at rest and shows only while the panel scrolls
+   (CommunityFeed sets data-scrolling, then clears it 900 ms after the last
+   scroll). Its room is kept the whole time, so nothing shifts when it shows.
+   scrollbar-color for Chrome and Firefox; the ::-webkit- rules for Safari, which
+   doesn't read it (Chrome ignores them once scrollbar-color is set). */
 .panelScroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 16px;
+  padding-top: 36px; /* the header's height: the first post starts under it */
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 240ms var(--community-ease);
+}
+
+.panelScroll[data-scrolling] {
+  scrollbar-color: var(--community-scrollbar) transparent;
+}
+
+.panelScroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.panelScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panelScroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  background-clip: padding-box;
+}
+
+.panelScroll[data-scrolling]::-webkit-scrollbar-thumb {
+  background-color: var(--community-scrollbar);
 }
 
 .iconBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--muted-text);
+  color: var(--community-muted);
   cursor: pointer;
-  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out),
-    transform 120ms var(--ease-out);
+  transition: background-color 140ms var(--community-ease), color 140ms var(--community-ease),
+    transform 120ms var(--community-ease);
 }
 
 .iconBtn:hover {
@@ -115,7 +267,7 @@
 }
 
 .iconBtn:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
 .iconBtn:focus-visible {
@@ -123,53 +275,266 @@
   outline-offset: 1px;
 }
 
-/* The divider. The library owns its flex sizing; this is only the look. */
+/* ── The divider, carrying your avatar ─────────────────────────────────── */
+
+/* White, down to the composer bars, where it takes their colour so they read as
+   one bar with your avatar sitting on it. 4 px to look at; the library still
+   gives a mouse 10 px to grab and a finger 20 (resizeTargetMinimumSize). */
 .handle {
+  --dock-height: 38.5px;
   position: relative;
-  width: 12px;
+  z-index: 3;
+  width: 4px;
   outline: none;
+  background: linear-gradient(to top, var(--community-dock) var(--dock-height), var(--white) var(--dock-height));
   cursor: col-resize;
 }
 
+/* It turns purple only when in use. */
 .handle::before {
   content: "";
   position: absolute;
-  top: 50%;
+  top: 6px;
+  bottom: var(--dock-height);
   left: 50%;
-  width: 4px;
-  height: 40px;
-  border-radius: 999px;
-  background: var(--community-hairline);
-  transform: translate(-50%, -50%);
-  transition: background-color 140ms var(--ease-out), height 200ms var(--ease-out);
+  width: 1px;
+  background: transparent;
+  transform: translateX(-50%);
+  transition: background-color 140ms var(--community-ease), width 140ms var(--community-ease);
 }
 
 .handle[data-separator="hover"]::before,
 .handle:hover::before {
-  background: var(--reaction-mine-border);
-  height: 64px;
+  width: 2px;
+  background: var(--purple);
 }
 
 .handle[data-separator="active"]::before {
+  width: 3px;
   background: var(--purple);
-  height: 96px;
 }
 
 .handle[data-separator="focus"]::before,
 .handle:focus-visible::before {
+  width: 3px;
   background: var(--purple);
-  height: 64px;
   box-shadow: 0 0 0 3px var(--reaction-mine-bg);
 }
 
-/* A panel collapsed to LAYOUT_COLLAPSED_PX (44). */
+/* The glow-bar grip (owner, 7 Nov): a white capsule holding a short bar that
+   runs purple-dark → purple-light → pink-dark, glowing. In use, it grows a
+   little and its outline turns purple. */
+.handleGripGlow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 46px;
+  border: 1.5px solid var(--community-grip-glow-border);
+  border-radius: 999px;
+  background: var(--white);
+  box-shadow: var(--community-grip-glow-shadow);
+  transform: translate(-50%, -50%);
+  transition: transform 150ms var(--community-ease), border-color 150ms var(--community-ease),
+    box-shadow 150ms var(--community-ease);
+}
+
+.handleGripGlow::after {
+  content: "";
+  width: 4px;
+  height: 26px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--purple-dark) 0%, var(--purple-light) 50%, var(--pink-dark) 100%);
+  box-shadow: 0 0 8px var(--community-grip-glow);
+}
+
+.handle:hover .handleGripGlow,
+.handle[data-separator="hover"] .handleGripGlow,
+.handle[data-separator="active"] .handleGripGlow,
+.handle[data-separator="focus"] .handleGripGlow,
+.handle:focus-visible .handleGripGlow {
+  border-color: var(--purple);
+  box-shadow: var(--community-grip-glow-shadow-hover);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+/* Your avatar, joining the two composers tucked in behind it. From the outside in:
+   a ring in the accent of the side in use, a band whose half on that side fills in,
+   a white gap, then the photo. */
+/* A hand, because pressing it switches sides; while it drags the divider, the
+   resize arrows. */
+.hub {
+  --hub-accent: var(--community-rail);
+  --hub-glow: transparent;
+  position: absolute;
+  bottom: 5px; /* where it was against the composers, which moved up 0.5 px */
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 2.5px solid var(--hub-accent);
+  border-radius: 50%;
+  background: var(--community-canvas);
+  box-shadow: 0 2px 14px var(--hub-glow), var(--community-float-shadow);
+  transform: translateX(-50%);
+  cursor: pointer;
+  touch-action: none;
+  transition: border-color 200ms var(--community-ease), box-shadow 220ms var(--community-ease),
+    transform 220ms var(--community-spring);
+}
+
+/* !important, and doubled up: while the pointer is within 5 px of the divider,
+   react-resizable-panels puts `*, *:hover { cursor: col-resize !important }` on
+   the whole page, which turned the middle of the avatar into resize arrows. */
+.handle .hub,
+.handle .hub * {
+  cursor: pointer !important;
+}
+
+.handle .hub[data-dragging],
+.handle .hub[data-dragging] * {
+  cursor: col-resize !important;
+}
+
+.hub[data-active="left"] {
+  --hub-accent: var(--purple-dark);
+  --hub-glow: var(--reaction-mine-bg);
+}
+
+.hub[data-active="right"] {
+  --hub-accent: var(--pink-dark);
+  --hub-glow: var(--community-world-tint);
+}
+
+/* The cap on top. */
+.hub::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: -8.5px;
+  left: 50%;
+  width: 11px;
+  height: 10px;
+  border-radius: 5.5px 5.5px 0 0;
+  background: var(--purple-dark);
+  transform: translateX(-50%);
+}
+
+.handle:hover .hub,
+.handle[data-separator="hover"] .hub {
+  transform: translateX(-50%) scale(1.03);
+}
+
+.handle[data-separator="active"] .hub,
+.handle .hub[data-dragging] {
+  transform: translateX(-50%) scale(1.06);
+}
+
+.hub:active:not([data-dragging]) {
+  transform: translateX(-50%) scale(0.97);
+}
+
+.hubHalf {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 200ms var(--community-ease);
+}
+
+.hubHalfLeft {
+  background: conic-gradient(transparent 0deg 180deg, var(--purple) 180deg 360deg);
+}
+
+.hubHalfRight {
+  background: conic-gradient(
+    var(--pink-dark) 0deg,
+    var(--purple) 90deg,
+    var(--pink-dark) 180deg,
+    transparent 180deg 360deg
+  );
+}
+
+.hub[data-active="left"] .hubHalfLeft,
+.hub[data-active="right"] .hubHalfRight {
+  opacity: 1;
+}
+
+.hubPhoto {
+  position: relative;
+  display: block;
+  width: 46px;
+  height: 46px;
+  padding: 2.5px;
+  border-radius: 50%;
+  background: var(--white);
+}
+
+/* !important: AvatarImg sets its usual purple ring inline. Here the rings around
+   the photo do that job, so it gets only a thin grey edge (spec §1.1). */
+.hubAvatar {
+  display: block;
+  width: 41px;
+  height: 41px;
+  border: 1px solid var(--community-grip-border) !important;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Where you're writing, only as an icon. Springs out on the side in use, over the
+   ring's upper corner. */
+.hubBadge {
+  position: absolute;
+  z-index: 2;
+  top: -3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 20px;
+  border-radius: 999px;
+  color: var(--white);
+  box-shadow: var(--community-float-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.7);
+  transition: opacity 160ms var(--community-ease), transform 240ms var(--community-spring);
+}
+
+.hubBadgeCampus {
+  right: calc(50% + 20px);
+  background: var(--purple-dark);
+  transform-origin: right center;
+}
+
+.hubBadgeWorld {
+  left: calc(50% + 20px);
+  background: var(--pink-dark);
+  transform-origin: left center;
+}
+
+.hubBadgeWorld .worldIcon {
+  color: var(--white);
+}
+
+.hub[data-active="left"] .hubBadgeCampus,
+.hub[data-active="right"] .hubBadgeWorld {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* A panel collapsed to LAYOUT_COLLAPSED_PX (36). */
 .collapsedBar {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 5px 0;
   min-width: 0;
 }
 
@@ -178,7 +543,7 @@
   padding: 4px 0;
   border: 0;
   background: none;
-  font: 600 13px/1 "Inter", sans-serif;
+  font: 600 12px/1 "Inter", sans-serif;
   color: var(--black-soft);
   white-space: nowrap;
   cursor: pointer;
@@ -188,50 +553,163 @@
   color: var(--purple);
 }
 
-/* ── The country dropdown (§1.3) ───────────────────────────────────────── */
+/* ── The docked composer ───────────────────────────────────────────────── */
 
-.countryBtn {
+/* 38.5 px: the 1.5 px line, then 2 above the 33 px composer and 2 below it, the
+   same room either side (owner, 8 Nov; was 2.5 above and 1.5 below). */
+.dock {
+  flex: 0 0 auto;
+  min-height: 38.5px;
+  padding: 2px 8px;
+  border-top: 1.5px solid var(--community-rail);
+  background: var(--community-dock);
+}
+
+/* What each side's composer looks like while it's in use (Composer.module.css). */
+.dockCampus {
+  --composer-accent: var(--purple-dark);
+  --composer-solid: var(--purple-dark);
+  --composer-tint: var(--reaction-mine-bg);
+}
+
+.dockWorld {
+  --composer-accent: var(--pink-dark);
+  --composer-solid: var(--community-world-strong);
+  --composer-tint: var(--community-world-tint);
+}
+
+/* Each composer ends 13 px from the divider's centre (2 px of divider, then 11),
+   tucked in under the avatar, with enough padding to keep the text and the
+   tools clear of it. */
+.dockLeft {
+  padding-right: 11px;
+  --composer-radius: 20px 18px 18px 20px;
+  --composer-pad-start: 12px;
+  --composer-pad-end: 26px;
+}
+
+/* The right side's badge on the avatar reaches 50 px past the divider's centre,
+   over this composer's top corner, so its "Replying to" chip starts 16 px
+   further in and clears it. */
+.dockRight {
+  padding-left: 11px;
+  --composer-radius: 18px 20px 20px 18px;
+  --composer-pad-start: 26px;
+  /* No --composer-pad-end: the Post pill sits concentric in the field's end
+     (Composer.module.css; owner, 8 Nov; was 6 px). */
+  --composer-topline-start: 16px;
+}
+
+.dockRight .viewOnly {
+  padding-left: 26px;
+}
+
+/* < 1024 px: floats at the bottom of the window until the footer arrives.
+   14 px in from each side, like the brand pill, so a curved or rounded screen
+   doesn't cut its ends (owner, 8 Nov; was 8). */
+.dockFloat {
+  position: sticky;
+  z-index: 15;
+  bottom: 0;
+  min-height: 48px;
+  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.dockFloat > * {
+  pointer-events: auto;
+}
+
+/* Spec §1.4. */
+.viewOnly {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-height: 30px;
+  font: 400 13px/18px "Inter", sans-serif;
+  color: var(--community-muted);
+}
+
+.dockFloat .viewOnly {
+  padding: 7px 12px;
+  border-radius: 16px;
+  background: var(--community-glass);
+  box-shadow: var(--community-float-shadow);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+}
+
+.viewOnlyIcon {
+  flex: 0 0 auto;
+  color: var(--purple);
+}
+
+/* ── Choosing the right-hand feed (§1.3) ───────────────────────────────── */
+
+.worldBtn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  max-width: 100%;
-  padding: 6px 12px;
-  border: 1px solid var(--community-hairline);
-  border-radius: 999px;
-  background: var(--white);
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   font: 600 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
   cursor: pointer;
-  transition: border-color 140ms var(--ease-out), transform 120ms var(--ease-out);
+  transition: background-color 140ms var(--community-ease), transform 120ms var(--community-ease);
 }
 
-.countryBtn span {
+.worldName {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.countryBtn:hover {
-  border-color: var(--reaction-mine-border);
+.worldBtn:hover {
+  background: var(--reaction-mine-bg);
 }
 
-.countryBtn:active {
+.worldBtn:active {
   transform: scale(0.98);
 }
 
-.countryBtn:focus-visible {
+.worldBtn:focus-visible {
   outline: 2px solid var(--purple);
-  outline-offset: 2px;
+  outline-offset: 1px;
+}
+
+.worldIcon {
+  color: var(--community-muted);
+}
+
+.flag {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.chevron,
+.chevronOpen {
+  flex: 0 0 auto;
+  color: var(--community-muted);
+  transition: transform 200ms var(--community-ease);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
 }
 
 .menu {
-  min-width: 260px;
+  min-width: 220px;
   max-width: calc(100vw - 16px);
-  max-height: min(360px, 60vh);
+  max-height: min(320px, 60vh);
   overflow-y: auto;
-  padding: 6px;
-  border-radius: 14px;
+  padding: 4px;
+  border-radius: 10px;
   background: var(--white);
   box-shadow: var(--quick-bar-shadow);
 }
@@ -240,23 +718,35 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 32px;
+  padding: 5px 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 6px;
   background: transparent;
   text-align: left;
-  font: 500 14px/20px "Inter", sans-serif;
+  font: 500 13px/18px "Inter", sans-serif;
   color: var(--black-soft);
   cursor: pointer;
+  transition: background-color 120ms var(--community-ease);
 }
 
-.menuOption:hover,
+.menuOption:hover {
+  background: var(--reaction-mine-bg);
+}
+
 .menuOption:focus-visible {
   background: var(--reaction-mine-bg);
-  outline: none;
+  outline: 2px solid var(--purple);
+  outline-offset: -2px;
+}
+
+.menuLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .menuOptionActive {
@@ -266,7 +756,7 @@
 
 .menuHint {
   font-weight: 400;
-  color: var(--muted-text);
+  color: var(--community-muted);
 }
 
 .menuCheck {
@@ -276,33 +766,84 @@
 
 .menuDivider {
   height: 1px;
-  margin: 6px 4px;
+  margin: 4px;
   background: var(--community-hairline);
 }
 
-/* ── Hot · New ─────────────────────────────────────────────────────────── */
+/* ── Hot · New, as two icons with a sliding thumb ──────────────────────── */
 
 .sortSwitch {
+  position: relative;
+  flex: 0 0 auto;
   display: inline-flex;
-  padding: 3px;
-  border-radius: 999px;
-  background: var(--community-input-bg);
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--input-bg);
+}
+
+.sortThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--white);
+  box-shadow: 0 1px 2px rgba(42, 8, 42, 0.14);
+  transition: transform 220ms var(--community-spring);
+}
+
+.sortSwitch[data-sort="new"] .sortThumb {
+  transform: translateX(24px);
 }
 
 .sortBtn {
-  min-height: 30px;
-  padding: 4px 14px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: 5px;
   background: transparent;
-  font: 500 13px/20px "Inter", sans-serif;
-  color: var(--muted-text);
+  color: var(--community-muted);
   cursor: pointer;
-  transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out);
+  transition: color 160ms var(--community-ease);
 }
 
-.sortBtn:hover {
+.sortBtn:hover,
+.sortBtnActive {
   color: var(--purple);
+}
+
+/* "Hot" / "New" under the button after 350 ms of resting on it (a mouse only),
+   and not after pressing it. */
+.sortBtn::before {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 50%;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--toast-bg);
+  color: var(--white);
+  font: 500 11px/14px "Inter", sans-serif;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+  transition: opacity 120ms var(--community-ease), transform 120ms var(--community-ease);
+}
+
+@media (hover: hover) {
+  .sortBtn:hover:not([data-quiet])::before {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 350ms;
+  }
 }
 
 .sortBtn:focus-visible {
@@ -310,80 +851,108 @@
   outline-offset: 1px;
 }
 
-.sortBtnActive {
-  background: var(--white);
-  color: var(--purple);
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(11, 11, 11, 0.08);
-}
-
-/* ── < 1024 px: the switcher (§1.2) ────────────────────────────────────── */
+/* ── < 1024 px: the floating switcher (§1.2) ───────────────────────────── */
 
 .narrow {
   min-height: calc(100dvh - var(--app-chrome));
-  padding: 0 16px 24px;
-  background:
-    radial-gradient(700px 300px at 0% 0%, rgba(128, 0, 128, 0.06), transparent 60%),
-    var(--bg);
-}
-
-.switcher {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: 0 -16px 16px;
-  padding: 12px 16px;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--community-hairline);
-}
-
-/* Same width and centring as .feed. */
-.switcherInner {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
+}
+
+/* The bar itself is see-through and lets presses through. Only its two pills
+   take them, so the posts really do pass underneath. */
+.switcher {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  pointer-events: none;
+}
+
+.segments,
+.switcherSort {
+  pointer-events: auto;
+  border-radius: 999px;
+  background: var(--community-glass);
+  box-shadow: var(--community-float-shadow), inset 0 0 0 1px var(--community-hairline);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
 }
 
 .segments {
   display: flex;
-  width: 100%;
+  align-items: center;
+  min-width: 0;
   padding: 3px;
-  border-radius: 999px;
-  background: var(--white);
-  border: 1px solid var(--community-hairline);
+}
+
+.switcherSort {
+  flex: 0 0 auto;
+  padding: 3px;
+}
+
+/* Hot · New (country / Global only) and the brand pill, together at the right
+   end; the pill is always last (owner, 8 Nov). See-through like the bar, so
+   only the pills take presses. */
+.switcherEnd {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  pointer-events: none;
+}
+
+.switcherSort .sortSwitch {
+  background: transparent;
+}
+
+.switcherSort .sortThumb {
+  background: var(--reaction-mine-bg);
+  box-shadow: none;
 }
 
 .segment {
-  flex: 1 1 0;
+  position: relative;
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 40px;
-  padding: 6px 12px;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  font: 600 14px/20px "Inter", sans-serif;
-  color: var(--muted-text);
+  font: 600 13px/16px "Inter", sans-serif;
+  color: var(--community-muted);
   cursor: pointer;
-  transition: background-color 180ms var(--ease-out), color 180ms var(--ease-out);
+  transition: background-color 180ms var(--community-ease), color 180ms var(--community-ease),
+    padding 220ms var(--community-ease), transform 120ms var(--community-ease);
 }
 
-.segment span {
+.segment:active {
+  transform: scale(0.96);
+}
+
+.segmentIcon {
+  flex: 0 0 auto;
+  width: 34px;
+  justify-content: center;
+  padding: 0;
+}
+
+.segmentName {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.segment:focus-visible {
+.segment:focus-visible,
+.segmentChevron:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: 1px;
 }
@@ -393,94 +962,133 @@
   color: var(--white);
 }
 
+/* The country and its chevron share one purple pill. Off this feed the chevron
+   has no width and takes no presses or focus (inert in the JSX). */
+.worldSegment {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  transition: background-color 180ms var(--community-ease);
+}
+
+.worldSegmentActive {
+  background: var(--purple);
+}
+
+.worldSegmentActive .segment {
+  padding-right: 3px;
+  color: var(--white);
+}
+
+.worldSegmentActive .worldIcon,
+.worldSegmentActive .chevron,
+.worldSegmentActive .chevronOpen {
+  color: var(--white);
+}
+
+.segmentChevron {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: width 220ms var(--community-ease), margin 220ms var(--community-ease),
+    opacity 160ms var(--community-ease);
+}
+
+.worldSegmentActive .segmentChevron {
+  width: 22px;
+  margin-right: 4px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Purple on purple wouldn't show. */
+.worldSegmentActive .segment:focus-visible,
+.worldSegmentActive .segmentChevron:focus-visible {
+  outline-color: var(--white);
+  outline-offset: -3px;
+}
+
+/* A finger needs 44 px even though the controls stay thin to look at. */
+@media (pointer: coarse) {
+  .segment::after,
+  .segmentChevron::after,
+  .sortBtn::after {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+
+  .sortBtn {
+    width: 34px;
+  }
+
+  .sortThumb {
+    width: 34px;
+  }
+
+  .sortSwitch[data-sort="new"] .sortThumb {
+    transform: translateX(34px);
+  }
+}
+
 /* ── A feed ────────────────────────────────────────────────────────────── */
 
+/* Posts respond to their panel's width, not the window's (PostCard's @container
+   rules and cqi padding). Rows always run edge to edge. */
 .feed {
+  container: feed / inline-size;
+  flex: 1 0 auto;
   width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
+/* The cards (PostCard.module.css) sit 10 px in from both edges and 6 px apart.
+   On the right the scrollbar's own room counts towards the 10: CommunityFeed
+   measures it into --scrollbar-room, and scrollbar-gutter keeps it constant. */
 .list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* Spec §2.1: the closed composer. */
-.composerRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--community-hairline);
-  border-radius: 16px;
-  background: var(--white);
-  text-align: left;
-  font: 400 15px/22px "Inter", sans-serif;
-  color: var(--muted-text);
-  cursor: text;
-  transition: border-color 140ms var(--ease-out), box-shadow 200ms var(--ease-out);
-}
-
-.composerRow:hover {
-  border-color: var(--reaction-mine-border);
-  box-shadow: 0 2px 10px rgba(128, 0, 128, 0.06);
-}
-
-.composerRow:focus-visible {
-  outline: 2px solid var(--purple);
-  outline-offset: 2px;
-}
-
-.composerAvatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex: 0 0 auto;
-}
-
-/* Spec §1.4: Inter 400 13, mutedText, on inputBg, radius 12, padding 12 / 14. */
-.viewOnly {
-  display: flex;
-  gap: 10px;
-  margin: 0;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--community-input-bg);
-  font: 400 13px/19px "Inter", sans-serif;
-  color: var(--muted-text);
+  padding: 6px max(0px, calc(10px - var(--scrollbar-room, 0px))) 0 max(10px, var(--scrollbar-room, 0px));
 }
 
 .empty {
-  margin: 24px 0;
-  padding: 32px 16px;
+  max-width: 320px;
+  margin: 32px auto;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--community-glass);
   text-align: center;
-  font: 400 15px/22px "Inter", sans-serif;
-  color: var(--muted-text);
+  font: 400 14px/20px "Inter", sans-serif;
+  color: var(--community-muted);
 }
 
 .failed {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 16px;
-  font: 400 14px/20px "Inter", sans-serif;
-  color: var(--muted-text);
+  gap: 10px;
+  padding: 12px;
+  font: 400 13px/18px "Inter", sans-serif;
+  color: var(--community-muted);
 }
 
 .retry {
-  padding: 6px 14px;
+  height: 28px;
+  padding: 0 12px;
   border: 1px solid var(--reaction-mine-border);
   border-radius: 999px;
   background: var(--white);
-  font: 600 13px/20px "Inter", sans-serif;
+  font: 600 12px/16px "Inter", sans-serif;
   color: var(--purple);
   cursor: pointer;
 }
@@ -490,45 +1098,49 @@
   outline-offset: 2px;
 }
 
-/* Spec §9: avatar circle, two text lines, a grey block. */
+/* Spec §9: the same shape as a loaded post, on the same card. */
 .skeleton {
   display: flex;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 16px;
-  background: var(--white);
-  border: 1px solid var(--community-hairline);
+  flex-direction: column;
+  gap: 8px;
+  max-width: 860px;
+  margin: 0 auto 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--community-card-border);
+  border-left: 3px solid var(--zone-accent, var(--community-card-border));
+  border-radius: 14px;
+  background: var(--community-card);
+  box-shadow: var(--community-card-shadow);
+}
+
+.skeletonHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .skeletonAvatar {
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--community-input-bg);
-}
-
-.skeletonBody {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  background: rgba(128, 0, 128, 0.08);
 }
 
 .skeletonLine {
-  height: 12px;
-  border-radius: 6px;
-  background: var(--community-input-bg);
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(128, 0, 128, 0.08);
 }
 
 .skeletonLineSm {
-  width: 45%;
+  width: 40%;
 }
 
 .skeletonBlock {
-  height: 140px;
-  border-radius: 12px;
-  background: var(--community-input-bg);
+  height: 96px;
+  border-radius: 8px;
+  background: rgba(128, 0, 128, 0.06);
 }
 
 .shimmer {
@@ -541,7 +1153,7 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
-  animation: communityShimmer 1.4s ease infinite;
+  animation: communityShimmer 1.4s var(--community-ease) infinite;
   transform: translateX(-100%);
 }
 
@@ -556,12 +1168,23 @@
     animation: none;
   }
 
+  .groupGliding > [data-panel],
   .iconBtn,
-  .countryBtn,
+  .worldBtn,
+  .sortThumb,
   .sortBtn,
   .segment,
-  .composerRow,
-  .handle::before {
+  .worldSegment,
+  .segmentChevron,
+  .chevron,
+  .chevronOpen,
+  .menuOption,
+  .handle::before,
+  .handleGripGlow,
+  .hub,
+  .hubHalf,
+  .hubBadge,
+  .panelScroll {
     transition: none;
   }
 }

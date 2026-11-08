@@ -1,0 +1,102 @@
+/* frontend/src/components/community/AnimatedIcons/AnimatedIcons.module.css
+   docs/design/COMMUNITY_SPEC.md §1.1. */
+
+.icon {
+  flex: 0 0 auto;
+  display: block;
+  overflow: visible;
+}
+
+.draw,
+.drawLate {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: iconDraw 520ms var(--community-ease) both;
+}
+
+.drawLate {
+  animation-delay: 180ms;
+}
+
+@keyframes iconDraw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Any header or button around the icon can be the hover target. */
+header:hover .campus,
+button:hover > .campus {
+  animation: capHop 420ms var(--community-spring);
+}
+
+@keyframes capHop {
+  40% {
+    transform: translateY(-2px) rotate(-5deg);
+  }
+}
+
+/* ── The Global globe ──────────────────────────────────────────────────── */
+
+.globe {
+  animation: globeIn 360ms var(--community-spring) both;
+}
+
+@keyframes globeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-20deg);
+  }
+}
+
+.globeLand {
+  fill: var(--community-globe-land);
+}
+
+/* One face to the left: the land's second copy slides into the first one's
+   place, so the turn ends exactly where it started. */
+header:hover .globeLand,
+button:hover .globeLand {
+  animation: globeTurn 900ms var(--community-ease);
+}
+
+@keyframes globeTurn {
+  to {
+    transform: translateX(-20px);
+  }
+}
+
+/* White meridians and parallels over the land, like the 🌐 sign people know. */
+.globeGrid {
+  fill: none;
+  stroke: var(--white);
+  stroke-width: 1.1;
+  stroke-opacity: 0.7;
+}
+
+.globeShine {
+  fill: var(--white);
+  opacity: 0.3;
+}
+
+.globeRim {
+  fill: none;
+  stroke: var(--blue-dark);
+  stroke-opacity: 0.55;
+  stroke-width: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw,
+  .drawLate,
+  .globe,
+  header:hover .campus,
+  button:hover > .campus,
+  header:hover .globeLand,
+  button:hover .globeLand {
+    animation: none;
+  }
+}

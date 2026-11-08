@@ -85,6 +85,85 @@
   --reaction-mine-border: rgba(128,0,128,0.35);
   --quick-bar-shadow: 0 6px 20px rgba(11,11,11,0.16);
 
+  /* Community redesign — docs/design/COMMUNITY_SPEC.md §12 (Block V-P).
+     Canvas and tile strength are the chat's (MESSAGES_SPEC §2), so the two
+     screens share one wallpaper. */
+  --input-bg: #F3F0EF;
+  --community-canvas: #EDE6F5;
+  --community-glass: rgba(255,255,255,0.74);
+  /* Every action pill under a post (summary, react, reply): pinkish, one look
+     for all of them (owner, 7 Nov; was white at 72%). */
+  --community-pill: #F8ECF5;
+  /* Under the pointer: a deeper pink, lifted 1 px with this shadow. */
+  --community-pill-hover: #EFD8EA;
+  --community-pill-mine-hover: rgba(128,0,128,0.17);
+  --community-pill-lift: 0 2px 6px rgba(79,1,79,0.14);
+  --community-hairline: rgba(128,0,128,0.1);
+  --community-rail: #D1AAD7;
+  /* Darker than the first #B07FBA, which the owner found too faint (6 Nov). */
+  --community-rail-hover: #9552A3;
+  /* A reply username under the pointer: the author's pill deepens to this. */
+  --community-author-hover: rgba(128,0,128,0.18);
+  /* The panels' scrollbar, shown only while they scroll (web only; the app
+     uses the phone's own indicator). */
+  --community-scrollbar: rgba(128,0,128,0.3);
+  /* The Global globe: land and the shading over it. The ocean is
+     --blue-light into --blue-dark. */
+  --community-globe-land: #2E9E5E;
+  /* Two zones (owner, 7 Nov): each panel's own ground, with the doodles at 5%
+     (the veil is the ground at 95% over the tile). */
+  /* (8 Nov: a more purple campus, a pinker world; the doodles at 15%, after
+     5% and 8% left them invisible.) */
+  --community-panel-campus: #F0E5F7;
+  --community-panel-campus-veil: rgba(240,229,247,0.75);
+  --community-panel-world: #FCE9F1;
+  --community-panel-world-veil: rgba(252,233,241,0.75);
+  /* Each panel's header: glass that runs from the zone's tint at the outer
+     edge to white where the two headers meet. */
+  --community-header-campus: linear-gradient(90deg, rgba(232,212,244,0.95) 0%, rgba(255,255,255,0.88) 100%);
+  --community-header-world: linear-gradient(90deg, rgba(255,255,255,0.88) 0%, rgba(252,220,234,0.95) 100%);
+  /* Each zone's reply thread and the accent down a card's left edge: purple on
+     the campus side, pink on the other (owner, 7 Nov). The accents are
+     --purple-dark and --pink-dark. */
+  --community-rail-campus: #A86BBB;
+  --community-rail-world: #D27AA3;
+  /* The badge in the world panel's header, and a post's college in the world
+     feed. (8 Nov: the campus badge's two tokens are gone; nothing used them
+     since the CAMPUS badge left on 7 Nov.) */
+  --community-badge-world-bg: #FCE4EE;
+  --community-badge-world-text: #C82863;
+  --community-badge-world-border: rgba(235,72,127,0.22);
+  --community-college-bg: #FAF0F9;
+  --community-college-text: #6E2270;
+  /* Frosted post cards. */
+  --community-card: rgba(255,255,255,0.94);
+  --community-card-border: rgba(128,0,128,0.11);
+  --community-card-border-hover: rgba(128,0,128,0.2);
+  --community-card-shadow: 0 2px 10px rgba(79,1,79,0.04);
+  /* The centre brand pill and its menu. */
+  --community-pill-border: rgba(128,0,128,0.22);
+  --community-pill-shadow: 0 4px 14px rgba(79,1,79,0.12);
+  --community-pill-ring: #F7EBF5;
+  --community-pill-divider: rgba(128,0,128,0.16);
+  --community-menu-glass: rgba(255,255,255,0.88);
+  --community-menu-shadow: 0 12px 32px rgba(79,1,79,0.18);
+  /* The divider's glow-bar grip (its bar runs purple-dark → purple-light →
+     pink-dark). */
+  --community-grip-glow-border: rgba(128,0,128,0.28);
+  --community-grip-glow-shadow: 0 3px 12px rgba(79,1,79,0.12);
+  --community-grip-glow-shadow-hover: 0 4px 16px rgba(128,0,128,0.24);
+  --community-grip-glow: rgba(215,0,215,0.55);
+  --community-globe-shade: rgba(5,40,90,0.38);
+  --community-grip-border: #8E8B99;
+  --community-dock: #F9EEF8;
+  --community-world-strong: #C92C66;
+  --community-world-tint: rgba(235,72,127,0.16);
+  --community-muted: #5C5969;
+  --community-like: #D81E5B;
+  --community-float-shadow: 0 4px 16px rgba(42,8,42,0.12);
+  --community-ease: cubic-bezier(0.2,0.8,0.2,1);
+  --community-spring: cubic-bezier(0.34,1.56,0.64,1);
+
   /* Text & background */
   --black: #0B0B0B;
   --black-soft: #1A1A1A;

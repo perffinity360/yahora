@@ -27,7 +27,7 @@ export default function ReactionBreakdown({ anchorEl, counts, total, mine, onAdd
               aria-label="Add your reaction"
               onClick={onAdd}
             >
-              <CirclePlus size={18} strokeWidth={1.75} aria-hidden="true" />
+              <CirclePlus size={15} strokeWidth={1.75} aria-hidden="true" />
             </button>
           </li>
           {rows.map(([emoji, count]) => (

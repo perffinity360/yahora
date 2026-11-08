@@ -5,12 +5,13 @@
 // link are tappable.
 
 import React from "react";
+import { HeartHandshake } from "lucide-react";
 import styles from "./Composer.module.css";
 
 export default function SupportCard({ onClose }) {
   return (
     <section className={styles.support} role="status" aria-labelledby="composer-support-title">
-      <span className={styles.supportIcon} aria-hidden="true">💜</span>
+      <HeartHandshake size={18} className={styles.supportIcon} aria-hidden="true" />
       <div className={styles.supportBody}>
         <h3 id="composer-support-title" className={styles.supportTitle}>
           You're not alone

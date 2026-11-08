@@ -15,19 +15,19 @@
 // onReact(emoji | null); what that does to the post is the caller's business.
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { CirclePlus, Heart } from "lucide-react";
+import { CirclePlus, Smile } from "lucide-react";
 import Popover from "../Popover/Popover";
 import { EmojiPickerPanel } from "./EmojiPickerPopover";
 import {
   DEFAULT_REACTION,
   QUICK_REACTIONS,
   REACTION_HOVER_DELAY_MS,
+  REACTION_LONG_PRESS_MS,
 } from "../../../utils/community";
 import styles from "./ReactionBar.module.css";
 
 /** Grace period for the pointer to travel from the button up to the bar. */
 const HOVER_CLOSE_MS = 250;
-const LONG_PRESS_MS = 450;
 const PICKER_WIDTH = 340;
 const PICKER_MAX_HEIGHT = 400;
 const PICKER_MIN_HEIGHT = 260;
@@ -124,7 +124,7 @@ export default function ReactionBar({ reaction, onReact }) {
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
       setBarOpen(true);
-    }, LONG_PRESS_MS);
+    }, REACTION_LONG_PRESS_MS);
   };
   const cancelPress = () => clearTimeout(pressTimer.current);
 
@@ -167,7 +167,7 @@ export default function ReactionBar({ reaction, onReact }) {
         aria-haspopup="true"
         aria-expanded={barOpen}
         aria-label={reaction ? `Your reaction ${reaction}. Remove it` : `React with ${DEFAULT_REACTION}`}
-        title="Hover or press ↑ for more reactions"
+        title="React. Hover, long-press or press ↑ for more"
         onClick={onClick}
         onKeyDown={onKeyDown}
         onPointerEnter={onButtonEnter}
@@ -184,10 +184,9 @@ export default function ReactionBar({ reaction, onReact }) {
           {reaction ? (
             <span className={styles.reactEmoji}>{reaction}</span>
           ) : (
-            <Heart size={18} strokeWidth={2} aria-hidden="true" />
+            <Smile size={15} strokeWidth={2} aria-hidden="true" />
           )}
         </span>
-        <span>React</span>
       </button>
 
       {barOpen && (
@@ -204,10 +203,11 @@ export default function ReactionBar({ reaction, onReact }) {
               hangs off it (absolute), so opening it never moves the bar. */}
           <div className={styles.stack}>
             <div ref={barRef} className={styles.quickBar} onKeyDown={onBarKeyDown}>
-              {QUICK_REACTIONS.map((emoji) => (
+              {QUICK_REACTIONS.map((emoji, i) => (
                 <button
                   key={emoji}
                   type="button"
+                  style={{ "--quick-i": i }}
                   className={`${styles.quickBtn} ${emoji === reaction ? styles.quickMine : ""}`}
                   aria-pressed={emoji === reaction}
                   aria-label={emoji === reaction ? `${emoji}, your reaction. Remove it` : `React with ${emoji}`}
@@ -225,7 +225,7 @@ export default function ReactionBar({ reaction, onReact }) {
                   setExpanded((x) => (x ? null : pickerPlacement(barRef.current)))
                 }
               >
-                <CirclePlus size={24} strokeWidth={1.75} aria-hidden="true" />
+                <CirclePlus size={20} strokeWidth={1.75} aria-hidden="true" />
               </button>
             </div>
             {expanded && (

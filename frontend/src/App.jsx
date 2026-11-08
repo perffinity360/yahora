@@ -16,6 +16,8 @@ import Community from "./pages/community/Community";
 import OnboardingRequired from "./components/OnboardingRequired/OnboardingRequired";
 import useScrollRestoration from "./hooks/useScrollRestoration";
 
+const NO_FOOTER_PATHS = new Set(['/messages', '/community']);
+
 // ⚠ Development only: the Block N-S test bench at /dev/community. DEV is
 // statically false in a production build, so Vite drops this import — and the
 // page with it — from the bundle entirely.
@@ -136,6 +138,12 @@ function App() {
   const location = useLocation(); // Get current route
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
   const chromeRef = useRef(null);
+  // The Community page takes the whole window and puts the menu in a brand
+  // pill (pages/community/BrandMenu.jsx): between its two panels on a laptop,
+  // in the floating switcher on a phone (owner, 8 Nov). The navbar is only
+  // hidden there, never unmounted: it keeps presence, delivery ticks and the
+  // unread count running, which every page relies on.
+  const hideNavbar = location.pathname === '/community';
 
   // Publish the real height of the fixed app chrome (demo banner + navbar) as
   // --app-chrome so full-height pages can size themselves with
@@ -172,7 +180,9 @@ function App() {
     // composer. dvh there means the page has nothing to scroll. --vv-height is
     // set by Messages only while a keyboard covers part of the screen in a
     // browser that doesn't shrink dvh for it (iOS Safari); see Messages.jsx.
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: location.pathname === '/messages' ? 'var(--vv-height, 100dvh)' : '100vh' }}>
+    // The Community is 100dvh for the same reason: at 100vh a short feed on a
+    // phone scrolled into a strip of bare page under its floating bar (8 Nov).
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: location.pathname === '/messages' ? 'var(--vv-height, 100dvh)' : location.pathname === '/community' ? '100dvh' : '100vh' }}>
       
       {/* Demo banner + navbar are measured together as the app chrome */}
       <div ref={chromeRef}>
@@ -201,7 +211,9 @@ function App() {
         </div>
       )}
       
-      <Navbar />
+      <div style={hideNavbar ? { display: 'none' } : undefined}>
+        <Navbar />
+      </div>
 
       </div>
 
@@ -238,8 +250,9 @@ function App() {
         </Routes>
       </main>
 
-      {/* No footer on the messages page */}
-      {location.pathname !== '/messages' && <Footer />}
+      {/* No footer on the working pages that fill the window: messages and the
+          community (owner, 7 Nov). */}
+      {!NO_FOOTER_PATHS.has(location.pathname) && <Footer />}
     </div>
   );
 }
