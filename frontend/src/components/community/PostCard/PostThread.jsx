@@ -11,9 +11,9 @@
 //   · a page that would leave only one or two replies unloaded brings them in
 //     too, so the button never stands in for one or two replies;
 //   · a reply can only be liked (❤️, the default reaction), not given any emoji;
-//   · the post's own author gets a highlighted username;
-//   · a reply shows the student's username; the campus only if there is room
-//     (the @container rule in the CSS) and never in the campus feed.
+//   · the post's own author gets a highlighted username, and nothing more;
+//   · a reply shows the student's username, never a full name, and the campus
+//     in the country and Global feeds (never in the campus feed).
 //
 // One line runs down from the post and curves into each reply's avatar (Rail).
 //
@@ -96,25 +96,27 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
     onReact(reply.id, next);
   };
 
+  const person = {
+    id: reply.author_id,
+    name: reply.author_name, // the avatar's initials only; never shown
+    username: reply.author_username,
+    avatar: reply.author_avatar,
+    campus: reply.author_university,
+  };
+
   return (
     <li className={styles.reply}>
       <Rail />
-      <Link to={profile} className={styles.replyAvatarLink} aria-label={reply.author_username} tabIndex={-1}>
-        <AvatarImg src={reply.author_avatar} name={reply.author_name} size={22} className={styles.replyAvatar} />
-      </Link>
+      {/* The avatar opens the profile glimpse too, like the username. */}
+      <ProfileHover person={person} loadProfile={loadProfile}>
+        <Link to={profile} className={styles.replyAvatarLink} aria-label={`@${reply.author_username}`} tabIndex={-1}>
+          <AvatarImg src={reply.author_avatar} name={reply.author_name} size={22} className={styles.replyAvatar} />
+        </Link>
+      </ProfileHover>
 
       <div className={styles.replyBody}>
-        <header className={styles.replyHeader}>
-          <ProfileHover
-            person={{
-              id: reply.author_id,
-              name: reply.author_name,
-              username: reply.author_username,
-              avatar: reply.author_avatar,
-              campus: reply.author_university,
-            }}
-            loadProfile={loadProfile}
-          >
+        <header className={`${styles.replyHeader} ${showCampus ? styles.twoLine : ""}`}>
+          <ProfileHover person={person} loadProfile={loadProfile}>
             <Link
               to={profile}
               className={`${styles.replyUsername} ${isAuthor ? styles.replyUsernameAuthor : ""}`}
@@ -122,14 +124,15 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
               @{reply.author_username}
             </Link>
           </ProfileHover>
-          {/* The post's own author, replying (spec §4). */}
-          {isAuthor && <span className={styles.authorTag}>(Author)</span>}
-          {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
-          {time && (
-            <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>
-              {time}
-            </time>
-          )}
+          {/* A line of its own in a narrow feed, as on a post (PostCard.module.css). */}
+          <span className={styles.byline}>
+            {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
+            {time && (
+              <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>
+                {time}
+              </time>
+            )}
+          </span>
           <span className={styles.replyTools}>
             <button
               type="button"
@@ -142,7 +145,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
               <span key={popKey} className={popKey ? styles.likePop : undefined}>
                 <Heart size={14} fill={mine ? "currentColor" : "none"} aria-hidden="true" />
               </span>
-              {total > 0 && <span>{formatCount(total)}</span>}
+              {total > 0 && <span className={styles.likeCount}>{formatCount(total)}</span>}
             </button>
             {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
             <button type="button" className={styles.replyMore} aria-label="More options">

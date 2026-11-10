@@ -41,32 +41,25 @@
   flex-direction: column;
 }
 
-.name,
-.name:hover {
+/* The username leads the card: no full names anywhere (owner, 10 Nov). */
+.username,
+.username:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 600 15px/20px "Inter", sans-serif;
+  font: 600 14px/20px "Inter", sans-serif;
   color: var(--black-soft);
   text-decoration: none;
 }
 
-.name:hover {
+.username:hover {
   color: var(--purple);
 }
 
-.name:focus-visible {
+.username:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: 2px;
   border-radius: 3px;
-}
-
-.username {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: 400 13px/18px "Inter", sans-serif;
-  color: var(--community-muted);
 }
 
 .campus {

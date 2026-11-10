@@ -136,6 +136,21 @@ function CollapsedBar({ label, side, onExpand }) {
 export default function Community() {
   const wide = useMediaQuery(`(min-width: ${LAYOUT_BREAKPOINT_PX}px)`);
 
+  // Spec §2.1: Chrome on Android paints the strip behind the phone's
+  // navigation buttons in the page's own background colour (Quora's dark page
+  // gets a dark strip). Ours is the site's --bg, a beige that never matched the
+  // composer's dock just above it (owner, 10 Nov). While this page is open
+  // the page's background is the dock's colour, so the dock runs on into the
+  // strip; leaving the page puts the site's colour back.
+  useEffect(() => {
+    const { style } = document.body;
+    const before = style.backgroundColor;
+    style.backgroundColor = "var(--community-dock)";
+    return () => {
+      style.backgroundColor = before;
+    };
+  }, []);
+
   // Part 2: GET /api/posts/countries.
   const countries = SAMPLE_COUNTRIES;
   const myCountry = countries.find((c) => c.is_mine)?.code ?? GLOBAL;
@@ -457,7 +472,6 @@ function WideLayout({
             data-active={side ?? undefined}
             data-dragging={hubDragging || undefined}
             aria-hidden="true"
-            title={available[otherSide] ? `Post in ${otherSide === "left" ? "My campus" : label}` : undefined}
             onPointerDown={onHubDown}
             onPointerMove={onHubMove}
             onPointerUp={onHubUp}

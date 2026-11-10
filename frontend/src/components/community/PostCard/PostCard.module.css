@@ -86,31 +86,16 @@
   white-space: nowrap;
 }
 
-.name {
-  flex: 0 1 auto;
-  min-width: 32px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font: 600 14px/20px "Inter", sans-serif;
+/* The author: the username only, no full name (owner, 10 Nov). It reads like a
+   reply's username (Inter 600 13), one step up from the grey meta beside it.
+   Pointing at it turns it purple (no underline); resting on it opens the
+   profile glimpse (ProfileHover). footer.module.css leaks a bare `a:hover`
+   that turns every link --pink-light, so every link here says its own hover
+   colour. */
+.username {
+  font: 600 13px/20px "Inter", sans-serif;
   color: var(--black-soft);
   text-decoration: none;
-}
-
-/* footer.module.css leaks a bare `a:hover` that turns every link --pink-light,
-   which nearly vanishes here. Every link in a post says its own hover colour.
-   A name only changes colour (no underline); resting on it opens the profile
-   glimpse (ProfileHover). */
-.name {
-  transition: color 160ms var(--community-ease);
-}
-
-.name:hover {
-  color: var(--purple);
-}
-
-/* The post's @username opens the glimpse too, so it answers the pointer. */
-.username {
-  cursor: default;
   transition: color 160ms var(--community-ease);
 }
 
@@ -118,7 +103,7 @@
   color: var(--purple);
 }
 
-.name:focus-visible,
+.username:focus-visible,
 .time:focus-visible,
 .replyUsername:focus-visible {
   outline: 2px solid var(--purple);
@@ -132,17 +117,20 @@
   text-decoration: none;
 }
 
-/* The username gives way first, then the campus. The time always stays. */
+/* When the line runs short the campus gives way first, then the username;
+   both truncate but never vanish, at any width (owner, 10 Nov: the campus was
+   hidden in a feed under 420 px, so a phone never showed it). The time always
+   stays. */
 .username {
   flex: 0 3 auto;
-  min-width: 0;
+  min-width: 40px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .campus {
   flex: 0 6 auto;
-  min-width: 0;
+  min-width: 48px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -219,23 +207,77 @@ a.time:hover {
   outline-offset: 1px;
 }
 
-/* If a panel has no room for it, the campus goes, and that's all (spec §3). */
-@container feed (max-width: 420px) {
-  .campus {
-    display: none;
-  }
+/* ── A reply's campus on a line of its own, in a narrow feed ───────────── */
+
+/* A reply's campus and time sit in .byline. On a wide feed it adds no box of
+   its own, so they stay on the author line. In a feed 520 px wide or less
+   (every phone, or a narrow panel on a laptop) the campus was mostly `…` beside
+   the like, so in the country and Global feeds (.twoLine, never the campus
+   feed) the byline drops under the username, like Quora's credential line
+   (owner, 10 Nov): `@username … ♡ ⋯` above, `campus · time` below. It sits
+   close under the username, as Quora's does, and plainly nearer to it than
+   to the text below (owner, 10 Nov: 5 against 7 px still read as even). No
+   row gap (the header's 5 px `gap` would also open one between the lines), a
+   14 px line pulled 4 px up, and 3 px more under the header. From the
+   username's baseline to the campus's capitals is then about 4 px, with a j
+   or p still clear of them; from the campus's baseline to the text's capitals
+   about 10.
+   The username and the like stay on the first line (order); the campus still
+   truncates if even its own line is too short, and the time never goes.
+   A post keeps its one line: it has the room. */
+.byline {
+  display: contents;
 }
 
-@container feed (max-width: 300px) {
-  .username {
-    display: none;
+@container feed (max-width: 520px) {
+  /* .replyHeader.twoLine: a plain .twoLine lost to .replyHeader's `gap: 5px`,
+     which comes later, so its row-gap: 0 never applied and the spacing the
+     owner approved (10 Nov) was set with a 5 px row gap. That gap is now
+     part of the campus line's margin instead (below). */
+  .replyHeader.twoLine {
+    flex-wrap: wrap;
+    row-gap: 0;
+    margin-bottom: 3px; /* 3 px more before the text */
+  }
+
+  .twoLine .byline {
+    order: 1;
+    flex: 1 0 100%;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    /* The approved spacing: 5 px of row gap less 4 px, so 1 px down; then up
+       by however far the username has risen (--name-rise, below), so the gap
+       from the username to the campus stays as approved (owner, 10 Nov: with
+       the gap lost and the rise counted twice it was nearly touching). The
+       post author's pill ends about 3.5 px above the campus's capitals, at
+       any lift. */
+    margin-top: calc(1px - var(--name-rise));
+    /* It overlaps the like button's lower part; let presses through. */
+    pointer-events: none;
+  }
+
+  /* Whatever starts the line has no dot before it. */
+  .twoLine .byline > .campus::before,
+  .twoLine .byline > .time:first-child::before {
+    content: none;
+  }
+
+  .twoLine .byline > .campus {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .twoLine .byline .meta {
+    line-height: 14px;
   }
 }
 
 /* ── Text ──────────────────────────────────────────────────────────────── */
 
 .text {
-  font: 400 14px/var(--text-line) "Inter", sans-serif;
+  font: 400 15px/var(--text-line) "Inter", sans-serif;
   color: var(--black-soft);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -552,7 +594,12 @@ a.time:hover {
    you see. */
 .thread {
   --rail-x: -22px; /* from the text column back to the middle of the post's avatar */
-  --elbow: 14px; /* from the row's top to the middle of its avatar */
+  --elbow: 15px; /* from the row's top to the middle of its avatar (see .replyAvatarLink) */
+  /* Extra room above the first row only. Between two replies the eye sees the
+     text's line-box space as well (about 16 px from one reply's text to the
+     next username); under the post there's a hard pill edge instead, which
+     left only 10 px. 6 px more makes the two the same (owner, 10 Nov). */
+  --thread-lead: 6px;
   grid-column: 2;
   grid-row: 2;
   margin: 0;
@@ -611,12 +658,24 @@ a.time:hover {
   animation: replyIn 260ms var(--community-ease) backwards;
 }
 
+/* The first row takes --thread-lead on top. Its piece of the line spans the
+   whole row, so the line still runs on unbroken from the post. */
+.reply:first-child {
+  --elbow: calc(15px + var(--thread-lead));
+  padding-top: calc(4px + var(--thread-lead));
+}
+
 /* Folding the thread brings this row back on screen; the margins keep it clear
    of the floating header and composer. */
 .threadMore {
   --elbow: 13px;
   padding-top: 2px;
   scroll-margin: 48px 0 72px;
+}
+
+.threadMore:first-child {
+  --elbow: calc(13px + var(--thread-lead));
+  padding-top: calc(2px + var(--thread-lead));
 }
 
 @keyframes replyIn {
@@ -682,7 +741,13 @@ a.time:hover {
   display: block;
   width: 22px;
   height: 22px;
-  margin-top: -1px; /* centres it on the 20 px author line */
+  /* Its middle is level with the middle of the username's lowercase letters,
+     which is what the eye centres on (owner, 10 Nov). Where the browser can
+     trim the username to exactly those letters (text-box, below) their middle
+     is the 20 px line's, 10 px down, and so is the avatar's. Elsewhere they sit
+     about 1 px below the line's middle, and so does the avatar: margin-top 0,
+     its middle 11 px down, 15 from the row's top (--elbow). */
+  margin-top: 0;
   border-radius: 50%;
 }
 
@@ -743,13 +808,94 @@ a.time:hover {
   color: var(--purple-dark);
 }
 
-/* AUTHOR, after the author's own username (owner's screenshot, 7 Nov). */
-.authorTag {
-  flex: 0 0 auto;
-  font: 700 10px/20px "Inter", sans-serif;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--purple);
+/* A reply's author line centred on its avatar by the font's own measurements,
+   not by eye (owner, 10 Nov: centring the 20 px line box left the lowercase
+   letters about 1.2 px below the avatar's middle on a Mac, and pixel nudges
+   came out differently on each screen). Each piece of text on the line, the
+   username, the campus and time beside it on a wide feed, and the like count,
+   is trimmed to its lowercase letters, x-height down to baseline (text-box),
+   then padded back out to 20 px, so the middle of those letters sits at the
+   same height whatever its size: --name-lift (1 px, owner, 10 Nov) above
+   the line's middle, where the avatar's middle is. The padding keeps the
+   author's pill 20 px tall and leaves room for the tall letters and the tails
+   of j, p and y, which overflow: hidden would otherwise cut. */
+.replyHeader {
+  --name-lift: 1px;
+  /* The reply's text moves up by as much as the author line has risen, so
+     the gap from the username to the text is what it was before the lift
+     (owner, 10 Nov). On its own line under the username the campus sets its
+     own gap (.twoLine, narrow feed). */
+  margin-bottom: calc(-1 * var(--name-rise));
+  /* How far the username's baseline sits above where an untrimmed 20 px line
+     put it, which the campus line's spacing (narrow feed) was set against:
+     there it was 14.72 px down the line; trimmed, it's the middle (10) less
+     the lift plus half an x-height (3.55 for Inter 600 13). */
+  --name-rise: calc(1.17px + var(--name-lift));
+}
+
+@supports (text-box: trim-both ex alphabetic) {
+  .replyUsername,
+  .replyHeader .meta,
+  .likeCount {
+    text-box: trim-both ex alphabetic;
+    /* Less room above than below lifts the letters by --name-lift. */
+    padding-top: calc((20px - 1ex) / 2 - var(--name-lift));
+    padding-bottom: calc((20px - 1ex) / 2 + var(--name-lift));
+  }
+
+  /* The post author's pill hugs the lifted name: 18 tall, the same room
+     above and below the letters, moved up with them. At 20 tall and left on
+     the line it sat low around the name and its edge ran into the campus line
+     under it (owner, 10 Nov). */
+  .replyUsernameAuthor {
+    position: relative;
+    top: calc(-1 * var(--name-lift));
+    padding-top: calc(9px - 0.5ex);
+    padding-bottom: calc(9px - 0.5ex);
+  }
+
+  /* On its own line under the username (narrow feed) the campus keeps its
+     plain 14 px line, which that spacing was set on. */
+  @container feed (max-width: 520px) {
+    .twoLine .byline .meta {
+      text-box: normal;
+      padding-block: 0;
+    }
+  }
+
+  .replyAvatarLink {
+    margin-top: -1px; /* its middle 10 px down the line */
+  }
+
+  .thread {
+    --elbow: 14px;
+  }
+
+  .reply:first-child {
+    --elbow: calc(14px + var(--thread-lead));
+  }
+}
+
+/* Without text-box the letters sit about 1 px below the line's middle, as the
+   avatar does there (.replyAvatarLink); they still rise by --name-lift. */
+@supports not (text-box: trim-both ex alphabetic) {
+  .replyHeader {
+    --name-rise: var(--name-lift);
+  }
+
+  .replyUsername,
+  .replyHeader .meta,
+  .likeCount {
+    position: relative;
+    top: calc(-1 * var(--name-lift));
+  }
+
+  /* The campus on its own line already moves with the username (--name-rise). */
+  @container feed (max-width: 520px) {
+    .twoLine .byline .meta {
+      top: 0;
+    }
+  }
 }
 
 .replyTools {
@@ -925,6 +1071,10 @@ a.time:hover {
 
   .threadMore {
     --elbow: 20px;
+  }
+
+  .threadMore:first-child {
+    --elbow: calc(20px + var(--thread-lead));
   }
 }
 

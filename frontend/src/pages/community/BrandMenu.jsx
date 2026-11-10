@@ -12,7 +12,7 @@
 // "Soon"), and you. Esc or a press elsewhere closes it; Esc gives the focus back
 // to the pill.
 //
-// The unread count, your name and photo come from the navbar, which stays
+// The unread count, your username and photo come from the navbar, which stays
 // mounted, hidden, and publishes them (NAV_STATE_EVENT), so there is still only
 // one Realtime subscription for them.
 
@@ -33,7 +33,7 @@ import { NAV_STATE_EVENT } from "../../components/navbar/navbar";
 import { useAuth } from "../../contexts/AuthContext";
 import styles from "./BrandMenu.module.css";
 
-const EMPTY = { unreadCount: 0, avatarUrl: null, userName: "" };
+const EMPTY = { unreadCount: 0, avatarUrl: null, userName: "", userHandle: "" };
 
 function subscribe(onChange) {
   window.addEventListener(NAV_STATE_EVENT, onChange);
@@ -47,7 +47,7 @@ function useNavState() {
 const badge = (n) => (n > 99 ? "99+" : String(n));
 
 export default function BrandMenu({ inBar = false }) {
-  const { unreadCount, avatarUrl, userName } = useNavState();
+  const { unreadCount, avatarUrl, userName, userHandle } = useNavState();
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -77,7 +77,9 @@ export default function BrandMenu({ inBar = false }) {
   }, [open]);
 
   const close = () => setOpen(false);
-  const name = userName || "You";
+  // Your username, never your full name (owner, 10 Nov). The full name only
+  // picks the avatar's initials and colour, as on the rest of the site.
+  const handle = userHandle ? `@${userHandle}` : "You";
 
   const items = [
     { to: "/", label: "Home", Icon: House },
@@ -161,9 +163,9 @@ export default function BrandMenu({ inBar = false }) {
 
         <div className={styles.me} style={{ "--i": items.length + soon.length }}>
           <Link to="/dashboard" className={styles.meLink} onClick={close}>
-            <AvatarImg src={avatarUrl} name={name} size={34} className={styles.meAvatar} />
+            <AvatarImg src={avatarUrl} name={userName || userHandle} size={34} className={styles.meAvatar} />
             <span className={styles.meText}>
-              <span className={styles.meName}>{name}</span>
+              <span className={styles.meName}>{handle}</span>
               <span className={styles.meHint}>Your profile</span>
             </span>
           </Link>

@@ -5,8 +5,8 @@
 // country / Global feed, in both layouts.
 //
 // `inPanel` is the laptop layout: the feed scrolls inside its panel and the
-// dock sits under the scroller. Without it the page scrolls and the dock floats
-// at the bottom of the window, with the posts passing underneath.
+// dock sits under the scroller. Without it the page scrolls and the same solid
+// dock stays at the bottom of the window, hiding the posts that pass under it.
 //
 // The parent gives it a `key` per feed + sort, so a different feed is a fresh
 // mount: cursors belong to one list and one sort (runbook Appendix A), and a
@@ -271,7 +271,7 @@ export default function CommunityFeed({
     return (
       <>
         {feed}
-        <div className={`${styles.dockFloat} ${accent}`}>{dock}</div>
+        <div className={`${styles.dock} ${styles.dockFloat} ${accent}`}>{dock}</div>
       </>
     );
   }

@@ -2,14 +2,20 @@
 //
 // The React button and its quick bar — docs/design/COMMUNITY_SPEC.md §5.1.
 //
-//   · click React          — ❤️ on, or your reaction off
-//   · hover React 300 ms   — the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕)
-//   · focus React, press ↑ — the quick bar, focus on its first emoji
-//   · long-press (touch)   — the quick bar; a touch screen has no hover, and
-//                            the spec's app gesture is the same (§5.1)
+// Pressing React never reacts by itself: it always offers the emojis, with a
+// mouse, a keyboard or a finger alike (owner, 10 Nov; a click used to give ❤️
+// straight away, which hid the other five).
+//
+//   · click React (mouse)  — the quick bar; a second click closes it
+//   · hover React 300 ms   — the quick bar, as before
+//   · Enter/Space or ↑     — the quick bar, focus on its first emoji
+//   · tap React (touch)    — the quick bar, or closes it
+//   · long-press (touch)   — the quick bar too
 //   · ⊕                    — the full picker (§5.2), opened against the
 //                            quick bar so its six emojis stay where they were
 //
+// Your current emoji sits marked in the bar; choosing it again removes it.
+
 // One reaction per person: choosing your current emoji removes it, choosing
 // another replaces it. The component only reports the choice through
 // onReact(emoji | null); what that does to the post is the caller's business.
@@ -19,7 +25,6 @@ import { CirclePlus, Smile } from "lucide-react";
 import Popover from "../Popover/Popover";
 import { EmojiPickerPanel } from "./EmojiPickerPopover";
 import {
-  DEFAULT_REACTION,
   QUICK_REACTIONS,
   REACTION_HOVER_DELAY_MS,
   REACTION_LONG_PRESS_MS,
@@ -65,6 +70,7 @@ export default function ReactionBar({ reaction, onReact }) {
   const closeTimer = useRef(null);
   const pressTimer = useRef(null);
   const longPressed = useRef(false);
+  const openedBy = useRef(null); // "hover" | "press": what opened the bar
   const focusFirst = useRef(false);
   const barRef = useRef(null);
 
@@ -109,7 +115,10 @@ export default function ReactionBar({ reaction, onReact }) {
     if (e.pointerType !== "mouse") return;
     clearTimeout(closeTimer.current);
     if (barOpen) return;
-    openTimer.current = setTimeout(() => setBarOpen(true), REACTION_HOVER_DELAY_MS);
+    openTimer.current = setTimeout(() => {
+      openedBy.current = "hover";
+      setBarOpen(true);
+    }, REACTION_HOVER_DELAY_MS);
   };
 
   const onButtonLeave = (e) => {
@@ -123,27 +132,36 @@ export default function ReactionBar({ reaction, onReact }) {
     longPressed.current = false;
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
+      openedBy.current = "press";
       setBarOpen(true);
     }, REACTION_LONG_PRESS_MS);
   };
   const cancelPress = () => clearTimeout(pressTimer.current);
 
-  const onClick = () => {
+  const onClick = (e) => {
     clearTimers();
     if (longPressed.current) {
       // The finger that opened the bar is lifting; that is not a tap.
       longPressed.current = false;
       return;
     }
-    setBarOpen(false);
     setExpanded(null);
-    choose(reaction ? reaction : DEFAULT_REACTION);
+    // detail is 0 for a click from the keyboard: the focus goes into the bar.
+    const keyboard = e.detail === 0;
+    // A mouse that rested on React has already opened the bar by hover; the
+    // click that follows keeps it open rather than shutting it in its face.
+    const hovered = barOpen && openedBy.current === "hover";
+    const willOpen = !barOpen || hovered;
+    openedBy.current = willOpen ? "press" : null;
+    if (willOpen && keyboard) focusFirst.current = true;
+    setBarOpen(willOpen);
   };
 
   const onKeyDown = (e) => {
     if (e.key === "ArrowUp") {
       e.preventDefault();
       focusFirst.current = true;
+      openedBy.current = "press";
       setBarOpen(true);
     }
   };
@@ -166,8 +184,8 @@ export default function ReactionBar({ reaction, onReact }) {
         aria-pressed={!!reaction}
         aria-haspopup="true"
         aria-expanded={barOpen}
-        aria-label={reaction ? `Your reaction ${reaction}. Remove it` : `React with ${DEFAULT_REACTION}`}
-        title="React. Hover, long-press or press ↑ for more"
+        aria-label={reaction ? `Your reaction ${reaction}. Change or remove it` : "React"}
+        title="React"
         onClick={onClick}
         onKeyDown={onKeyDown}
         onPointerEnter={onButtonEnter}

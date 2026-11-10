@@ -32,8 +32,12 @@ change both.
 - **Avoid cards inside cards.** A list on a plain ground uses flat rows split by a hairline. **A list on a
   patterned ground uses slim frosted cards** (the website's community, owner 7 Nov): white at about 94%,
   radius 16, padding about 12 / 14, 12 apart, with the pattern itself faint (about 5%).
-- **Floating chrome.** Switchers and composers float, with content passing underneath. Use `expo-blur` for the
-  glass. It feels more spacious than a solid bar.
+- **Floating chrome.** Switchers float, with content passing underneath. Use `expo-blur` for the glass.
+  It feels more spacious than a solid bar. **A composer at the bottom is the exception: a solid dock, edge
+  to edge** (owner, 10 Nov). Floating, it left a gap below it, and the posts passing through that gap and
+  around its ends looked messy and confusing.
+  **The dock's colour runs on behind the home indicator / navigation bar:** pad it by the bottom safe-area
+  inset instead of stopping above it, so that strip is never a different colour.
 - **Never put text straight on a pattern.** The website's text halo still read as messy and was removed
   (owner, 7 Nov) in favour of the frosted cards above.
 - Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every overlap
@@ -49,13 +53,31 @@ change both.
 
 - **An avatar gets a column of its own.** Everything in the row, text, media, actions and nested replies,
   starts at one left edge. A drop cap was tried on the website; it made rows hard to scan.
-- **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
-  context already says, such as a campus name in that campus's own feed.
+- **Centre an avatar on the middle of the name's lowercase letters,** not on its line box: the eye
+  centres on the lowercase letters, which sit about 1 pt below a line's middle (owner, 10 Nov). Work it out
+  from the font's x-height and baseline, never a pixel nudge, since each screen draws text a little
+  differently; then lift it 1 pt (owner, 10 Nov). Every other piece of text on that line (campus, time,
+  like count) is placed the same way, so they line up.
+- **A metadata line never wraps on its own.** Decide what truncates first and what never goes. Drop what the
+  context already says, such as a campus name in that campus's own feed. Anything else **truncates with
+  `…` rather than disappearing** on a narrow screen (the campus in a world feed was hidden on phones
+  until 10 Nov). **Where the secondary part would be mostly `…` on a phone (a reply's campus,
+  squeezed by its like), give it a line of its own,** close under the name like Quora's credential line:
+  name and actions on the first line, `campus · time` tucked right under it (owner, 10 Nov). **It sits
+  plainly nearer the name than the text below sits to it** (the website's community: about 7 from the
+  tails of j and p to the campus, 11 from the campus to the text), or it reads as part of the text. If the
+  name can sit on a highlight pill, check the pill's edge clears that line, and keep the pill centred on the
+  letters wherever they move. Where there's
+  room (a post's author line), stay on one line.
+- **People are shown by `@username`, never by full name** (owner, 10 Nov). The full name only picks an
+  avatar's initials and colour, so the same person looks the same everywhere.
 
 ## Touch
 
 - Thin to look at, 44 pt to touch. Use `hitSlop` to reach it.
-- Long-press is the route to anything the website does on hover.
+- Long-press is the route to anything the website does on hover. But if a button's hover offers a
+  choice (the React button's quick bar), **a tap on the button opens the choice**; it never picks a
+  default for you (owner, 10 Nov).
 - Never hide an action behind a second tap on something that looks selected. Give it its own button.
 
 ## Motion

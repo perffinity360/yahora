@@ -45,7 +45,7 @@ function PostCard({
   const time = formatPostTime(post.created_at);
   const person = {
     id: post.author_id,
-    name: post.author_name,
+    name: post.author_name, // the avatar's initials only; never shown
     username: post.author_username,
     avatar: post.author_avatar,
     campus: post.author_university,
@@ -65,11 +65,15 @@ function PostCard({
     <article
       className={styles.post}
       style={{ "--post-i": Math.min(index, STAGGER_MAX) }}
-      aria-label={`Post by ${post.author_name}`}
+      aria-label={`Post by @${post.author_username}`}
     >
-      <Link to={profile} className={styles.avatarLink} aria-label={post.author_name} tabIndex={-1}>
-        <AvatarImg src={post.author_avatar} name={post.author_name} size={28} className={styles.avatar} />
-      </Link>
+      {/* Resting on the avatar opens the profile glimpse too, as on the
+          username (owner, 10 Nov). */}
+      <ProfileHover person={person} loadProfile={loadProfile}>
+        <Link to={profile} className={styles.avatarLink} aria-label={`@${post.author_username}`} tabIndex={-1}>
+          <AvatarImg src={post.author_avatar} name={post.author_name} size={28} className={styles.avatar} />
+        </Link>
+      </ProfileHover>
 
       {/* The top of the thread's line, shown only when the post has a thread. */}
       <span className={styles.stem} aria-hidden="true" />
@@ -77,13 +81,11 @@ function PostCard({
       <div className={styles.postBody}>
         <div>
           <header className={styles.header}>
+            {/* Usernames only, never full names (owner, 10 Nov). */}
             <ProfileHover person={person} loadProfile={loadProfile}>
-              <Link to={profile} className={styles.name}>
-                {post.author_name}
+              <Link to={profile} className={styles.username}>
+                @{post.author_username}
               </Link>
-            </ProfileHover>
-            <ProfileHover person={person} loadProfile={loadProfile}>
-              <span className={`${styles.meta} ${styles.username}`}>@{post.author_username}</span>
             </ProfileHover>
             {showCampus && (
               <span className={`${styles.campus} ${styles.collegePill}`} title={post.author_university}>
@@ -110,7 +112,7 @@ function PostCard({
         </div>
 
         {post.image_urls?.length > 0 && (
-          <PostPhotos urls={post.image_urls} authorName={post.author_name} onOpen={setLightboxIndex} />
+          <PostPhotos urls={post.image_urls} authorName={`@${post.author_username}`} onOpen={setLightboxIndex} />
         )}
 
         {post.gif && <PostGif gif={post.gif} />}
@@ -155,7 +157,7 @@ function PostCard({
           <ImageLightbox
             images={post.image_urls}
             startIndex={lightboxIndex}
-            alt={`Photo from ${post.author_name}`}
+            alt={`Photo from @${post.author_username}`}
             onClose={() => setLightboxIndex(null)}
           />,
           document.body,
