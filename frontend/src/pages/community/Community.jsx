@@ -457,7 +457,6 @@ function WideLayout({
             data-active={side ?? undefined}
             data-dragging={hubDragging || undefined}
             aria-hidden="true"
-            title={available[otherSide] ? `Post in ${otherSide === "left" ? "My campus" : label}` : undefined}
             onPointerDown={onHubDown}
             onPointerMove={onHubMove}
             onPointerUp={onHubUp}

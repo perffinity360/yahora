@@ -86,31 +86,16 @@
   white-space: nowrap;
 }
 
-.name {
-  flex: 0 1 auto;
-  min-width: 32px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font: 600 14px/20px "Inter", sans-serif;
+/* The author: the username only, no full name (owner, 10 Nov). It reads like a
+   reply's username (Inter 600 13), one step up from the grey meta beside it.
+   Pointing at it turns it purple (no underline); resting on it opens the
+   profile glimpse (ProfileHover). footer.module.css leaks a bare `a:hover`
+   that turns every link --pink-light, so every link here says its own hover
+   colour. */
+.username {
+  font: 600 13px/20px "Inter", sans-serif;
   color: var(--black-soft);
   text-decoration: none;
-}
-
-/* footer.module.css leaks a bare `a:hover` that turns every link --pink-light,
-   which nearly vanishes here. Every link in a post says its own hover colour.
-   A name only changes colour (no underline); resting on it opens the profile
-   glimpse (ProfileHover). */
-.name {
-  transition: color 160ms var(--community-ease);
-}
-
-.name:hover {
-  color: var(--purple);
-}
-
-/* The post's @username opens the glimpse too, so it answers the pointer. */
-.username {
-  cursor: default;
   transition: color 160ms var(--community-ease);
 }
 
@@ -118,7 +103,7 @@
   color: var(--purple);
 }
 
-.name:focus-visible,
+.username:focus-visible,
 .time:focus-visible,
 .replyUsername:focus-visible {
   outline: 2px solid var(--purple);
@@ -132,17 +117,20 @@
   text-decoration: none;
 }
 
-/* The username gives way first, then the campus. The time always stays. */
+/* When the line runs short the campus gives way first, then the username;
+   both truncate but never vanish, at any width (owner, 10 Nov: the campus was
+   hidden in a feed under 420 px, so a phone never showed it). The time always
+   stays. */
 .username {
   flex: 0 3 auto;
-  min-width: 0;
+  min-width: 40px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .campus {
   flex: 0 6 auto;
-  min-width: 0;
+  min-width: 48px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -217,19 +205,6 @@ a.time:hover {
 .moreBtn:focus-visible {
   outline: 2px solid var(--purple);
   outline-offset: 1px;
-}
-
-/* If a panel has no room for it, the campus goes, and that's all (spec §3). */
-@container feed (max-width: 420px) {
-  .campus {
-    display: none;
-  }
-}
-
-@container feed (max-width: 300px) {
-  .username {
-    display: none;
-  }
 }
 
 /* ── Text ──────────────────────────────────────────────────────────────── */
@@ -553,6 +528,11 @@ a.time:hover {
 .thread {
   --rail-x: -22px; /* from the text column back to the middle of the post's avatar */
   --elbow: 14px; /* from the row's top to the middle of its avatar */
+  /* Extra room above the first row only. Between two replies the eye sees the
+     text's line-box space as well (about 16 px from one reply's text to the
+     next username); under the post there's a hard pill edge instead, which
+     left only 10 px. 6 px more makes the two the same (owner, 10 Nov). */
+  --thread-lead: 6px;
   grid-column: 2;
   grid-row: 2;
   margin: 0;
@@ -611,12 +591,24 @@ a.time:hover {
   animation: replyIn 260ms var(--community-ease) backwards;
 }
 
+/* The first row takes --thread-lead on top. Its piece of the line spans the
+   whole row, so the line still runs on unbroken from the post. */
+.reply:first-child {
+  --elbow: calc(14px + var(--thread-lead));
+  padding-top: calc(4px + var(--thread-lead));
+}
+
 /* Folding the thread brings this row back on screen; the margins keep it clear
    of the floating header and composer. */
 .threadMore {
   --elbow: 13px;
   padding-top: 2px;
   scroll-margin: 48px 0 72px;
+}
+
+.threadMore:first-child {
+  --elbow: calc(13px + var(--thread-lead));
+  padding-top: calc(2px + var(--thread-lead));
 }
 
 @keyframes replyIn {
@@ -741,15 +733,6 @@ a.time:hover {
 .replyUsernameAuthor:hover {
   background: var(--community-author-hover);
   color: var(--purple-dark);
-}
-
-/* AUTHOR, after the author's own username (owner's screenshot, 7 Nov). */
-.authorTag {
-  flex: 0 0 auto;
-  font: 700 10px/20px "Inter", sans-serif;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--purple);
 }
 
 .replyTools {
@@ -925,6 +908,10 @@ a.time:hover {
 
   .threadMore {
     --elbow: 20px;
+  }
+
+  .threadMore:first-child {
+    --elbow: calc(20px + var(--thread-lead));
   }
 }
 

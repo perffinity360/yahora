@@ -2,11 +2,15 @@
 //
 // The React button and its quick bar — docs/design/COMMUNITY_SPEC.md §5.1.
 //
-//   · click React          — ❤️ on, or your reaction off
+//   · click React (mouse)  — ❤️ on, or your reaction off
 //   · hover React 300 ms   — the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕)
+//   · Enter/Space on React — ❤️ on, or your reaction off
 //   · focus React, press ↑ — the quick bar, focus on its first emoji
-//   · long-press (touch)   — the quick bar; a touch screen has no hover, and
-//                            the spec's app gesture is the same (§5.1)
+//   · tap React (touch)    — the quick bar, or closes it; a touch screen has
+//                            no hover, so a tap that only gave ❤️ hid the
+//                            other emojis (owner, 10 Nov). Tapping your own
+//                            emoji in the bar removes it.
+//   · long-press (touch)   — the quick bar too
 //   · ⊕                    — the full picker (§5.2), opened against the
 //                            quick bar so its six emojis stay where they were
 //
@@ -65,6 +69,7 @@ export default function ReactionBar({ reaction, onReact }) {
   const closeTimer = useRef(null);
   const pressTimer = useRef(null);
   const longPressed = useRef(false);
+  const lastPointer = useRef(null); // the pointerType of the last press on React
   const focusFirst = useRef(false);
   const barRef = useRef(null);
 
@@ -119,6 +124,7 @@ export default function ReactionBar({ reaction, onReact }) {
   };
 
   const onPointerDown = (e) => {
+    lastPointer.current = e.pointerType;
     if (e.pointerType === "mouse") return;
     longPressed.current = false;
     pressTimer.current = setTimeout(() => {
@@ -128,11 +134,18 @@ export default function ReactionBar({ reaction, onReact }) {
   };
   const cancelPress = () => clearTimeout(pressTimer.current);
 
-  const onClick = () => {
+  const onClick = (e) => {
     clearTimers();
     if (longPressed.current) {
       // The finger that opened the bar is lifting; that is not a tap.
       longPressed.current = false;
+      return;
+    }
+    // detail is 0 for a click from the keyboard, which keeps the ❤️ toggle.
+    const touched = e.detail !== 0 && lastPointer.current && lastPointer.current !== "mouse";
+    if (touched) {
+      setExpanded(null);
+      setBarOpen((open) => !open);
       return;
     }
     setBarOpen(false);
@@ -167,7 +180,7 @@ export default function ReactionBar({ reaction, onReact }) {
         aria-haspopup="true"
         aria-expanded={barOpen}
         aria-label={reaction ? `Your reaction ${reaction}. Remove it` : `React with ${DEFAULT_REACTION}`}
-        title="React. Hover, long-press or press ↑ for more"
+        title="React. Hover or press ↑ for more"
         onClick={onClick}
         onKeyDown={onKeyDown}
         onPointerEnter={onButtonEnter}

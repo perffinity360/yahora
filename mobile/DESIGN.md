@@ -50,7 +50,11 @@ change both.
 - **An avatar gets a column of its own.** Everything in the row, text, media, actions and nested replies,
   starts at one left edge. A drop cap was tried on the website; it made rows hard to scan.
 - **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
-  context already says, such as a campus name in that campus's own feed.
+  context already says, such as a campus name in that campus's own feed. Anything else **truncates with
+  `…` rather than disappearing** on a narrow screen (the campus in a world feed was hidden on phones
+  until 10 Nov).
+- **People are shown by `@username`, never by full name** (owner, 10 Nov). The full name only picks an
+  avatar's initials and colour, so the same person looks the same everywhere.
 
 ## Touch
 

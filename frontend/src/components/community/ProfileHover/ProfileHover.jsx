@@ -1,12 +1,12 @@
 // frontend/src/components/community/ProfileHover/ProfileHover.jsx
 //
-// A glimpse of someone's profile while the mouse rests on their name —
-// docs/design/COMMUNITY_SPEC.md §4.1, after Instagram's. It wraps the name or
+// A glimpse of someone's profile while the mouse rests on their username —
+// docs/design/COMMUNITY_SPEC.md §4.1, after Instagram's. It wraps the
 // username link it belongs to:
 //
 //   <ProfileHover person={…} loadProfile={…}><Link …>@priya.nair</Link></ProfileHover>
 //
-// The name, photo, username and campus come with the post, so they show at
+// The photo, username and campus come with the post, so they show at
 // once; the counts and the latest photos load (loadProfile), with a shimmer
 // meanwhile. The photos are a small gallery grid, four across, like a phone's.
 // "Follow" is a placeholder until follows exist (it says so when pressed);
@@ -17,7 +17,8 @@
 // has no hover; there a tap on the name opens the profile, as before. Esc, a
 // press elsewhere or scrolling the name away closes it (Popover).
 //
-// person: { id, name, username, avatar, campus }
+// person: { id, name, username, avatar, campus }. `name` only picks the
+// avatar's initials and colour; no full name is ever shown (owner, 10 Nov).
 // loadProfile: (id) → Promise<{ posts_count, followers_count, following_count,
 //              recent_photos }>
 
@@ -80,10 +81,10 @@ function ProfileCard({ person, loadProfile }) {
           <AvatarImg src={person.avatar} name={person.name} size={52} className={styles.avatar} />
         </Link>
         <div className={styles.who}>
-          <Link to={profile} className={styles.name}>
-            {person.name}
+          {/* Usernames only, never full names (owner, 10 Nov). */}
+          <Link to={profile} className={styles.username}>
+            @{person.username}
           </Link>
-          <span className={styles.username}>@{person.username}</span>
           {person.campus && (
             <span className={styles.campus}>
               <GraduationCap size={12} aria-hidden="true" />
@@ -170,7 +171,7 @@ export default function ProfileHover({ person, loadProfile, children }) {
           onClose={() => setAnchor(null)}
           onPointerEnter={stay}
           onPointerLeave={leave}
-          ariaLabel={`${person.name}'s profile`}
+          ariaLabel={`@${person.username}'s profile`}
         >
           <ProfileCard person={person} loadProfile={loadProfile} />
         </Popover>

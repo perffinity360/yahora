@@ -1,6 +1,13 @@
 # Community — design spec (Phase 7)
 
-**Version 3.7 · 8 November 2026 · for the website and the app**
+**Version 3.8 · 10 November 2026 · for the website and the app**
+
+> **Changed in version 3.8 (owner, 10 Nov):** **no full names anywhere,** only `@username` and the campus:
+> on a post, in the profile glimpse and in the brand menu (§1.1, §3, §4.1); the campus no longer disappears
+> in a narrow feed, so a phone shows it on posts and replies in the country and Global feeds (§3, §4); no
+> `(AUTHOR)` tag, the highlighted username is enough (§4); the first reply sits as far below the post as the
+> replies sit from each other (§4); no tooltip on your avatar on the divider (§1.1); on a touch screen,
+> tapping React opens the quick bar instead of giving ❤️ (§5.1).
 
 > **Changed in version 3.7 (owner, 8 Nov):** each reply's curve leaves the thread from inside the line
 > (it started a fraction of a pixel to its left); pointed at, the thread takes the card's left-edge colour
@@ -116,7 +123,7 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   and `communityMenuShadow`, springing from the pill while its rows arrive 22 ms apart: **Home**,
   **Marketplace**, **Community** (current, white on `purpleDark`), **Messages** with the unread count,
   **Saved / Cart** (to the dashboard, where the Watchlist is), **Notifications** and **Settings** (both marked
-  `Soon`; there is nothing to open yet, and the site has no settings page), then **you**: photo, name, `Your profile` (to the dashboard) and a log-out button.
+  `Soon`; there is nothing to open yet, and the site has no settings page), then **you**: photo, `@username` (never the full name), `Your profile` (to the dashboard) and a log-out button.
   Rows are 36 tall, Inter 500 14, `reactionMineBg` on hover. Esc or a press elsewhere closes it; Esc gives
   the focus back to the pill.
 - **Header clearance:** each header keeps clear of the pill, so ⤢ never slides under it: 72 px at 50 / 50,
@@ -177,8 +184,8 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
   composer bar with the two composers tucked in under it. Nothing runs below it. It is a child of the
   divider, so it moves with it as you resize, and it grows slightly on hover and while dragging. **Pressing it
   switches sides** (and puts the cursor in that composer), so the pointer is a hand **on every part of it**
-  (the library's own resize cursor near the divider's line is overridden there); its tooltip says
-  `Post in India` (or `Post in My campus`). A press that moves drags the divider instead, with the resize
+  (the library's own resize cursor near the divider's line is overridden there). It has **no tooltip**
+  (owner, 10 Nov; it said `Post in India` / `Post in My campus`). A press that moves drags the divider instead, with the resize
   cursor. From the outside in:
   - **a 2.5 px ring:** `purpleDark` while the left side is selected, `pinkDark` for the right;
     `communityRail` only when neither side has a composer;
@@ -396,9 +403,9 @@ side:** 10 px, or the scrollbar's room if that is wider (the right side counts t
 into the replies when there are any.
 
 ```
-(av) Rahul Verma @rahul.verma · IIITDM Kurnool · 2h                 ⋯
+(av) @rahul.verma (cap IIITDM Kurnool) · 2h                          ⋯
  │   Text of the post, Inter 400 14/20, black-soft. Every line starts
- │   under the name, and so does everything below it.
+ │   under the username, and so does everything below it.
  │   ┌─────────────────── photos (1–3) or GIF ───────────────────┐
  │   └───────────────────────────────────────────────────────────┘
  │   ( ❤️ 😂 😮 👍 1.2K ) ( ☺ ) ( 💬 14 )     ← pills (§5.3)
@@ -409,16 +416,18 @@ into the replies when there are any.
   and replies all start at the same left edge, so on the busy wallpaper you can always see what belongs
   to which post. On a 390 px phone the text gets 330 px. (Version 3 first floated the avatar as a drop
   cap; it made the rows hard to scan.)
-- **Author line: always exactly one line.** Full name in Inter 600 14; then `@username · campus · time`
-  in Inter 400 13, communityMuted. When space runs out they truncate in this order: the campus first,
-  then the username, then the name. The time never goes. Tapping the avatar or the name opens the
-  profile. Tapping the time opens the post's page.
+- **Author line: always exactly one line.** **No full name, anywhere** (owner, 10 Nov): `@username` in
+  Inter 600 13, black-soft (like a reply's), then the campus and `· time` in Inter 400 13, communityMuted.
+  When space runs out they truncate with `…` in this order: the campus first, then the username. Neither
+  disappears: the username keeps at least 40 px and the campus 48. The time never goes. Tapping the
+  avatar or the username opens the profile. Tapping the time opens the post's page.
 - **Campus name:**
   - **never in the campus feed,** where it's obvious;
-  - elsewhere, only if there is room: it's hidden when the feed is 420 px wide or less. On a post it's a
-    compact pill: a graduation cap and the college, Inter 500 11, `communityCollegeText` on
-    `communityCollegeBg`, padding 0 7, radius 999 (replies keep the plain `· campus` text);
-  - the username also goes at 300 px or less (a very narrow panel only).
+  - **always in the country and Global feeds,** at every width, on posts and on replies (owner, 10 Nov; it
+    used to be hidden in a feed 420 px wide or less, so a phone never showed it). When the line is short it
+    truncates with `…` instead. On a post it's a compact pill: a graduation cap and the college, Inter 500
+    11, `communityCollegeText` on `communityCollegeBg`, padding 0 7, radius 999 (replies keep the plain
+    `· campus` text).
 - **Time:** `now`, `5m`, `2h`, `3d`; then `12 Oct`, or `12 Oct 2025` for an earlier year.
   Reuse the message time formatter.
 - **Text:** links are tappable; there are no link previews. A long post folds after
@@ -511,16 +520,21 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   140 ms. Each piece takes the pointer **3 px either side** of the line (7.5 px in all), following the
   curve; the empty corner inside a curve doesn't.
 - **Each reply:** 45 px from the top of one to the top of the next when it has one line: 4 above, a
-  20 px author line, a 19 px text line, 2 below. It starts at the post's text edge: a 22 px avatar in its
+  20 px author line, a 19 px text line, 2 below.
+- **The first reply sits as far below the post as the replies sit from each other** (owner, 10 Nov): its
+  row gets **6 px more on top** (`--thread-lead`), 10 instead of 4. Between two replies the eye also counts
+  the text's own line spacing, about 16 px from one reply's text to the next username; under the post
+  there's a hard pill edge instead, which left about 10. The line runs on unbroken through the extra room. It starts at the post's text edge: a 22 px avatar in its
   own column, then 8 px, and every line of text starts directly under the username.
   `@username` in Inter 600 13; `campus · time` in Inter 400 12; text in Inter 400 13/19, with an optional
   GIF up to 180 px wide.
-- **Usernames, not full names.** The campus shows only under the rule in §3.
+- **Usernames, not full names.** The campus follows the rule in §3: never in the campus feed, always in
+  the country and Global feeds.
 - **Pointing at a username** turns it `purple`, with **no underline**, and resting on it opens the profile
   glimpse (§4.1). The author's pill (below) deepens to `communityAuthorHover` with `purpleDark` text.
 - **The post's author is highlighted:** when they reply to their own post, their username sits on
-  a `reactionMineBg` pill in purple, followed by an **`(AUTHOR)`** tag, in brackets: Inter 700 10, letter-spacing 0.06 em,
-  capitals, `purple`. The pill reaches out to the left, so the name itself stays in line with the text below.
+  a `reactionMineBg` pill in purple, and that's all: **no `(AUTHOR)` tag** (owner, 10 Nov; the
+  highlight says it). The pill reaches out to the left, so the username itself stays in line with the text below.
 - **A reply can only be liked.** A heart (not the post's smiley, because it is a like, not a choice of
   emoji) at the right of its line, with the count; it stores
   `DEFAULT_REACTION`, ❤️. No quick bar and no picker. Filled in `communityLike` when it's yours. The ⋯
@@ -546,15 +560,14 @@ already sends the field, so the screens are ready.
 
 ### 4.1 The profile glimpse (website, with a mouse)
 
-Resting the mouse on a name or @username, in a post or a reply, for **450 ms** opens a small card under it,
+Resting the mouse on an @username, in a post or a reply, for **450 ms** opens a small card under it,
 after Instagram's. Moving onto the card keeps it open (it closes 180 ms after the mouse leaves both); Esc, a
-press elsewhere or scrolling the name away closes it. On a touch screen there's no hover: a tap on the name
-opens the profile, as before.
+press elsewhere or scrolling the username away closes it. On a touch screen there's no hover: a tap on the
+username opens the profile, as before.
 
 ```
  ╭──────────────────────────────╮
- │ ((av))  Priya Nair            │   52 px photo in a purple → pinkDark ring
- │         @priya.nair           │
+ │ ((av))  @priya.nair           │   52 px photo in a purple → pinkDark ring
  │         (cap) IIITDM Kurnool  │
  │ ──────────────────────────── │
  │    12        1.2K      402    │   posts · followers · following
@@ -565,7 +578,8 @@ opens the profile, as before.
 ```
 
 - 288 wide, padding 14, radius 14, white, `quickBarShadow` and a `communityHairline` edge.
-- Name Inter 600 15; @username 400 13 `communityMuted`; campus 500 12 `purple` with a graduation cap.
+- `@username` Inter 600 14, black-soft (no full name, owner, 10 Nov); campus 500 12 `purple` with a
+  graduation cap.
 - Counts Inter 700 15 over 400 12 `communityMuted` labels, between two hairlines; they shimmer while they load.
 - **Photos like a phone's gallery:** up to 8 small square tiles, four across, 2 px apart, rounded (6) only at
   the grid's outer corners.
@@ -574,7 +588,7 @@ opens the profile, as before.
   until then Follow says `Coming soon` for a moment when pressed.
 - **⚠ Needs an API before it works on real data:** posts, followers and following counts and the latest
   photos, for one person. Nothing sends that yet; the social module (follows) isn't built. Until then
-  `sampleData.js` makes it up (`sampleProfile`). The name, photo, username and campus come with the post.
+  `sampleData.js` makes it up (`sampleProfile`). The photo, username and campus come with the post.
 
 ## 5. Reactions — on posts and messages
 
@@ -589,7 +603,8 @@ reaction; picking your current one again removes it. Replies have only a like (�
 
 - **The six, in this order:** ❤️ 👍 😂 😮 😢 🙏. Then **⊕**, which opens the full emoji picker.
 - **The React button is an icon, with no word:** a line-drawn smiley, or your current emoji, in a 30 × 24
-  pill. It tints purple on hover. Tapping it still gives ❤️.
+  pill. It tints purple on hover. With a mouse or the keyboard, pressing it still gives ❤️; on a touch
+  screen it opens the quick bar (below).
 - **Look:** a white pill with radius 999 and a soft shadow. With a mouse, each emoji is 22 in a
   34 × 34 button. On a touch screen, 26 in 44 × 44. Your current reaction sits on a `reactionMineBg`
   circle.
@@ -598,9 +613,11 @@ reaction; picking your current one again removes it. Replies have only a like (�
     quick bar.
   - **Website, with a mouse:** click React = ❤️ on or off. Hover React for **300 ms** = the quick bar.
     It also opens from the keyboard: focus React and press ↑.
-  - **Website, on a touch screen:** tap React = ❤️ on or off. Long-press React for **450 ms**
-    (`REACTION_LONG_PRESS_MS`) = the quick bar, the same gesture as the app. A touch screen has no
-    hover.
+  - **Website, on a touch screen:** **tap React = the quick bar** (owner, 10 Nov; a tap that only gave
+    ❤️ hid the other emojis, since a touch screen has no hover). Tapping React again closes it. Your
+    current reaction sits on its `reactionMineBg` circle; tapping it removes it, tapping another replaces
+    it. A long-press for **450 ms** (`REACTION_LONG_PRESS_MS`) opens it too. Enter or Space from a
+    keyboard still gives ❤️.
 - **Animation:** the bar springs up from the button and its emoji arrive left to right, 18 ms apart.
   Hovered emoji lift and grow. The chosen emoji pops (up to 1.35 over 320 ms) with a ring going out
   behind it. With reduced motion turned on, none of this moves.

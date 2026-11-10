@@ -11,9 +11,9 @@
 //   · a page that would leave only one or two replies unloaded brings them in
 //     too, so the button never stands in for one or two replies;
 //   · a reply can only be liked (❤️, the default reaction), not given any emoji;
-//   · the post's own author gets a highlighted username;
-//   · a reply shows the student's username; the campus only if there is room
-//     (the @container rule in the CSS) and never in the campus feed.
+//   · the post's own author gets a highlighted username, and nothing more;
+//   · a reply shows the student's username, never a full name, and the campus
+//     in the country and Global feeds (never in the campus feed).
 //
 // One line runs down from the post and curves into each reply's avatar (Rail).
 //
@@ -108,7 +108,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
           <ProfileHover
             person={{
               id: reply.author_id,
-              name: reply.author_name,
+              name: reply.author_name, // the avatar's initials only; never shown
               username: reply.author_username,
               avatar: reply.author_avatar,
               campus: reply.author_university,
@@ -122,8 +122,6 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
               @{reply.author_username}
             </Link>
           </ProfileHover>
-          {/* The post's own author, replying (spec §4). */}
-          {isAuthor && <span className={styles.authorTag}>(Author)</span>}
           {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
           {time && (
             <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>

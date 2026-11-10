@@ -63,7 +63,11 @@ the variables in `src/styles/global.css`.
 - **Scrollbars on a working panel stay see-through until it scrolls,** then fade about a second after the
   last scroll. Keep their room the whole time (`scrollbar-color: transparent`), so nothing shifts.
 - **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
-  context already says, such as a campus name in that campus's own feed.
+  context already says, such as a campus name in that campus's own feed. Anything else **truncates with
+  `…` rather than disappearing** on a narrow screen (the campus in a world feed was hidden on phones
+  until 10 Nov).
+- **People are shown by `@username`, never by full name** (owner, 10 Nov). The full name only picks an
+  avatar's initials and colour, so the same person looks the same everywhere.
 - **Components respond to their container, not the window.** Use `@container` and `cqi`, because a panel
   can be any width. Keep window media queries for page layout.
 - Folding text around a float: use `max-height` with `overflow: clip`. `-webkit-line-clamp` and
@@ -72,7 +76,9 @@ the variables in `src/styles/global.css`.
 ## Touch
 
 - Thin to look at, 44 px to touch. Add an invisible `::after` hit area under `@media (pointer: coarse)`.
-- Anything on hover needs a touch route, such as a long-press, and a keyboard route.
+- Anything on hover needs a touch route and a keyboard route. If the hover offers a choice (the React
+  button's quick bar), **a tap opens the choice**; a long-press alone is too hidden (owner, 10 Nov: a tap
+  that only gave ❤️ hid the other emojis on phones).
 - Never hide an action behind a second tap on something that looks selected. Give it its own button.
 
 ## Motion
