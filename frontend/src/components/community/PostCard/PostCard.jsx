@@ -67,41 +67,41 @@ function PostCard({
       style={{ "--post-i": Math.min(index, STAGGER_MAX) }}
       aria-label={`Post by @${post.author_username}`}
     >
-      <Link to={profile} className={styles.avatarLink} aria-label={`@${post.author_username}`} tabIndex={-1}>
-        <AvatarImg src={post.author_avatar} name={post.author_name} size={28} className={styles.avatar} />
-      </Link>
+      {/* Resting on the avatar opens the profile glimpse too, as on the
+          username (owner, 10 Nov). */}
+      <ProfileHover person={person} loadProfile={loadProfile}>
+        <Link to={profile} className={styles.avatarLink} aria-label={`@${post.author_username}`} tabIndex={-1}>
+          <AvatarImg src={post.author_avatar} name={post.author_name} size={28} className={styles.avatar} />
+        </Link>
+      </ProfileHover>
 
       {/* The top of the thread's line, shown only when the post has a thread. */}
       <span className={styles.stem} aria-hidden="true" />
 
       <div className={styles.postBody}>
         <div>
-          {/* In a narrow feed the campus and time drop to a line of their own
-              under the username, like Quora's (PostCard.module.css, .byline). */}
-          <header className={`${styles.header} ${showCampus ? styles.twoLine : ""}`}>
+          <header className={styles.header}>
             {/* Usernames only, never full names (owner, 10 Nov). */}
             <ProfileHover person={person} loadProfile={loadProfile}>
               <Link to={profile} className={styles.username}>
                 @{post.author_username}
               </Link>
             </ProfileHover>
-            <span className={styles.byline}>
-              {showCampus && (
-                <span className={`${styles.campus} ${styles.collegePill}`} title={post.author_university}>
-                  <GraduationCap size={11} aria-hidden="true" />
-                  <span>{post.author_university}</span>
-                </span>
-              )}
-              {time && (
-                <Link
-                  to={`/post/${post.id}`}
-                  className={`${styles.meta} ${styles.time}`}
-                  title={new Date(post.created_at).toLocaleString()}
-                >
-                  <time dateTime={post.created_at}>{time}</time>
-                </Link>
-              )}
-            </span>
+            {showCampus && (
+              <span className={`${styles.campus} ${styles.collegePill}`} title={post.author_university}>
+                <GraduationCap size={11} aria-hidden="true" />
+                <span>{post.author_university}</span>
+              </span>
+            )}
+            {time && (
+              <Link
+                to={`/post/${post.id}`}
+                className={`${styles.meta} ${styles.time}`}
+                title={new Date(post.created_at).toLocaleString()}
+              >
+                <time dateTime={post.created_at}>{time}</time>
+              </Link>
+            )}
             {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
             <button type="button" className={styles.moreBtn} aria-label="More options">
               <Ellipsis size={15} aria-hidden="true" />

@@ -96,25 +96,27 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
     onReact(reply.id, next);
   };
 
+  const person = {
+    id: reply.author_id,
+    name: reply.author_name, // the avatar's initials only; never shown
+    username: reply.author_username,
+    avatar: reply.author_avatar,
+    campus: reply.author_university,
+  };
+
   return (
     <li className={styles.reply}>
       <Rail />
-      <Link to={profile} className={styles.replyAvatarLink} aria-label={reply.author_username} tabIndex={-1}>
-        <AvatarImg src={reply.author_avatar} name={reply.author_name} size={22} className={styles.replyAvatar} />
-      </Link>
+      {/* The avatar opens the profile glimpse too, like the username. */}
+      <ProfileHover person={person} loadProfile={loadProfile}>
+        <Link to={profile} className={styles.replyAvatarLink} aria-label={`@${reply.author_username}`} tabIndex={-1}>
+          <AvatarImg src={reply.author_avatar} name={reply.author_name} size={22} className={styles.replyAvatar} />
+        </Link>
+      </ProfileHover>
 
       <div className={styles.replyBody}>
         <header className={`${styles.replyHeader} ${showCampus ? styles.twoLine : ""}`}>
-          <ProfileHover
-            person={{
-              id: reply.author_id,
-              name: reply.author_name, // the avatar's initials only; never shown
-              username: reply.author_username,
-              avatar: reply.author_avatar,
-              campus: reply.author_university,
-            }}
-            loadProfile={loadProfile}
-          >
+          <ProfileHover person={person} loadProfile={loadProfile}>
             <Link
               to={profile}
               className={`${styles.replyUsername} ${isAuthor ? styles.replyUsernameAuthor : ""}`}
@@ -143,7 +145,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
               <span key={popKey} className={popKey ? styles.likePop : undefined}>
                 <Heart size={14} fill={mine ? "currentColor" : "none"} aria-hidden="true" />
               </span>
-              {total > 0 && <span>{formatCount(total)}</span>}
+              {total > 0 && <span className={styles.likeCount}>{formatCount(total)}</span>}
             </button>
             {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
             <button type="button" className={styles.replyMore} aria-label="More options">

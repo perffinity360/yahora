@@ -1,14 +1,18 @@
 // frontend/src/components/community/ProfileHover/ProfileHover.jsx
 //
-// A glimpse of someone's profile while the mouse rests on their username —
-// docs/design/COMMUNITY_SPEC.md §4.1, after Instagram's. It wraps the
-// username link it belongs to:
+// A glimpse of someone's profile while the mouse rests on their username or
+// avatar — docs/design/COMMUNITY_SPEC.md §4.1, after Instagram's. It wraps the
+// link it belongs to:
 //
 //   <ProfileHover person={…} loadProfile={…}><Link …>@priya.nair</Link></ProfileHover>
 //
-// The photo, username and campus come with the post, so they show at
-// once; the counts and the latest photos load (loadProfile), with a shimmer
-// meanwhile. The photos are a small gallery grid, four across, like a phone's.
+// The photo, username and campus come with the post. The counts and the
+// latest photos load (loadProfile) from the moment the mouse arrives, and the
+// card waits for them, photos decoded, before it opens, so it opens once at its
+// final size (owner, 10 Nov: a card that opened and then grew as its photos
+// came in flickered). If they take longer than MAX_WAIT_MS it opens anyway,
+// with a shimmer. The photos are a small gallery grid, four across, like a
+// phone's.
 // "Follow" is a placeholder until follows exist (it says so when pressed);
 // "View profile" opens the profile page.
 //
@@ -35,11 +39,47 @@ import styles from "./ProfileHover.module.css";
 
 const HOVER_OPEN_MS = 450;
 const HOVER_CLOSE_MS = 180;
+/** How long past HOVER_OPEN_MS the card waits for the counts and photos. */
+const MAX_WAIT_MS = 700;
+/** How long a loaded profile is reused before it is asked for again. */
+const CACHE_MS = 60_000;
 // The card at its tallest, with two rows of photos (ProfileHover.module.css):
-// padding 28 + head 57 + stats 71 + photos 139 + buttons 44. The Popover picks
-// above or below for this height at once, so the card never opens below and
-// then jumps above when the photos arrive.
+// padding 28 + head 57 + stats 71 + photos 139 + buttons 44. Only used when it
+// opens before its profile arrived (MAX_WAIT_MS): the Popover then picks above
+// or below for this height at once, so the card never jumps sides as it grows.
 const CARD_MAX_HEIGHT = 340;
+
+/* Loaded profiles by person id: { promise, data, failed, at }. Shared by every
+   username, so the same person's card opens at once the second time. */
+const profiles = new Map();
+
+function decodePhotos(urls) {
+  return Promise.all(
+    urls.map((url) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = url;
+      // decode() settles once the photo can be painted without a blank frame.
+      return img.decode().catch(() => {});
+    }),
+  );
+}
+
+function fetchProfile(id, loadProfile) {
+  const cached = profiles.get(id);
+  if (cached && !cached.failed && Date.now() - cached.at < CACHE_MS) return cached;
+  const entry = { data: null, failed: false, at: Date.now() };
+  entry.promise = Promise.resolve(loadProfile?.(id))
+    .then(async (d) => {
+      await decodePhotos((d?.recent_photos ?? []).slice(0, MAX_PHOTOS));
+      entry.data = d ?? null;
+    })
+    .catch(() => {
+      entry.failed = true;
+    });
+  profiles.set(id, entry);
+  return entry;
+}
 
 function Stat({ value, label }) {
   return (
@@ -54,9 +94,9 @@ function Stat({ value, label }) {
   );
 }
 
-function ProfileCard({ person, loadProfile }) {
-  const [data, setData] = useState(null);
-  const [failed, setFailed] = useState(false);
+function ProfileCard({ person, entry }) {
+  const [data, setData] = useState(entry.data);
+  const [failed, setFailed] = useState(entry.failed);
   const [soon, setSoon] = useState(false);
   const isMe = person.id === localStorage.getItem("yahora_user_id");
 
@@ -66,15 +106,18 @@ function ProfileCard({ person, loadProfile }) {
     return () => clearTimeout(t);
   }, [soon]);
 
+  // Only when it opened before the profile arrived (MAX_WAIT_MS).
   useEffect(() => {
     let alive = true;
-    loadProfile?.(person.id)
-      .then((d) => alive && setData(d))
-      .catch(() => alive && setFailed(true));
+    entry.promise.then(() => {
+      if (!alive) return;
+      setData(entry.data);
+      setFailed(entry.failed);
+    });
     return () => {
       alive = false;
     };
-  }, [person.id, loadProfile]);
+  }, [entry]);
 
   const profile = `/user/${person.id}`;
   const photos = (data?.recent_photos ?? []).slice(0, MAX_PHOTOS);
@@ -110,7 +153,9 @@ function ProfileCard({ person, loadProfile }) {
       {photos.length > 0 && (
         <div className={styles.photos}>
           {photos.map((url, i) => (
-            <img key={url + i} src={url} alt="" loading="lazy" decoding="async" className={styles.photo} />
+            // Not lazy: the card is placed off screen for its first frame, and a
+            // lazy photo waited for that, then painted a frame late.
+            <img key={url + i} src={url} alt="" className={styles.photo} />
           ))}
         </div>
       )}
@@ -138,13 +183,16 @@ function ProfileCard({ person, loadProfile }) {
 }
 
 export default function ProfileHover({ person, loadProfile, children }) {
-  const [anchor, setAnchor] = useState(null);
+  const [open, setOpen] = useState(null); // null | { anchor, entry }
   const openTimer = useRef(null);
+  const waitTimer = useRef(null);
   const closeTimer = useRef(null);
+  const attempt = useRef(0); // bumped on leave, so a late profile can't open it
 
   useEffect(
     () => () => {
       clearTimeout(openTimer.current);
+      clearTimeout(waitTimer.current);
       clearTimeout(closeTimer.current);
     },
     [],
@@ -152,16 +200,30 @@ export default function ProfileHover({ person, loadProfile, children }) {
 
   const stay = () => clearTimeout(closeTimer.current);
   const leave = () => {
+    attempt.current += 1;
     clearTimeout(openTimer.current);
+    clearTimeout(waitTimer.current);
     clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setAnchor(null), HOVER_CLOSE_MS);
+    closeTimer.current = setTimeout(() => setOpen(null), HOVER_CLOSE_MS);
   };
   const enter = (e) => {
     if (e.pointerType !== "mouse") return;
     stay();
-    const el = e.currentTarget;
+    if (open) return;
+    const anchor = e.currentTarget;
+    const entry = fetchProfile(person.id, loadProfile);
+    const mine = ++attempt.current;
+    const show = () => {
+      if (attempt.current !== mine) return;
+      clearTimeout(waitTimer.current);
+      setOpen((o) => o ?? { anchor, entry });
+    };
     clearTimeout(openTimer.current);
-    openTimer.current = setTimeout(() => setAnchor(el), HOVER_OPEN_MS);
+    openTimer.current = setTimeout(() => {
+      if (entry.data || entry.failed) return show();
+      entry.promise.then(show);
+      waitTimer.current = setTimeout(show, MAX_WAIT_MS);
+    }, HOVER_OPEN_MS);
   };
 
   if (!person?.id) return children;
@@ -169,17 +231,17 @@ export default function ProfileHover({ person, loadProfile, children }) {
   return (
     <>
       {cloneElement(children, { onPointerEnter: enter, onPointerLeave: leave })}
-      {anchor && (
+      {open && (
         <Popover
-          anchorEl={anchor}
+          anchorEl={open.anchor}
           placement="bottom"
-          reserveHeight={CARD_MAX_HEIGHT}
-          onClose={() => setAnchor(null)}
+          reserveHeight={open.entry.data || open.entry.failed ? 0 : CARD_MAX_HEIGHT}
+          onClose={() => setOpen(null)}
           onPointerEnter={stay}
           onPointerLeave={leave}
           ariaLabel={`@${person.username}'s profile`}
         >
-          <ProfileCard person={person} loadProfile={loadProfile} />
+          <ProfileCard person={person} entry={open.entry} />
         </Popover>
       )}
     </>
