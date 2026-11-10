@@ -19,14 +19,16 @@
   display: flex;
   flex-direction: column;
   padding: 0 var(--composer-pad-end, var(--post-inset)) 0 var(--composer-pad-start, 12px);
-  border: 1.5px solid var(--community-rail);
+  /* A dock can darken the resting outline with --composer-border (the floating
+     one on a phone does, Community.module.css). */
+  border: 1.5px solid var(--composer-border, var(--community-rail));
   border-radius: var(--composer-radius, 20px);
   background: var(--white);
   transition: border-color 180ms var(--community-ease), box-shadow 220ms var(--community-ease);
 }
 
 .shell:hover {
-  border-color: var(--reaction-mine-border);
+  border-color: var(--composer-border, var(--reaction-mine-border));
 }
 
 /* Purple on the campus side and pink on the other (spec §2.1). */

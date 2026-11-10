@@ -207,10 +207,58 @@ a.time:hover {
   outline-offset: 1px;
 }
 
+/* ── Campus on a line of its own, in a narrow feed ─────────────────────── */
+
+/* The campus and time sit in .byline. On a wide feed it adds no box of its
+   own, so they stay on the author line. In a feed 520 px wide or less (every
+   phone, or a narrow panel on a laptop) the campus was mostly `…` on replies,
+   so in the country and Global feeds (.twoLine, never the campus feed) the
+   byline drops under the username, like Quora's credential line (owner,
+   10 Nov): `@username … ⋯` above, `campus · time` below. The username, ⋯ and
+   a reply's like stay on the first line (order); the campus still truncates
+   if even its own line is too short, and the time never goes. */
+.byline {
+  display: contents;
+}
+
+@container feed (max-width: 520px) {
+  .twoLine {
+    flex-wrap: wrap;
+  }
+
+  .twoLine .byline {
+    order: 1;
+    flex: 1 0 100%;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  /* Whatever starts the line has no dot before it. */
+  .twoLine .byline > .campus::before,
+  .twoLine .byline > .time:first-child::before {
+    content: none;
+  }
+
+  .twoLine .byline > .campus {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .twoLine .byline .meta {
+    line-height: 18px;
+  }
+
+  .replyHeader.twoLine .byline .meta {
+    line-height: 16px;
+  }
+}
+
 /* ── Text ──────────────────────────────────────────────────────────────── */
 
 .text {
-  font: 400 14px/var(--text-line) "Inter", sans-serif;
+  font: 400 15px/var(--text-line) "Inter", sans-serif;
   color: var(--black-soft);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

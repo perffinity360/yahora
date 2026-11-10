@@ -35,6 +35,11 @@ import styles from "./ProfileHover.module.css";
 
 const HOVER_OPEN_MS = 450;
 const HOVER_CLOSE_MS = 180;
+// The card at its tallest, with two rows of photos (ProfileHover.module.css):
+// padding 28 + head 57 + stats 71 + photos 139 + buttons 44. The Popover picks
+// above or below for this height at once, so the card never opens below and
+// then jumps above when the photos arrive.
+const CARD_MAX_HEIGHT = 340;
 
 function Stat({ value, label }) {
   return (
@@ -168,6 +173,7 @@ export default function ProfileHover({ person, loadProfile, children }) {
         <Popover
           anchorEl={anchor}
           placement="bottom"
+          reserveHeight={CARD_MAX_HEIGHT}
           onClose={() => setAnchor(null)}
           onPointerEnter={stay}
           onPointerLeave={leave}

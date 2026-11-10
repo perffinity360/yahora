@@ -62,10 +62,12 @@ the variables in `src/styles/global.css`.
   copy (`pointer-events: stroke`), not a box, so the empty corner inside the curve doesn't react.
 - **Scrollbars on a working panel stay see-through until it scrolls,** then fade about a second after the
   last scroll. Keep their room the whole time (`scrollbar-color: transparent`), so nothing shifts.
-- **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
+- **A metadata line never wraps on its own.** Decide what truncates first and what never goes. Drop what the
   context already says, such as a campus name in that campus's own feed. Anything else **truncates with
   `…` rather than disappearing** on a narrow screen (the campus in a world feed was hidden on phones
-  until 10 Nov).
+  until 10 Nov). **If on a phone the secondary part would be mostly `…`, give it a line of its own** under
+  the name, like Quora's credential line: name and actions on the first line, `campus · time` under it
+  (owner, 10 Nov).
 - **People are shown by `@username`, never by full name** (owner, 10 Nov). The full name only picks an
   avatar's initials and colour, so the same person looks the same everywhere.
 - **Components respond to their container, not the window.** Use `@container` and `cqi`, because a panel
@@ -77,8 +79,11 @@ the variables in `src/styles/global.css`.
 
 - Thin to look at, 44 px to touch. Add an invisible `::after` hit area under `@media (pointer: coarse)`.
 - Anything on hover needs a touch route and a keyboard route. If the hover offers a choice (the React
-  button's quick bar), **a tap opens the choice**; a long-press alone is too hidden (owner, 10 Nov: a tap
-  that only gave ❤️ hid the other emojis on phones).
+  button's quick bar), **pressing the button opens the choice, with a click, a tap or Enter alike**; it
+  never picks a default for you, and a long-press alone is too hidden (owner, 10 Nov: a press that only
+  gave ❤️ hid the other emojis).
+- **A popover that grows after it opens** (photos loading) chooses above or below once, for its full
+  height, and stays there. Deciding on the first, smaller size makes it jump sides.
 - Never hide an action behind a second tap on something that looks selected. Give it its own button.
 
 ## Motion

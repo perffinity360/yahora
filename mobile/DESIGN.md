@@ -49,17 +49,21 @@ change both.
 
 - **An avatar gets a column of its own.** Everything in the row, text, media, actions and nested replies,
   starts at one left edge. A drop cap was tried on the website; it made rows hard to scan.
-- **A metadata line is exactly one line.** Decide what truncates first and what never goes. Drop what the
+- **A metadata line never wraps on its own.** Decide what truncates first and what never goes. Drop what the
   context already says, such as a campus name in that campus's own feed. Anything else **truncates with
   `…` rather than disappearing** on a narrow screen (the campus in a world feed was hidden on phones
-  until 10 Nov).
+  until 10 Nov). **If on a phone the secondary part would be mostly `…`, give it a line of its own** under
+  the name, like Quora's credential line: name and actions on the first line, `campus · time` under it
+  (owner, 10 Nov).
 - **People are shown by `@username`, never by full name** (owner, 10 Nov). The full name only picks an
   avatar's initials and colour, so the same person looks the same everywhere.
 
 ## Touch
 
 - Thin to look at, 44 pt to touch. Use `hitSlop` to reach it.
-- Long-press is the route to anything the website does on hover.
+- Long-press is the route to anything the website does on hover. But if a button's hover offers a
+  choice (the React button's quick bar), **a tap on the button opens the choice**; it never picks a
+  default for you (owner, 10 Nov).
 - Never hide an action behind a second tap on something that looks selected. Give it its own button.
 
 ## Motion

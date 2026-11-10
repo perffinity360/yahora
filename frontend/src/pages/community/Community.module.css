@@ -620,6 +620,14 @@
   pointer-events: auto;
 }
 
+/* On a phone the composer's outline is always the feed's dark accent
+   (purpleDark on campus, pinkDark elsewhere), not the pale rail colour it has
+   at rest on a laptop: over the busy wallpaper the pale one hardly showed
+   (owner, 10 Nov). Clicking it still adds the soft tint around it. */
+.dockFloat {
+  --composer-border: var(--composer-accent);
+}
+
 /* Spec §1.4. */
 .viewOnly {
   display: flex;

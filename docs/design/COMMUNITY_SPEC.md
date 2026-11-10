@@ -1,6 +1,14 @@
 # Community — design spec (Phase 7)
 
-**Version 3.8 · 10 November 2026 · for the website and the app**
+**Version 3.9 · 10 November 2026 · for the website and the app**
+
+> **Changed in version 3.9 (owner, 10 Nov):** **pressing React always opens the quick bar,** with a mouse, the
+> keyboard or a finger, on the website and in the app; nothing gives ❤️ by itself any more, and hover still
+> opens the bar too (§5.1). **In a narrow feed the campus gets a line of its own** under the username, like
+> Quora's, on posts and replies in the country and Global feeds (§3, §4). The profile glimpse picks above or
+> below once, at its full height, instead of opening below and jumping above when its photos load (§4.1).
+> On a phone the composer's outline is always the feed's dark accent (§2.1). Post text is Inter 400 15/20
+> (§3; was 14/20).
 
 > **Changed in version 3.8 (owner, 10 Nov):** **no full names anywhere,** only `@username` and the campus:
 > on a post, in the profile glimpse and in the brand menu (§1.1, §3, §4.1); the campus no longer disappears
@@ -298,6 +306,8 @@ the screen (like the brand pill, so a curved screen doesn't cut its ends; was 8)
 
 **Clicking it highlights it, and it stays one line.** The outline turns to the feed's accent with a 3 px soft
 tint around it: `purpleDark` on the campus feed, `pinkDark` on a country or Global feed. Both layouts do this.
+**On a narrow window the outline is that dark accent all the time** (owner, 10 Nov): over the wallpaper the
+pale `communityRail` one hardly showed. Clicking it adds only the tint.
 The tools come to full strength, and GIF and emoji slide in beside the photo icon over 220 ms. Pressing
 elsewhere, Tab or Esc puts GIF and emoji away again. **On a narrow window** that also ends the highlight.
 **On a laptop** the highlight stays on the selected side's composer (§1.1) whether or not it's in use, so
@@ -404,7 +414,7 @@ into the replies when there are any.
 
 ```
 (av) @rahul.verma (cap IIITDM Kurnool) · 2h                          ⋯
- │   Text of the post, Inter 400 14/20, black-soft. Every line starts
+ │   Text of the post, Inter 400 15/20, black-soft. Every line starts
  │   under the username, and so does everything below it.
  │   ┌─────────────────── photos (1–3) or GIF ───────────────────┐
  │   └───────────────────────────────────────────────────────────┘
@@ -412,25 +422,38 @@ into the replies when there are any.
  ╰─(av) replies (§4)
 ```
 
+In a feed 520 px wide or less, wherever the campus shows (the country and Global feeds):
+
+```
+(av) @rahul.verma                                                   ⋯
+ │   (cap IIITDM Kurnool) · 2h
+ │   Text of the post…
+```
+
 - **The avatar has a column of its own:** 28 px, then 8 px. The author line, text, photos, GIF, actions
   and replies all start at the same left edge, so on the busy wallpaper you can always see what belongs
   to which post. On a 390 px phone the text gets 330 px. (Version 3 first floated the avatar as a drop
   cap; it made the rows hard to scan.)
-- **Author line: always exactly one line.** **No full name, anywhere** (owner, 10 Nov): `@username` in
-  Inter 600 13, black-soft (like a reply's), then the campus and `· time` in Inter 400 13, communityMuted.
-  When space runs out they truncate with `…` in this order: the campus first, then the username. Neither
-  disappears: the username keeps at least 40 px and the campus 48. The time never goes. Tapping the
+- **Author line: one line on a wide feed, two on a narrow one.** **No full name, anywhere** (owner, 10 Nov):
+  `@username` in Inter 600 13, black-soft (like a reply's), then the campus and `· time` in Inter 400 13,
+  communityMuted. When space runs out they truncate with `…` in this order: the campus first, then the
+  username. Neither disappears: the username keeps at least 40 px and the campus 48. The time never goes.
+  **In a feed 520 px wide or less** (every phone, or a narrow panel on a laptop), wherever the campus
+  shows, **the campus and time move to a second line** under the username, like Quora's credential line
+  (owner, 10 Nov: on a phone the campus was mostly `…`). The username and `⋯` keep the first line; the
+  second is 18 px tall and the campus still truncates if even that line is too short. The campus feed,
+  with no campus, stays on one line. Tapping the
   avatar or the username opens the profile. Tapping the time opens the post's page.
 - **Campus name:**
   - **never in the campus feed,** where it's obvious;
   - **always in the country and Global feeds,** at every width, on posts and on replies (owner, 10 Nov; it
-    used to be hidden in a feed 420 px wide or less, so a phone never showed it). When the line is short it
-    truncates with `…` instead. On a post it's a compact pill: a graduation cap and the college, Inter 500
+    used to be hidden in a feed 420 px wide or less, so a phone never showed it). In a feed 520 px wide or
+    less it takes a second line (above); when even that is short it truncates with `…`. On a post it's a compact pill: a graduation cap and the college, Inter 500
     11, `communityCollegeText` on `communityCollegeBg`, padding 0 7, radius 999 (replies keep the plain
     `· campus` text).
 - **Time:** `now`, `5m`, `2h`, `3d`; then `12 Oct`, or `12 Oct 2025` for an earlier year.
   Reuse the message time formatter.
-- **Text:** links are tappable; there are no link previews. A long post folds after
+- **Text:** Inter 400 15/20, black-soft (owner, 10 Nov; was 14/20). Links are tappable; there are no link previews. A long post folds after
   **6 lines** behind `See more`, which expands it in place.
 - **Photos: one at a time, like Instagram** (owner, 7 Nov; was a grid):
   - **The frame** takes the first photo's shape, kept between 4:5 and 16:9, full width but at most
@@ -529,7 +552,8 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   `@username` in Inter 600 13; `campus · time` in Inter 400 12; text in Inter 400 13/19, with an optional
   GIF up to 180 px wide.
 - **Usernames, not full names.** The campus follows the rule in §3: never in the campus feed, always in
-  the country and Global feeds.
+  the country and Global feeds, and **on a line of its own in a feed 520 px wide or less:** `@username`
+  with the like and `⋯` on the first line, `campus · time` (12/16) under it, then the text.
 - **Pointing at a username** turns it `purple`, with **no underline**, and resting on it opens the profile
   glimpse (§4.1). The author's pill (below) deepens to `communityAuthorHover` with `purpleDark` text.
 - **The post's author is highlighted:** when they reply to their own post, their username sits on
@@ -564,6 +588,11 @@ Resting the mouse on an @username, in a post or a reply, for **450 ms** opens a 
 after Instagram's. Moving onto the card keeps it open (it closes 180 ms after the mouse leaves both); Esc, a
 press elsewhere or scrolling the username away closes it. On a touch screen there's no hover: a tap on the
 username opens the profile, as before.
+
+**It opens below the username when there's room for the whole card, photos and all (340 px), and above
+otherwise, and stays on that side while it's open** (owner, 10 Nov). It used to choose by the card's size
+before the photos loaded, so a username low on the screen got the card below, then saw it jump above when
+the photos made it taller. Above the name, it grows upwards as they arrive.
 
 ```
  ╭──────────────────────────────╮
@@ -603,21 +632,23 @@ reaction; picking your current one again removes it. Replies have only a like (�
 
 - **The six, in this order:** ❤️ 👍 😂 😮 😢 🙏. Then **⊕**, which opens the full emoji picker.
 - **The React button is an icon, with no word:** a line-drawn smiley, or your current emoji, in a 30 × 24
-  pill. It tints purple on hover. With a mouse or the keyboard, pressing it still gives ❤️; on a touch
-  screen it opens the quick bar (below).
+  pill. It tints purple on hover. **Pressing it always opens the quick bar, never ❤️ by itself** (owner,
+  10 Nov), whatever you press it with, on the website and in the app: a press that gave ❤️ hid the other
+  five emojis.
 - **Look:** a white pill with radius 999 and a soft shadow. With a mouse, each emoji is 22 in a
   34 × 34 button. On a touch screen, 26 in 44 × 44. Your current reaction sits on a `reactionMineBg`
   circle.
 - **How to open it:**
-  - **App:** tap React = ❤️ on or off. Long-press React (or long-press the post) = the
-    quick bar.
-  - **Website, with a mouse:** click React = ❤️ on or off. Hover React for **300 ms** = the quick bar.
-    It also opens from the keyboard: focus React and press ↑.
-  - **Website, on a touch screen:** **tap React = the quick bar** (owner, 10 Nov; a tap that only gave
-    ❤️ hid the other emojis, since a touch screen has no hover). Tapping React again closes it. Your
-    current reaction sits on its `reactionMineBg` circle; tapping it removes it, tapping another replaces
-    it. A long-press for **450 ms** (`REACTION_LONG_PRESS_MS`) opens it too. Enter or Space from a
-    keyboard still gives ❤️.
+  - **App:** tap React = the quick bar; tapping React again closes it. Long-press React (or long-press
+    the post) opens it too.
+  - **Website, with a mouse:** click React = the quick bar; a second click closes it. Hovering React for
+    **300 ms** still opens it as well, and a click after that keeps it open rather than shutting it.
+  - **Website, from the keyboard:** Enter, Space or ↑ on React opens it with the focus on its first
+    emoji; ← → move along it and Esc closes it.
+  - **Website, on a touch screen:** tap React = the quick bar; tapping React again closes it. A
+    long-press for **450 ms** (`REACTION_LONG_PRESS_MS`) opens it too.
+  - **Everywhere,** your current reaction sits on its `reactionMineBg` circle: choosing it again removes
+    it, choosing another replaces it. `DEFAULT_REACTION` (❤️) is now only a reply's like (§4).
 - **Animation:** the bar springs up from the button and its emoji arrive left to right, 18 ms apart.
   Hovered emoji lift and grow. The chosen emoji pops (up to 1.35 over 320 ms) with a ring going out
   behind it. With reduced motion turned on, none of this moves.

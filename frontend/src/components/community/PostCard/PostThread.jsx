@@ -104,7 +104,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
       </Link>
 
       <div className={styles.replyBody}>
-        <header className={styles.replyHeader}>
+        <header className={`${styles.replyHeader} ${showCampus ? styles.twoLine : ""}`}>
           <ProfileHover
             person={{
               id: reply.author_id,
@@ -122,12 +122,15 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
               @{reply.author_username}
             </Link>
           </ProfileHover>
-          {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
-          {time && (
-            <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>
-              {time}
-            </time>
-          )}
+          {/* A line of its own in a narrow feed, as on a post (PostCard.module.css). */}
+          <span className={styles.byline}>
+            {showCampus && <span className={`${styles.meta} ${styles.campus}`}>{reply.author_university}</span>}
+            {time && (
+              <time className={`${styles.meta} ${styles.time}`} dateTime={reply.created_at}>
+                {time}
+              </time>
+            )}
+          </span>
           <span className={styles.replyTools}>
             <button
               type="button"
