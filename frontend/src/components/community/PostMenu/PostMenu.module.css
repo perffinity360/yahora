@@ -1,0 +1,53 @@
+/* frontend/src/components/community/PostMenu/PostMenu.module.css
+   The ⋯ menu's list: the same card and rows as the country dropdown
+   (.menu and .menuOption in pages/community/Community.module.css). */
+
+.menu {
+  min-width: 160px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: var(--quick-bar-shadow);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: 500 13px/18px "Inter", sans-serif;
+  color: var(--black-soft);
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--reaction-mine-bg);
+}
+
+.item:focus-visible {
+  background: var(--reaction-mine-bg);
+  outline: 2px solid var(--purple);
+  outline-offset: -2px;
+}
+
+.danger {
+  color: var(--error-text);
+}
+
+/* The toast's layer: fixed to the bottom of the window, so AppToast (which
+   sits `bottom` px above its parent's bottom edge) shows over any page. */
+.toastLayer {
+  position: fixed;
+  z-index: 10001;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  pointer-events: none;
+}

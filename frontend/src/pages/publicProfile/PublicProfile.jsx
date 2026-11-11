@@ -8,6 +8,7 @@ import ProductCard from "../../components/ProductCard/ProductCard";
 import { API_BASE_URL } from '../../config/urls';
 import { useAuth } from "../../contexts/AuthContext";
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
+import UserPosts from "../community/UserPosts";
 
 
 function DisplayAvatar({ src, name, size, onClick }) {
@@ -101,7 +102,7 @@ export default function PublicProfile() {
   // 1. Fetch the current logged-in user's ID
   const currentUserId = localStorage.getItem("yahora_user_id");
   const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
-  const { logout } = useAuth();
+  const { logout, isAuthenticated } = useAuth();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -614,6 +615,22 @@ export default function PublicProfile() {
                   />
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* ── Posts (COMMUNITY_SPEC §10) — the posts API needs a session, so
+              a logged-out visitor doesn't get this section. ── */}
+          {isAuthenticated && (
+            <section className={gateStyles.soldSection} aria-labelledby="posts-heading">
+              <div className={styles.tabs}>
+                <h2
+                  id="posts-heading"
+                  className={`${styles.tab} ${styles.tabActive} ${gateStyles.soldHeading}`}
+                >
+                  Posts
+                </h2>
+              </div>
+              <UserPosts userId={id} />
             </section>
           )}
         </div>

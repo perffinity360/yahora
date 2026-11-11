@@ -14,7 +14,21 @@
 //
 // `patches` holds reaction answers by post id. They live above the feeds, so a
 // reaction survives switching feeds and coming back (the feed remounts), and
-// each feed lays them over its own copy.
+// each feed lays them over its own copy. A press passes the post as it shows
+// now to onReact, which patches it at once and rolls back if the API refuses.
+//
+// `kind` is null while the page doesn't know which feed this is yet (the
+// countries are loading): the skeletons show and nothing loads.
+//
+// A post reported or deleted from its ⋯ menu leaves the list at once
+// (`hidden`, from PostActionsContext; see ./PostActions.jsx).
+//
+// The campus feed asks every NEW_POSTS_POLL_MS, while the page is visible,
+// how many posts are newer than the newest one it shows (spec §8), and shows
+// the "new posts" pill. Pressing it scrolls to the top and fetches the first
+// page in the background; only the posts not already shown are added on top,
+// sliding in, and every page loaded below stays (and the cursor with it).
+// Nothing is cleared, and posts are never inserted without that press.
 //
 // On a laptop the page also says which side you're writing on: `selected`
 // keeps that side's composer highlighted while it isn't in use, `focusSignal`
@@ -25,15 +39,47 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "
 
 /* Spec §1.1: a panel's scrollbar shows while it scrolls, then fades. */
 const SCROLLBAR_LINGER_MS = 900;
-import { Eye } from "lucide-react";
+/* Spec §8: the "new posts" pill fades out over this long (Community.module.css). */
+const NEW_POSTS_FADE_MS = 200;
+/* ⚠ Not in the spec: it has no words for this. The feed's own failure line
+   says "Couldn't load posts." */
+const NEW_POSTS_FAILED = "Couldn't load new posts. Try again.";
+
+/* The `since` for new-count: 1 ms after the newest post shown. The API reads
+   `since` to the millisecond, and the database keeps microseconds, so
+   `created_at` itself (…00.123456) would come back as …00.123 and the newest
+   post shown would count as new. */
+function justAfter(iso) {
+  return new Date(Date.parse(iso) + 1).toISOString();
+}
+
+/* The newest `created_at` in a list (the campus feed is newest first, but
+   your own post is put at the top by hand, so this doesn't trust the order). */
+function newestTime(items) {
+  let best = null;
+  for (const p of items) {
+    if (best === null || Date.parse(p.created_at) > Date.parse(best)) best = p.created_at;
+  }
+  return best;
+}
+import { ArrowUp, Eye } from "lucide-react";
 import Composer from "../../components/community/Composer/Composer";
 import InfiniteScrollSentinel from "../../components/InfiniteScrollSentinel/InfiniteScrollSentinel";
 import PostCard from "../../components/community/PostCard/PostCard";
+import { usePostActions } from "../../components/community/PostMenu/PostMenu";
 import useInfiniteScroll from "../../hooks/useInfiniteScroll";
-import { samplePost, sampleFeed, sampleProfile, sampleReplies } from "./sampleData";
+import { applyPatches } from "../../hooks/useReactionPatches";
+import { NEW_POSTS_POLL_MS } from "../../utils/community";
+import { createPost, getFeed, getNewCount, getReplies } from "./api";
 import styles from "./Community.module.css";
 
-const SkeletonPost = memo(function SkeletonPost() {
+/* ⚠ No route sends the profile glimpse's counts and photos yet (spec §4.1:
+   the social module isn't built). Failing on purpose makes the card hide
+   them, instead of shimmering for ever; the name, photo, username and campus
+   still show, because they come with the post. */
+export const loadProfile = () => Promise.reject(new Error("Not built yet"));
+
+export const SkeletonPost = memo(function SkeletonPost() {
   return (
     <div className={styles.skeleton} aria-hidden="true">
       <div className={styles.skeletonHead}>
@@ -75,6 +121,18 @@ export default function CommunityFeed({
   const [scroller, setScroller] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
   const [addedReplies, setAddedReplies] = useState({});
+  const [newCount, setNewCount] = useState(0);
+  // What the pill shows, and whether it's fading out. It stays a moment
+  // after newCount drops to 0, so it can fade.
+  const [pillCount, setPillCount] = useState(0);
+  const [pillLeaving, setPillLeaving] = useState(false);
+  // The posts the pill just brought in, by id → their place in the stagger.
+  const [arrived, setArrived] = useState({});
+  const fetchingNew = useRef(false);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const since = useRef(null);
+  const checkNewRef = useRef(null);
   const inFlight = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
@@ -92,13 +150,14 @@ export default function CommunityFeed({
       setLoading(true);
       setFailed(false);
       try {
-        // Part 2 swaps this one line for api.getFeed(kind, { country, sort, cursor }).
-        const page = await sampleFeed(kind, { country, sort, cursor: from });
+        const page = await getFeed(kind, { country, sort, cursor: from });
         if (!alive.current) return;
         setItems((prev) => {
           const seen = new Set(prev.map((p) => p.id));
           return [...prev, ...page.items.filter((p) => !seen.has(p.id))];
         });
+        // A first page (or the pill's reload) shows everything new so far.
+        if (from === null) setNewCount(0);
         setCursor(page.next_cursor);
         setHasMore(page.next_cursor !== null);
         if (typeof page.can_post === "boolean") setCanPost(page.can_post);
@@ -116,8 +175,8 @@ export default function CommunityFeed({
   );
 
   useEffect(() => {
-    loadPage(null);
-  }, [loadPage]);
+    if (kind) loadPage(null);
+  }, [kind, loadPage]);
 
   // null while the first page loads: the page keeps your side selected
   // through a reload instead of flicking to the other one and back.
@@ -152,9 +211,115 @@ export default function CommunityFeed({
     root: inPanel ? scroller : null,
   });
 
+  // Spec §8: "new" is newer than the newest post shown. It moves on every load
+  // and reload, and when your own post goes on top, so the pill only counts
+  // posts you can't see yet. Hidden posts (reported, deleted) still count as
+  // seen: `items`, not `shown`. An empty feed counts from now. When it moves,
+  // ask again at once, so a count that is now too high doesn't linger.
+  const newest = useMemo(() => newestTime(items), [items]);
+  useEffect(() => {
+    if (kind !== "campus" || firstLoad) return;
+    const next = newest ? justAfter(newest) : (since.current ?? new Date().toISOString());
+    if (next === since.current) return;
+    since.current = next;
+    checkNewRef.current?.();
+  }, [kind, firstLoad, newest]);
+
+  // Campus only, every NEW_POSTS_POLL_MS, and not while the page is hidden;
+  // becoming visible again asks at once.
+  useEffect(() => {
+    if (kind !== "campus" || firstLoad) return undefined;
+    let asked = 0;
+    const check = async () => {
+      if (document.visibilityState !== "visible" || !since.current) return;
+      const mine = ++asked;
+      try {
+        const { count } = await getNewCount(since.current);
+        // Only the latest question counts: an older one asked about an older `since`.
+        if (alive.current && mine === asked) setNewCount(count);
+      } catch {
+        // Only a hint: try again next time.
+      }
+    };
+    checkNewRef.current = check;
+    const timer = setInterval(check, NEW_POSTS_POLL_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      checkNewRef.current = null;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [kind, firstLoad]);
+
+  // newCount → what the pill shows: in at once; out after its fade.
+  useEffect(() => {
+    if (newCount > 0) {
+      setPillLeaving(false);
+      setPillCount(newCount);
+      return undefined;
+    }
+    if (pillCount === 0) return undefined;
+    setPillLeaving(true);
+    const t = setTimeout(() => {
+      setPillCount(0);
+      setPillLeaving(false);
+    }, NEW_POSTS_FADE_MS);
+    return () => clearTimeout(t);
+    // Driven by newCount alone; pillCount is read as it is at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newCount]);
+
+  // Spec §8: the pill goes, the feed glides to the top, and the first page is
+  // fetched in the background. Nothing on screen is cleared: the posts not
+  // already shown go on top (matched by id) and slide in; the ones already
+  // shown take the fresh copy in place (same key, so no remount); every page
+  // loaded below stays, so the cursor and infinite scroll carry on. A failure
+  // leaves the list as it is and says so in the toast.
+  const actions = usePostActions();
+  const showNewPosts = async () => {
+    setNewCount(0);
+    if (inPanel) scroller?.scrollTo({ top: 0, behavior: "smooth" });
+    else window.scrollTo({ top: 0, behavior: "smooth" });
+    if (fetchingNew.current) return;
+    fetchingNew.current = true;
+    try {
+      const page = await getFeed(kind, { country, sort, cursor: null });
+      if (!alive.current) return;
+      const fresh = new Map(page.items.map((p) => [p.id, p]));
+      const seen = new Set(itemsRef.current.map((p) => p.id));
+      const added = page.items.filter((p) => !seen.has(p.id));
+      setItems((prev) => {
+        const known = new Set(prev.map((p) => p.id));
+        return [
+          ...added.filter((p) => !known.has(p.id)),
+          ...prev.map((p) => (fresh.has(p.id) ? { ...p, ...fresh.get(p.id) } : p)),
+        ];
+      });
+      // Merged, never replaced: taking the mark off a post that already slid
+      // in would start its ordinary entrance again.
+      setArrived((prev) => ({ ...prev, ...Object.fromEntries(added.map((p, i) => [p.id, i])) }));
+    } catch {
+      if (alive.current) actions?.showToast?.(NEW_POSTS_FAILED);
+    } finally {
+      fetchingNew.current = false;
+    }
+  };
+
+  const hidden = actions?.hidden;
   const shown = useMemo(
-    () => items.map((p) => (patches[p.id] ? { ...p, ...patches[p.id] } : p)),
-    [items, patches],
+    () => applyPatches(items, patches).filter((p) => !hidden?.has(p.id)),
+    [items, patches, hidden],
+  );
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  // Stable, so a memoised PostCard re-renders only when its own post changes.
+  // A reply isn't in this list: it gets no `before` and keeps its own count.
+  const react = useCallback(
+    (postId, emoji) => onReact(postId, emoji, shownRef.current.find((p) => p.id === postId)),
+    [onReact],
   );
 
   const onPosted = useCallback((post) => {
@@ -177,14 +342,14 @@ export default function CommunityFeed({
 
   // Stable, so a memoised PostCard re-renders only when its own post changes.
   const startReply = useCallback((post) => setReplyTo(post), []);
-  const loadReplies = useCallback((postId, from) => sampleReplies(postId, from), []);
+  const loadReplies = useCallback((postId, from) => getReplies(postId, from), []);
 
   const composerProps = {
     feed: kind,
     countryName,
     viewer,
     showAvatar: !inPanel, // on a laptop the avatar is the one on the divider
-    onSubmit: samplePost,
+    onSubmit: createPost,
     onPosted,
     onActiveChange: onComposerActive,
     selected,
@@ -223,6 +388,20 @@ export default function CommunityFeed({
 
   const feed = (
     <div className={styles.feed}>
+      {/* Takes no room: a zero-height sticky layer the pill floats in (§8). */}
+      {pillCount > 0 && (
+        <div className={styles.newPostsRow}>
+          <button
+            type="button"
+            className={`${styles.newPosts} ${pillLeaving ? styles.newPostsLeaving : ""}`}
+            onClick={showNewPosts}
+            tabIndex={pillLeaving ? -1 : undefined}
+          >
+            <ArrowUp size={16} aria-hidden="true" />
+            {pillCount} new {pillCount === 1 ? "post" : "posts"}
+          </button>
+        </div>
+      )}
       {firstLoad ? (
         <div className={styles.list} role="status" aria-label="Loading posts">
           <SkeletonPost />
@@ -240,11 +419,12 @@ export default function CommunityFeed({
               index={i}
               showCampus={kind !== "campus"}
               canReply={canPost === true}
-              onReact={onReact}
+              onReact={react}
               onReply={startReply}
               loadReplies={loadReplies}
-              loadProfile={sampleProfile}
+              loadProfile={loadProfile}
               addedReplies={addedReplies[p.id]}
+              arriving={arrived[p.id] ?? null}
             />
           ))}
         </div>

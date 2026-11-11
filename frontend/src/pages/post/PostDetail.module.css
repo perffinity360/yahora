@@ -1,0 +1,15 @@
+/* frontend/src/pages/post/PostDetail.module.css
+   A post's own page. Everything else comes from the community's own styles
+   (pages/community/Community.module.css: the zone's wallpaper, the list, the
+   floating dock) and the post card's. */
+
+/* The site navbar is shown here, unlike on /community, so the page starts
+   under it. */
+.page {
+  padding-top: 8px;
+}
+
+/* The list pushes the dock to the bottom of the window when the thread is short. */
+.feed {
+  flex: 1 0 auto;
+}

@@ -1057,6 +1057,84 @@
   padding: 6px max(0px, calc(10px - var(--scrollbar-room, 0px))) 0 max(10px, var(--scrollbar-room, 0px));
 }
 
+/* Spec §3.1: the support card under your own post held for self-harm, on
+   your Posts tab, as wide as the post above it. */
+.supportUnder {
+  max-width: 860px;
+  margin: 0 auto 6px;
+}
+
+/* Spec §8: the "new posts" pill floats over the feed and takes no space, so
+   nothing moves when it comes or goes. A zero-height sticky layer at the top
+   of the scroller, 8 px under the panel's 36 px header (laid over the
+   scroller's top); the pill hangs from it, absolute and centred. */
+.newPostsRow {
+  position: sticky;
+  z-index: 12;
+  top: 44px;
+  height: 0;
+  pointer-events: none;
+}
+
+/* On a narrow window, 8 px under the floating switcher (8 + 34 + 8). */
+.narrow .newPostsRow {
+  top: 58px;
+}
+
+.newPosts {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  /* The centring is its own property, so the entrance's transform keeps it. */
+  translate: -50% 0;
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--community-new-posts);
+  box-shadow: var(--quick-bar-shadow);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  font: 600 13px/18px "Inter", sans-serif;
+  color: var(--white);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: newPostsIn 200ms var(--community-ease);
+  transition: opacity 200ms var(--community-ease), background-color 140ms var(--community-ease);
+}
+
+.newPosts:hover {
+  background: var(--community-new-posts-hover);
+}
+
+.newPosts:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
+/* Leaving: it fades out, then CommunityFeed takes the row away. */
+.newPostsLeaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes newPostsIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newPosts {
+    animation: none;
+    transition: none;
+  }
+}
+
 .empty {
   max-width: 320px;
   margin: 32px auto;
