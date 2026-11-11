@@ -821,12 +821,31 @@ API reason values, in the same order: `spam`, `harassment`, `hate_speech`, `sexu
 
 ## 8. "New posts" pill (campus feed only)
 
-- `↑ 3 new posts`: purple background, white Inter 600 13, radius 999, padding 6 / 14. It
-  floats 8 px under the top of the campus feed.
+- **Look (owner, 11 Nov):** a frosted pill, centred: lucide `ArrowUp` 16, then `1 new post` /
+  `N new posts` in Inter 600 13, white. Radius 999, padding 8 / 16. Background
+  `communityNewPosts` (the brand purple, slightly see-through) with a 12 px backdrop blur, and the
+  `quickBarShadow`. Hover: `communityNewPostsHover`, a little brighter. Keyboard focus: the usual
+  2 px `purple` ring, 2 px out.
+- **Where:** 8 px under the campus panel's header (on a narrow window, under the floating
+  switcher), centred, and it stays there while the feed scrolls (sticky inside the panel). It
+  floats over the feed and takes no space, so nothing moves: the campus feed starts exactly where
+  the other panel's does, and the pill coming or going never shifts a post. It may sit over the
+  top of the first post for a moment; pressing it takes it away.
+- **Motion:** in, it slides down 8 px and fades in over 200 ms (`communityEase`); out, it fades
+  over 200 ms. No movement with reduced motion.
+- **What counts:** posts newer than the **newest post shown in the campus feed**. That moves on
+  every load and reload, and when your own new post appears at the top, so the pill only ever
+  counts posts you can't see yet, and never your own. (`created_at` is sent 1 ms later than the
+  post's own: the API reads `since` to the millisecond, and the database keeps microseconds, so
+  the newest post shown would otherwise count as new.)
 - **Checking:** every **30 seconds** while the feed is on screen, using
   `GET /api/posts/feed/campus/new-count?since=…`. It stops while the tab or page is hidden.
-- **Tapping it** scrolls to the top and reloads. New posts are **never** inserted while
-  someone is reading.
+- **Tapping it** scrolls to the top and adds the new posts smoothly at the top, without reloading
+  the list: the posts already shown stay on screen the whole time (no skeletons, no blink), only
+  posts not already shown are added, each fading and sliding down into place (about 200 ms,
+  slightly staggered; none with reduced motion), and every page loaded below stays. If that fails,
+  the list stays as it is and a toast says so. New posts are **never** inserted while someone is
+  reading, only when the pill is tapped.
 
 ## 9. Empty and loading states
 
@@ -921,6 +940,8 @@ A **Posts** tab sits next to the existing tabs:
 | `communityMuted` | `--community-muted` | `#5C5969` | secondary text on the wallpaper (5.58:1 on `chatCanvas`; `mutedText` is 4.44:1, too low) |
 | `communityLike` | `--community-like` | `#D81E5B` | a liked reply, the ring when a reaction pops |
 | `communityFloatShadow` | `--community-float-shadow` | `0 4px 16px rgba(42,8,42,0.12)` | anything floating over the feed |
+| `communityNewPosts` | `--community-new-posts` | `rgba(128,0,128,0.86)` | the "new posts" pill (§8): the brand purple, frosted |
+| `communityNewPostsHover` | `--community-new-posts-hover` | `rgba(150,16,150,0.92)` | that pill on hover, a little brighter |
 | `communityEase` | `--community-ease` | `cubic-bezier(0.2,0.8,0.2,1)` | movement and fades |
 | `communitySpring` | `--community-spring` | `cubic-bezier(0.34,1.56,0.64,1)` | small things that pop (the app uses a real spring) |
 

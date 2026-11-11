@@ -19,14 +19,21 @@
 //
 // `moreRequest` is a counter: when it goes up, the thread shows more. It lets
 // the post's reply button open the thread where the student can't reply.
+//
+// PostPageThread is the post's own page (spec §4): no preview, every reply
+// oldest first, a page at a time behind "Load more replies".
+//
+// A reply reported or deleted from its ⋯ menu leaves the thread at once
+// (`hidden`, from PostActionsContext).
 
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronUp, Ellipsis, Heart, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, Loader2 } from "lucide-react";
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import PostGif from "./PostGif";
 import PostText from "./PostText";
 import ProfileHover from "../ProfileHover/ProfileHover";
+import PostMenu, { usePostActions } from "../PostMenu/PostMenu";
 import {
   DEFAULT_REACTION,
   REPLIES_FOLD_MIN,
@@ -89,11 +96,19 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
   const time = formatPostTime(reply.created_at);
 
   const toggleLike = () => {
+    const before = { mine, total };
     const next = mine ? null : DEFAULT_REACTION;
     setMine(next);
     setTotal((t) => Math.max(0, t + (next ? 1 : -1)));
     if (next) setPopKey((k) => k + 1);
-    onReact(reply.id, next);
+    // Optimistic: onReact resolves false when the API refuses, and the like
+    // goes back to what it was.
+    Promise.resolve(onReact(reply.id, next)).then((ok) => {
+      if (ok === false) {
+        setMine(before.mine);
+        setTotal(before.total);
+      }
+    });
   };
 
   const person = {
@@ -147,10 +162,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
               </span>
               {total > 0 && <span className={styles.likeCount}>{formatCount(total)}</span>}
             </button>
-            {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
-            <button type="button" className={styles.replyMore} aria-label="More options">
-              <Ellipsis size={14} aria-hidden="true" />
-            </button>
+            <PostMenu post={reply} className={styles.replyMore} size={14} />
           </span>
         </header>
 
@@ -202,7 +214,8 @@ export default function PostThread({
     () => distinct([...(post.top_replies ?? []), ...loaded, ...(addedReplies ?? [])]),
     [post.top_replies, loaded, addedReplies],
   );
-  const replies = expanded ? unfolded : folded;
+  const hidden = usePostActions()?.hidden;
+  const replies = (expanded ? unfolded : folded).filter((r) => !hidden?.has(r.id));
 
   const total = Math.max(post.replies_count ?? 0, unfolded.length);
   const canLoad = !exhausted && total > unfolded.length;
@@ -317,6 +330,101 @@ export default function PostThread({
                 Hide replies
               </button>
             )}
+          </div>
+        </li>
+      )}
+    </ul>
+  );
+}
+
+/** The post's own page: every reply, oldest first, `pageSize` at a time.
+    The first page loads by itself; "Load more replies" brings the next. */
+export function PostPageThread({
+  post,
+  showCampus,
+  onReact,
+  loadReplies,
+  loadProfile,
+  addedReplies,
+  pageSize,
+}) {
+  const [loaded, setLoaded] = useState([]);
+  const [cursor, setCursor] = useState(null);
+  const [more, setMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const inFlight = useRef(false);
+  const alive = useRef(true);
+  const hidden = usePostActions()?.hidden;
+
+  const load = useCallback(
+    async (from) => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      setLoading(true);
+      setFailed(false);
+      try {
+        const page = await loadReplies(post.id, from, pageSize);
+        if (!alive.current) return;
+        setLoaded((prev) => [...prev, ...page.items]);
+        setCursor(page.next_cursor);
+        setMore(page.next_cursor !== null);
+      } catch {
+        if (alive.current) setFailed(true);
+      } finally {
+        inFlight.current = false;
+        if (alive.current) setLoading(false);
+      }
+    },
+    [loadReplies, post.id, pageSize],
+  );
+
+  useEffect(() => {
+    alive.current = true;
+    load(null);
+    return () => {
+      alive.current = false;
+    };
+    // Once per post; `load` itself never changes for one post.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+
+  // What you just replied comes after what has loaded. A later page that
+  // brings it again keeps it only once.
+  const replies = distinct([...loaded, ...(addedReplies ?? [])]).filter((r) => !hidden?.has(r.id));
+  const showButton = more || failed;
+
+  if (replies.length === 0 && !showButton) return null;
+
+  return (
+    <ul className={styles.thread} aria-label="Replies">
+      {replies.map((reply) => (
+        <ReplyRow
+          key={reply.id}
+          reply={reply}
+          isAuthor={reply.author_id === post.author_id}
+          showCampus={showCampus}
+          onReact={onReact}
+          loadProfile={loadProfile}
+        />
+      ))}
+      {showButton && (
+        <li className={styles.threadMore}>
+          <Rail />
+          <div className={styles.threadButtons}>
+            <button
+              type="button"
+              className={styles.showMore}
+              onClick={() => load(cursor)}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 size={13} className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={13} aria-hidden="true" />
+              )}
+              {failed ? "Couldn't load replies. Try again" : "Load more replies"}
+            </button>
           </div>
         </li>
       )}
