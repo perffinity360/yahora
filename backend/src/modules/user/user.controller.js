@@ -464,7 +464,7 @@ const foldUsername = (raw) =>
  * `viewerId` may be null (an anonymous caller checking a handle at onboarding),
  * in which case nothing is excluded from the lookups.
  */
-async function classifyUnavailableUsername(username, viewerId = null) {
+async function classifyUnavailableUsername(username, viewerId = null, universityId = null) {
   let takenQuery = supabase
     .from('users')
     .select('id')
@@ -496,6 +496,20 @@ async function classifyUnavailableUsername(username, viewerId = null) {
   if (reserved.data) return 'RESERVED';
   if (taken.data) return 'TAKEN';
   if (released.data?.length) return 'RECENTLY_RELEASED';
+
+  // Phase 7 V-C: the demo. rule (runbook §1.11). A real student asking for
+  // demo.x, or a demo account asking for a plain name, breaks it, and that is
+  // RESERVED, not a format error. The rule is stated once, in
+  // username_breaks_world_rule(); this only asks it, like the lookups above.
+  // A NULL campus (signed out) counts as real, as it does in the function.
+  // (Edited by Vishwajeet's session on 11 Nov, at his request; see the
+  // changelog entry "user/: demo. names answer RESERVED".)
+  const { data: breaksWorldRule, error: worldError } = await supabase.rpc(
+    'username_breaks_world_rule',
+    { p_username: username, p_university_id: universityId },
+  );
+  if (worldError) throw worldError;
+  if (breaksWorldRule === true) return 'RESERVED';
 
   return 'INVALID_FORMAT';
 }
@@ -561,11 +575,14 @@ export const checkUsernameAvailable = async (req, res) => {
 
     if (isAvailable) return res.json({ available: true });
 
+    // The campus is needed by both: the demo. rule in the classifier and the
+    // campus-style suggestions.
+    const universityId = await getViewerUniversityId(req);
     const [reason, suggestions] = await Promise.all([
-      classifyUnavailableUsername(username, req.user?.id ?? null),
+      classifyUnavailableUsername(username, req.user?.id ?? null, universityId),
       // The rejected handle is the best seed we have for an alternative — it is
       // what the student actually wanted.
-      getViewerUniversityId(req).then((uni) => fetchSuggestions(username, uni)),
+      fetchSuggestions(username, universityId),
     ]);
 
     // RECENTLY_RELEASED is reported as itself here, unlike the onboarding
@@ -802,7 +819,7 @@ export const updateMyUsername = async (req, res) => {
 
     const { data: current, error: currentError } = await supabase
       .from('users')
-      .select('username, username_changed_at')
+      .select('username, username_changed_at, university_id')
       .eq('id', userId)
       .maybeSingle();
 
@@ -846,7 +863,7 @@ export const updateMyUsername = async (req, res) => {
     if (rpcError) return mapDbError(res, rpcError);
 
     if (!isAvailable) {
-      const reason = await classifyUnavailableUsername(username, userId);
+      const reason = await classifyUnavailableUsername(username, userId, current.university_id);
 
       if (reason === 'RESERVED') return sendError(res, 400, 'USERNAME_RESERVED');
       if (reason === 'INVALID_FORMAT') return sendError(res, 400, 'INVALID_FORMAT');

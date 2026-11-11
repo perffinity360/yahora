@@ -12,6 +12,8 @@ import {
     markAsDelivered,
     deleteMessageForEveryone,
     deleteMessageForMe,
+    reactToMessage,
+    removeMessageReaction,
 } from './messages.controller.js';
 import requireAuth from '../../middleware/requireAuth.js';
 
@@ -50,5 +52,11 @@ router.put('/deliver', requireAuth, markAsDelivered);
 // above: each has two segments, the second one fixed.
 router.post('/:id/delete-for-everyone', requireAuth, deleteMessageForEveryone);
 router.post('/:id/delete-for-me', requireAuth, deleteMessageForMe);
+
+// Reactions (Phase 7 V-C). react_to_message() decides who may react; the actor
+// is req.user.id. Two segments with a fixed second one, like the two above, so
+// nothing collides.
+router.put('/:id/reaction', requireAuth, reactToMessage);
+router.delete('/:id/reaction', requireAuth, removeMessageReaction);
 
 export default router;

@@ -30,6 +30,13 @@ const MIN_LENGTH = 3;
 const MAX_LENGTH = 25;
 
 /**
+ * Every demo account's username starts with this (Phase 7, runbook §1.11); the
+ * database refuses anything else. Decided 11 Nov: the field shows it fixed in
+ * front of the input and the student types only the rest. Same on the website.
+ */
+export const DEMO_USERNAME_PREFIX = 'demo.';
+
+/**
  * The charset rule, mirroring the database's own CHECK constraint (migration
  * 005 §3) so the field refuses locally what Postgres would refuse anyway.
  */
@@ -86,9 +93,16 @@ export function UsernameField({
   onSuggestions,
   serverError,
   editable = true,
+  prefix = '',
 }: {
+  /** What the student typed. With a `prefix`, only the part after it. */
   value: string;
   onChangeText: (next: string) => void;
+  /**
+   * Shown fixed in front of the input and added to the value before every
+   * check (`DEMO_USERNAME_PREFIX` for demo accounts). The student can't delete it.
+   */
+  prefix?: string;
   /** Lets the screen block submit until the handle is known to be good. */
   onStatusChange?: (status: UsernameStatus) => void;
   /** Alternatives the server offers when the handle is unavailable. */
@@ -126,7 +140,8 @@ export function UsernameField({
   };
 
   useEffect(() => {
-    const handle = value.trim();
+    const typed = value.trim();
+    const handle = typed ? prefix + typed : '';
 
     if (!handle) {
       setLocalError(null);
@@ -182,7 +197,7 @@ export function UsernameField({
     }, CHECK_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [value]);
+  }, [value, prefix]);
 
   // Submit-time errors outrank the live check: the handle can be taken in the
   // gap between the check passing and the student pressing the button.
@@ -204,15 +219,22 @@ export function UsernameField({
     <View>
       <View style={[styles.inputRow, focused && styles.inputRowFocused]}>
         <Feather name="at-sign" size={18} color={colors.purple} style={styles.inputIcon} />
+        {prefix ? <AppText style={styles.prefix}>{prefix}</AppText> : null}
         <AppTextInput
           value={value}
           // Folded, not rejected. Someone typing a capital is not making a
           // mistake worth an error message — the handle is simply lowercase, so
           // make it lowercase and let them carry on.
-          onChangeText={(next) => onChangeText(next.toLowerCase().trim())}
+          onChangeText={(next) => {
+            let folded = next.toLowerCase().trim();
+            // A pasted "demo.x" becomes x: the prefix is already in front.
+            if (prefix && folded.startsWith(prefix)) folded = folded.slice(prefix.length);
+            onChangeText(folded);
+          }}
+          accessibilityLabel={prefix ? `Username, after ${prefix}` : undefined}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="your.handle"
+          placeholder={prefix ? 'good_bunny' : 'your.handle'}
           placeholderTextColor={colors.mutedPlaceholder}
           style={styles.input}
           autoCapitalize="none"
@@ -221,7 +243,7 @@ export function UsernameField({
           textContentType="username"
           editable={editable}
           returnKeyType="next"
-          maxLength={MAX_LENGTH}
+          maxLength={MAX_LENGTH - prefix.length}
         />
         {status === 'checking' ? (
           <ActivityIndicator size="small" color={colors.purple} />
@@ -266,6 +288,14 @@ const styles = StyleSheet.create({
     borderColor: colors.inputBorderFocus,
   },
   inputIcon: { marginRight: 2 },
+  // Same size and weight as the input, so "demo." + the typed rest read as one
+  // handle; purple marks it as fixed. No gap, so it sits right before the text.
+  prefix: {
+    fontFamily: font.family.semibold,
+    fontSize: font.sizes.bodyLg,
+    color: colors.purple,
+    marginRight: -spacing.sm,
+  },
   input: {
     flex: 1,
     fontFamily: font.family.medium,

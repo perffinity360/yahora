@@ -9,6 +9,8 @@ export interface UserProfile {
   id: string;
   university_id: string;
   full_name: string | null;
+  /** The handle; a demo account's is set at demo login (demo.sunny.otter). */
+  username?: string | null;
   avatar_url: string | null;
   qualification: string | null;
   course_id: string | null;

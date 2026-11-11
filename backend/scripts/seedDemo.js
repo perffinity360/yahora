@@ -99,115 +99,120 @@ const ago = (days = 0, hours = 0) =>
 // true and a NULL handle is rejected by the database — and every persona here
 // is seeded complete.
 //
-// Handles are derived from the persona's real name (rahul.sharma, priya_verma,
-// sid.menon), never user1/test_a — demo screenshots go in front of investors.
-// House rules, a strict subset of the users_username_valid CHECK in migration
-// 005: lowercase, 3–20 characters, [a-z0-9._] only, starts with a letter, no
-// leading or trailing dot/underscore, no doubled dots, and unique across this
-// file. None of them appear in reserved_usernames. assertValidHandles() below
-// enforces all of that before a single row is written.
+// Handles are 'demo.' plus the persona's real name (demo.rahul.sharma,
+// demo.priya_verma, demo.sid.menon), never user1/test_a — demo screenshots go
+// in front of investors. Phase 7 (runbook §1.11): every demo-campus username
+// MUST start with 'demo.' — trg_username_world_prefix refuses anything else
+// with USERNAME_RESERVED — and these are the same names migration
+// demo_usernames gave the personas on production. House rules, a strict subset
+// of the users_username_valid CHECK in migration 005: the demo. prefix,
+// lowercase, 3–20 characters in all (the longest is 18), [a-z0-9._] only,
+// starts with a letter, no leading or trailing dot/underscore, no doubled
+// dots, and unique across this file. None of them appear in
+// reserved_usernames. assertValidHandles() below enforces all of that before a
+// single row is written. The login emails don't change.
 const DUMMY_USERS = [
   {
     email:    'rahul.sharma@demo.yahora.com',
-    username: 'rahul.sharma',
+    username: 'demo.rahul.sharma',
     name:     'Rahul Sharma',
     role:     'B.Tech CSE — Final Year',
     avatar:   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'priya.verma@demo.yahora.com',
-    username: 'priya_verma',
+    username: 'demo.priya_verma',
     name:     'Priya Verma',
     role:     'MBA — 2nd Year',
     avatar:   'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'amit.gupta@demo.yahora.com',
-    username: 'amit.gupta',
+    username: 'demo.amit.gupta',
     name:     'Amit Gupta',
     role:     'M.Tech Electronics — 1st Year',
     avatar:   'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'sarah.khan@demo.yahora.com',
-    username: 'sarah.khan',
+    username: 'demo.sarah.khan',
     name:     'Sarah Khan',
     role:     'B.Des — 3rd Year',
     avatar:   'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'nikhil.bansal@demo.yahora.com',
-    username: 'nikhil_bansal',
+    username: 'demo.nikhil_bansal',
     name:     'Nikhil Bansal',
     role:     'B.Tech AI & Data Science — 3rd Year',
     avatar:   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'meera.joshi@demo.yahora.com',
-    username: 'meera.joshi',
+    username: 'demo.meera.joshi',
     name:     'Meera Joshi',
     role:     'B.Tech ECE — 2nd Year',
     avatar:   'https://images.unsplash.com/photo-1521119989659-a83eee488004?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'arjun.singh@demo.yahora.com',
-    username: 'arjun.singh',
+    username: 'demo.arjun.singh',
     name:     'Arjun Singh',
     role:     'B.Tech IT — Final Year',
     avatar:   'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'ananya.roy@demo.yahora.com',
-    username: 'ananya_roy',
+    username: 'demo.ananya_roy',
     name:     'Ananya Roy',
     role:     'B.Sc Mathematics — 3rd Year',
     avatar:   'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'karthik.reddy@demo.yahora.com',
-    username: 'karthik.reddy',
+    username: 'demo.karthik.reddy',
     name:     'Karthik Reddy',
     role:     'B.Tech Mechanical — 2nd Year',
     avatar:   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'tanya.singh@demo.yahora.com',
-    username: 'tanya.singh',
+    username: 'demo.tanya.singh',
     name:     'Tanya Singh',
     role:     'BBA — 3rd Year',
     avatar:   'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'rohan.patel@demo.yahora.com',
-    username: 'rohan.patel',
+    username: 'demo.rohan.patel',
     name:     'Rohan Patel',
     role:     'B.Tech Civil Engineering — 1st Year',
     avatar:   'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'isha.malhotra@demo.yahora.com',
-    username: 'isha.malhotra',
+    username: 'demo.isha.malhotra',
     name:     'Isha Malhotra',
     role:     'B.Tech CSE — 2nd Year',
     avatar:   'https://images.unsplash.com/photo-1491349174775-aaafddd81942?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'devika.nair@demo.yahora.com',
-    username: 'devika.nair',
+    username: 'demo.devika.nair',
     name:     'Devika Nair',
     role:     'M.Sc Physics — 1st Year',
     avatar:   'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'siddharth.menon@demo.yahora.com',
-    username: 'sid.menon',
+    username: 'demo.sid.menon',
     name:     'Siddharth Menon',
     role:     'B.Tech Electrical Engineering — Final Year',
     avatar:   'https://images.unsplash.com/photo-1463453091185-61582044d556?auto=format&fit=crop&w=150&q=80',
   },
   {
     email:    'zara.ali@demo.yahora.com',
-    username: 'zara.ali',
+    username: 'demo.zara.ali',
     name:     'Zara Ali',
     role:     'B.Des Graphic Design — 2nd Year',
     avatar:   'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&q=80',
@@ -224,6 +229,7 @@ function assertValidHandles(users) {
     const h = u.username;
     const bad =
       typeof h !== 'string'          ? 'missing'
+      : !h.startsWith('demo.')       ? "must start with 'demo.' (runbook §1.11; the database refuses it otherwise)"
       : !/^[a-z][a-z0-9._]*$/.test(h) ? 'illegal characters, or does not start with a lowercase letter'
       : h.length < 3 || h.length > 20 ? 'must be 3–20 characters'
       : /[._]$/.test(h)               ? 'must not end with a dot or underscore'
@@ -844,33 +850,78 @@ const DUMMY_PRODUCTS = [
 
 // ─── 25 COMMUNITY POSTS ───────────────────────────────────────────────────────
 // Written to feel like authentic campus conversations that showcase Yahora's value.
+//
+// Phase 7 shape: each post has a scope — 10 for the campus feed, 9 for India
+// (the demo campus's country) and 6 for Global — and a few have photos
+// (image_urls, up to 3). The BEFORE INSERT trigger fills university_id,
+// country_code and is_demo from the author, so none of them is sent: every row
+// lands in the demo world, which real students never see (runbook §1.11).
+// Photos are the listings' Unsplash images, never files in our 'posts' bucket,
+// so the 90-day purge job leaves them alone.
 const DUMMY_POSTS = [
-  { content: 'Sold my old bicycle in under 2 hours on Yahora. The buyer was literally in the hostel block next to mine 🚴 This is how campus selling is supposed to work.', daysAgo: 0, hoursAgo: 1 },
-  { content: 'MacBook deal done at the library gate. He showed his student ID, I checked the product, we did UPI, and it was done in 10 minutes. Zero anxiety, zero scammers ✅', daysAgo: 0, hoursAgo: 4 },
-  { content: 'MOVE-OUT ALERT 📦 Selling study table, ergonomic chair, mini fridge, and table fan before semester ends. Hostel Block B, Room 204. Pickup this Saturday. DM me here.', daysAgo: 0, hoursAgo: 7 },
-  { content: 'Freshers tip nobody tells you: buy your textbooks on Yahora. Saved ₹2,200 this semester buying second-hand from seniors. Same content, fraction of the price 📚', daysAgo: 1, hoursAgo: 0 },
-  { content: 'PSA: semester end is 3 weeks away. List your hostel furniture NOW before the market floods. Early sellers consistently get 20–30% better prices than last-minute ones 🪑', daysAgo: 1, hoursAgo: 5 },
-  { content: 'The swipe discovery mode is literally Tinder for campus stuff and I am absolutely here for it 😂 Liked 12 items in under 5 minutes without knowing what I was looking for.', daysAgo: 2, hoursAgo: 0 },
-  { content: 'Got my full GATE prep bundle at 55% off from a senior who just cracked it with AIR 47. The trust factor of buying from a verified campus student is genuinely unmatched 🙌', daysAgo: 2, hoursAgo: 8 },
-  { content: 'Tip for sellers: upload multiple photos and be upfront about the condition. My listing with 4 photos got 3× more DMs than my single-photo ones. Transparency = faster sales.', daysAgo: 3, hoursAgo: 0 },
-  { content: 'Anyone selling an electric kettle near Block C? The hostel mess is closed for renovation and I am surviving on Maggi and sheer desperation ☕😭', daysAgo: 3, hoursAgo: 6 },
-  { content: 'Set up my entire hostel room — study table, ergonomic chair, lamp, and mini fridge — for under ₹5,000 total using Yahora. My parents asked how I managed so well on a budget 😄', daysAgo: 4, hoursAgo: 0 },
-  { content: '"Hot at Campus" surfaced my classmate\'s Canon DSLR listing before I even searched for it. The campus-specific algorithm genuinely knows what students here need 📸', daysAgo: 4, hoursAgo: 9 },
-  { content: 'Anyone selling a white lab coat in size M or L? Need it urgently for tomorrow\'s chemistry practical. Can pick up tonight from anywhere on campus 🧪', daysAgo: 5, hoursAgo: 0 },
-  { content: 'Listed 4 items before breakfast and had 3 interested buyers by lunch. The engagement density of a closed campus network is something general marketplaces simply cannot replicate.', daysAgo: 5, hoursAgo: 11 },
-  { content: 'Freshers: this is NOT Facebook Marketplace. Every single person here is a verified student from YOUR campus. No catfishing, no strangers, no fake accounts. Sleep peacefully 💯', daysAgo: 6, hoursAgo: 0 },
-  { content: 'Selling CSE 3rd-sem complete book bundle this Sunday. Used once for mid-sems. Margin notes included free 😅 DM before Sunday morning or they are gone.', daysAgo: 7, hoursAgo: 0 },
-  { content: 'Swipe mode is perfect for hostel boredom at 11 PM. Found a Yamaha acoustic guitar I had no idea I needed until I swiped right on it. Now I play badly but happily 🎸', daysAgo: 9, hoursAgo: 0 },
-  { content: 'Ergonomic chair for ₹4,200 when the exact same model costs ₹11,000 on Amazon. Campus circular economy is genuinely one of the best financial decisions you can make 💺', daysAgo: 12, hoursAgo: 0 },
-  { content: 'Final year here. Listed 9 items across three months before graduation. Sold 7 of them. Yahora essentially funded my farewell dinner and covered my first month\'s deposit 🎓', daysAgo: 14, hoursAgo: 0 },
-  { content: 'The in-app DM makes price negotiation feel natural and private. No awkward WhatsApp groups, no public bidding. Just clean, one-on-one campus commerce. Exactly right.', daysAgo: 16, hoursAgo: 0 },
-  { content: 'Looking for a Yonex badminton racket or a shuttle tube. Budget ₹1,500. I am at the sports complex most evenings. DM if you have one to sell 🏸', daysAgo: 18, hoursAgo: 0 },
-  { content: 'Quick reminder: mark your item as Sold once the deal closes. Keeps listings accurate, builds trust, and helps other buyers stop chasing things that are already gone ✔️', daysAgo: 21, hoursAgo: 0 },
-  { content: 'Been on Yahora for 3 weeks. Already bought a cycle, sold my old monitor, and saved ₹3,800 on textbooks. This thing is quietly becoming an essential campus utility.', daysAgo: 24, hoursAgo: 0 },
-  { content: 'Move-out week every May is the absolute best time to buy furniture. Seniors practically gift things at 70% off because they cannot take them home. Set your notifications now 📲', daysAgo: 28, hoursAgo: 0 },
-  { content: 'Bought a MacBook Air M2 from a final-year student through Yahora — ₹72K versus ₹1.15 lakh new. Battery health 98%. The verified-student layer gave me the confidence to make that call 💻', daysAgo: 32, hoursAgo: 0 },
-  { content: 'Campus-verified access = zero scammers by design. This single feature makes Yahora 10× safer than any open marketplace. Every college in India deserves something like this 🏫', daysAgo: 40, hoursAgo: 0 },
+  { content: 'Sold my old bicycle in under 2 hours on Yahora. The buyer was literally in the hostel block next to mine 🚴 This is how campus selling is supposed to work.', daysAgo: 0, hoursAgo: 1, scope: 'campus', imgs: ['https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=800&q=80'] },
+  { content: 'MacBook deal done at the library gate. He showed his student ID, I checked the product, we did UPI, and it was done in 10 minutes. Zero anxiety, zero scammers ✅', daysAgo: 0, hoursAgo: 4, scope: 'campus' },
+  { content: 'MOVE-OUT ALERT 📦 Selling study table, ergonomic chair, mini fridge, and table fan before semester ends. Hostel Block B, Room 204. Pickup this Saturday. DM me here.', daysAgo: 0, hoursAgo: 7, scope: 'campus', imgs: ['https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?auto=format&fit=crop&w=800&q=80', 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=800&q=80'] },
+  { content: 'Freshers tip nobody tells you: buy your textbooks on Yahora. Saved ₹2,200 this semester buying second-hand from seniors. Same content, fraction of the price 📚', daysAgo: 1, hoursAgo: 0, scope: 'country' },
+  { content: 'PSA: semester end is 3 weeks away. List your hostel furniture NOW before the market floods. Early sellers consistently get 20–30% better prices than last-minute ones 🪑', daysAgo: 1, hoursAgo: 5, scope: 'campus' },
+  { content: 'The swipe discovery mode is literally Tinder for campus stuff and I am absolutely here for it 😂 Liked 12 items in under 5 minutes without knowing what I was looking for.', daysAgo: 2, hoursAgo: 0, scope: 'global' },
+  { content: 'Got my full GATE prep bundle at 55% off from a senior who just cracked it with AIR 47. The trust factor of buying from a verified campus student is genuinely unmatched 🙌', daysAgo: 2, hoursAgo: 8, scope: 'country' },
+  { content: 'Tip for sellers: upload multiple photos and be upfront about the condition. My listing with 4 photos got 3× more DMs than my single-photo ones. Transparency = faster sales.', daysAgo: 3, hoursAgo: 0, scope: 'global' },
+  { content: 'Anyone selling an electric kettle near Block C? The hostel mess is closed for renovation and I am surviving on Maggi and sheer desperation ☕😭', daysAgo: 3, hoursAgo: 6, scope: 'campus' },
+  { content: 'Set up my entire hostel room — study table, ergonomic chair, lamp, and mini fridge — for under ₹5,000 total using Yahora. My parents asked how I managed so well on a budget 😄', daysAgo: 4, hoursAgo: 0, scope: 'country' },
+  { content: '"Hot at Campus" surfaced my classmate\'s Canon DSLR listing before I even searched for it. The campus-specific algorithm genuinely knows what students here need 📸', daysAgo: 4, hoursAgo: 9, scope: 'campus' },
+  { content: 'Anyone selling a white lab coat in size M or L? Need it urgently for tomorrow\'s chemistry practical. Can pick up tonight from anywhere on campus 🧪', daysAgo: 5, hoursAgo: 0, scope: 'campus' },
+  { content: 'Listed 4 items before breakfast and had 3 interested buyers by lunch. The engagement density of a closed campus network is something general marketplaces simply cannot replicate.', daysAgo: 5, hoursAgo: 11, scope: 'global' },
+  { content: 'Freshers: this is NOT Facebook Marketplace. Every single person here is a verified student from YOUR campus. No catfishing, no strangers, no fake accounts. Sleep peacefully 💯', daysAgo: 6, hoursAgo: 0, scope: 'country' },
+  { content: 'Selling CSE 3rd-sem complete book bundle this Sunday. Used once for mid-sems. Margin notes included free 😅 DM before Sunday morning or they are gone.', daysAgo: 7, hoursAgo: 0, scope: 'campus' },
+  { content: 'Swipe mode is perfect for hostel boredom at 11 PM. Found a Yamaha acoustic guitar I had no idea I needed until I swiped right on it. Now I play badly but happily 🎸', daysAgo: 9, hoursAgo: 0, scope: 'global' },
+  { content: 'Ergonomic chair for ₹4,200 when the exact same model costs ₹11,000 on Amazon. Campus circular economy is genuinely one of the best financial decisions you can make 💺', daysAgo: 12, hoursAgo: 0, scope: 'country' },
+  { content: 'Final year here. Listed 9 items across three months before graduation. Sold 7 of them. Yahora essentially funded my farewell dinner and covered my first month\'s deposit 🎓', daysAgo: 14, hoursAgo: 0, scope: 'country' },
+  { content: 'The in-app DM makes price negotiation feel natural and private. No awkward WhatsApp groups, no public bidding. Just clean, one-on-one campus commerce. Exactly right.', daysAgo: 16, hoursAgo: 0, scope: 'global' },
+  { content: 'Looking for a Yonex badminton racket or a shuttle tube. Budget ₹1,500. I am at the sports complex most evenings. DM if you have one to sell 🏸', daysAgo: 18, hoursAgo: 0, scope: 'campus' },
+  { content: 'Quick reminder: mark your item as Sold once the deal closes. Keeps listings accurate, builds trust, and helps other buyers stop chasing things that are already gone ✔️', daysAgo: 21, hoursAgo: 0, scope: 'campus' },
+  { content: 'Been on Yahora for 3 weeks. Already bought a cycle, sold my old monitor, and saved ₹3,800 on textbooks. This thing is quietly becoming an essential campus utility.', daysAgo: 24, hoursAgo: 0, scope: 'global' },
+  { content: 'Move-out week every May is the absolute best time to buy furniture. Seniors practically gift things at 70% off because they cannot take them home. Set your notifications now 📲', daysAgo: 28, hoursAgo: 0, scope: 'country' },
+  { content: 'Bought a MacBook Air M2 from a final-year student through Yahora — ₹72K versus ₹1.15 lakh new. Battery health 98%. The verified-student layer gave me the confidence to make that call 💻', daysAgo: 32, hoursAgo: 0, scope: 'country', imgs: ['https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80'] },
+  { content: 'Campus-verified access = zero scammers by design. This single feature makes Yahora 10× safer than any open marketplace. Every college in India deserves something like this 🏫', daysAgo: 40, hoursAgo: 0, scope: 'country' },
 ];
+
+// ─── REPLIES BETWEEN PERSONAS ─────────────────────────────────────────────────
+// `post` is the index in DUMMY_POSTS, `by` the index in DUMMY_USERS, `after` the
+// minutes after the post. A post's author is DUMMY_USERS[(post + 2) % 15]; a
+// few reply under their own post, so the author highlight shows. Replies carry
+// no scope: the trigger copies the post's.
+const DUMMY_REPLIES = [
+  { post: 0,  by: 5,  after: 12,   content: 'Which block? I have been hunting for a cycle since August 😭' },
+  { post: 0,  by: 2,  after: 20,   content: 'Block D! Sorry Meera, it is gone already. Keep an eye on Vehicles, two more went up today.' },
+  { post: 1,  by: 11, after: 30,   content: 'The library gate is basically the official Yahora exchange point at this point 😂' },
+  { post: 2,  by: 8,  after: 60,   content: 'Is the mini fridge still there? I can come on Saturday morning.' },
+  { post: 2,  by: 4,  after: 90,   content: 'Yes! Saturday 10 AM works. Room 204.' },
+  { post: 3,  by: 13, after: 120,  content: 'Same here. Bought my whole 2nd-year set for less than one new book.' },
+  { post: 5,  by: 9,  after: 180,  content: 'Swipe mode at 1 AM is dangerous for my wallet 💸' },
+  { post: 5,  by: 1,  after: 300,  content: 'Liked 40 things, bought zero. Window shopping is free at least 😅' },
+  { post: 6,  by: 0,  after: 240,  content: 'AIR 47 is unreal. Did they include their notes too?' },
+  { post: 6,  by: 8,  after: 360,  content: 'Yes, full handwritten notes for every subject.' },
+  { post: 8,  by: 6,  after: 60,   content: 'I have a spare one. Message me, you can have it for ₹300.' },
+  { post: 9,  by: 12, after: 1200, content: 'Saving this for when I move rooms next semester 📌' },
+  { post: 11, by: 3,  after: 40,   content: 'I have a size M, barely used. Sending you a message now!' },
+  { post: 13, by: 14, after: 300,  content: 'This is the main reason my parents let me buy a used laptop 🙏' },
+  { post: 15, by: 10, after: 120,  content: 'Playing badly but happily is the only way to play 🎸' },
+  { post: 19, by: 0,  after: 180,  content: 'There is a pair of Yonex Arcsabers listed under Sports right now!' },
+  { post: 23, by: 7,  after: 480,  content: '98% battery health at ₹72K is a steal.' },
+  { post: 24, by: 4,  after: 1440, content: 'Agreed. Sharing this with my cousin at IIT Madras.' },
+];
+
+// ─── REACTIONS ────────────────────────────────────────────────────────────────
+// How many personas react to each post, index-aligned to DUMMY_POSTS, and
+// deliberately uneven, with real zeros: a uniform count is the tell that data
+// is seeded. Who reacts and with what follows a fixed pattern, so every run
+// (and every screenshot) looks the same. The author never reacts to their own
+// post. Replies get a few ❤️ likes, the only reaction a reply has (spec §4).
+const POST_REACTION_COUNTS = [11, 9, 6, 8, 3, 12, 10, 4, 7, 5, 2, 6, 0, 13, 4,
+                              7, 9, 6, 1, 3, 2, 8, 5, 10, 12];
+const REACTION_CYCLE = ['❤️', '❤️', '😂', '👍', '❤️', '🙏', '😮', '👍', '😢', '❤️'];
+const REPLY_LIKE_COUNTS = [3, 2, 4, 1, 0, 2, 5, 3, 2, 1, 4, 0, 2, 3, 1, 2, 3, 1];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -1088,33 +1139,144 @@ async function seedSandbox() {
       }
     }
 
-    // ── Posts ─────────────────────────────────────────────────────────────────
+    // ── Posts, replies and reactions (Phase 7 shape) ─────────────────────────
+    //
+    // RE-RUNS: every row here is authored by a demo persona, and posts,
+    // replies and post_reactions all cascade from public.users, so the guarded
+    // delete at the top of the run already removed the previous run's
+    // community. Each run therefore starts from an empty demo community and
+    // writes it again; no extra delete statement is needed (same reasoning as
+    // the engagement section below).
+    //
+    // ISOLATION: nothing here names a campus, a country or a world. The
+    // BEFORE INSERT trigger (prepare_post) fills them from the author, and every
+    // author is one of the 15 personas created above on the demo campus. The
+    // check after the inserts proves it rather than trusting it.
+    //
+    // RATE LIMITS: the trigger counts posts created in the last hour, and these
+    // carry their own created_at in the past, so they never trip it.
     console.log(`\n💬  Seeding ${DUMMY_POSTS.length} community posts...`);
 
+    const postIds = [];
+    const postAuthor = (i) => userIds[(i + 2) % userIds.length];
+
     for (let i = 0; i < DUMMY_POSTS.length; i++) {
-      const post     = DUMMY_POSTS[i];
-      const authorId = userIds[(i + 2) % userIds.length];
+      const post = DUMMY_POSTS[i];
+      const { data: row, error: postErr } = await supabase
+        .from('posts')
+        .insert([{
+          author_id:  postAuthor(i),
+          scope:      post.scope,
+          content:    post.content,
+          image_urls: post.imgs ?? [],
+          created_at: ago(post.daysAgo, post.hoursAgo),
+        }])
+        .select('id')
+        .single();
+      if (postErr) throw postErr;
+      postIds.push(row.id);
+      postsWritten += 1;
+      console.log(`   ✓ Post ${i + 1} [${post.scope}]: "${post.content.slice(0, 50)}..."`);
+    }
 
-      // Scoped to the demo tenant, same reasoning as the product check above.
-      const exists = await maybeSingle(
-        supabase.from('posts').select('id')
-          .eq('university_id', demoUniId)
-          .eq('content', post.content)
-      );
+    console.log(`\n↩️   Seeding ${DUMMY_REPLIES.length} replies...`);
+    let repliesWritten = 0;
+    const replyIds = [];
 
-      if (!exists) {
-        const { error: postErr } = await supabase.from('posts').insert([{
-          author_id:     authorId,
-          university_id: demoUniId,
-          content:       post.content,
-          created_at:    ago(post.daysAgo, post.hoursAgo),
-        }]);
-        if (postErr) throw postErr;
-        postsWritten += 1;
-        console.log(`   ✓ Post ${i + 1}: "${post.content.slice(0, 60)}..."`);
-      } else {
-        console.log(`   ↩ Already exists (post ${i + 1})`);
+    for (const r of DUMMY_REPLIES) {
+      const parent = DUMMY_POSTS[r.post];
+      const at = new Date(Date.parse(ago(parent.daysAgo, parent.hoursAgo)) + r.after * 60_000);
+      if (at.getTime() >= Date.now()) {
+        throw new Error(`Reply to post ${r.post + 1} would be in the future; shorten its "after".`);
       }
+      const { data: row, error: replyErr } = await supabase
+        .from('posts')
+        .insert([{
+          author_id:      userIds[r.by],
+          parent_post_id: postIds[r.post],
+          content:        r.content,
+          created_at:     at.toISOString(),
+        }])
+        .select('id')
+        .single();
+      if (replyErr) throw replyErr;
+      replyIds.push(row.id);
+      repliesWritten += 1;
+    }
+    console.log(`   ✓ ${repliesWritten} replies`);
+
+    console.log('\n😂  Seeding reactions...');
+    const reactionRows = [];
+
+    DUMMY_POSTS.forEach((_, i) => {
+      const author = postAuthor(i);
+      let added = 0;
+      for (let step = 0; added < POST_REACTION_COUNTS[i] && step < userIds.length; step++) {
+        const reactor = userIds[(i * 4 + 1 + step) % userIds.length];
+        if (reactor === author) continue;
+        reactionRows.push({
+          post_id: postIds[i],
+          user_id: reactor,
+          emoji:   REACTION_CYCLE[(i + added) % REACTION_CYCLE.length],
+        });
+        added += 1;
+      }
+    });
+
+    DUMMY_REPLIES.forEach((r, j) => {
+      const author = userIds[r.by];
+      let added = 0;
+      for (let step = 0; added < REPLY_LIKE_COUNTS[j] && step < userIds.length; step++) {
+        const reactor = userIds[(j * 3 + 2 + step) % userIds.length];
+        if (reactor === author) continue;
+        reactionRows.push({ post_id: replyIds[j], user_id: reactor, emoji: '❤️' });
+        added += 1;
+      }
+    });
+
+    // The counts on each post (reactions_total, reaction_counts) are kept by
+    // trg_sync_post_reaction_counts, never written here.
+    const { error: reactErr } = await supabase.from('post_reactions').insert(reactionRows);
+    if (reactErr) throw reactErr;
+    const reactionsWritten = reactionRows.length;
+    console.log(`   ✓ ${reactionsWritten} reactions`);
+
+    // Hot scores. The trigger scores every new post as if it were brand new,
+    // and the refresh-hot-scores job only rescores the last 7 days of country
+    // and Global posts, so a seeded post from 40 days ago would sit at the top
+    // of Hot for good. Each top-level post is scored once here with the
+    // database's own formula (post_hot_score), from its real reactions,
+    // replies and age.
+    const { data: scored, error: scoredErr } = await supabase
+      .from('posts')
+      .select('id, reactions_total, replies_count, created_at')
+      .in('id', postIds);
+    if (scoredErr) throw scoredErr;
+
+    for (const row of scored) {
+      const { data: hot, error: hotErr } = await supabase.rpc('post_hot_score', {
+        p_reactions: row.reactions_total,
+        p_replies:   row.replies_count,
+        p_age_hours: (Date.now() - Date.parse(row.created_at)) / 3_600_000,
+      });
+      if (hotErr) throw hotErr;
+      const { error: setErr } = await supabase.from('posts').update({ hot_score: hot }).eq('id', row.id);
+      if (setErr) throw setErr;
+    }
+
+    // Proof, not trust: every row just written is in the demo world, on the
+    // demo campus.
+    const { data: written, error: writtenErr } = await supabase
+      .from('posts')
+      .select('id, university_id, is_demo')
+      .in('id', [...postIds, ...replyIds]);
+    if (writtenErr) throw writtenErr;
+    const strays = written.filter((w) => w.university_id !== demoUniId || w.is_demo !== true);
+    if (strays.length > 0 || written.length !== postIds.length + replyIds.length) {
+      throw new Error(
+        `Refusing to continue: ${strays.length} seeded post(s) are not in the demo world ` +
+        `(or ${postIds.length + replyIds.length - written.length} went missing).`
+      );
     }
 
     // ── Engagement ────────────────────────────────────────────────────────────
@@ -1353,6 +1515,8 @@ async function seedSandbox() {
     console.log(`   Users        : ${usersWritten} created`);
     console.log(`   Products     : ${productsWritten} created`);
     console.log(`   Posts        : ${postsWritten} created`);
+    console.log(`   Replies      : ${repliesWritten} created`);
+    console.log(`   Reactions    : ${reactionsWritten} created (on posts and replies)`);
     console.log(`   Likes        : ${likesWritten} created`);
     console.log(`   Saves        : ${savesWritten} created`);
     console.log(`   Comments     : ${commentsWritten} created (on listings)`);

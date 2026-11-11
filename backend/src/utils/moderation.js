@@ -216,3 +216,142 @@ export async function checkContent({ text, images = [] } = {}, { timeoutMs = DEF
     clearTimeout(timer);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE RE-CHECK JOB (Phase 7 V-C, runbook §1.6) — run every 10 minutes from
+// utils/cronJobs.js.
+//
+// A post whose check couldn't run at posting time waits as 'pending' with no
+// moderation_checked_at ("Being checked"). This checks up to 20 of them, OLDEST
+// FIRST and with no time window, so it catches up after any outage or a server
+// that slept. For each one:
+//
+//   a photo can't be fetched or read  → moderation_photo_failures + 1, next post.
+//                                        At 6 (about an hour) the job stops
+//                                        picking it up, so missing photos can't
+//                                        block the queue; it stays held for review
+//   still not checked (OpenAI down)   → left for the next run. Never counted as
+//                                        a photo failure: an outage must not use
+//                                        up a post's tries
+//   publish                           → 'active'
+//   nudge                             → 'active' and moderation_flagged, as if
+//                                        the author chose "Post anyway" (they
+//                                        aren't there to be asked)
+//   hold                              → stays 'pending', moderation_support set
+//
+// Every write is conditional on the post still being unchecked and pending, so
+// an author deleting it or anything else changing it meanwhile wins.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const RECHECK_BATCH = 20;
+const RECHECK_MAX_PHOTO_FAILURES = 6;
+const RECHECK_TIMEOUT_MS = 15000;
+const PHOTO_FETCH_TIMEOUT_MS = 15000;
+
+/** One stored photo as the check wants it, or null if it can't be fetched or read. */
+async function fetchStoredPhoto(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(PHOTO_FETCH_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const image = {
+      buffer: Buffer.from(await response.arrayBuffer()),
+      mimetype: response.headers.get('content-type') ?? '',
+    };
+    return (await isReadablePhoto(image)) ? image : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The fields each outcome saves. Mirrors what POST /api/posts saves for a checked post. */
+function recheckFields(result) {
+  const checked = { moderation_scores: result.scores, moderation_checked_at: new Date().toISOString() };
+  if (result.outcome === 'hold') {
+    return { ...checked, moderation_support: result.support === true };
+  }
+  return { ...checked, moderation_status: 'active', moderation_flagged: result.outcome === 'nudge' };
+}
+
+/**
+ * Checks the oldest unchecked posts once. Never throws: the caller logs the
+ * summary it returns, `{ picked, published, nudged, held, unchecked, photoFailures, errors }`.
+ */
+export async function recheckUncheckedPosts() {
+  // Loaded here, not at the top: config/supabase.js throws without the Supabase
+  // variables, and scripts/try-moderation.mjs and moderation-benchmark.mjs
+  // import this file with only the OpenAI key set.
+  const { supabase } = await import('../config/supabase.js');
+  const summary = { picked: 0, published: 0, nudged: 0, held: 0, unchecked: 0, photoFailures: 0, errors: 0 };
+
+  const { data: posts, error } = await supabase
+    .from('posts')
+    .select('id, content, image_urls, moderation_photo_failures')
+    .eq('moderation_status', 'pending')
+    .is('moderation_checked_at', null)
+    .is('deleted_at', null)
+    .lt('moderation_photo_failures', RECHECK_MAX_PHOTO_FAILURES)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(RECHECK_BATCH);
+
+  if (error) {
+    console.error('[moderation] re-check could not list posts:', error.message);
+    summary.errors += 1;
+    return summary;
+  }
+
+  summary.picked = posts.length;
+
+  // One post at a time: at most 20 posts × (1 + 3) requests, and nobody is
+  // waiting on the answer.
+  for (const post of posts) {
+    try {
+      const images = [];
+      for (const url of post.image_urls ?? []) {
+        const image = await fetchStoredPhoto(url);
+        if (!image) break;
+        images.push(image);
+      }
+
+      // A missing or unreadable photo: count it, and move on.
+      if (images.length !== (post.image_urls ?? []).length) {
+        const { error: failError } = await supabase
+          .from('posts')
+          .update({ moderation_photo_failures: post.moderation_photo_failures + 1 })
+          .eq('id', post.id)
+          .eq('moderation_photo_failures', post.moderation_photo_failures)
+          .eq('moderation_status', 'pending')
+          .is('moderation_checked_at', null);
+        if (failError) throw failError;
+        summary.photoFailures += 1;
+        continue;
+      }
+
+      const result = await checkContent({ text: post.content, images }, { timeoutMs: RECHECK_TIMEOUT_MS });
+
+      // OpenAI is still unreachable: try again next run, with no penalty.
+      if (!result.checked) {
+        summary.unchecked += 1;
+        continue;
+      }
+
+      const { error: saveError } = await supabase
+        .from('posts')
+        .update(recheckFields(result))
+        .eq('id', post.id)
+        .eq('moderation_status', 'pending')
+        .is('moderation_checked_at', null);
+      if (saveError) throw saveError;
+
+      if (result.outcome === 'publish') summary.published += 1;
+      else if (result.outcome === 'nudge') summary.nudged += 1;
+      else summary.held += 1;
+    } catch (err) {
+      // One post's failure never stops the others. Its id only, never its text.
+      console.error(`[moderation] re-check of post ${post.id} failed:`, err?.message ?? err);
+      summary.errors += 1;
+    }
+  }
+
+  return summary;
+}
