@@ -6,9 +6,10 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '../AppText';
 import { Avatar } from '../Avatar';
+import { MoreButton } from './PostActions';
 import { PostGif } from './PostMedia';
 import { PostText } from './PostText';
-import { useThreadReplies } from '../../hooks/useCommunity';
+import { usePostPageReplies, useThreadReplies } from '../../hooks/useCommunity';
 import {
   DEFAULT_REACTION,
   distinctById,
@@ -181,16 +182,8 @@ const ReplyRow = memo(function ReplyRow({
               <AppText style={[styles.likeCount, mine && styles.likeCountMine]}>{formatCount(total)}</AppText>
             ) : null}
           </Pressable>
-          {/* ⋯ — Report and Delete arrive in part 3 (CC-V4c). */}
-          <Pressable
-            onPress={() => {}}
-            hitSlop={{ top: 12, bottom: 12, left: 4, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel="More"
-            style={({ pressed }) => [styles.replyMore, pressed && styles.pressed]}
-          >
-            <Feather name="more-horizontal" size={14} color={colors.communityMuted} />
-          </Pressable>
+          {/* ⋯ — Report, or Delete on your own (PostActionsProvider). */}
+          <MoreButton post={reply} size={14} style={styles.replyMore} />
         </View>
         {showCampus ? (
           <AppText numberOfLines={1} style={styles.replyByline}>
@@ -416,4 +409,90 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: colors.communityMuted,
   },
+});
+
+/**
+ * A post's own page (spec §4): every reply, in the API's order, a page at a
+ * time behind "Load more replies" (a button, not infinite scroll). The first
+ * page loads by itself. A reply you just wrote goes at the end of what has
+ * loaded (useCreatePost); a later page that brings it again keeps it once.
+ */
+export const PostPageThread = memo(function PostPageThread({
+  post,
+  showCampus,
+  zone,
+  playing,
+  onReact,
+  onOpenProfile,
+}: {
+  post: PostItem;
+  showCampus: boolean;
+  zone: Zone;
+  playing: boolean;
+  onReact: (post: PostItem, emoji: string | null) => void;
+  onOpenProfile: (userId: string) => void;
+}) {
+  const thread = usePostPageReplies(post.id, true);
+  const replies = useMemo(
+    () => distinctById(thread.data?.pages.flatMap((p) => p?.items ?? []) ?? []),
+    [thread.data],
+  );
+  const failed = thread.isError && !thread.isFetching;
+  const loadingFirst = thread.isLoading;
+  const showButton = !loadingFirst && (thread.hasNextPage || failed);
+
+  if (loadingFirst) {
+    return (
+      <View style={[styles.reply, { paddingTop: ROW_TOP + THREAD_LEAD }]}>
+        <Rail zone={zone} top={ROW_TOP + THREAD_LEAD} last />
+        <View style={styles.threadButtons}>
+          <ActivityIndicator size={12} color={colors.communityMuted} />
+        </View>
+      </View>
+    );
+  }
+  if (replies.length === 0 && !showButton) return null;
+
+  return (
+    <View accessibilityLabel="Replies">
+      {replies.map((reply, i) => (
+        <ReplyRow
+          key={reply.id}
+          reply={reply}
+          isAuthor={reply.author_id === post.author_id}
+          showCampus={showCampus}
+          zone={zone}
+          first={i === 0}
+          last={!showButton && i === replies.length - 1}
+          playing={playing}
+          onReact={onReact}
+          onOpenProfile={onOpenProfile}
+        />
+      ))}
+      {showButton ? (
+        <View style={[styles.reply, { paddingTop: replies.length === 0 ? ROW_TOP + THREAD_LEAD : ROW_TOP }]}>
+          <Rail zone={zone} top={replies.length === 0 ? ROW_TOP + THREAD_LEAD : ROW_TOP} last />
+          <View style={styles.threadButtons}>
+            <Pressable
+              onPress={() => void (failed && !thread.data ? thread.refetch() : thread.fetchNextPage())}
+              disabled={thread.isFetchingNextPage}
+              hitSlop={{ top: 12, bottom: 12 }}
+              accessibilityRole="button"
+              accessibilityState={{ busy: thread.isFetchingNextPage }}
+              style={({ pressed }) => [styles.threadButton, pressed && styles.pressed]}
+            >
+              {thread.isFetchingNextPage ? (
+                <ActivityIndicator size={12} color={colors.communityMuted} />
+              ) : (
+                <Feather name="chevron-down" size={13} color={colors.communityMuted} />
+              )}
+              <AppText style={styles.threadButtonText}>
+                {failed ? "Couldn't load replies. Try again" : 'Load more replies'}
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
 });

@@ -30,6 +30,8 @@ export const ComposerDock = memo(function ComposerDock({
   avatarUri,
   onOpen,
   onPhotos,
+  reply = false,
+  bottomInset = 0,
 }: {
   zone: 'campus' | 'world';
   hint: string;
@@ -37,12 +39,17 @@ export const ComposerDock = memo(function ComposerDock({
   avatarName?: string | null;
   avatarUri?: string | null;
   onOpen: () => void;
-  onPhotos: () => void;
+  onPhotos?: () => void;
+  /** A post page's reply bar: no photo button (replies take none), `Reply`. */
+  reply?: boolean;
+  /** Where nothing sits under the dock (a post page, no tab bar), it runs on
+   *  behind the phone's own bar in the same colour (DESIGN.md "Surfaces"). */
+  bottomInset?: number;
 }) {
   const outline = zone === 'campus' ? colors.purpleDark : colors.pinkDark;
   const pill = zone === 'campus' ? colors.purpleDark : colors.communityWorldStrong;
   return (
-    <View style={styles.dock}>
+    <View style={[styles.dock, bottomInset ? { height: DOCK_HEIGHT + bottomInset, paddingBottom: bottomInset } : null]}>
       <Pressable
         onPress={onOpen}
         accessibilityRole="button"
@@ -53,17 +60,19 @@ export const ComposerDock = memo(function ComposerDock({
         <AppText numberOfLines={1} style={[styles.hint, draft ? styles.draft : null]}>
           {draft || hint}
         </AppText>
-        <Pressable
-          onPress={onPhotos}
-          hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel="Add photos"
-          style={({ pressed }) => [styles.photo, pressed && styles.pressed]}
-        >
-          <Feather name="image" size={18} color={pill} />
-        </Pressable>
+        {!reply && onPhotos ? (
+          <Pressable
+            onPress={onPhotos}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Add photos"
+            style={({ pressed }) => [styles.photo, pressed && styles.pressed]}
+          >
+            <Feather name="image" size={18} color={pill} />
+          </Pressable>
+        ) : null}
         <View style={[styles.post, { backgroundColor: pill }]} pointerEvents="none">
-          <AppText style={styles.postText}>Post</AppText>
+          <AppText style={styles.postText}>{reply ? 'Reply' : 'Post'}</AppText>
         </View>
       </Pressable>
     </View>

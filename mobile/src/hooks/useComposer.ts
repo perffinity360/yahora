@@ -288,8 +288,8 @@ export function useComposer({
 }
 
 /** A half-written post for this destination, if there is one (the dock shows it). */
-export function draftFor(scope: 'campus' | 'country' | 'global'): string | null {
-  const d = drafts.get(`post:${scope}`);
+export function draftFor(scope: 'campus' | 'country' | 'global', parentId?: string | null): string | null {
+  const d = drafts.get(parentId ? `reply:${parentId}` : `post:${scope}`);
   if (!d) return null;
   return d.text.trim() || (d.gif ? 'GIF' : d.photos.length ? `${d.photos.length} photo${d.photos.length > 1 ? 's' : ''}` : null);
 }

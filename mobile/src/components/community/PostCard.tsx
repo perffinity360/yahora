@@ -10,7 +10,9 @@ import { Skeleton } from '../Skeleton';
 import { ZoomableImageViewer } from '../ZoomableImageViewer';
 import { PostGif, PostPhotos } from './PostMedia';
 import { PostText } from './PostText';
-import { LINE_W, LINE_X, PostThread } from './PostThread';
+import { MoreButton } from './PostActions';
+import { SupportCard } from './SupportCard';
+import { LINE_W, LINE_X, PostPageThread, PostThread } from './PostThread';
 import { ReactButton, type ReactButtonHandle } from './ReactionBar';
 import { ReactionSummary } from './ReactionSummary';
 import { formatCount, formatPostTime, REACTION_LONG_PRESS_MS } from '../../lib/community';
@@ -73,6 +75,8 @@ export const PostCard = memo(function PostCard({
   onOpenProfile,
   onOpenPost,
   onReply,
+  variant = 'feed',
+  showSupport = false,
 }: {
   post: PostItem;
   index: number;
@@ -86,7 +90,14 @@ export const PostCard = memo(function PostCard({
   onOpenPost: (postId: string) => void;
   /** Where you can reply: 💬 opens the compose screen as a reply (spec §3). */
   onReply: (post: PostItem) => void;
+  /** 'page': the post's own page (spec §4) — text at 15/22, never folded, and
+   *  every reply, paged, instead of the feed's preview. */
+  variant?: 'feed' | 'page';
+  /** Your own Posts tab: a post held for self-harm carries the support card
+   *  under it, without Close (spec §2.4, `moderation_support`). */
+  showSupport?: boolean;
 }) {
+  const onPage = variant === 'page';
   const reactRef = useRef<ReactButtonHandle>(null);
   const [viewerAt, setViewerAt] = useState<number | null>(null);
   const [moreRequest, setMoreRequest] = useState(0);
@@ -167,21 +178,13 @@ export const PostCard = memo(function PostCard({
               ) : null}
               {status ? <AppText style={styles.status}>{status}</AppText> : null}
               <View style={styles.headerSpacer} />
-              {/* ⋯ — Report and Delete arrive in part 3 (CC-V4c). */}
-              <Pressable
-                onPress={() => {}}
-                hitSlop={{ top: 12, bottom: 12, left: 8, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="More"
-                style={({ pressed }) => [styles.more, pressed && styles.pressedFade]}
-              >
-                <Feather name="more-horizontal" size={15} color={colors.communityMuted} />
-              </Pressable>
+              {/* ⋯ — Report, or Delete on your own (PostActionsProvider). */}
+              <MoreButton post={post} style={styles.more} />
             </View>
 
             {post.content ? (
               <View style={styles.text}>
-                <PostText key={post.id} content={post.content} />
+                <PostText key={post.id} content={post.content} variant={onPage ? 'page' : 'post'} />
               </View>
             ) : null}
 
@@ -197,11 +200,7 @@ export const PostCard = memo(function PostCard({
             {post.gif ? <PostGif gif={post.gif} playing={playing} /> : null}
 
             <View style={styles.actions}>
-              <ReactionSummary
-                counts={post.reaction_counts}
-                total={post.reactions_total}
-                mine={post.viewer_reaction}
-              />
+              <ReactionSummary post={post} onReact={react} />
               <ReactButton ref={reactRef} reaction={post.viewer_reaction} onReact={react} />
               <Pressable
                 onPress={onReplyPress}
@@ -217,16 +216,32 @@ export const PostCard = memo(function PostCard({
           </View>
         </View>
 
-        <PostThread
-          key={post.id}
-          post={post}
-          showCampus={showCampus}
-          zone={zone}
-          playing={playing}
-          moreRequest={moreRequest}
-          onReact={onReact}
-          onOpenProfile={onOpenProfile}
-        />
+        {onPage ? (
+          <PostPageThread
+            post={post}
+            showCampus={showCampus}
+            zone={zone}
+            playing={playing}
+            onReact={onReact}
+            onOpenProfile={onOpenProfile}
+          />
+        ) : (
+          <PostThread
+            key={post.id}
+            post={post}
+            showCampus={showCampus}
+            zone={zone}
+            playing={playing}
+            moreRequest={moreRequest}
+            onReact={onReact}
+            onOpenProfile={onOpenProfile}
+          />
+        )}
+        {showSupport && post.moderation_support ? (
+          <View style={styles.support}>
+            <SupportCard />
+          </View>
+        ) : null}
       </Pressable>
 
       {viewerAt !== null ? (
@@ -340,7 +355,7 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { flexGrow: 1, flexShrink: 0, minWidth: 4 },
   more: { height: AVATAR, justifyContent: 'center', paddingLeft: 4 },
-  pressedFade: { opacity: 0.55 },
+  support: { marginTop: 10 },
   text: { marginTop: 1 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   replyPill: {

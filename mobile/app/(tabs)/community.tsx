@@ -2,7 +2,8 @@ import Feather from '@expo/vector-icons/Feather';
 import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-list';
 import { useIsFocused, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { AppState, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import Reanimated, { Easing, FadeOut, Keyframe } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../../src/components/AppText';
@@ -10,22 +11,30 @@ import { AppToast, useToast } from '../../src/components/AppToast';
 import { CommunitySwitcher, SWITCHER_HEIGHT, worldLabel } from '../../src/components/community/CommunitySwitcher';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
 import { ComposerDock, DOCK_HEIGHT } from '../../src/components/community/ComposerDock';
+import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { onComposeResult, useCountries, useFeed, useReact } from '../../src/hooks/useCommunity';
+import {
+  onComposeResult,
+  useCountries,
+  useFeed,
+  useNewCampusCount,
+  useReact,
+  useShowNewCampusPosts,
+} from '../../src/hooks/useCommunity';
 import { COMPOSER_TEXT, draftFor } from '../../src/hooks/useComposer';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import { GLOBAL, type FeedKind, type FeedSort, type WorldFeed } from '../../src/lib/community';
 import { hrefWithFrom } from '../../src/lib/nav';
-import { colors, font } from '../../src/theme';
+import { colors, font, shadows } from '../../src/theme';
 import type { Country, PostItem } from '../../src/types';
 
 /**
- * The Community tab — COMMUNITY_SPEC.md §1.2 (a phone), §3, §9. Phase 7 V-D,
- * parts 1 and 2 (CC-V4a, CC-V4b): the switcher, the three feeds, the post
- * card and reactions on it, and the closed composer in its dock, which opens
- * the compose screen (app/compose.tsx). The post page, ⊕, the breakdown,
- * report and delete (part 3) come next.
+ * The Community tab — COMMUNITY_SPEC.md §1.2 (a phone), §3, §8, §9. Phase 7
+ * V-D (CC-V4a–c): the switcher, the three feeds, the post card with its
+ * reactions and ⋯ menu (PostActionsProvider: report, delete, the full picker,
+ * the breakdown), the closed composer in its dock, which opens the compose
+ * screen (app/compose.tsx), and the "new posts" pill on the campus feed.
  *
  *   · one feed at a time: your campus (newest first), or a country / Global
  *     (Hot or New). Each feed shows only its own posts (runbook §1.1);
@@ -45,6 +54,16 @@ const memory: { side: 'campus' | 'world'; world: WorldFeed | null; sort: FeedSor
 };
 
 const VIEWABILITY = { itemVisiblePercentThreshold: 25 };
+
+/* Not in the spec: it has no words for this. The website's text. */
+const NEW_POSTS_FAILED = "Couldn't load new posts. Try again.";
+
+/* Spec §8: in, it slides down 8 and fades in over 200 ms (communityEase);
+   Reanimated skips it with reduced motion. */
+const PILL_IN = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: -8 }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }], easing: Easing.bezier(0.2, 0.8, 0.2, 1) },
+}).duration(200);
 const SKELETONS = [0, 1, 2];
 
 export default function CommunityScreen() {
@@ -155,6 +174,35 @@ export default function CommunityScreen() {
     return unsubscribe;
   }, [navigation]);
 
+  /* ── The "new posts" pill (spec §8), the campus feed only ──
+     "New" is newer than the newest post shown: it moves on every load and
+     when your own post goes on top, so the pill only counts posts you can't
+     see yet. `since` is 1 ms after it (the API reads milliseconds, the
+     database keeps microseconds). An empty feed counts from when it loaded.
+     Asked every NEW_POSTS_POLL_MS while the feed is on screen and the app is
+     in the foreground; never inserts posts by itself. */
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active'));
+    return () => sub.remove();
+  }, []);
+  const since = useMemo(() => {
+    if (kind !== 'campus' || !feed.isSuccess) return null;
+    let newest = 0;
+    for (const p of posts) newest = Math.max(newest, Date.parse(p.created_at) || 0);
+    return new Date(newest ? newest + 1 : feed.dataUpdatedAt).toISOString();
+  }, [kind, feed.isSuccess, feed.dataUpdatedAt, posts]);
+  const newCount = useNewCampusCount(since, kind === 'campus' && isFocused && appActive).data ?? 0;
+  const [pillTakenFor, setPillTakenFor] = useState<string | null>(null);
+  const showNewPosts = useShowNewCampusPosts();
+  const onNewPostsPress = useCallback(async () => {
+    setPillTakenFor(since);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    const ok = await showNewPosts();
+    if (!ok) showToast(NEW_POSTS_FAILED);
+  }, [since, showNewPosts, showToast]);
+  const pillCount = kind === 'campus' && pillTakenFor !== since ? newCount : 0;
+
   const onEndReached = useCallback(() => {
     if (feed.hasNextPage && !feed.isFetchingNextPage && !feed.isError) void feed.fetchNextPage();
   }, [feed]);
@@ -220,66 +268,89 @@ export default function CommunityScreen() {
   const feedKeyString = `${kind}:${country ?? ''}:${kind === 'campus' ? '' : sort}`;
 
   return (
-    <View style={styles.screen}>
-      <CommunityWallpaper ground={zone === 'campus' ? colors.communityPanelCampus : colors.communityPanelWorld} />
+    <PostActionsProvider toastBottom={dockHeight + 16}>
+      <View style={styles.screen}>
+        <CommunityWallpaper ground={zone === 'campus' ? colors.communityPanelCampus : colors.communityPanelWorld} />
 
-      <FlashList
-        // A new list per feed: each starts at its own top, and the cards'
-        // entrance plays for the new feed.
-        key={feedKeyString}
-        ref={listRef}
-        data={posts}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        extraData={visible}
-        contentContainerStyle={{ paddingTop: topPad, paddingBottom: dockHeight + 16 }}
-        scrollIndicatorInsets={{ top: topPad, bottom: dockHeight }}
-        ListEmptyComponent={listEmpty}
-        ListFooterComponent={
-          feed.isFetchingNextPage ? <PostCardSkeleton zone={zone} /> : null
-        }
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.6}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={VIEWABILITY}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            progressViewOffset={topPad}
-            tintColor={colors.purple}
-            colors={[colors.purple]}
-          />
-        }
-      />
-
-      <CommunitySwitcher
-        side={side}
-        world={world}
-        countries={countries}
-        sort={sort}
-        onSide={setSide}
-        onWorld={setWorld}
-        onSort={setSort}
-      />
-
-      {viewOnly ? (
-        <ViewOnlyLine country={label} />
-      ) : showComposer ? (
-        <ComposerDock
-          zone={zone}
-          hint={hint}
-          // Re-read when the tab comes back into view, after the compose screen.
-          draft={isFocused ? draftFor(scope) : null}
-          avatarName={profile?.full_name}
-          avatarUri={profile?.avatar_url}
-          onOpen={() => openCompose()}
-          onPhotos={() => openCompose({ pick: 'photos' })}
+        <FlashList
+          // A new list per feed: each starts at its own top, and the cards'
+          // entrance plays for the new feed.
+          key={feedKeyString}
+          ref={listRef}
+          data={posts}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          extraData={visible}
+          contentContainerStyle={{ paddingTop: topPad, paddingBottom: dockHeight + 16 }}
+          scrollIndicatorInsets={{ top: topPad, bottom: dockHeight }}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={
+            feed.isFetchingNextPage ? <PostCardSkeleton zone={zone} /> : null
+          }
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.6}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={VIEWABILITY}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              progressViewOffset={topPad}
+              tintColor={colors.purple}
+              colors={[colors.purple]}
+            />
+          }
         />
-      ) : null}
 
-      <AppToast message={toast} bottom={dockHeight + 16} />
-    </View>
+        <CommunitySwitcher
+          side={side}
+          world={world}
+          countries={countries}
+          sort={sort}
+          onSide={setSide}
+          onWorld={setWorld}
+          onSort={setSort}
+        />
+
+        {viewOnly ? (
+          <ViewOnlyLine country={label} />
+        ) : showComposer ? (
+          <ComposerDock
+            zone={zone}
+            hint={hint}
+            // Re-read when the tab comes back into view, after the compose screen.
+            draft={isFocused ? draftFor(scope) : null}
+            avatarName={profile?.full_name}
+            avatarUri={profile?.avatar_url}
+            onOpen={() => openCompose()}
+            onPhotos={() => openCompose({ pick: 'photos' })}
+          />
+        ) : null}
+
+        {pillCount > 0 ? (
+          <Reanimated.View
+            entering={PILL_IN}
+            exiting={FadeOut.duration(200)}
+            style={[styles.pillWrap, { top: topPad + 8 }]}
+            pointerEvents="box-none"
+          >
+            <Pressable
+              onPress={() => void onNewPostsPress()}
+              accessibilityRole="button"
+              accessibilityLiveRegion="polite"
+              style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
+            >
+              <Feather name="arrow-up" size={16} color={colors.white} />
+              <AppText style={styles.pillText}>
+                {pillCount === 1 ? '1 new post' : `${pillCount} new posts`}
+              </AppText>
+            </Pressable>
+          </Reanimated.View>
+        ) : null}
+
+        <AppToast message={toast} bottom={dockHeight + 16} />
+      </View>
+    </PostActionsProvider>
   );
 }
 
@@ -302,6 +373,20 @@ function ViewOnlyLine({ country }: { country: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.communityPanelCampus },
+
+  pillWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    backgroundColor: colors.communityNewPosts,
+    boxShadow: shadows.quickBar,
+  },
+  pillPressed: { transform: [{ scale: 0.97 }] },
+  pillText: { fontFamily: font.family.semibold, fontSize: font.sizes.body, lineHeight: 16, color: colors.white },
 
   note: {
     marginHorizontal: 16,

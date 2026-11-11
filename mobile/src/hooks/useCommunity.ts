@@ -8,12 +8,13 @@ import {
 } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { api } from '../lib/api';
+import { api, type ApiError } from '../lib/api';
 import { toUploadFile } from '../lib/upload';
 import {
   applyReaction,
   distinctById,
   FEED_PAGE_SIZE,
+  NEW_POSTS_POLL_MS,
   REPLIES_PAGE_SIZE,
   withReaction,
   type FeedKind,
@@ -118,25 +119,70 @@ export function useThreadReplies(postId: string, enabled: boolean) {
 type FeedCache = InfiniteData<FeedPage>;
 type ThreadCache = InfiniteData<Paged<PostItem>>;
 
-/** Lay a reaction over every cached copy of the post: in any feed (as a post or
- *  inside a post's `top_replies`) and in any open thread. */
-function patchEverywhere(client: ReturnType<typeof useQueryClient>, result: ReactionResult) {
-  const patch = <C extends FeedCache | ThreadCache>(data: C | undefined): C | undefined => {
+const BY_USER = ['community', 'by-user'] as const;
+const POSTS = ['community', 'post'] as const;
+
+type ListCache = InfiniteData<Paged<PostItem>>;
+type PostCache = { post: PostItem; can_reply: boolean };
+
+/**
+ * Run `fn` over every cached post: the feeds, the threads, the profiles' Posts
+ * lists and the post pages. `fn` gets each top-level item and returns it, a
+ * changed copy, or null to take it out of that list. A post page's own post is
+ * never removed here (the page says why it's gone instead).
+ */
+function mapEveryPost(client: ReturnType<typeof useQueryClient>, fn: (item: PostItem) => PostItem | null) {
+  const mapList = (data: ListCache | undefined): ListCache | undefined => {
     if (!data?.pages) return data;
     let changed = false;
     const pages = data.pages.map((page) => {
       if (!page?.items) return page;
-      const items = page.items.map((item) => {
-        const next = withReaction(item, result);
+      const items: PostItem[] = [];
+      for (const item of page.items) {
+        const next = fn(item);
         if (next !== item) changed = true;
-        return next;
-      });
+        if (next) items.push(next);
+      }
       return { ...page, items };
     });
-    return changed ? ({ ...data, pages } as C) : data;
+    return changed ? { ...data, pages } : data;
   };
-  client.setQueriesData<FeedCache>({ queryKey: FEEDS }, patch);
-  client.setQueriesData<ThreadCache>({ queryKey: THREADS }, patch);
+  for (const prefix of [FEEDS, THREADS, BY_USER]) {
+    client.setQueriesData<ListCache>({ queryKey: prefix }, mapList);
+  }
+  client.setQueriesData<PostCache>({ queryKey: POSTS }, (data) => {
+    if (!data?.post) return data;
+    const next = fn(data.post);
+    return next && next !== data.post ? { ...data, post: next } : data;
+  });
+}
+
+/** Lay a reaction over every cached copy of the post, as a post or as a reply
+ *  inside a post's `top_replies`. */
+function patchEverywhere(client: ReturnType<typeof useQueryClient>, result: ReactionResult) {
+  mapEveryPost(client, (item) => withReaction(item, result));
+}
+
+/**
+ * Take a post or reply out of everything this student has loaded: after they
+ * delete it, or report it (the API leaves out what you reported from then on,
+ * spec §7). A reply also leaves its post's preview, and the post counts one
+ * fewer reply.
+ */
+export function removePostEverywhere(client: ReturnType<typeof useQueryClient>, target: PostItem) {
+  const parentId = target.parent_post_id;
+  mapEveryPost(client, (item) => {
+    if (item.id === target.id) return null;
+    const inPreview = item.top_replies?.some((r) => r.id === target.id);
+    if (item.id === parentId || inPreview) {
+      return {
+        ...item,
+        replies_count: item.id === parentId ? Math.max(0, (item.replies_count ?? 0) - 1) : item.replies_count,
+        top_replies: inPreview ? item.top_replies.filter((r) => r.id !== target.id) : item.top_replies,
+      };
+    }
+    return item;
+  });
 }
 
 /**
@@ -254,28 +300,17 @@ function insertNewPost(client: ReturnType<typeof useQueryClient>, post: PostItem
 function insertNewReply(client: ReturnType<typeof useQueryClient>, reply: PostItem) {
   const parentId = reply.parent_post_id;
   if (!parentId) return;
-  client.setQueriesData<FeedCache>({ queryKey: FEEDS }, (data) => {
-    if (!data?.pages) return data;
-    let changed = false;
-    const pages = data.pages.map((page) => {
-      if (!page?.items?.some((i) => i.id === parentId)) return page;
-      changed = true;
-      return {
-        ...page,
-        items: page.items.map((i) =>
-          i.id === parentId
-            ? {
-                ...i,
-                replies_count: (i.replies_count ?? 0) + 1,
-                top_replies: distinctById([...(i.top_replies ?? []), reply]),
-              }
-            : i,
-        ),
-      };
-    });
-    return changed ? { ...data, pages } : data;
-  });
-  client.setQueryData<ThreadCache>([...THREADS, parentId], (data) => {
+  mapEveryPost(client, (item) =>
+    item.id === parentId
+      ? {
+          ...item,
+          replies_count: (item.replies_count ?? 0) + 1,
+          top_replies: distinctById([...(item.top_replies ?? []), reply]),
+        }
+      : item,
+  );
+  // The feed's thread and the post page's thread (both start with this key).
+  client.setQueriesData<ThreadCache>({ queryKey: [...THREADS, parentId] }, (data) => {
     if (!data?.pages?.length) return data;
     const pages = [...data.pages];
     const last = pages[pages.length - 1];
@@ -312,4 +347,153 @@ export function useCreatePost() {
       else insertNewPost(client, answer.post);
     },
   });
+}
+
+/* ───────────────────────────── A post's page ───────────────────────────── */
+
+/** What a direct link can answer instead of the post (spec §3.1, runbook §1.7). */
+export type PostGone = 'POST_NOT_FOUND' | 'POST_DELETED' | 'POST_REMOVED' | 'POST_UNDER_REVIEW';
+
+export function goneCode(err: unknown): PostGone | null {
+  const e = err as ApiError | null;
+  if (!e?.fromApi) return null;
+  const code = e.body?.error;
+  if (code === 'POST_DELETED' || code === 'POST_REMOVED' || code === 'POST_UNDER_REVIEW') return code;
+  // 404, and a link whose id isn't even a uuid (400).
+  if (e.status === 404 || e.status === 400) return 'POST_NOT_FOUND';
+  return null;
+}
+
+/** `GET /api/posts/:id` → `{ post, can_reply }`. A gone post isn't retried. */
+export function usePost(postId: string | undefined) {
+  return useQuery({
+    queryKey: [...POSTS, postId],
+    queryFn: () => api.get<PostCache>(`/api/posts/${encodeURIComponent(postId ?? '')}`),
+    enabled: !!postId,
+    retry: (count, err) => !goneCode(err) && count < 2,
+  });
+}
+
+/** The post page's replies (spec §4): every reply, in the API's order, a page
+ *  of POST_PAGE_REPLIES at a time behind "Load more replies". */
+export const POST_PAGE_REPLIES = 20;
+export function usePostPageReplies(postId: string | undefined, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...THREADS, postId, 'page'],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      api.get<Paged<PostItem>>(
+        `/api/posts/${encodeURIComponent(postId ?? '')}/replies${query({ limit: POST_PAGE_REPLIES, cursor: pageParam })}`,
+      ),
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
+    enabled: enabled && !!postId,
+  });
+}
+
+/* ───────────────────────────── Profiles' Posts ───────────────────────────── */
+
+/** `GET /api/posts/by-user/:userId`: that person's posts you may see, newest
+ *  first, all scopes mixed (a profile isn't a feed). Your own include your
+ *  held and covered ones, with their labels (spec §10). */
+export function useUserPosts(userId: string | undefined, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: [...BY_USER, userId],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      api.get<Paged<PostItem>>(
+        `/api/posts/by-user/${encodeURIComponent(userId ?? '')}${query({ limit: FEED_PAGE_SIZE, cursor: pageParam })}`,
+      ),
+    getNextPageParam: (lastPage) => lastPage?.next_cursor ?? undefined,
+    select: (data) => data.pages.flatMap((p) => p?.items ?? []),
+    enabled: enabled && !!userId,
+  });
+}
+
+/* ───────────────────────────── Delete and report ───────────────────────────── */
+
+/** `DELETE /api/posts/:id`. A 404 means it's already gone, which is what was
+ *  asked for. Either way it leaves every list at once (runbook §1.8). */
+export function useDeletePost() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (post: PostItem) => {
+      try {
+        await api.del(`/api/posts/${encodeURIComponent(post.id)}`);
+      } catch (err) {
+        if ((err as ApiError)?.status !== 404) throw err;
+      }
+      return post;
+    },
+    onSuccess: (post) => removePostEverywhere(client, post),
+  });
+}
+
+/** `POST /api/reports`. The answer never says what the report caused (spec
+ *  §7). Sent: the post leaves this student's lists, and stays gone. */
+export function useReportPost() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ post, reason, details }: { post: PostItem; reason: string; details: string }) =>
+      api.post<{ reported: true }>('/api/reports', {
+        target_type: 'post',
+        target_id: post.id,
+        reason,
+        ...(details.trim() ? { details: details.trim() } : {}),
+      }),
+    onSuccess: (_answer, { post }) => removePostEverywhere(client, post),
+  });
+}
+
+/* ───────────────────────────── New posts (spec §8) ───────────────────────────── */
+
+/**
+ * How many campus posts are newer than `since`, asked every NEW_POSTS_POLL_MS
+ * while `enabled` (the campus feed on screen, the app in the foreground). A
+ * new `since` is a new key, so it asks again at once.
+ */
+export function useNewCampusCount(since: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['community', 'new-count', since],
+    queryFn: () => api.get<{ count: number }>(`/api/posts/feed/campus/new-count${query({ since })}`),
+    enabled: enabled && !!since,
+    refetchInterval: enabled ? NEW_POSTS_POLL_MS : false,
+    refetchIntervalInBackground: false,
+    staleTime: 0,
+    gcTime: NEW_POSTS_POLL_MS * 2,
+    retry: false,
+    select: (d) => d?.count ?? 0,
+  });
+}
+
+/**
+ * The pill's tap (spec §8): fetch the campus feed's first page and put the
+ * posts not already shown at the top. Nothing shown is cleared, every page
+ * below stays, and posts already there take their fresh copy in place.
+ * Resolves false when it couldn't load.
+ */
+export function useShowNewCampusPosts() {
+  const client = useQueryClient();
+  return useCallback(async () => {
+    let page: FeedPage;
+    try {
+      page = await api.get<FeedPage>(`/api/posts/feed/campus${query({ limit: FEED_PAGE_SIZE })}`);
+    } catch {
+      return false;
+    }
+    client.setQueryData<FeedCache>([...FEEDS, 'campus'], (data) => {
+      if (!data?.pages?.length) return data;
+      const fresh = new Map(page.items.map((p) => [p.id, p]));
+      const known = new Set(data.pages.flatMap((p) => p.items.map((i) => i.id)));
+      const added = page.items.filter((p) => !known.has(p.id));
+      const pages = data.pages.map((p, i) => ({
+        ...p,
+        items: [
+          ...(i === 0 ? added : []),
+          ...p.items.map((item) => (fresh.has(item.id) ? fresh.get(item.id)! : item)),
+        ],
+      }));
+      return { ...data, pages };
+    });
+    return true;
+  }, [client]);
 }

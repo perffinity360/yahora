@@ -1426,9 +1426,11 @@ after its checkpoint, so the next starts from `main`.
    is kept. Then post in **Global**: it goes through, because each feed is counted on its own.
 
 **👁️ CHECKPOINT V-D4c**
-1. Tap a post's 💬: the post page, with replies oldest first, and **Load more replies** when
-   there are more than 20.
-2. Reply with text and a GIF: it appears at the bottom.
+1. Tap a post's time (or its 💬 on a profile's Posts): the post page, with its replies in Hot
+   order (the API's order since 11 Nov, spec §4), and **Load more replies** when there are more
+   than 20.
+2. Reply from the bar at the bottom with text and a GIF: it appears at the end of the replies.
+   (In a feed, 💬 opens the reply composer straight away, and the reply joins the post's preview.)
 3. Open the India feed while logged in as a seeded **NIET** student (`sneha.gupta`): you can
    reply, because NIET is in India too. *(A view-only test needs a campus in another country:
    CC-V2's seed adds a test campus in Germany with one student, `lena.test`. Log in as her
@@ -2317,8 +2319,8 @@ posts" pill. Read: spec §3.1, §4, §5.2, §5.4, §7, §8, §10; runbook §1.7,
 §1.8.
 
 1. From mobile/, install the emoji picker: npx expo install rn-emoji-keyboard
-   If it doesn't install cleanly on SDK 57, STOP and tell me. Don't choose
-   another library on your own.
+   If it doesn't install cleanly on SDK 58, choose
+   another best library on your own.
 2. ⊕ in ReactionBar opens the full picker (search, frequently used,
    categories), styled as spec §5.2. The chosen emoji becomes the reaction.
 3. ReactionBreakdownSheet.tsx (spec §5.4): the title "N reactions"; a grid

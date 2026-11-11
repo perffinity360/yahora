@@ -87,6 +87,10 @@ change both.
 - **A small choice that hangs off a button** (the quick bar, the country dropdown) opens in a transparent
   `Modal`, placed from the button's `measureInWindow`, so a card or a list never clips it. A press outside
   closes it; it never moves the content under it.
+- **What a row opens lives once per screen, not once per row.** Menus, sheets and pickers that a list item
+  opens (the community's ⋯ menu, report form, emoji picker, breakdown) sit in one provider around the
+  screen (`PostActionsProvider`), which the rows reach through context. One per row meant dozens of hidden
+  Modals. Only one overlay is open at a time: each opens after the one before has closed.
 
 ## Motion
 

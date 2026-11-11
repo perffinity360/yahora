@@ -25,6 +25,8 @@ import { colors, font } from '../../theme';
  */
 const SIZES = {
   post: { fontSize: 15, lineHeight: 20, emoji: 19 },
+  // A post's own page (spec §4): 15/22, never folded.
+  page: { fontSize: 15, lineHeight: 22, emoji: 19 },
   reply: { fontSize: 13, lineHeight: 19, emoji: 17 },
 } as const;
 
@@ -71,12 +73,14 @@ export const PostText = memo(function PostText({
   variant = 'post',
 }: {
   content: string;
-  variant?: 'post' | 'reply';
+  variant?: 'post' | 'page' | 'reply';
 }) {
   const size = SIZES[variant];
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(variant === 'page');
   // null: not measured yet. Short text never needs measuring.
-  const [overflows, setOverflows] = useState<boolean | null>(() => (mightFold(content) ? null : false));
+  const [overflows, setOverflows] = useState<boolean | null>(() =>
+    variant !== 'page' && mightFold(content) ? null : false,
+  );
 
   const onMeasure = (e: TextLayoutEvent) => setOverflows(e.nativeEvent.lines.length > POST_FOLD_LINES);
   const textStyle = [styles.text, { fontSize: size.fontSize, lineHeight: size.lineHeight }];

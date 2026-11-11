@@ -16,6 +16,7 @@ import Reanimated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../AppText';
+import { usePostActions } from './PostActions';
 import { QUICK_REACTIONS, REACTION_LONG_PRESS_MS } from '../../lib/community';
 import { colors, shadows } from '../../theme';
 
@@ -26,7 +27,8 @@ import { colors, shadows } from '../../theme';
  *   · long-press React — the quick bar too (the card's long-press calls `open`)
  *   · in the bar       — your current emoji sits on a reactionMineBg circle:
  *                        choosing it again removes it, another replaces it
- *   · ⊕                — the full picker, which arrives in part 3 (CC-V4c)
+ *   · ⊕                — the full picker (spec §5.2), opened by the screen's
+ *                        PostActionsProvider once the bar has closed
  *
  * A tap never gives ❤️ by itself (owner, 10 Nov; DESIGN.md "Touch"): it always
  * offers the six, or the other five would stay hidden. The runbook's CC-V4a
@@ -63,6 +65,7 @@ export const ReactButton = memo(function ReactButton({
   const buttonRef = useRef<ViewInstance>(null);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const reduceMotion = useReducedMotion();
+  const actions = usePostActions();
 
   const scale = useSharedValue(1);
   const ring = useSharedValue(0);
@@ -79,10 +82,8 @@ export const ReactButton = memo(function ReactButton({
 
   const close = useCallback(() => setAnchor(null), []);
 
-  const choose = useCallback(
-    (emoji: string) => {
-      const next = emoji === reaction ? null : emoji;
-      setAnchor(null);
+  const pick = useCallback(
+    (next: string | null) => {
       onReact(next);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       if (next && !reduceMotion) {
@@ -97,8 +98,22 @@ export const ReactButton = memo(function ReactButton({
         });
       }
     },
-    [reaction, onReact, reduceMotion, scale, ring],
+    [onReact, reduceMotion, scale, ring],
   );
+
+  const choose = useCallback(
+    (emoji: string) => {
+      setAnchor(null);
+      pick(emoji === reaction ? null : emoji);
+    },
+    [reaction, pick],
+  );
+
+  const more = useCallback(() => {
+    setAnchor(null);
+    // The picker toggles your current emoji off itself.
+    actions?.openPicker({ current: reaction, onPick: pick });
+  }, [actions, reaction, pick]);
 
   return (
     <>
@@ -129,7 +144,7 @@ export const ReactButton = memo(function ReactButton({
         </Reanimated.View>
       </Pressable>
 
-      {anchor ? <QuickBar anchor={anchor} current={reaction} onChoose={choose} onClose={close} /> : null}
+      {anchor ? <QuickBar anchor={anchor} current={reaction} onChoose={choose} onMore={more} onClose={close} /> : null}
     </>
   );
 });
@@ -138,11 +153,13 @@ function QuickBar({
   anchor,
   current,
   onChoose,
+  onMore,
   onClose,
 }: {
   anchor: Anchor;
   current: string | null;
   onChoose: (emoji: string) => void;
+  onMore: () => void;
   onClose: () => void;
 }) {
   const { width: screenW } = useWindowDimensions();
@@ -190,9 +207,9 @@ function QuickBar({
           );
         })}
         <Reanimated.View entering={FadeIn.delay(QUICK_REACTIONS.length * STAGGER_MS).duration(180)}>
-          {/* ⊕ — the full emoji picker arrives in part 3 (CC-V4c). */}
+          {/* ⊕ — the full emoji picker (spec §5.2). */}
           <Pressable
-            onPress={() => {}}
+            onPress={onMore}
             accessibilityRole="button"
             accessibilityLabel="More emoji"
             style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
