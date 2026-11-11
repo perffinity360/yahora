@@ -18,8 +18,10 @@
 // Only one layout is mounted (useMediaQuery), so the feeds load once. Both
 // layouts offer the same feeds and the same actions (frontend/CLAUDE.md §18).
 //
-// ⚠ Part 1: everything here runs on ./sampleData.js. Part 2 replaces it with
-// the posts API and deletes that file.
+// Data: ./api.js (the posts API). The countries and who you are load once
+// here; each feed loads its own pages. Reactions are optimistic and roll back
+// when the API refuses them; the ⋯ menu's Report and Delete live in
+// ./PostActions.jsx, around both layouts.
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
@@ -44,7 +46,9 @@ import {
   LAYOUT_BREAKPOINT_PX,
   LAYOUT_COLLAPSED_PX,
 } from "../../utils/community";
-import { SAMPLE_COUNTRIES, SAMPLE_VIEWER, sampleReact } from "./sampleData";
+import useReactionPatches from "../../hooks/useReactionPatches";
+import { getCountries, getViewerProfile } from "./api";
+import PostActionsProvider from "./PostActions";
 import styles from "./Community.module.css";
 
 const LAYOUT_KEY = "yahora.community.layout";
@@ -151,43 +155,49 @@ export default function Community() {
     };
   }, []);
 
-  // Part 2: GET /api/posts/countries.
-  const countries = SAMPLE_COUNTRIES;
+  // GET /api/posts/countries. Null while it loads; if it fails, the page
+  // still has My campus and Global.
+  const [countryList, setCountryList] = useState(null);
+  const [profile, setProfile] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getCountries()
+      .then((page) => alive && setCountryList(page.items ?? []))
+      .catch(() => alive && setCountryList([]));
+    getViewerProfile()
+      .then((p) => alive && setProfile(p))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const countries = useMemo(() => countryList ?? [], [countryList]);
   const myCountry = countries.find((c) => c.is_mine)?.code ?? GLOBAL;
-  const campusName = SAMPLE_VIEWER.university;
+  const campusName = profile?.university || "My campus";
   const viewer = useMemo(
     () => ({
-      username: SAMPLE_VIEWER.username,
-      name: SAMPLE_VIEWER.name,
-      avatar: SAMPLE_VIEWER.avatar,
-      campus: SAMPLE_VIEWER.university,
+      username: profile?.username ?? "",
+      name: profile?.full_name ?? "",
+      avatar: profile?.avatar_url ?? null,
+      campus: profile?.university ?? "",
     }),
-    [],
+    [profile],
   );
 
   // View state that changes what is on screen lives in the history entry, so
-  // Back returns to the same feed (frontend/CLAUDE.md §13).
-  const [world, setWorld] = useHistoryEntryState("communityWorld", myCountry);
+  // Back returns to the same feed (frontend/CLAUDE.md §13). `null` is "your
+  // own country", which is known only once the countries have loaded; until
+  // then the right-hand feed waits, rather than opening Global and switching.
+  const [chosenWorld, setWorld] = useHistoryEntryState("communityWorld", null);
+  const world = chosenWorld ?? (countryList ? myCountry : null);
   const [sort, setSort] = useHistoryEntryState("communitySort", "hot");
   const [segment, setSegment] = useHistoryEntryState("communitySegment", "campus");
 
-  // Reaction answers by post id, laid over every loaded feed.
-  const [patches, setPatches] = useState({});
-  const onReact = useCallback((postId, emoji) => {
-    // Part 2: optimistic, then api.react / api.unreact, rolled back on error.
-    const answer = sampleReact(postId, emoji);
-    if (!answer) return;
-    setPatches((prev) => ({
-      ...prev,
-      [postId]: {
-        viewer_reaction: answer.viewer_reaction,
-        reactions_total: answer.reactions_total,
-        reaction_counts: answer.reaction_counts,
-      },
-    }));
-  }, []);
+  // Reaction answers by post id, laid over every loaded feed
+  // (hooks/useReactionPatches.js: optimistic, rolled back on error).
+  const { patches, onReact } = useReactionPatches();
 
-  const worldName = worldLabel(world, countries);
+  const worldName = world ? worldLabel(world, countries) : "";
 
   // Spec §9: the words for each feed.
   const campusFeed = {
@@ -195,7 +205,9 @@ export default function Community() {
     emptyText: `No posts from ${campusName} yet. Be the first to say hello.`,
   };
   const worldFeed =
-    world === GLOBAL
+    world === null
+      ? { kind: null } // the countries are still loading: skeletons
+      : world === GLOBAL
       ? {
           kind: "global",
           emptyText: "Nothing here yet. Start the conversation.",
@@ -213,32 +225,37 @@ export default function Community() {
 
   const shared = { patches, onReact, viewer };
 
-  return wide ? (
-    <WideLayout
-      campusName={campusName}
-      campusFeed={campusFeed}
-      worldFeed={worldFeed}
-      world={world}
-      setWorld={setWorld}
-      sort={sort}
-      setSort={setSort}
-      countries={countries}
-      viewer={viewer}
-      shared={shared}
-    />
-  ) : (
-    <NarrowLayout
-      campusFeed={campusFeed}
-      worldFeed={worldFeed}
-      world={world}
-      setWorld={setWorld}
-      sort={sort}
-      setSort={setSort}
-      segment={segment}
-      setSegment={setSegment}
-      countries={countries}
-      shared={shared}
-    />
+  // The ⋯ menu's Report and Delete, for both layouts (./PostActions.jsx).
+  return (
+    <PostActionsProvider>
+      {wide ? (
+        <WideLayout
+          campusName={campusName}
+          campusFeed={campusFeed}
+          worldFeed={worldFeed}
+          world={world}
+          setWorld={setWorld}
+          sort={sort}
+          setSort={setSort}
+          countries={countries}
+          viewer={viewer}
+          shared={shared}
+        />
+      ) : (
+        <NarrowLayout
+          campusFeed={campusFeed}
+          worldFeed={worldFeed}
+          world={world}
+          setWorld={setWorld}
+          sort={sort}
+          setSort={setSort}
+          segment={segment}
+          setSegment={setSegment}
+          countries={countries}
+          shared={shared}
+        />
+      )}
+    </PostActionsProvider>
   );
 }
 
@@ -398,7 +415,7 @@ function WideLayout({
     else collapse(otherRef);
   };
 
-  const label = worldLabel(world, countries);
+  const label = world ? worldLabel(world, countries) : "";
 
   return (
     <div ref={wideRef} className={styles.wide}>
@@ -582,7 +599,7 @@ function NarrowLayout({
 }) {
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const label = worldLabel(world, countries);
+  const label = world ? worldLabel(world, countries) : "";
   const onWorld = segment === "world";
 
   return (

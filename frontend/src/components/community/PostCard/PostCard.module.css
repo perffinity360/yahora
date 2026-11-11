@@ -50,6 +50,20 @@
   }
 }
 
+/* Spec §8: a post the "new posts" pill brought in fades and slides down into
+   place, 200 ms, each a little after the one above. */
+.postArriving {
+  animation: postArrive 200ms var(--community-ease) backwards;
+  animation-delay: calc(var(--arrive-i, 0) * 40ms);
+}
+
+@keyframes postArrive {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
 .postBody {
   grid-column: 2;
   grid-row: 1;
@@ -207,6 +221,18 @@ a.time:hover {
   outline-offset: 1px;
 }
 
+/* Spec §3.1: your own held or covered post, on your Posts tab. Grey, quiet. */
+.statusLabel {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border: 1px solid var(--community-card-border);
+  border-radius: 999px;
+  background: var(--community-glass);
+  font: 600 11px/16px "Inter", sans-serif;
+  color: var(--community-muted);
+  white-space: nowrap;
+}
+
 /* ── A reply's campus on a line of its own, in a narrow feed ───────────── */
 
 /* A reply's campus and time sit in .byline. On a wide feed it adds no box of
@@ -281,6 +307,15 @@ a.time:hover {
   color: var(--black-soft);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* A post's own page (spec §4): the text at 15/22. */
+.postLarge {
+  --text-line: 22px;
+}
+
+.postLarge .postBody .text {
+  font-size: 15px;
 }
 
 /* POST_FOLD_LINES = 6 (spec §13). */
@@ -1080,6 +1115,7 @@ a.time:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .post,
+  .postArriving,
   .reply,
   .likePop {
     animation: none;

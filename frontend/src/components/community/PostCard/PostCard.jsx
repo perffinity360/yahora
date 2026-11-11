@@ -8,11 +8,20 @@
 //
 // `showCampus` is off in the campus feed, where the campus is obvious. Elsewhere
 // the campus shows only if the panel has room (the @container rule in the CSS).
+//
+// `arriving` (0, 1, 2…, or null) marks a post the "new posts" pill just brought
+// in (spec §8): it slides down into place instead, staggered by that number.
+//
+// `variant="page"` is the post's own page (spec §4): text at 15/22 and never
+// folded, and every reply paged by "Load more replies" (PostPageThread)
+// instead of the feed's preview. The ⋯ menu is PostMenu: Report, or Delete
+// for your own. Your own held or covered post carries its label (spec §3.1);
+// nobody else is ever sent one.
 
 import React, { memo, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { Ellipsis, GraduationCap, MessageCircle } from "lucide-react";
+import { GraduationCap, MessageCircle } from "lucide-react";
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import ImageLightbox from "../../ImageLightbox/ImageLightbox";
 import ReactionBar from "../ReactionBar/ReactionBar";
@@ -21,12 +30,16 @@ import ProfileHover from "../ProfileHover/ProfileHover";
 import PostPhotos from "./PostPhotos";
 import PostGif from "./PostGif";
 import PostText from "./PostText";
-import PostThread from "./PostThread";
+import PostThread, { PostPageThread } from "./PostThread";
+import PostMenu from "../PostMenu/PostMenu";
 import { formatCount, formatPostTime } from "../../../utils/community";
 import styles from "./PostCard.module.css";
 
 /* The stagger stops here, so a long page doesn't keep arriving for a second. */
 const STAGGER_MAX = 6;
+
+/* Spec §3.1: only the author ever receives these. */
+const STATUS_LABELS = { pending: "Being checked", under_review: "Under review" };
 
 function PostCard({
   post,
@@ -38,7 +51,11 @@ function PostCard({
   loadReplies,
   loadProfile,
   addedReplies,
+  variant = "feed",
+  pageSize,
+  arriving = null,
 }) {
+  const onPage = variant === "page";
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [moreRequest, setMoreRequest] = useState(0);
   const profile = `/user/${post.author_id}`;
@@ -63,8 +80,8 @@ function PostCard({
 
   return (
     <article
-      className={styles.post}
-      style={{ "--post-i": Math.min(index, STAGGER_MAX) }}
+      className={`${styles.post} ${onPage ? styles.postLarge : ""} ${arriving !== null ? styles.postArriving : ""}`}
+      style={{ "--post-i": Math.min(index, STAGGER_MAX), "--arrive-i": Math.min(arriving ?? 0, STAGGER_MAX) }}
       aria-label={`Post by @${post.author_username}`}
     >
       {/* Resting on the avatar opens the profile glimpse too, as on the
@@ -102,13 +119,13 @@ function PostCard({
                 <time dateTime={post.created_at}>{time}</time>
               </Link>
             )}
-            {/* Part 3 (CC-N4c) fills this menu: Report, and Delete for your own. */}
-            <button type="button" className={styles.moreBtn} aria-label="More options">
-              <Ellipsis size={15} aria-hidden="true" />
-            </button>
+            {STATUS_LABELS[post.moderation_status] && (
+              <span className={styles.statusLabel}>{STATUS_LABELS[post.moderation_status]}</span>
+            )}
+            <PostMenu post={post} className={styles.moreBtn} size={15} />
           </header>
 
-          {post.content && <PostText content={post.content} />}
+          {post.content && <PostText content={post.content} unfolded={onPage} />}
         </div>
 
         {post.image_urls?.length > 0 && (
@@ -140,15 +157,27 @@ function PostCard({
         </div>
       </div>
 
-      <PostThread
-        post={post}
-        showCampus={showCampus}
-        onReact={onReact}
-        loadReplies={loadReplies}
-        loadProfile={loadProfile}
-        addedReplies={addedReplies}
-        moreRequest={moreRequest}
-      />
+      {onPage ? (
+        <PostPageThread
+          post={post}
+          showCampus={showCampus}
+          onReact={onReact}
+          loadReplies={loadReplies}
+          loadProfile={loadProfile}
+          addedReplies={addedReplies}
+          pageSize={pageSize}
+        />
+      ) : (
+        <PostThread
+          post={post}
+          showCampus={showCampus}
+          onReact={onReact}
+          loadReplies={loadReplies}
+          loadProfile={loadProfile}
+          addedReplies={addedReplies}
+          moreRequest={moreRequest}
+        />
+      )}
 
       {/* In a portal: the feed's container query makes it the containing block
           for anything fixed inside it, which would trap the viewer in the panel. */}

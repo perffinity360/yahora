@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useLayoutEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Navbar from './components/navbar/navbar';
@@ -13,17 +13,11 @@ import ProductDetail from "./pages/product/ProductDetail";
 import PublicProfile from "./pages/publicProfile/PublicProfile";
 import Messages from "./pages/messages/Messages";
 import Community from "./pages/community/Community";
+import PostDetail from "./pages/post/PostDetail";
 import OnboardingRequired from "./components/OnboardingRequired/OnboardingRequired";
 import useScrollRestoration from "./hooks/useScrollRestoration";
 
 const NO_FOOTER_PATHS = new Set(['/messages', '/community']);
-
-// ⚠ Development only: the Block N-S test bench at /dev/community. DEV is
-// statically false in a production build, so Vite drops this import — and the
-// page with it — from the bundle entirely.
-const CommunitySandbox = import.meta.env.DEV
-  ? lazy(() => import("./pages/dev/CommunitySandbox"))
-  : null;
 
 // Keep logged-in users off the auth page: reaching /auth (via the back button,
 // a stale link, or a typed URL) sends them on instead of showing the login
@@ -231,6 +225,8 @@ function App() {
 
           {/* App surfaces: session + finished profile required. */}
           <Route path="/community" element={<RequireOnboarded><Community /></RequireOnboarded>} />
+          {/* A post's own page (COMMUNITY_SPEC §4). */}
+          <Route path="/post/:id" element={<RequireOnboarded><PostDetail /></RequireOnboarded>} />
           {/* The old placeholder routes, kept so existing links still land. */}
           <Route path="/feed" element={<Navigate to="/community" replace />} />
           <Route path="/hot" element={<Navigate to="/community" replace />} />
@@ -244,9 +240,6 @@ function App() {
           <Route path="/product/:id" element={<RequireOnboarded allowGuest><ProductDetail /></RequireOnboarded>} />
           <Route path="/user/:id" element={<RequireOnboarded allowGuest><PublicProfile /></RequireOnboarded>} />
 
-          {import.meta.env.DEV && (
-            <Route path="/dev/community" element={<Suspense fallback={null}><CommunitySandbox /></Suspense>} />
-          )}
         </Routes>
       </main>
 
