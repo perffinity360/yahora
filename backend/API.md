@@ -116,19 +116,19 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `POST_NOT_FOUND` | 404 | Phase 7 — the database: no such post, or you're not allowed to see it | — |
 | `NOT_ALLOWED_HERE` | 403 | Phase 7 — the database: posting or replying in a feed you can only view | — |
 | `CANNOT_REPORT_OWN` | 400 | Phase 7 — `create_report()`: reporting your own post | — |
-| `MESSAGE_DELETED` | 400 | Phase 7 — `react_to_message()`: reacting to a deleted message. *(Block V-C — not built yet)* | — |
+| `MESSAGE_DELETED` | 400 | Phase 7 — `react_to_message()`: reacting to a deleted message (Block V-C) | — |
 | `MODERATION_NUDGE` | 422 | Phase 7 — `POST /api/posts`: the check flagged it and `confirm` wasn't sent. Nothing was saved | `categories` |
 | `EMPTY_POST` | 400 | Phase 7 — `POST /api/posts`: no text, photo or GIF | — |
 | `MEDIA_CONFLICT` | 400 | Phase 7 — `POST /api/posts`: photos with a GIF, or photos on a reply | — |
-| `INVALID_GIF` | 400 | Phase 7 — `POST /api/posts`; `POST /api/messages/send` *(Block V-C — not built yet)* | — |
-| `INVALID_EMOJI` | 400 | Phase 7 — `PUT /api/posts/:id/reaction`; `PUT /api/messages/:id/reaction` *(Block V-C — not built yet)* | — |
+| `INVALID_GIF` | 400 | Phase 7 — `POST /api/posts`; `POST /api/messages/send` (Block V-C) | — |
+| `INVALID_EMOJI` | 400 | Phase 7 — `PUT /api/posts/:id/reaction`; `PUT /api/messages/:id/reaction` (Block V-C) | — |
 | `FILE_TOO_LARGE` | 400 | Phase 7 — `POST /api/posts`: a photo over 5 MB | — |
 | `INVALID_FILE_TYPE` | 400 | Phase 7 — `POST /api/posts`: a photo that isn't a readable JPEG, PNG or WebP | — |
 | `POST_UNDER_REVIEW` | 403 | Phase 7 — `GET /api/posts/:id`: covered by reports. Nothing about the post is sent | — |
 | `POST_DELETED` | 410 | Phase 7 — `GET /api/posts/:id`: the author deleted it | — |
 | `POST_REMOVED` | 410 | Phase 7 — `GET /api/posts/:id`: removed by moderation | — |
 | `LOGIN_REQUIRED` | 401 | **Live (Phase 6B N-C).** `GET /api/user/:userId/public` and `GET /api/users/by-username/:username` (including its `redirect_to` case) when the caller is anonymous and the person is a real student. Not `UNAUTHORIZED`: the route is open, but this answer needs a student's token. See [the identity rule](#the-identity-rule-phase-6b) | — |
-| `MESSAGE_NOT_FOUND` | 404 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` and `/delete-for-me`, from `delete_message_for_everyone()` / `hide_message_for_me()` (migration `message_actions`) — no such message, or the caller is not one of its two people. Also the two reaction routes *(Phase 7 Block V-C — not built yet)* | — |
+| `MESSAGE_NOT_FOUND` | 404 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` and `/delete-for-me`, from `delete_message_for_everyone()` / `hide_message_for_me()` (migration `message_actions`) — no such message, or the caller is not one of its two people. Also the two reaction routes (Phase 7 Block V-C) | — |
 | `NOT_MESSAGE_SENDER` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the caller didn't send the message | — |
 | `DELETE_WINDOW_EXPIRED` | 403 | **Live (Phase 6B V-C).** `POST /api/messages/:id/delete-for-everyone` — the message is more than 60 minutes old | — |
 | `CANNOT_MESSAGE_SELF` | 400 | **Live (Phase 6B V-FIX).** `POST /api/messages/send` — `receiver_id` is the caller. Sent by the controller before any database call | `message` |
@@ -386,8 +386,8 @@ response, not an error.
 - [PUT /api/messages/deliver](#put-apimessagesdeliver)
 - [POST /api/messages/:id/delete-for-everyone](#post-apimessagesiddelete-for-everyone)
 - [POST /api/messages/:id/delete-for-me](#post-apimessagesiddelete-for-me)
-- [PUT /api/messages/:id/reaction](#put-apimessagesidreaction-phase-7-block-v-c--not-built-yet) (Phase 7 Block V-C — not built yet)
-- [DELETE /api/messages/:id/reaction](#delete-apimessagesidreaction-phase-7-block-v-c--not-built-yet) (Phase 7 Block V-C — not built yet)
+- [PUT /api/messages/:id/reaction](#put-apimessagesidreaction-phase-7-block-v-c) (Phase 7 Block V-C)
+- [DELETE /api/messages/:id/reaction](#delete-apimessagesidreaction-phase-7-block-v-c) (Phase 7 Block V-C)
 
 ### Part 2 — the contract, not yet implemented
 
@@ -637,7 +637,8 @@ is `req.user.id` from the verified token and nothing else.
 **Body:**
   - full_name: string, required
   - username: string, required — trimmed and lowercased server-side before any check, so
-    `"Rahul.Sharma "` is stored as `rahul.sharma`
+    `"Rahul.Sharma "` is stored as `rahul.sharma`. **A demo account's is ignored** (Phase 7
+    V-C): see the demo note below
   - password: string, required, min 8 — never logged, never echoed back
   - qualification: string, required — free text (e.g. `'Graduation'`), not an enum
   - course_id: uuid, required
@@ -660,7 +661,10 @@ is `req.user.id` from the verified token and nothing else.
 **400:** `{ "error": "INVALID_FORMAT", "message": "..." }` — no `username` sent, or the handle
   is unavailable for a reason that is neither reserved nor taken (i.e. it fails
   `users_username_valid`)
-**400:** `{ "error": "USERNAME_RESERVED" }`
+**400:** `{ "error": "USERNAME_RESERVED" }` — on the reserved list, or (Phase 7 V-C) breaking the
+  `demo.` rule: a real student asking for a name that starts with `demo.`, `demo-` or `demo_`
+  (any case). It was `INVALID_FORMAT` before V-C. The rule is `username_breaks_world_rule()`'s,
+  asked by name; the password is not changed
 **400:** `{ "error": "USERNAME_TAKEN" }` — either the availability check saw it, or the unique
   index caught the race a millisecond later. Both produce this same code.
 **400:** `{ "error": "WEAK_PASSWORD", "message": "..." }` — under 8 characters, identical to the
@@ -731,6 +735,15 @@ it reports the loser as Postgres `23505`, mapped here to `400 USERNAME_TAKEN`. A
 path is a bug. (`mapDbError` maps `23505` to the generic `DUPLICATE`; this endpoint names it
 before falling through, because the handle is the only unique column in play.)
 
+**🎭 Demo accounts (Phase 7 V-C, runbook §1.11).** When the caller's campus is the demo one
+(`is_demo`), the `username` in the body is **ignored and not required**: the account keeps the
+`demo.` name it was given at [demo-login](#post-apiauthdemo-login). There is no availability check
+and the profile UPDATE leaves `username` alone. The password-equals-username check compares
+with that stored name. A demo account made before V-C, with no name yet, is named here, before
+the password is set (a complete profile needs a username, and a refusal after the password
+change would leave the caller's session dead). Everything else is the same for demo and real
+users.
+
 **Notes:** The required-field check is a single truthiness test, so an empty string fails the
 same way a missing key does. Nothing verifies that `course_id` and `specialization_id` are
 consistent with each other. **Note the doubled-separator gap:** `users_username_valid` permits
@@ -743,6 +756,9 @@ runbook discrepancy logged in `docs/CHANGELOG.md`.
 **Content-Type:** n/a — the body is ignored entirely
 **200:** Same four keys as `verify-otp`:
 `{ "message": "Demo login successful", "session": { }, "userAuth": { }, "userProfile": { "<users row>": "..." } }`
+— **`userProfile.username` is set** (Phase 7 V-C), for example `demo.sunny.otter`. It was `null`
+before V-C. The demo skips the username step; onboarding ignores any username a demo account
+sends
 **500:** `{ "error": "Demo university not found. Please run the seed script first." }` — when
 no `universities` row has `domain = 'demo.yahora.com'`. Note this is a **500 with a specific
 message**, i.e. a 500 that is not the generic catch.
@@ -761,6 +777,14 @@ back. Fixed — no client change needed.
 Cleanup is the `cleanup_demo_users` RPC, run by `node-cron` at `0 0 * * *` (midnight daily)
 from `backend/src/utils/cronJobs.js`. The log line there says "weekly"; the schedule is
 daily.
+
+**The `demo.` username (Phase 7 V-C).** After the upsert above (left exactly as it was — a
+username in it would be dropped by DO NOTHING), the handler asks `generate_demo_username()` for a
+free name and UPDATEs the row with it, then answers with the row as it is after that update. Two
+logins drawing the same name at once: the second gets `23505` from the unique index and draws
+again, up to 3 tries; a third clash, or any other error, is the generic 500. The database
+enforces the rule both ways (`trg_username_world_prefix`): a demo-campus name must start with
+`demo.`, and a real one must not start with `demo.`, `demo-` or `demo_`.
 
 `is_profile_complete` is deliberately `false` so demo users still see onboarding. Demo-campus
 users also get the chat auto-responder — see [POST /api/messages/send](#post-apimessagessend).
@@ -992,8 +1016,9 @@ the schema, so this list cannot be filtered by the `course_id` chosen during onb
 **Module:** university
 **Auth:** none
 **Content-Type:** n/a (no body)
-**200:** Bare array — `[ { "id": "uuid", "name": "string", "domain": "string" } ]`, ordered
-by `name`.
+**200:** Bare array — `[ { "id": "uuid", "name": "string", "domain": "string", "country_code":
+"IN" } ]`, ordered by `name`. `country_code` (Phase 7 V-C) is the campus's ISO 3166-1 alpha-2
+country, two capital letters, never null; the community's country feeds are built on it.
 **500:** `{ "error": "Failed to fetch universities" }`
 **Notes:** Mounted at the plural `/api/universities` while every other module is singular
 (`/api/user`, `/api/academic`) — except `/api/products`, which is also plural. Returns the
@@ -1977,9 +2002,10 @@ row and overwrites anything sent.
 Hidden messages are left out of `GET /history` and skipped by `GET /inbox`, for the person who
 hid them only.
 
-#### The reactions and gif fields (Phase 7 Block V-C — not built yet)
+#### The reactions and gif fields (Phase 7 Block V-C)
 
-From Block V-C, every `<messages row>` (send, history and Realtime) also carries:
+Since Block V-C (migration `message_reactions_gifs`), every `<messages row>` (send, history,
+the reaction routes and Realtime) also carries:
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -1987,7 +2013,11 @@ From Block V-C, every `<messages row>` (send, history and Realtime) also carries
 | `gif` | object or null | `{ "provider": "klipy", "id", "url", "preview_url", "width", "height" }`. `null` when there is no GIF. Cleared on a tombstone |
 
 A reaction arrives as a Realtime **UPDATE** of the message row, so no new subscription is needed.
-Merge it by id, exactly as for tombstones.
+Merge it by id, exactly as for tombstones. A reply that quotes a GIF-only message gets
+`reply_preview: "GIF"` (from `trg_fill_message_reply`).
+
+`GET /history` and `GET /inbox` needed no code change for these: history selects `*` and the inbox
+passes the RPC's columns through, so the new fields arrive on their own (verified 10 Nov).
 
 ### GET /api/messages/inbox/:userId
 **Module:** messages
@@ -2008,7 +2038,8 @@ other value is `403 FORBIDDEN`. (Was unauthenticated until 14 Sep 2026.)
                "product_id": "uuid", "product_title": "string", "product_image": "string",
                "last_message": "string", "last_message_time": "timestamptz",
                "unread_count": 0,
-               "last_sender_id": "uuid", "last_message_deleted": false } ],
+               "last_sender_id": "uuid", "last_message_deleted": false,
+               "last_message_has_gif": false } ],
   "next_cursor": "2026-09-14T11:37:40.203488+00:00"
 }
 ```
@@ -2016,8 +2047,8 @@ other value is `403 FORBIDDEN`. (Was unauthenticated until 14 Sep 2026.)
     caller's id → the preview reads "You: …", or "You deleted this message" for a tombstone
   - `last_message_deleted` (Phase 6B) — the last visible message is a tombstone (deleted for
     everyone). `last_message` is then `""`
-  - `last_message_has_gif` **(Phase 7 Block V-C — not built yet)** — boolean: the last visible
-    message has a GIF
+  - `last_message_has_gif` (Phase 7 Block V-C) — boolean: the last visible message has a GIF.
+    A GIF-only message has `last_message: ""`, so show "GIF" for it
   - **Messages the caller hid ("delete for me") are skipped** for the preview, the ordering and
     `unread_count`. If the caller hid every message in a conversation, that conversation leaves
     **their** inbox until a new message arrives. The other person's inbox is unaffected
@@ -2155,17 +2186,22 @@ campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 202
     holder. Both clients still send it today
   - receiver_id: uuid, required — must exist and be on the caller's campus
   - product_id: uuid, required
-  - content: string, required — at least one non-whitespace character, at most **2000**
-    characters (Phase 6B V-C; before that, no limit). Stored **exactly as sent**: leading
-    and trailing whitespace is kept, and the trim is only used to test for emptiness
+  - content: string, required **unless a `gif` is sent** — at least one non-whitespace character,
+    at most **2000** characters (Phase 6B V-C; before that, no limit). Characters are **code
+    points** (`[...content].length`, runbook §1.12), so an emoji counts as one (Phase 7 V-C;
+    before that, each emoji counted twice). Stored **exactly as sent**: leading and trailing
+    whitespace is kept, and the trim is only used to test for emptiness
   - reply_to_id: uuid or null, **optional** (Phase 6B V-C) — the message this one replies to.
     It must be in this same conversation (same listing, same two people, either direction) and
     not deleted for everyone. Absent or `null` → not a reply, exactly as before. **Send only the
     id.** `reply_to_sender_id` and `reply_preview` are filled by the database trigger
     `trg_fill_message_reply`, and anything sent for them is overwritten
-  - gif: object, **optional (Phase 7 Block V-C — not built yet)** — `provider` `klipy`, `id`, an
-    https `url`, optional https `preview_url`, positive integer `width` and `height`. `content` may
-    then be `''`. Without a GIF, the empty-message rule above stays
+  - gif: object, **optional (Phase 7 Block V-C)** — `provider` `klipy`, a non-empty string `id`,
+    an https `url`, optional https `preview_url`, positive integer `width` and `height`. **Only
+    those six keys are stored;** anything else in the object is dropped. Absent or `null` → no
+    GIF, exactly as before. With a GIF, `content` may be `''` or left out (stored as `''`); the
+    same rule as a GIF in a post (`POST /api/posts`). Without a GIF, the empty-message rule above
+    stays
 **201:** `{ "message": { "<messages row>": "..." } }` — the row includes the
   [four message-action fields](#the-four-message-action-fields-phase-6b). On a reply,
   `reply_to_sender_id` and `reply_preview` are already filled
@@ -2182,8 +2218,11 @@ campus. (Was unauthenticated, with `sender_id` as a body field, until 14 Sep 202
   when `reply_to_id` is present and not `null`
 **400:** `{ "error": "REPLY_TARGET_INVALID" }` — `reply_to_id` names a message in another
   conversation, a deleted-for-everyone message, or no message at all. Raised by the trigger
-**400:** `{ "error": "INVALID_GIF" }` **(Phase 7 Block V-C — not built yet)** — `gif` is present
-  and isn't a valid GIF object
+**400:** `{ "error": "INVALID_GIF", "message": "..." }` (Phase 7 Block V-C) — `gif` is present,
+  not `null`, and isn't a valid GIF object (a JSON string is refused too: send the object).
+  Checked first, before `content`
+**400:** `{ "error": "INVALID_FORMAT", "message": "content must be a string." }` (Phase 7 Block
+  V-C) — a `gif` is present and `content` is neither a string nor absent
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **403:** `{ "error": "FORBIDDEN", "message": "You can only message students on your own
   campus." }` — sender and receiver are on different campuses. **A `NULL` `university_id` on
@@ -2232,6 +2271,8 @@ that reply as a message **from the receiver to the sender**. Consequences worth 
 - The timer lives in process memory: a restart within those 3 seconds loses the reply.
 - The whole block is wrapped in its own `try/catch` that only logs, so a bot failure never
   affects the caller.
+- It never reads `content`, so a GIF-only message gets a reply like any other. The reply is
+  always text.
 
 ### PUT /api/messages/read
 **Module:** messages
@@ -2348,7 +2389,7 @@ told, and no Realtime event is sent.** Remove the message from the local view af
 From then on, `GET /history` leaves it out and `GET /inbox` skips it, for this caller only.
 There is no "unhide".
 
-### PUT /api/messages/:id/reaction (Phase 7 Block V-C — not built yet)
+### PUT /api/messages/:id/reaction (Phase 7 Block V-C)
 **Module:** messages
 **Auth:** **`requireAuth`. The actor is always the caller** (`req.user.id`).
 **Content-Type:** application/json
@@ -2358,23 +2399,29 @@ There is no "unhide".
   - emoji: string, required — exactly one emoji, checked with `isSingleEmoji()`
 **200:** `{ "message": { "<messages row>": "..." } }`. Setting a new emoji replaces the caller's
   reaction
-**400:** `{ "error": "INVALID_FORMAT" }` — `:id` isn't a uuid
-**400:** `{ "error": "INVALID_EMOJI" }`
+**400:** `{ "error": "INVALID_FORMAT", "message": "id must be a valid UUID." }` — `:id` isn't a
+  uuid. Checked before the body
+**400:** `{ "error": "INVALID_EMOJI", "message": "emoji must be exactly one emoji." }` — missing,
+  not a string, text, two emojis, or anything else `isSingleEmoji()` refuses. A skin tone
+  (`👍🏽`) or a joined sequence (`👨‍👩‍👧`) is one emoji
 **400:** `{ "error": "MESSAGE_DELETED" }` — the message was deleted for everyone
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **404:** `{ "error": "MESSAGE_NOT_FOUND" }` — no such message, or the caller is not one of its
   two people
+**500:** `{ "error": "INTERNAL_ERROR", ... }` — unexpected failure
 **Notes:** every rule lives in `react_to_message(p_message_id, p_user_id, p_emoji)`, which does one
-update of the row, so Realtime delivers it to both people.
+update of the row, so Realtime delivers it to both people. The row is locked first, so a reaction
+and a delete for everyone at the same moment take turns.
 
-### DELETE /api/messages/:id/reaction (Phase 7 Block V-C — not built yet)
+### DELETE /api/messages/:id/reaction (Phase 7 Block V-C)
 **Module:** messages
 **Auth:** **`requireAuth`. The actor is always the caller** (`req.user.id`). There is no body.
 **Content-Type:** n/a (no body)
 **Path:**
   - id: uuid, required — the message
-**200:** `{ "message": { "<messages row>": "..." } }` — the row without the caller's reaction
-**400:** `{ "error": "INVALID_FORMAT" }` — `:id` isn't a uuid
+**200:** `{ "message": { "<messages row>": "..." } }` — the row without the caller's reaction.
+  Removing a reaction you don't have is not an error
+**400:** `{ "error": "INVALID_FORMAT", "message": "id must be a valid UUID." }` — `:id` isn't a uuid
 **400:** `{ "error": "MESSAGE_DELETED" }`
 **401:** `{ "error": "UNAUTHORIZED" }` — missing or invalid Bearer token
 **404:** `{ "error": "MESSAGE_NOT_FOUND" }`
