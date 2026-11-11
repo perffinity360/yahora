@@ -35,6 +35,14 @@ const SESSION_KEY = "yahora_session";
 
 const MIN_PASSWORD_LENGTH = 8;
 
+// Demo accounts (Phase 7, runbook §1.11; decided 11 Nov). Every demo username
+// starts with "demo." — the database refuses anything else. The field shows the
+// prefix fixed in front of the input, the student types only the rest, and the
+// page adds the prefix before every check and the save. 20 = the 25-character
+// username limit minus the prefix.
+const DEMO_PREFIX = "demo.";
+const DEMO_SUFFIX_MAX = 20;
+
 // `is_username_available()` reports one of four reasons, and each is kept as a
 // distinct status so the UI can behave differently even where it now READS the
 // same — see USERNAME_STATUS_COPY, where "taken" and "reserved" deliberately
@@ -240,10 +248,23 @@ const Onboarding = () => {
    navigate("/auth", { replace: true });
  };
 
+ // Check if they are a demo user. Needed before the form state: for a demo
+ // account `formData.username` holds only what comes after "demo.".
+ const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
+
+ // The handle as the server knows it: the demo prefix added back on.
+ const toHandle = (typed) => {
+   const t = typed.trim();
+   return isDemoUser && t ? DEMO_PREFIX + t : t;
+ };
+
  // 1. Form State (Pre-filled with existing data if available)
  const [formData, setFormData] = useState({
    fullName: existingProfile.full_name || "",
-   username: existingProfile.username || "",
+   username:
+     isDemoUser && (existingProfile.username || "").startsWith(DEMO_PREFIX)
+       ? existingProfile.username.slice(DEMO_PREFIX.length)
+       : existingProfile.username || "",
    qualification: existingProfile.qualification || "",
    courseId: existingProfile.course_id || "",
    yearOfStudy: existingProfile.year_of_study || "",
@@ -287,8 +308,6 @@ const Onboarding = () => {
  const [uploadingImage, setUploadingImage] = useState(false);
  const fileInputRef = useRef(null);
 
- // Check if they are a demo user
- const isDemoUser = localStorage.getItem("yahora_demo_user") === "true";
 
  // Short, fixed lists — still rendered via the searchable react-select so
  // every academic field (qualification, course, year, specialization) has
@@ -355,7 +374,7 @@ const Onboarding = () => {
  // debounce collapses the burst; the request counter discards anything stale
  // that still arrives late.
  useEffect(() => {
-   const handle = formData.username.trim();
+   const handle = toHandle(formData.username);
 
    // Whatever the server said about the last handle no longer applies.
    setUsernameServerError("");
@@ -447,7 +466,11 @@ const Onboarding = () => {
    if (name === "bio" && value.length > 250) return;
    // Handles are lowercase in the database. Convert silently as they type —
    // a capital letter is a keyboard habit, not a mistake worth an error for.
-   const next = name === "username" ? value.toLowerCase() : value;
+   let next = name === "username" ? value.toLowerCase() : value;
+   // A demo student pasting a whole "demo.x" gets x: the prefix is already there.
+   if (name === "username" && isDemoUser && next.startsWith(DEMO_PREFIX)) {
+     next = next.slice(DEMO_PREFIX.length);
+   }
    setFormData((prev) => ({ ...prev, [name]: next }));
  };
 
@@ -512,7 +535,7 @@ const Onboarding = () => {
    setPasswordError("");
    setLoading(true);
 
-   const handle = formData.username.trim();
+   const handle = toHandle(formData.username);
 
    // Frontend Validation
    if (
@@ -627,7 +650,7 @@ const Onboarding = () => {
 
  // Live validity, recomputed each render — these drive both the inline hints
  // and the submit gate, so the button can never disagree with the messages.
- const trimmedUsername = formData.username.trim();
+ const trimmedUsername = toHandle(formData.username);
  const passwordLongEnough = password.length >= MIN_PASSWORD_LENGTH;
  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
 
@@ -840,10 +863,18 @@ const Onboarding = () => {
              </label>
              <div className={styles.inputWithIcon}>
                <AtSign size={18} className={styles.inputIcon} />
+               {isDemoUser && (
+                 <span className={styles.handlePrefix} aria-hidden="true">
+                   {DEMO_PREFIX}
+                 </span>
+               )}
                <input
                  type="text"
                  name="username"
-                 placeholder="rahul.sharma"
+                 className={isDemoUser ? styles.withPrefix : undefined}
+                 aria-label={isDemoUser ? `Username, after ${DEMO_PREFIX}` : undefined}
+                 maxLength={isDemoUser ? DEMO_SUFFIX_MAX : undefined}
+                 placeholder={isDemoUser ? "good_bunny" : "rahul.sharma"}
                  value={formData.username}
                  onChange={handleChange}
                  autoComplete="username"
@@ -875,7 +906,9 @@ const Onboarding = () => {
                </p>
              )}
 
-             {usernameStatus !== "available" && suggestionChips.length > 0 && (
+             {/* The suggestion endpoints don't know the demo. prefix yet, so a demo
+                 account gets none; it already starts with a generated name. */}
+             {!isDemoUser && usernameStatus !== "available" && suggestionChips.length > 0 && (
                <div className={styles.suggestionChips}>
                  {suggestionChips.map((suggestion) => (
                    <button

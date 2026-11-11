@@ -637,7 +637,7 @@ is `req.user.id` from the verified token and nothing else.
 **Body:**
   - full_name: string, required
   - username: string, required — trimmed and lowercased server-side before any check, so
-    `"Rahul.Sharma "` is stored as `rahul.sharma`. **A demo account's is ignored** (Phase 7
+    `"Rahul.Sharma "` is stored as `rahul.sharma`. **A demo account's is optional** (Phase 7
     V-C): see the demo note below
   - password: string, required, min 8 — never logged, never echoed back
   - qualification: string, required — free text (e.g. `'Graduation'`), not an enum
@@ -736,10 +736,17 @@ path is a bug. (`mapDbError` maps `23505` to the generic `DUPLICATE`; this endpo
 before falling through, because the handle is the only unique column in play.)
 
 **🎭 Demo accounts (Phase 7 V-C, runbook §1.11).** When the caller's campus is the demo one
-(`is_demo`), the `username` in the body is **ignored and not required**: the account keeps the
-`demo.` name it was given at [demo-login](#post-apiauthdemo-login). There is no availability check
-and the profile UPDATE leaves `username` alone. The password-equals-username check compares
-with that stored name. A demo account made before V-C, with no name yet, is named here, before
+(`is_demo`), the `username` in the body is **optional** (changed 11 Nov; it used to be ignored):
+
+- **Sent, and different from the name it holds:** checked exactly like a real student's, and
+  saved. It must be the **whole** handle, `demo.good_bunny`: the clients show `demo.` fixed in
+  front of the input and add it before sending; the server doesn't. A plain `good_bunny` is
+  `400 USERNAME_RESERVED` (the `demo.` rule), with the password unchanged.
+- **Missing, empty, or the name it already holds:** the account keeps the `demo.` name it was
+  given at [demo-login](#post-apiauthdemo-login); no availability check, and the UPDATE leaves
+  `username` alone.
+
+The password-equals-username check compares with whichever of the two is used. A demo account made before V-C, with no name yet, is named here, before
 the password is set (a complete profile needs a username, and a refusal after the password
 change would leave the caller's session dead). Everything else is the same for demo and real
 users.

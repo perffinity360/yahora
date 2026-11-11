@@ -719,21 +719,30 @@ export const completeOnboarding = async (req, res) => {
         }
 
         // 🎭 DEMO (Phase 7 V-C, runbook §1.11). A demo account was named at
-        // demo-login (demo.sunny.otter) and keeps that name: any username in
-        // the body is ignored and none is required, because the demo screens
-        // stop sending one. The generated name never goes through
-        // is_username_available(), and the UPDATE below leaves it alone.
+        // demo-login (demo.sunny.otter). Its onboarding screen shows a fixed
+        // "demo." with the rest editable (decided 11 Nov), so it may send a
+        // name of its own, which must start with demo. — the clients add the
+        // prefix; this doesn't. A chosen name is checked like anyone's, and
+        // a plain one answers USERNAME_RESERVED from the database's rule.
+        // Sending none, or the name it already holds, keeps that name.
         const isDemo = caller.university?.is_demo === true;
+        const requested = typeof rawUsername === 'string' ? rawUsername.trim().toLowerCase() : '';
 
         let username;
+        let checkUsername = !isDemo;
         if (isDemo) {
-            // A demo account made before V-C was deployed has no name yet.
-            // Name it now, BEFORE the password step: the profile can't be
-            // marked complete without a username
-            // (users_username_required_when_complete), and failing that
-            // after the password change would leave the student with a
-            // revoked session (see step 2).
-            username = caller.username ?? (await assignDemoUsername(userId)).username;
+            if (requested && requested !== caller.username) {
+                username = requested;
+                checkUsername = true;
+            } else {
+                // A demo account made before V-C was deployed has no name
+                // yet. Name it now, BEFORE the password step: the profile
+                // can't be marked complete without a username
+                // (users_username_required_when_complete), and failing that
+                // after the password change would leave the student with a
+                // revoked session (see step 2).
+                username = caller.username ?? (await assignDemoUsername(userId)).username;
+            }
         } else {
             // Fold first, exactly as is_username_available() does internally, so a
             // caps-lock student asking about RAHUL is answered about rahul.
@@ -769,9 +778,9 @@ export const completeOnboarding = async (req, res) => {
 
         // The database owns every username rule: charset, length, the reserved
         // list, and the 30-day cooling-off window. Do not re-derive any of them
-        // here — see classifyUnavailableUsername above. A demo account keeps
-        // its generated name, so there is nothing to ask.
-        if (!isDemo) {
+        // here — see classifyUnavailableUsername above. A demo account that
+        // keeps its generated name has nothing to ask.
+        if (checkUsername) {
             const { data: isAvailable, error: rpcError } = await supabase.rpc('is_username_available', {
                 p_username: username,
                 p_user_id:  userId,
@@ -874,12 +883,12 @@ export const completeOnboarding = async (req, res) => {
         }
 
         // ── 3. Only now: the profile row, complete, with the handle. ──
-        // A demo account's generated name is left out, so it stays as it is.
+        // A demo account keeping its generated name leaves it out, so it stays.
         const { data: updatedUser, error: updateError } = await supabase
             .from('users')
             .update({
                 full_name,
-                ...(isDemo ? {} : { username }),
+                ...(checkUsername ? { username } : {}),
                 avatar_url:          avatar_url || null,
                 qualification,       // Frontend string (e.g., 'Graduation')
                 course_id,           // UUID from the database

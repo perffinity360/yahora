@@ -879,8 +879,11 @@ A **Posts** tab sits next to the existing tabs:
 
 ## 11. The demo
 
-- Demo accounts get a username like `@demo.sunny.otter` when they log in. The onboarding
-  screen shows it read-only, with the line `Demo accounts get a name automatically.`
+- Demo accounts get a username like `@demo.sunny.otter` when they log in. On the onboarding
+  screen (owner, 11 Nov) the username field shows **`demo.`** fixed in front of the input, in
+  purple, which can't be deleted; the student edits only the rest (prefilled `sunny.otter`,
+  placeholder `good_bunny`, at most 20 characters) and the availability check and the save use
+  `demo.` + it. A pasted `demo.x` becomes `x`. No suggestion chips for demo accounts.
 - They see only the demo community, filled with the demo personas' posts. Real students
   never see demo posts, and demo accounts never see real ones.
 
