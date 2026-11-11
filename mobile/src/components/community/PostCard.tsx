@@ -33,7 +33,9 @@ import type { PostItem } from '../../types';
  *     own posts, so there is no scope chip);
  *   · `playing`: the card is on screen (FlashList viewability), so its GIFs play;
  *   · `canReply`: false in another country's feed, where 💬 shows the replies
- *     instead of opening the reply composer (spec §3 "Actions").
+ *     instead of opening the reply composer (spec §3 "Actions"). A pending or
+ *     covered post can't take replies either (`can_reply` on its page); the
+ *     server answers POST_NOT_FOUND for those, shown as the posting error.
  *
  * Memoised: a card re-renders only when its own post or flags change. A
  * reaction replaces the post object in the cache, so only that card redraws.
@@ -70,6 +72,7 @@ export const PostCard = memo(function PostCard({
   onReact,
   onOpenProfile,
   onOpenPost,
+  onReply,
 }: {
   post: PostItem;
   index: number;
@@ -81,6 +84,8 @@ export const PostCard = memo(function PostCard({
   onReact: (post: PostItem, emoji: string | null) => void;
   onOpenProfile: (userId: string) => void;
   onOpenPost: (postId: string) => void;
+  /** Where you can reply: 💬 opens the compose screen as a reply (spec §3). */
+  onReply: (post: PostItem) => void;
 }) {
   const reactRef = useRef<ReactButtonHandle>(null);
   const [viewerAt, setViewerAt] = useState<number | null>(null);
@@ -95,10 +100,9 @@ export const PostCard = memo(function PostCard({
   const openProfile = () => onOpenProfile(post.author_id);
 
   const onReplyPress = () => {
-    // Where you can reply, 💬 opens the post's page for now; the reply
-    // composer arrives in part 2 (CC-V4b). Where you can only view, it shows
-    // more of the thread instead.
-    if (canReply) onOpenPost(post.id);
+    // Where you can reply, 💬 opens the compose screen as a reply. Where you
+    // can only view, it shows more of the thread instead (spec §3 "Actions").
+    if (canReply) onReply(post);
     else setMoreRequest((n) => n + 1);
   };
 
@@ -203,7 +207,7 @@ export const PostCard = memo(function PostCard({
                 onPress={onReplyPress}
                 hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
                 accessibilityRole="button"
-                accessibilityLabel={canReply ? `${replyWords}. Open the post` : `${replyWords}. Show them`}
+                accessibilityLabel={canReply ? `${replyWords}. Write a reply` : `${replyWords}. Show them`}
                 style={({ pressed }) => [styles.replyPill, pressed && styles.pillPressed]}
               >
                 <Feather name="message-circle" size={14} color={colors.communityMuted} />

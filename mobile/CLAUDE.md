@@ -131,6 +131,7 @@ mobile/
       profile.tsx                   Dashboard (own profile + listings/purchases, avatar, bio)
     profile/[id].tsx                public profile (read-only)
     post/[id].tsx                   a post's own page (placeholder until CC-V4c)
+    compose.tsx                     write a post or reply (modal): photos / GIF, every result of posting
     edit-profile.tsx                edit-profile form
     sell.tsx                        create/edit listing (multipart upload + live ProductCard preview)
   src/
@@ -143,17 +144,20 @@ mobile/
       marketplace.ts                filter/sort constants + isWithinPostingDate + formatRupees
       community.ts                  COMMUNITY_SPEC §13 constants (same names as the web's utils/community.js),
                                     formatCount, flagEmoji, formatPostTime, the optimistic reaction math
+      klipy.ts                      THE only file that calls KLIPY (GIFs); reads EXPO_PUBLIC_KLIPY_API_KEY
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
     hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
                                     useProductActions (useToggleLike/Save — take a query key) ·
                                     useMarketplace (useMarketplaceFeed) · useMarketplaceFilters ·
                                     useProduct · useAcademics · useAvatarActions ·
-                                    useCommunity (useCountries, useFeed, useThreadReplies, useReact)
+                                    useCommunity (useCountries, useFeed, useThreadReplies, useReact,
+                                    useCreatePost) · useComposer (compose rules + drafts) · useGifs
     components/                     ProductCard · Skeleton · ExpandableBio · AvatarSheet ·
                                     SearchablePicker · AuroraBackground · UniversitiesModal · DemoModal ·
                                     FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
                                     community/ (PostCard, PostThread, PostText, PostMedia, ReactionBar,
-                                    ReactionSummary, CommunitySwitcher, CommunityWallpaper, GlobeIcon)
+                                    ReactionSummary, CommunitySwitcher, CommunityWallpaper, GlobeIcon,
+                                    ComposerDock, GifPicker, SupportCard)
     types/index.ts                  University, UserProfile, Product, MarketplaceProduct, …
 ```
 

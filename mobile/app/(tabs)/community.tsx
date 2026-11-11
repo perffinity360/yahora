@@ -1,6 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-list';
-import { useNavigation, useRouter } from 'expo-router';
+import { useIsFocused, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,9 +9,11 @@ import { AppText } from '../../src/components/AppText';
 import { AppToast, useToast } from '../../src/components/AppToast';
 import { CommunitySwitcher, SWITCHER_HEIGHT, worldLabel } from '../../src/components/community/CommunitySwitcher';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
+import { ComposerDock, DOCK_HEIGHT } from '../../src/components/community/ComposerDock';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { useCountries, useFeed, useReact } from '../../src/hooks/useCommunity';
+import { onComposeResult, useCountries, useFeed, useReact } from '../../src/hooks/useCommunity';
+import { COMPOSER_TEXT, draftFor } from '../../src/hooks/useComposer';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import { GLOBAL, type FeedKind, type FeedSort, type WorldFeed } from '../../src/lib/community';
 import { hrefWithFrom } from '../../src/lib/nav';
@@ -20,14 +22,17 @@ import type { Country, PostItem } from '../../src/types';
 
 /**
  * The Community tab — COMMUNITY_SPEC.md §1.2 (a phone), §3, §9. Phase 7 V-D,
- * part 1 of 3 (CC-V4a): the switcher, the three feeds, the post card and
- * reactions on it. The composer (part 2) and the post page, ⊕, the
- * breakdown, report and delete (part 3) come next.
+ * parts 1 and 2 (CC-V4a, CC-V4b): the switcher, the three feeds, the post
+ * card and reactions on it, and the closed composer in its dock, which opens
+ * the compose screen (app/compose.tsx). The post page, ⊕, the breakdown,
+ * report and delete (part 3) come next.
  *
  *   · one feed at a time: your campus (newest first), or a country / Global
  *     (Hot or New). Each feed shows only its own posts (runbook §1.1);
- *   · a view-only line takes the composer's place in another country's feed
- *     (`can_post: false`, spec §1.4);
+ *   · the composer's dock at the bottom where you can post (your campus, your
+ *     country, Global); a view-only line takes its place in another country's
+ *     feed (`can_post: false`, spec §1.4). A new post lands at the top of its
+ *     feed and the list goes there; a held one shows the toast (spec §2.3);
  *   · pull to refresh, more pages at the end, skeletons, the spec's empty texts.
  *
  * The chosen country and sort are kept while the app is open (module memory),
@@ -89,6 +94,34 @@ export default function CommunityScreen() {
   const label = world ? worldLabel(world, countries) : '';
 
   const react = useReact();
+  const isFocused = useIsFocused();
+  const scope = kind;
+  // Where you can post: your campus always; a country or Global once the feed
+  // says so (`can_post`). Not while it's still loading, so another country's
+  // feed never flashes a composer it can't use.
+  const showComposer = side === 'campus' || feed.data?.canPost === true;
+
+  const openCompose = useCallback(
+    (extra: Record<string, string> = {}) => {
+      const q = new URLSearchParams({ feed: scope, ...(country ? { country } : {}), ...extra });
+      router.push(`/compose?${q.toString()}` as never);
+    },
+    [router, scope, country],
+  );
+  const onReply = useCallback(
+    (post: PostItem) => openCompose({ parent: post.id, to: post.author_username }),
+    [openCompose],
+  );
+
+  // What the compose screen did, once it has closed (spec §2.3).
+  useEffect(
+    () =>
+      onComposeResult((result) => {
+        if (result.kind === 'held') showToast(COMPOSER_TEXT.held);
+        else if (!result.post.parent_post_id) listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }),
+    [showToast],
+  );
 
   const openProfile = useCallback(
     (userId: string) => router.push(hrefWithFrom(`/profile/${userId}`, '/(tabs)/community') as never),
@@ -139,9 +172,10 @@ export default function CommunityScreen() {
         onReact={react}
         onOpenProfile={openProfile}
         onOpenPost={openPost}
+        onReply={onReply}
       />
     ),
-    [zone, canPost, visible, react, openProfile, openPost],
+    [zone, canPost, visible, react, openProfile, openPost, onReply],
   );
 
   const emptyText = useMemo(() => {
@@ -176,7 +210,13 @@ export default function CommunityScreen() {
   );
 
   const topPad = insets.top + SWITCHER_HEIGHT;
-  const dockHeight = viewOnly ? VIEW_ONLY_HEIGHT : 0;
+  const dockHeight = viewOnly ? VIEW_ONLY_HEIGHT : showComposer ? DOCK_HEIGHT : 0;
+  const hint =
+    kind === 'campus'
+      ? "What's happening on campus?"
+      : kind === 'global'
+        ? 'Share with students everywhere'
+        : `Share with students in ${label}`;
   const feedKeyString = `${kind}:${country ?? ''}:${kind === 'campus' ? '' : sort}`;
 
   return (
@@ -223,7 +263,20 @@ export default function CommunityScreen() {
         onSort={setSort}
       />
 
-      {viewOnly ? <ViewOnlyLine country={label} /> : null}
+      {viewOnly ? (
+        <ViewOnlyLine country={label} />
+      ) : showComposer ? (
+        <ComposerDock
+          zone={zone}
+          hint={hint}
+          // Re-read when the tab comes back into view, after the compose screen.
+          draft={isFocused ? draftFor(scope) : null}
+          avatarName={profile?.full_name}
+          avatarUri={profile?.avatar_url}
+          onOpen={() => openCompose()}
+          onPhotos={() => openCompose({ pick: 'photos' })}
+        />
+      ) : null}
 
       <AppToast message={toast} bottom={dockHeight + 16} />
     </View>

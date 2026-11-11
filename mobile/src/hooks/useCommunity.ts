@@ -9,15 +9,17 @@ import {
 import { useCallback } from 'react';
 
 import { api } from '../lib/api';
+import { toUploadFile } from '../lib/upload';
 import {
   applyReaction,
+  distinctById,
   FEED_PAGE_SIZE,
   REPLIES_PAGE_SIZE,
   withReaction,
   type FeedKind,
   type FeedSort,
 } from '../lib/community';
-import type { Country, FeedPage, Paged, PostItem, ReactionResult } from '../types';
+import type { Country, FeedPage, GifRef, Paged, PostItem, ReactionResult } from '../types';
 
 /**
  * The community's reads and reactions — backend/API.md, "posts module (Phase 7)".
@@ -192,4 +194,122 @@ export function useReact() {
     tapCounter += 1;
     mutate({ post, emoji, tap: tapCounter });
   }, [mutate]);
+}
+
+/* ───────────────────────────── Posting ───────────────────────────── */
+
+/** What the compose screen sends (backend/API.md, POST /api/posts). */
+export type NewPost = {
+  content: string;
+  /** Ignored by the server for a reply. */
+  scope: 'campus' | 'country' | 'global';
+  parentId: string | null;
+  gif: GifRef | null;
+  photos: { uri: string; name: string; type: string }[];
+  /** Re-sending after a nudge (`Post anyway`). */
+  confirm: boolean;
+};
+
+/** 201: `{ post }`. 202: `{ post, held: true, support }`. */
+export type CreatePostAnswer = { post: PostItem; held?: boolean; support?: boolean };
+
+/**
+ * The compose screen tells the Community screen what happened after it closes,
+ * so the feed can go to its top for a new post, or show the "being checked"
+ * toast (spec §2.3), on the screen the student is looking at.
+ */
+export type ComposeResult = { kind: 'posted'; post: PostItem } | { kind: 'held' };
+const composeListeners = new Set<(result: ComposeResult) => void>();
+export function onComposeResult(listener: (result: ComposeResult) => void) {
+  composeListeners.add(listener);
+  return () => {
+    composeListeners.delete(listener);
+  };
+}
+export function emitComposeResult(result: ComposeResult) {
+  composeListeners.forEach((l) => l(result));
+}
+
+/** A new top-level post goes to the top of its own feed, in every sort that is
+ *  cached (a feed is always newest first on New; on Hot a new post starts
+ *  high, and the student expects to see what they just posted). */
+function insertNewPost(client: ReturnType<typeof useQueryClient>, post: PostItem) {
+  const prefix: QueryKey =
+    post.scope === 'campus'
+      ? [...FEEDS, 'campus']
+      : post.scope === 'country'
+        ? [...FEEDS, 'country', post.country_code]
+        : [...FEEDS, 'global'];
+  client.setQueriesData<FeedCache>({ queryKey: prefix }, (data) => {
+    if (!data?.pages?.length) return data;
+    if (data.pages.some((p) => p?.items?.some((i) => i.id === post.id))) return data;
+    const [first, ...rest] = data.pages;
+    return { ...data, pages: [{ ...first, items: [post, ...(first?.items ?? [])] }, ...rest] };
+  });
+}
+
+/** A new reply joins its post's preview in every feed (after the top replies,
+ *  as on the website: "the preview, plus anything you just replied"), counts
+ *  one more reply, and goes at the end of any thread already loaded. */
+function insertNewReply(client: ReturnType<typeof useQueryClient>, reply: PostItem) {
+  const parentId = reply.parent_post_id;
+  if (!parentId) return;
+  client.setQueriesData<FeedCache>({ queryKey: FEEDS }, (data) => {
+    if (!data?.pages) return data;
+    let changed = false;
+    const pages = data.pages.map((page) => {
+      if (!page?.items?.some((i) => i.id === parentId)) return page;
+      changed = true;
+      return {
+        ...page,
+        items: page.items.map((i) =>
+          i.id === parentId
+            ? {
+                ...i,
+                replies_count: (i.replies_count ?? 0) + 1,
+                top_replies: distinctById([...(i.top_replies ?? []), reply]),
+              }
+            : i,
+        ),
+      };
+    });
+    return changed ? { ...data, pages } : data;
+  });
+  client.setQueryData<ThreadCache>([...THREADS, parentId], (data) => {
+    if (!data?.pages?.length) return data;
+    const pages = [...data.pages];
+    const last = pages[pages.length - 1];
+    pages[pages.length - 1] = { ...last, items: distinctById([...(last?.items ?? []), reply]) };
+    return { ...data, pages };
+  });
+}
+
+/**
+ * `POST /api/posts`, multipart: content, scope or parent_post_id, gif as a JSON
+ * string, images[], and confirm=true after a nudge. Resolves with the answer
+ * for 201 and 202; rejects with the ApiError for everything else (its `status`
+ * and `body.error` say which), or a plain error when no answer came back.
+ *
+ * A 201 is put straight into the caches. A 202 (held) is not: only its author
+ * can see it, on their Posts tab (part 3).
+ */
+export function useCreatePost() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewPost) => {
+      const form = new FormData();
+      form.append('content', input.content);
+      if (input.parentId) form.append('parent_post_id', input.parentId);
+      else form.append('scope', input.scope);
+      if (input.gif) form.append('gif', JSON.stringify(input.gif));
+      for (const photo of input.photos) form.append('images', toUploadFile(photo));
+      if (input.confirm) form.append('confirm', 'true');
+      return api.uploadForm<CreatePostAnswer>('/api/posts', form);
+    },
+    onSuccess: (answer) => {
+      if (!answer?.post || answer.held) return;
+      if (answer.post.parent_post_id) insertNewReply(client, answer.post);
+      else insertNewPost(client, answer.post);
+    },
+  });
 }
