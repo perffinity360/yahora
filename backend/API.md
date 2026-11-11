@@ -2479,6 +2479,11 @@ as available rather than "taken by you"
 }
 ```
 `reason` ∈ `"TAKEN"` | `"RESERVED"` | `"INVALID_FORMAT"` | `"RECENTLY_RELEASED"`
+**Phase 7 V-C (11 Nov):** a handle that breaks the `demo.` rule is `"RESERVED"`, no longer
+`"INVALID_FORMAT"`: a real student (or a signed-out caller, whose campus counts as real) asking
+for `demo.x`, `demo-x` or `demo_x`, or a demo account asking for a name without `demo.`. The
+controller asks `username_breaks_world_rule()` after the three lookups below; it doesn't state the
+rule itself.
 **Enforced by:** `is_username_available(p_username, p_user_id)` — a single `SECURITY DEFINER`
 RPC that checks **all four** of: format (3–20 chars, lowercase, no leading/trailing or doubled
 `.`/`_`), membership of `reserved_usernames`, an existing `users.username`, and the 30-day
@@ -2687,7 +2692,9 @@ result from a term with no matches means nothing.
   - username: string, required — e.g. `"rahul.sharma"`. Lowercase and trim before sending.
 **200:** `{ "user": { "...": "the updated user object" } }`
 **400:** `{ "error": "USERNAME_TAKEN" }` — the handle went in the moment before you did
-**400:** `{ "error": "USERNAME_RESERVED" }`
+**400:** `{ "error": "USERNAME_RESERVED" }` — on the reserved list, or (Phase 7 V-C, 11 Nov)
+breaking the `demo.` rule: a real student asking for `demo.x` / `demo-x` / `demo_x`, or a demo
+account asking for a name without `demo.`. That used to answer `INVALID_FORMAT`
 **400:** `{ "error": "INVALID_FORMAT" }`
 **429:** `{ "error": "RATE_LIMITED", "next_allowed_at": "2026-09-06T..." }`
 **401:** `{ "error": "UNAUTHORIZED" }`
@@ -3158,7 +3165,8 @@ Flat: there is no nested `author` object.
   "author_name": "Rahul Verma",
   "author_avatar": "https://… or null",
   "author_university": "IIITDM Kurnool",
-  "is_mine": false
+  "is_mine": false,
+  "top_replies": [ { "...": "a reply PostItem, the same shape", "top_replies": [] } ]
 }
 ```
 
@@ -3170,8 +3178,21 @@ Flat: there is no nested `author` object.
 - `moderation_support`: `true` only for the author of a post held because of self-harm, while it's
   still held: show the support card (spec §2.4) under it on their Posts tab. `false` for everyone
   else. The database works this out; the controller just passes it through.
+- `top_replies` (Phase 7 V-C, migrations `feed_top_replies` and `reply_hot_order_hide_reported`,
+  11 Nov): up to **2** reply PostItems (`REPLY_PREVIEW_COUNT`): the first 2 of
+  `GET /api/posts/:id/replies`, in its Hot order. So exactly the replies it would show you: active
+  ones, plus your own held or covered ones, never a deleted one or one you reported. `[]` when there are none, and **always `[]` on a reply** (one level
+  only). Every list carries it: the three feeds, `GET /:id`, `/:id/replies` and `/by-user/:userId`.
+  The nested items come from the database without `hot_score`; the controller passes the field on
+  untouched (`toPostItem` removes only the top-level `hot_score`). Clients: show these under the
+  post, and `Show more replies` loads the thread from `GET /:id/replies`, skipping ids already
+  shown.
 - The SQL functions also return `hot_score`, for building cursors. **Remove it from every item
   before responding.**
+- **What you reported stays hidden from you** (Phase 7 V-C, 11 Nov): the three feeds, `/by-user`,
+  `/:id/replies`, `top_replies` and `/feed/campus/new-count` skip every post and reply you
+  reported. `GET /api/posts/:id` still opens one when asked for it directly. Nobody else is
+  affected; covering a post for everyone is still the report thresholds' job.
 
 ### GET /api/posts/countries   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts
@@ -3269,12 +3290,18 @@ and `can_reply_to_post()`. `can_reply` is false for pending and under-review pos
 **Query:**
   - limit: int, optional, default 20, **at most 50**
   - cursor: opaque string, optional
-**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — ⚠️ **oldest first**, the
-opposite of every feed
-**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid, or a bad cursor
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — **Hot order**
+(`hot_score`, then `id`, both descending), like the Hot feeds. Changed 11 Nov (Phase 7 V-C,
+migration `reply_hot_order_hide_reported`); it was oldest first. A reply's score is
+`(likes + 1) ÷ (hours + 2)^1.5`, refreshed every 5 minutes, so a reply can move between pages;
+de-duplicate by `id`. The first 2 of this order are the post's `top_replies`.
+**400:** `{ "error": "INVALID_FORMAT" }` — not a uuid, or a bad cursor (a cursor from before the
+change is a bad cursor: start again without one)
 **401:** `{ "error": "UNAUTHORIZED" }`
-**Enforced by:** `get_post_replies()` — active, undeleted replies, plus your own pending and
-under-review ones. A covered reply is missing for everyone but its author.
+**Enforced by:** `get_post_replies(…, p_sort => 'hot', p_cursor_score, p_cursor_id)` — active,
+undeleted replies, plus your own pending and under-review ones, minus any you reported. A
+covered reply is missing for everyone but its author. (The function's `p_sort => 'oldest'`
+default exists only for the backend deployed before the change.)
 
 ### GET /api/posts/by-user/:userId   `OWNER: Neeraj`  `PHASE 7`
 **Module:** posts

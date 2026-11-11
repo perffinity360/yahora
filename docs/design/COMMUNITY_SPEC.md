@@ -78,8 +78,8 @@
 > in the interface itself.
 > Generic rules from this redesign are in `frontend/DESIGN.md` and `mobile/DESIGN.md`.
 >
-> **⚠ Needs an API change before it works on real data:** `top_replies` on a PostItem (§4), decided
-> for Block V-C. Until then a post shows only `Show more replies`.
+> **`top_replies` on a PostItem (§4)** is built (Block V-C, migration `feed_top_replies`, 11 Nov). It
+> reaches production when that migration is pushed; until then a post shows only `Show more replies`.
 >
 > **Changed in version 2:** each feed shows only its own posts, so the scope chip is gone
 > (§1.1, §3), and a covered post shows only a notice, with no "View anyway" (§3.1).
@@ -514,15 +514,15 @@ Replies now show **under each post in the feed,** as well as on the post's page.
  ╰─── ⌄ Show more replies  ⌃ Hide replies   ← Hide only once Show more was pressed
 ```
 
-- **Top replies show by default:** the **2** most-liked (`REPLY_PREVIEW_COUNT`), oldest first when
-  tied.
-- **`Show more replies`** loads the next **10** (`REPLIES_PAGE_SIZE`) in place, oldest first, without
+- **Top replies show by default:** the **2** hottest (`REPLY_PREVIEW_COUNT`): replies are ranked by
+  the Hot formula, `(likes + 1) ÷ (hours + 2)^1.5` (owner, 11 Nov; was "most liked").
+- **`Show more replies`** loads the next **10** (`REPLIES_PAGE_SIZE`) in place, in the same Hot order, without
   leaving the feed, then shows again while there are more. It disappears when there are none left. The
   API's default page is 20, so the client sends `?limit=REPLIES_PAGE_SIZE`. A top reply isn't shown
   twice, so a page that includes one adds one fewer.
   - **Not for fewer than 3 replies** (`REPLIES_FOLD_MIN`): a post with 1 or 2 replies shows them all in
-    its preview and never shows the button. Without `top_replies` (the API doesn't send it yet, see below)
-    such a post loads its replies by itself and shows them as its preview.
+    its preview and never shows the button. Without `top_replies` (an API from before
+    migration `feed_top_replies`, see below) such a post loads its replies by itself and shows them as its preview.
   - **Never for one or two left over:** if a page would leave only 1 or 2 replies unloaded, the same press
     loads them too (at most 3 pages a press).
 - **`Hide replies`** (chevron up, `communityMuted`, purple on hover) appears beside `Show more replies` once
@@ -608,11 +608,10 @@ Replies now show **under each post in the feed,** as well as on the post's page.
 - **A post's page:** website `/post/:id`, app `app/post/[id].tsx` (CC-N4c). The same post and thread
   with all replies paged, and text at 15/22.
 
-**⚠ API change needed (decided for Block V-C, not built).** `top_replies` is new. Each PostItem needs
-`top_replies`: up to `REPLY_PREVIEW_COUNT` reply PostItems, most liked first. That means a change to the feed
-SQL functions (Vishwajeet), `backend/API.md`, and the posts controller. Until it exists, a post with replies
-shows only `Show more replies`, which already works from `GET /api/posts/:id/replies`. `sampleData.js`
-already sends the field, so the screens are ready.
+**`top_replies` (built in Block V-C, migration `feed_top_replies`, 11 Nov).** Each PostItem carries
+`top_replies`: the first `REPLY_PREVIEW_COUNT` (2) replies of the thread, which is in Hot order (migration
+`reply_hot_order_hide_reported`, 11 Nov), so only replies the viewer could see in the thread itself. A reply's
+own `top_replies` is always `[]`. Contract: `backend/API.md`, "The PostItem" and `GET /api/posts/:id/replies`.
 
 ---
 
@@ -809,7 +808,9 @@ are always welcome — you won't be penalised if we decide a post doesn't break 
 - **Who can report:** anyone who can see the post, in any feed or country, except the post's
   own author.
 - **After sending:** toast `Thanks for letting us know. Our team will review this.` The post
-  disappears from **your** feed straight away.
+  disappears from **your** feed straight away, and stays gone: the API leaves out everything you
+  reported, in every feed, a profile's Posts tab, a thread and its preview (owner, 11 Nov). Only a direct
+  link to it still opens it.
 - **Already reported:** `You've already reported this post.`
 - **The outcome is never shown to the reporter.**
 

@@ -274,25 +274,33 @@ export const getPost = async (req, res) => {
 };
 
 // ───────────────────────────────────────────────────────────────────────────
-// GET /api/posts/:id/replies — ⚠ oldest first
+// GET /api/posts/:id/replies — Hot order (hot_score, id), like the Hot feeds
 // ───────────────────────────────────────────────────────────────────────────
+// Changed by Vishwajeet's session on 11 Nov, during the loan, at his decision
+// (migration reply_hot_order_hide_reported; changelog "Replies by Hot…"). It was
+// oldest first with a time cursor. The preview under a post (top_replies) is
+// the first 2 of this same order, so the client's de-duplication still holds.
 export const getPostReplies = async (req, res) => {
   try {
     const postId = req.params.id;
     if (!isUuid(postId)) return sendError(res, 400, 'INVALID_FORMAT');
 
-    const page = readTimePageParams(req.query);
-    if (!page) return sendError(res, 400, 'INVALID_FORMAT');
+    const raw = readCursorParam(req.query.cursor);
+    const cursor = raw === null ? null : decodeCursor(raw, 'number');
+    if (raw !== null && cursor === null) return sendError(res, 400, 'INVALID_FORMAT');
+    const limit = parsePageLimit(req.query.limit);
 
     const { data, error } = await supabase.rpc('get_post_replies', {
       p_viewer: req.user.id,
       p_post_id: postId,
-      p_limit: page.limit,
-      ...page.cursorArgs,
+      p_limit: limit,
+      p_sort: 'hot',
+      p_cursor_score: cursor ? cursor.value : null,
+      p_cursor_id: cursor ? cursor.id : null,
     });
     if (error) return mapDbError(res, error);
 
-    return res.json(buildPage(data, page.limit, 'created_at'));
+    return res.json(buildPage(data, limit, 'hot_score'));
   } catch (error) {
     return mapDbError(res, error);
   }
