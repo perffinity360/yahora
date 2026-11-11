@@ -80,6 +80,14 @@ change both.
   default for you (owner, 10 Nov).
 - Never hide an action behind a second tap on something that looks selected. Give it its own button.
 
+## Shadows and overlays
+
+- **Shadows are `boxShadow` strings** from `shadows` in `src/theme` (RN 0.76+), the same values as the
+  website's CSS variables, so a card or a menu floats the same on both.
+- **A small choice that hangs off a button** (the quick bar, the country dropdown) opens in a transparent
+  `Modal`, placed from the button's `measureInWindow`, so a card or a list never clips it. A press outside
+  closes it; it never moves the content under it.
+
 ## Motion
 
 - Reanimated on the UI thread. Use a spring for small things that should pop.

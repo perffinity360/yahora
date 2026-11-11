@@ -1403,8 +1403,12 @@ after its checkpoint, so the next starts from `main`.
 3. Tap the second segment: **🇮🇳 India** is selected. Tap it again: the dropdown shows India
    (your country) first, then Global, then Germany (the local test campus CC-V2 adds).
 4. Switch to **Global**, then flip **Hot · New**: the order changes.
-5. Tap **♡** on a post: it becomes ❤️ and the summary count goes up by 1. Tap again: back to ♡.
-6. Long-press ♡: the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕) appears. Pick 😂: the button shows 😂.
+5. Tap the **React** smiley on a post: the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕) opens (spec 3.9: a tap
+   always opens it, never gives ❤️ by itself). Pick ❤️: the button shows ❤️ and the summary goes up
+   by 1. Open it again and pick ❤️: it's removed. Long-press the React button, or the post itself:
+   the bar opens too.
+6. Pick 😂: the button shows 😂, the summary's ❤️ goes down and 😂 up. On a reply, the heart is a
+   plain like: tap it, it fills and counts 1; tap again, it's gone.
 7. Turn on airplane mode and pull to refresh: a friendly error, no crash. Turn it off again.
 
 **👁️ CHECKPOINT V-D4b**

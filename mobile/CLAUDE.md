@@ -124,11 +124,13 @@ mobile/
     _layout.tsx                     root: GestureHandlerRootView + QueryClient + AuthProvider + routing guard
     (auth)/                         login (6-digit OTP + demo) · onboarding
     (tabs)/
-      _layout.tsx                   tab bar (Feather icons: shopping-bag / message-square / user)
+      _layout.tsx                   tab bar (Feather icons: shopping-bag / users / message-square / user)
       index.tsx                     Marketplace: FlashList grid + swipe deck + filters/sort + campus switch
+      community.tsx                 Community (Phase 7): floating switcher, campus / country / Global feeds
       messages.tsx                  Messages placeholder
       profile.tsx                   Dashboard (own profile + listings/purchases, avatar, bio)
     profile/[id].tsx                public profile (read-only)
+    post/[id].tsx                   a post's own page (placeholder until CC-V4c)
     edit-profile.tsx                edit-profile form
     sell.tsx                        create/edit listing (multipart upload + live ProductCard preview)
   src/
@@ -139,14 +141,19 @@ mobile/
       supabase.ts                   Supabase client (AsyncStorage session; URL from config.ts)
       upload.ts                     toUploadFile(): FormData file part with .bytes() for Winter fetch
       marketplace.ts                filter/sort constants + isWithinPostingDate + formatRupees
+      community.ts                  COMMUNITY_SPEC §13 constants (same names as the web's utils/community.js),
+                                    formatCount, flagEmoji, formatPostTime, the optimistic reaction math
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
     hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
                                     useProductActions (useToggleLike/Save — take a query key) ·
                                     useMarketplace (useMarketplaceFeed) · useMarketplaceFilters ·
-                                    useProduct · useAcademics · useAvatarActions
+                                    useProduct · useAcademics · useAvatarActions ·
+                                    useCommunity (useCountries, useFeed, useThreadReplies, useReact)
     components/                     ProductCard · Skeleton · ExpandableBio · AvatarSheet ·
                                     SearchablePicker · AuroraBackground · UniversitiesModal · DemoModal ·
-                                    FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert
+                                    FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
+                                    community/ (PostCard, PostThread, PostText, PostMedia, ReactionBar,
+                                    ReactionSummary, CommunitySwitcher, CommunityWallpaper, GlobeIcon)
     types/index.ts                  University, UserProfile, Product, MarketplaceProduct, …
 ```
 
