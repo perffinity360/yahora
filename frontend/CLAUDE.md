@@ -19,7 +19,7 @@ This is the **web** app. There is a separate `mobile/` (React Native) app and a 
 1. **Read the real source before assuming anything.** Before wiring an endpoint, open the matching backend controller in `../backend/src/modules/<module>/`. Before touching data shapes, check `../database/schema.md`. Do not guess column names, response shapes, or field formats. (Example of why: the OTP is **6 digits**, delivered via Supabase — it was 8 until Phase 3, and docs that still say 8 are stale. Assumptions like this have caused bugs.)
 2. **Respect campus isolation.** Any request that reads or writes campus-scoped data must carry the correct `university_id`. Interaction endpoints must never operate across campuses.
 3. **Match existing patterns.** This codebase has established conventions (raw `fetch`, CSS Modules, `AuthContext`, lucide icons). Follow them — do not introduce axios, styled-components, Redux, TanStack Query, or new state libraries on the web without being asked.
-4. **Verification is the user's job.** Do not claim something works in the browser. Commit after each logical unit of work and let Vishwajeet verify in the browser.
+4. **Test only when it is quick and reliable (owner, 13 Nov; root `CLAUDE.md`, "How we work").** Test yourself only when it can be done quickly, reliably and without unnecessary token or resource use, and only once the expected outcome is clear and matches what the owner wants. If anything is ambiguous, ask first, or hand the check to the humans with exactly what to look at and how. Never test on an assumption that could check the wrong thing. Never claim something works in the browser unless you actually checked it; say what you checked and what you didn't. Commit after each logical unit of work.
 5. **Keep it minimal.** Prefer small, surgical diffs over large rewrites. Do not refactor unrelated code.
 
 ---
@@ -261,7 +261,7 @@ Base = `${VITE_API_BASE_URL}/api`. Confirm the exact request/response shape in t
 - Do not hardcode brand colors — use the CSS variables.
 - Do not bypass `university_id` scoping or enable cross-campus interaction.
 - Do not rename existing folders/files or do broad refactors unless explicitly requested.
-- Do not claim browser behavior is verified — commit and hand off to Vishwajeet for verification.
+- Do not claim browser behaviour is verified unless you checked it (see §2.4); otherwise hand over exactly what to check.
 - Do not edit `mobile/` or `backend/` from a frontend task unless explicitly asked (this brief covers `frontend/` only).
 
 ---
@@ -297,7 +297,7 @@ Before ANY UI work, read DESIGN.md fully. Its tokens are canonical — never har
 - GSAP + ScrollTrigger + Lenis: public landing/marketing pages ONLY. App surfaces use native scroll.
 - Every interactive element: hover + press + focus-visible. Every async surface: skeleton, empty, error, success.
 - Animate transform/opacity only. Respect prefers-reduced-motion.
-- After building a screen: screenshot via Playwright MCP at 1440px and 390px, self-critique, fix, re-verify.
+- After building a screen: when a quick, reliable check is possible (§2.4), screenshot via Playwright MCP at 1440px and 390px, self-critique, fix, re-verify. Otherwise hand the humans a checklist of what to look at, at which widths.
 
 ---
 

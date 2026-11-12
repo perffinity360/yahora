@@ -41,16 +41,18 @@ import { colors, shadows } from '../../theme';
  * The bar opens in an AnchoredModal laid over the screen, measured from the
  * button, so it is never clipped by the card or the list. Like the website's
  * Popover (and Facebook's and LinkedIn's bars), its left end lines up with the
- * button's and it sits 8 above it; below it only when there's no room above.
+ * button's and it sits 4 above it; below it only when there's no room above.
  * It reports only the choice, through onReact(emoji | null).
  */
 
-/** Quick-bar emoji: 26 in a 44 × 44 button on a touch screen (spec §5.1). */
-const CELL = 44;
+/** Quick-bar emoji: 24 in a 40 × 40 button (owner, 13 Nov: a touch smaller than spec §5.1's 26 in 44;
+ *  40 is still above Material's 40 dp minimum for a dense row). */
+const CELL = 40;
 const BAR_PAD = 4;
 const BAR_WIDTH = CELL * (QUICK_REACTIONS.length + 1) + BAR_PAD * 2;
 const BAR_HEIGHT = CELL + BAR_PAD * 2;
-const GAP = 8;
+/** Between the bar and the React button: 4, a little closer than the 8 it had (owner, 13 Nov). */
+const GAP = 4;
 const EDGE = 8;
 const STAGGER_MS = 18;
 
@@ -178,8 +180,8 @@ function QuickBar({
   return (
     <AnchoredModal anchor={anchor} onClose={onClose} closeLabel="Close reactions">
       {(button, layer) => {
-        // The bar's left end on the button's, kept on screen; 8 above the
-        // button, or 8 below it for a post at the very top of the feed.
+        // The bar's left end on the button's, kept on screen; GAP above the
+        // button, or GAP below it for a post at the very top of the feed.
         const left = Math.min(Math.max(button.x, EDGE), layer.width - BAR_WIDTH - EDGE);
         const above = button.y - GAP - BAR_HEIGHT >= insets.top + EDGE;
         const top = above ? button.y - GAP - BAR_HEIGHT : button.y + button.height + GAP;
@@ -220,7 +222,7 @@ function QuickBar({
                 accessibilityLabel="More emoji"
                 style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
               >
-                <Feather name="plus-circle" size={21} color={colors.communityMuted} />
+                <Feather name="plus-circle" size={19} color={colors.communityMuted} />
               </Pressable>
             </Reanimated.View>
           </Reanimated.View>
@@ -278,12 +280,12 @@ const styles = StyleSheet.create({
   },
   cellPressed: { transform: [{ scale: 1.18 }, { translateY: -3 }] },
   cellInner: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cellMine: { backgroundColor: colors.reactionMineBg },
-  quickEmoji: { fontSize: 26, lineHeight: 32 },
+  quickEmoji: { fontSize: 24, lineHeight: 30 },
 });

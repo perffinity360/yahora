@@ -182,6 +182,8 @@ export function PostActionsProvider({
 const MENU_W = 168;
 /** One 44-tall item and the menu's padding. */
 const MENU_H = 52;
+/** From the centre of the ⋯ dots to the menu's edge. */
+const MENU_GAP = 9;
 
 function PostMenu({
   post,
@@ -199,11 +201,15 @@ function PostMenu({
   return (
     <AnchoredModal anchor={anchor} onClose={onClose}>
       {(button, layer) => {
-        // Under the ⋯ button, right edges lined up; above it near the bottom.
+        // Just under the dots, right edges lined up; just over them near the
+        // bottom of the screen. Measured from the dots' centre, not the icon's
+        // box: from the box the menu sat ~12 below the dots, which read as
+        // detached (owner, 13 Nov). The ⋯ glyph is about 3 tall, so the menu's
+        // edge lands ~6 from the dots themselves.
+        const mid = button.y + button.height / 2;
         const left = Math.min(Math.max(button.x + button.width - MENU_W, 8), layer.width - MENU_W - 8);
-        const below = button.y + button.height + 4;
-        const above = below + MENU_H > layer.height - 8;
-        const top = above ? button.y - 4 - MENU_H : below;
+        const above = mid + MENU_GAP + MENU_H > layer.height - 8;
+        const top = above ? mid - MENU_GAP - MENU_H : mid + MENU_GAP;
         return (
           <Reanimated.View
             entering={POPOVER_ENTER}

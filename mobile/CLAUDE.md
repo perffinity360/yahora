@@ -147,7 +147,7 @@ mobile/
       community.ts                  COMMUNITY_SPEC §13 constants (same names as the web's utils/community.js),
                                     formatCount, flagEmoji, formatPostTime, the optimistic reaction math
       klipy.ts                      THE only file that calls KLIPY (GIFs); reads EXPO_PUBLIC_KLIPY_API_KEY
-      motion.ts                     POPOVER_ENTER / DIALOG_ENTER: smooth, non-bouncing entrances (DESIGN.md "Motion")
+      motion.ts                     POPOVER_ENTER / DIALOG_ENTER / SHEET_RISE: smooth, non-bouncing entrances (DESIGN.md "Motion")
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
     hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
                                     useProductActions (useToggleLike/Save — take a query key) ·
@@ -156,7 +156,8 @@ mobile/
                                     useCommunity (feeds, threads, the post page, profiles' Posts,
                                     reactions, posting, delete, report, the new-posts count — and the
                                     cache helpers that keep every list in step) · useComposer · useGifs
-    components/                     AnchoredModal (menus that hang off a button) · ProductCard · Skeleton ·
+    components/                     AnchoredModal (menus that hang off a button) · ModalSafeArea (insets inside
+                                    a Modal) · ProductCard · Skeleton ·
                                     ExpandableBio · AvatarSheet ·
                                     SearchablePicker · AuroraBackground · UniversitiesModal · DemoModal ·
                                     FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
@@ -203,6 +204,14 @@ mobile/
   `AnchoredModal` subtracts the position of `WindowOriginMarker` (a view filling the app's root, mounted
   in `app/_layout.tsx`), measured the same way, so the offset cancels out on any phone. Measuring the
   Modal's own layer does NOT work: inside the Modal it reads 0 (tried 12 Nov, still wrong on the POCO).
+- **A bottom sheet in a Modal: `ModalSafeArea` for its insets, `SHEET_RISE` for its entrance.** Inside a
+  Modal, `useSafeAreaInsets()` returns the screen's insets from outside it, which left the reaction
+  breakdown's pills under the POCO's three-button bar. The native `SafeAreaView` fixed that but padded a
+  frame late, so the sheet grew mid-rise and jumped. Wrap the Modal's content in `ModalSafeArea`
+  (`src/components/ModalSafeArea.tsx`): its insets are the Modal's own, known before the first frame. And
+  rise on your own clock (a shared value 0 → 1 times the measured height, `SHEET_RISE` in
+  `src/lib/motion.ts`), never `SlideInDown`, which can draw the sheet in place for a frame first.
+  `ReactionBreakdownSheet`, `GifPicker` and `BuyerPickerSheet` are the examples.
 - **Edge-to-edge screens keep the status bar solid.** A screen that draws under the status bar (the
   community feed, the post page) renders `StatusBarGround` after its list, in its own background colour,
   so content never scrolls under the clock.

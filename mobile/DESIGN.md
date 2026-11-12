@@ -205,7 +205,8 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   without overshoot. The springy `ZoomIn` on the community's quick bar, ⋯ menu, country dropdown and report
   form wobbled and read as bouncing. Use `src/lib/motion.ts`: `POPOVER_ENTER` (fade + scale 0.94 → 1,
   180 ms, grown from the button through `transformOrigin`) for what hangs off a button, `DIALOG_ENTER`
-  (220 ms) for a centred card. Sheets slide up 280 ms, ease-out cubic. Never grow from scale 0.
+  (220 ms) for a centred card. Sheets slide up 280 ms, ease-out cubic (`SHEET_RISE`), on their own clock with
+  the scrim fading in on the same one, and never change height while rising. Never grow from scale 0.
 - **Physics is welcome where it doesn't wobble** (the standard's §4, "appropriate physics": springs, momentum,
   friction, decay). Use it where a finger drives the motion (a swipe, a drag, a fling, a pager settling, a
   thumb released) and for state changes, with damping high enough, or `overshootClamping`, that nothing

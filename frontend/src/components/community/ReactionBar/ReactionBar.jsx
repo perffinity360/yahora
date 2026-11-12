@@ -117,6 +117,10 @@ export default function ReactionBar({ reaction, onReact }) {
     // Once the picker is open the student is choosing; only a press outside,
     // Esc or a choice closes it — never the pointer wandering off.
     if (expanded) return;
+    // Opened by a click or tap, the bar stays until an emoji is chosen, React is
+    // pressed again, or a press outside / Esc; the pointer leaving never closes
+    // it (owner, 13 Nov). Only a bar that hover opened closes on leave.
+    if (openedBy.current === "press") return;
     closeTimer.current = setTimeout(() => setBarOpen(false), HOVER_CLOSE_MS);
   };
 
@@ -220,6 +224,7 @@ export default function ReactionBar({ reaction, onReact }) {
         <Popover
           anchorEl={button}
           placement="top"
+          gap={4}
           onClose={closeBar}
           role="toolbar"
           ariaLabel="Reactions"

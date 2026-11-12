@@ -25,3 +25,12 @@ export const DIALOG_ENTER = new Keyframe({
   0: { opacity: 0, transform: [{ scale: 0.96 }, { translateY: 8 }] },
   100: { opacity: 1, transform: [{ scale: 1 }, { translateY: 0 }], easing: EASE_OUT },
 }).duration(220);
+
+/**
+ * A bottom sheet rising, with its scrim fading in on the same clock. Drive it
+ * with a shared value (0 → 1) and the sheet's measured height, never with
+ * `SlideInDown`: a layout animation starts a frame after the view is drawn, so
+ * in a fresh Modal the sheet flashes in place before it rises (BuyerPickerSheet,
+ * 27 Oct; the reaction breakdown, 13 Nov).
+ */
+export const SHEET_RISE = { duration: 280, easing: Easing.out(Easing.cubic) };

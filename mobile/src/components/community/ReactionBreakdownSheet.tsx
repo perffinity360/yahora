@@ -1,10 +1,18 @@
 import Feather from '@expo/vector-icons/Feather';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Reanimated, { Easing, SlideInDown } from 'react-native-reanimated';
+import { useEffect } from 'react';
+import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Reanimated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../AppText';
+import { ModalSafeArea } from '../ModalSafeArea';
 import { formatCount, sortedReactions } from '../../lib/community';
+import { SHEET_RISE } from '../../lib/motion';
 import { colors, font } from '../../theme';
 
 /**
@@ -16,10 +24,34 @@ import { colors, font } from '../../theme';
  *
  * Pills of emoji + count, biggest first, three to a row, with ⊕ (add your own,
  * the full picker) first. Counts only: who reacted is never shown.
+ *
+ * HOW IT OPENS, WITHOUT A JUMP (owner, 13 Nov: "it jumps while doing so").
+ *   · The bottom padding comes from `ModalSafeArea`, the Modal's own insets,
+ *     known before the first frame. The screen's insets from outside the Modal
+ *     left the pills under the POCO's three-button bar; the native SafeAreaView
+ *     that fixed it added its padding a frame late, so the sheet grew mid-rise.
+ *   · The rise is our own (`shown`, 0 → 1, over the sheet's measured height),
+ *     not `SlideInDown`, which can draw the sheet in place for a frame first.
+ *     The sheet starts a whole screen down, so it is never seen before it moves.
+ *   · The scrim fades in on the same clock, so the dark never arrives first.
  */
-const SHEET_ENTER = SlideInDown.duration(280).easing(Easing.out(Easing.cubic));
+export function ReactionBreakdownSheet(props: {
+  counts: Record<string, number>;
+  total: number;
+  mine: string | null;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={props.onClose}>
+      <ModalSafeArea>
+        <Sheet {...props} />
+      </ModalSafeArea>
+    </Modal>
+  );
+}
 
-export function ReactionBreakdownSheet({
+function Sheet({
   counts,
   total,
   mine,
@@ -33,42 +65,59 @@ export function ReactionBreakdownSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const rows = sortedReactions(counts);
+
+  const shown = useSharedValue(reduceMotion ? 1 : 0);
+  const sheetHeight = useSharedValue(Dimensions.get('screen').height);
+  useEffect(() => {
+    if (!reduceMotion) shown.value = withTiming(1, SHEET_RISE);
+  }, [reduceMotion, shown]);
+  const riseStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - shown.value) * sheetHeight.value }],
+  }));
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: shown.value }));
+
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
-        <Reanimated.View entering={SHEET_ENTER} style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-          <View style={styles.handle} />
-          <AppText style={styles.title} accessibilityRole="header">
-            {formatCount(total)} {total === 1 ? 'reaction' : 'reactions'}
-          </AppText>
-          <ScrollView contentContainerStyle={styles.grid}>
-            <Pressable
-              onPress={onAdd}
-              accessibilityRole="button"
-              accessibilityLabel="Add your own reaction"
-              style={({ pressed }) => [styles.cell, styles.pill, pressed && styles.pressed]}
+    <View style={styles.root}>
+      <Reanimated.View style={[styles.scrim, scrimStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+      </Reanimated.View>
+      <Reanimated.View
+        onLayout={(e) => {
+          sheetHeight.value = e.nativeEvent.layout.height;
+        }}
+        style={[styles.sheet, { paddingBottom: insets.bottom + 16 }, riseStyle]}
+      >
+        <View style={styles.handle} />
+        <AppText style={styles.title} accessibilityRole="header">
+          {formatCount(total)} {total === 1 ? 'reaction' : 'reactions'}
+        </AppText>
+        <ScrollView contentContainerStyle={styles.grid}>
+          <Pressable
+            onPress={onAdd}
+            accessibilityRole="button"
+            accessibilityLabel="Add your own reaction"
+            style={({ pressed }) => [styles.cell, styles.pill, pressed && styles.pressed]}
+          >
+            <Feather name="plus-circle" size={18} color={colors.purple} />
+          </Pressable>
+          {rows.map(([emoji, count]) => (
+            <View
+              key={emoji}
+              style={[styles.cell, styles.pill, emoji === mine && styles.pillMine]}
+              accessible
+              accessibilityLabel={`${emoji} ${count}${emoji === mine ? ', yours' : ''}`}
             >
-              <Feather name="plus-circle" size={18} color={colors.purple} />
-            </Pressable>
-            {rows.map(([emoji, count]) => (
-              <View
-                key={emoji}
-                style={[styles.cell, styles.pill, emoji === mine && styles.pillMine]}
-                accessible
-                accessibilityLabel={`${emoji} ${count}${emoji === mine ? ', yours' : ''}`}
-              >
-                <AppText style={styles.emoji} maxFontSizeMultiplier={1}>
-                  {emoji}
-                </AppText>
-                <AppText style={[styles.count, emoji === mine && styles.countMine]}>{formatCount(count)}</AppText>
-              </View>
-            ))}
-          </ScrollView>
-        </Reanimated.View>
-      </View>
-    </Modal>
+              <AppText style={styles.emoji} maxFontSizeMultiplier={1}>
+                {emoji}
+              </AppText>
+              <AppText style={[styles.count, emoji === mine && styles.countMine]}>{formatCount(count)}</AppText>
+            </View>
+          ))}
+        </ScrollView>
+      </Reanimated.View>
+    </View>
   );
 }
 

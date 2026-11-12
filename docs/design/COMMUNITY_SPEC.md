@@ -115,9 +115,10 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 ```
 
 - **Two zones, one wallpaper:** both panels keep the chat's doodle tile (`MESSAGES_SPEC.md` §2), pinned
-  while posts scroll, but faint, **15%**, so its lines never meet the text. Each panel has its own ground:
-  `communityPanelCampus` (purple tint) on the left, `communityPanelWorld` (pink tint) on the right. (The
-  veil over the tile is that ground at 85%: `communityPanelCampusVeil`, `communityPanelWorldVeil`.) A narrow window takes
+  while posts scroll, at **30%** on both the website and the app (owner, 13 Nov; it was 15%). Each panel
+  has its own ground: `communityPanelCampus` (purple tint) on the left, `communityPanelWorld` (pink tint) on
+  the right. (The website's veil over the tile is that ground at 70%: `communityPanelCampusVeil`,
+  `communityPanelWorldVeil`; the app draws the tile at 30%, `COMMUNITY_WALLPAPER_OPACITY`.) A narrow window takes
   the ground of the feed it shows. Posts sit on frosted cards (§3).
 - **No frame around the panels** (owner, 7 Nov): they run to the window's edges, with square corners, and
   the composer bar sits on its bottom edge. The page clips anything at its edges (`overflow: clip`): with
@@ -671,27 +672,35 @@ reaction; picking your current one again removes it. Replies have only a like (�
   pill. It tints purple on hover. **Pressing it always opens the quick bar, never ❤️ by itself** (owner,
   10 Nov), whatever you press it with, on the website and in the app: a press that gave ❤️ hid the other
   five emojis.
-- **Look:** a white pill with radius 999 and a soft shadow. With a mouse, each emoji is 22 in a
-  34 × 34 button. On a touch screen, 26 in 44 × 44. Your current reaction sits on a `reactionMineBg`
-  circle.
+- **Look:** a white pill with radius 999, a 1 px purple ring and a deeper two-layer shadow, so it stands
+  off the white cards (owner, 13 Nov: `--quick-bar-ring` + `--quick-bar-raised-shadow`; the app's
+  `shadows.quickBarRaised`). With a mouse, each emoji is 22 in a 34 × 34 button. On a touch screen, 26 in
+  44 × 44; the app, 24 in 40 × 40 (owner, 13 Nov: a touch smaller). Your current reaction sits on a
+  `reactionMineBg` circle.
+- **Where:** its left end on the React button's, **4** above it (below it when there's no room above).
+  It was 8 (owner, 13 Nov: closer).
 - **How to open it:**
   - **App:** tap React = the quick bar; tapping React again closes it. Long-press React (or long-press
     the post) opens it too.
-  - **Website, with a mouse:** click React = the quick bar; a second click closes it. Hovering React for
-    **300 ms** still opens it as well, and a click after that keeps it open rather than shutting it.
+  - **Website, with a mouse:** click React = the quick bar; a second click closes it. Opened by a click,
+    it **stays open when the pointer moves away**, until you choose an emoji, click React again, click
+    outside or press Esc (owner, 13 Nov). Hovering React for **300 ms** still opens it as well, and that
+    one closes when the pointer leaves; a click after the hover keeps it open rather than shutting it.
   - **Website, from the keyboard:** Enter, Space or ↑ on React opens it with the focus on its first
     emoji; ← → move along it and Esc closes it.
   - **Website, on a touch screen:** tap React = the quick bar; tapping React again closes it. A
     long-press for **450 ms** (`REACTION_LONG_PRESS_MS`) opens it too.
   - **Everywhere,** your current reaction sits on its `reactionMineBg` circle: choosing it again removes
     it, choosing another replaces it. `DEFAULT_REACTION` (❤️) is now only a reply's like (§4).
-  - **Website:** your current reaction also moves to the **first place** in the bar. If it isn't one of
-    the six (you chose it from ⊕), it takes the first place and the last of the six steps out, so you
-    can remove it from the bar without finding it in the picker again (owner, 12 Nov). The app keeps
-    the six in their fixed order.
-- **Animation:** the bar springs up from the button and its emoji arrive left to right, 18 ms apart.
-  Hovered emoji lift and grow. The chosen emoji pops (up to 1.35 over 320 ms) with a ring going out
-  behind it. With reduced motion turned on, none of this moves.
+  - **Website and app:** your current reaction also moves to the **first place** in the bar. If it isn't
+    one of the six (you chose it from ⊕), it takes the first place and the last of the six steps out, so
+    you can remove it from the bar without finding it in the picker again (owner, 12 Nov; the app since
+    12 Nov too).
+- **Animation:** the bar grows out of the button and its emoji arrive left to right, 18 ms apart.
+  Hovered emoji lift and grow. The chosen emoji pops with a ring going out behind it. With reduced motion
+  turned on, none of this moves. **The app opens it without any bounce** (owner, 12 Nov: fade + scale
+  0.94 → 1 on an ease-out curve, and a 1.2 swell for the chosen emoji; `mobile/DESIGN.md`, "Motion"); the
+  website still uses `--community-spring` (up to 1.35 over 320 ms).
 
 ### 5.2 The full picker (⊕)
 

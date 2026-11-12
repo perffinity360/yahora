@@ -385,8 +385,9 @@ export const shadows = {
 } as const;
 
 /**
- * The community's doodle wallpaper (spec §1.1): the chat's tile, faint, so its
- * lines never meet the text. The website lays its ground at 85% over the tile,
- * which leaves the tile at 15%; the app draws the tile at 15% over the ground.
+ * The community's doodle wallpaper (spec §1.1): the chat's tile over the zone's
+ * ground. 30% on both platforms (owner, 13 Nov): the website lays its ground at
+ * 70% over the tile (`--community-panel-*-veil`), which leaves the tile at 30%;
+ * the app draws the tile at 30% over the ground. Same artwork, same 420 tile.
  */
-export const COMMUNITY_WALLPAPER_OPACITY = 0.15;
+export const COMMUNITY_WALLPAPER_OPACITY = 0.3;

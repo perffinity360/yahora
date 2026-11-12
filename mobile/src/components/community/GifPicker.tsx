@@ -1,6 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,19 +10,24 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Reanimated, { Easing, SlideInDown } from 'react-native-reanimated';
+import Reanimated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../AppText';
 import { AppTextInput } from '../AppTextInput';
 import { KeyboardAvoider } from '../KeyboardAvoider';
+import { ModalSafeArea } from '../ModalSafeArea';
 import { useGifs } from '../../hooks/useGifs';
+import { SHEET_RISE } from '../../lib/motion';
 import { colors, font } from '../../theme';
 import type { GifRef } from '../../types';
 
 /**
- * The GIF picker — COMMUNITY_SPEC.md §6, as a bottom sheet (the AvatarSheet
- * pattern: the Modal shows at once, only the sheet slides; the scrim stays).
+ * The GIF picker — COMMUNITY_SPEC.md §6, as a bottom sheet. It opens like the
+ * reaction breakdown (13 Nov): its insets from `ModalSafeArea` (the Modal's own,
+ * so the last row and the KLIPY line clear Android's navigation buttons), and
+ * its own rise over SHEET_RISE with the scrim fading in on the same clock,
+ * never `SlideInDown`, which can draw the sheet in place for a frame first.
  *
  *   · a search box; trending GIFs first; 2 columns; more as you scroll;
  *   · "Powered by KLIPY" at the bottom, always: KLIPY's terms require it;
@@ -32,7 +37,6 @@ import type { GifRef } from '../../types';
  * All behaviour is in useGifs; this file is only the look. Its root is the
  * KeyboardAvoider (fillsModal), so the keyboard never covers the results.
  */
-const SHEET_ENTER = SlideInDown.duration(280).easing(Easing.out(Easing.cubic));
 const GAP = 4;
 const PAD = 12;
 
@@ -54,7 +58,11 @@ export function GifPicker({
       navigationBarTranslucent
       onRequestClose={onClose}
     >
-      {visible ? <Sheet onPick={onPick} onClose={onClose} /> : null}
+      {visible ? (
+        <ModalSafeArea>
+          <Sheet onPick={onPick} onClose={onClose} />
+        </ModalSafeArea>
+      ) : null}
     </Modal>
   );
 }
@@ -62,8 +70,18 @@ export function GifPicker({
 function Sheet({ onPick, onClose }: { onPick: (gif: GifRef) => void; onClose: () => void }) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const gifs = useGifs();
   const tile = Math.floor((Math.min(width, 560) - PAD * 2 - GAP) / 2);
+  const sheetHeight = Math.round(height * 0.72);
+
+  // Starts a whole sheet below the edge, so it is never seen before it moves.
+  const shown = useSharedValue(reduceMotion ? 1 : 0);
+  useEffect(() => {
+    if (!reduceMotion) shown.value = withTiming(1, SHEET_RISE);
+  }, [reduceMotion, shown]);
+  const riseStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (1 - shown.value) * sheetHeight }] }));
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: shown.value }));
 
   const renderItem = useCallback(
     ({ item }: { item: GifRef }) => (
@@ -81,10 +99,11 @@ function Sheet({ onPick, onClose }: { onPick: (gif: GifRef) => void; onClose: ()
 
   return (
     <KeyboardAvoider fillsModal style={styles.root}>
-      <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
+      <Reanimated.View style={[styles.scrim, scrimStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+      </Reanimated.View>
       <Reanimated.View
-        entering={SHEET_ENTER}
-        style={[styles.sheet, { height: Math.round(height * 0.72), paddingBottom: insets.bottom + 6 }]}
+        style={[styles.sheet, { height: sheetHeight, paddingBottom: insets.bottom + 6 }, riseStyle]}
         accessibilityViewIsModal
       >
         <View style={styles.handle} />
