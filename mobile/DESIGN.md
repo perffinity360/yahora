@@ -94,7 +94,14 @@ change both.
 
 ## Motion
 
-- Reanimated on the UI thread. Use a spring for small things that should pop.
+- Reanimated on the UI thread.
+- **Nothing that opens bounces** (owner, 12 Nov). Menus, popovers, the quick bar, dialogs and sheets ease out
+  on a timing curve and never overshoot: no `springify()`, no `withSpring` for an entrance. The springy
+  `ZoomIn` on the community's quick bar, ⋯ menu, country dropdown and report form read as bouncing. Use
+  `src/lib/motion.ts`: `POPOVER_ENTER` (fade + scale 0.94 → 1, 180 ms, grown from the button through
+  `transformOrigin`) for what hangs off a button, `DIALOG_ENTER` (220 ms) for a centred card. Sheets slide up
+  280 ms, ease-out cubic. Never grow from scale 0. A spring stays fine where a finger drives the motion
+  (a swipe, a drag, a pager settling), with `overshootClamping` where a bounce would show.
 - Press: scale with a light haptic (`PressableScale`). Small reveals: 180–280 ms. Entrances: up to 320 ms, moving
   4–8 pt, fading as they move.
 - Stagger short lists by 18–28 ms, and stop after about six items.

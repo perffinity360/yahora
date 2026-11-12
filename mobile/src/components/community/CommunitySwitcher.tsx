@@ -16,19 +16,21 @@ import Reanimated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  ZoomIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../AppText';
 import { GlobeIcon } from './GlobeIcon';
 import { countryName, flagEmoji, GLOBAL, type FeedSort, type WorldFeed } from '../../lib/community';
+import { POPOVER_ENTER } from '../../lib/motion';
 import { colors, font, shadows } from '../../theme';
 import type { Country } from '../../types';
 
 /**
  * The floating switcher — COMMUNITY_SPEC.md §1.2: transparent and sticky at the
- * top, only its pills take touches, and the posts pass underneath.
+ * top, only its pills take touches, and the posts pass underneath. The pills
+ * themselves are solid white, not frosted: posts showing through them looked
+ * washed out (owner, 12 Nov).
  *
  *   ( (cap) [🇮🇳 India ⌄] )                     ( [🔥|🕐] )
  *
@@ -248,7 +250,7 @@ function CountryMenu({
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       <Reanimated.View
-        entering={ZoomIn.springify().damping(18).stiffness(280)}
+        entering={POPOVER_ENTER}
         style={[
           styles.menu,
           { left, top, width, maxHeight: screenH - top - insets.bottom - 80, transformOrigin: 'top left' },
@@ -285,7 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 3,
     borderRadius: 999,
-    backgroundColor: colors.communityGlass,
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.communityHairline,
     boxShadow: shadows.communityFloat,
@@ -321,7 +323,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 5,
     borderRadius: 999,
-    backgroundColor: colors.communityGlass,
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.communityHairline,
     boxShadow: shadows.communityFloat,

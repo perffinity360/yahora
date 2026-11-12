@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Reanimated, { ZoomIn } from 'react-native-reanimated';
+import Reanimated from 'react-native-reanimated';
 
 import { AppText } from '../AppText';
 import { AppTextInput } from '../AppTextInput';
@@ -8,6 +8,7 @@ import { KeyboardAvoider } from '../KeyboardAvoider';
 import { useReportPost } from '../../hooks/useCommunity';
 import type { ApiError } from '../../lib/api';
 import { codePointLength, REPORT_DETAILS_MAX } from '../../lib/community';
+import { DIALOG_ENTER } from '../../lib/motion';
 import { colors, font, shadows } from '../../theme';
 import type { PostItem } from '../../types';
 
@@ -81,7 +82,7 @@ export function ReportSheet({ post, onClose }: { post: PostItem; onClose: (sent?
     <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={cancel}>
       <KeyboardAvoider fillsModal style={styles.root}>
         <Pressable style={styles.scrim} onPress={cancel} accessibilityLabel="Cancel" />
-        <Reanimated.View entering={ZoomIn.springify().damping(18).stiffness(240)} style={styles.card} accessibilityViewIsModal>
+        <Reanimated.View entering={DIALOG_ENTER} style={styles.card} accessibilityViewIsModal>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <AppText style={styles.title} accessibilityRole="header">
               Report post

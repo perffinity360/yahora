@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, useWindowDimensions, type StyleProp, type ViewInstance, type ViewStyle } from 'react-native';
-import Reanimated, { ZoomIn } from 'react-native-reanimated';
+import Reanimated from 'react-native-reanimated';
 
 import { AppText } from '../AppText';
 import { AppToast, useToast } from '../AppToast';
@@ -10,6 +10,7 @@ import { EmojiPickerSheet } from './EmojiPickerSheet';
 import { ReactionBreakdownSheet } from './ReactionBreakdownSheet';
 import { REPORT_TEXT, ReportSheet } from './ReportSheet';
 import { useDeletePost } from '../../hooks/useCommunity';
+import { POPOVER_ENTER } from '../../lib/motion';
 import { colors, font, shadows } from '../../theme';
 import type { PostItem } from '../../types';
 
@@ -200,7 +201,7 @@ function PostMenu({
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
       <Reanimated.View
-        entering={ZoomIn.springify().damping(18).stiffness(300)}
+        entering={POPOVER_ENTER}
         style={[styles.menu, { left, top, transformOrigin: 'top right' }]}
         accessibilityRole="menu"
       >

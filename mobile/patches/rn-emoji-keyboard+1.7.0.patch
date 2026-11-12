@@ -1,0 +1,92 @@
+diff --git a/node_modules/rn-emoji-keyboard/lib/commonjs/components/ModalWithBackdrop.js b/node_modules/rn-emoji-keyboard/lib/commonjs/components/ModalWithBackdrop.js
+index befb2d6..c6f5115 100644
+--- a/node_modules/rn-emoji-keyboard/lib/commonjs/components/ModalWithBackdrop.js
++++ b/node_modules/rn-emoji-keyboard/lib/commonjs/components/ModalWithBackdrop.js
+@@ -29,14 +29,18 @@ const ModalWithBackdrop = _ref => {
+   } = React.useContext(_KeyboardContext.KeyboardContext);
+   const handleTimeout = (0, _useTimeout.useTimeout)();
+   React.useEffect(() => {
+-    _reactNative.Animated.spring(translateY, {
++    _reactNative.Animated.timing(translateY, {
+       toValue: isOpen ? 0 : screenHeight,
++      duration: isOpen ? 280 : 200,
++      easing: isOpen ? _reactNative.Easing.out(_reactNative.Easing.cubic) : _reactNative.Easing.in(_reactNative.Easing.cubic),
+       useNativeDriver: true
+     }).start();
+   }, [isOpen, screenHeight, translateY]);
+   const handleClose = () => {
+-    _reactNative.Animated.spring(translateY, {
++    _reactNative.Animated.timing(translateY, {
+       toValue: screenHeight,
++      duration: 200,
++      easing: _reactNative.Easing.in(_reactNative.Easing.cubic),
+       useNativeDriver: true
+     }).start();
+     handleTimeout(() => backdropPress(), 200);
+diff --git a/node_modules/rn-emoji-keyboard/lib/module/components/ModalWithBackdrop.js b/node_modules/rn-emoji-keyboard/lib/module/components/ModalWithBackdrop.js
+index 2e2b55e..82b77d5 100644
+--- a/node_modules/rn-emoji-keyboard/lib/module/components/ModalWithBackdrop.js
++++ b/node_modules/rn-emoji-keyboard/lib/module/components/ModalWithBackdrop.js
+@@ -1,6 +1,6 @@
+ function _extends() { _extends = Object.assign ? Object.assign.bind() : function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends.apply(this, arguments); }
+ import * as React from 'react';
+-import { Modal, Animated, useWindowDimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
++import { Modal, Animated, Easing, useWindowDimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
+ import { KeyboardContext } from '../contexts/KeyboardContext';
+ import { useTimeout } from '../hooks/useTimeout';
+ import { IsSafeAreaWrapper } from './ConditionalContainer';
+@@ -21,14 +21,18 @@ export const ModalWithBackdrop = _ref => {
+   } = React.useContext(KeyboardContext);
+   const handleTimeout = useTimeout();
+   React.useEffect(() => {
+-    Animated.spring(translateY, {
++    Animated.timing(translateY, {
+       toValue: isOpen ? 0 : screenHeight,
++      duration: isOpen ? 280 : 200,
++      easing: isOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+       useNativeDriver: true
+     }).start();
+   }, [isOpen, screenHeight, translateY]);
+   const handleClose = () => {
+-    Animated.spring(translateY, {
++    Animated.timing(translateY, {
+       toValue: screenHeight,
++      duration: 200,
++      easing: Easing.in(Easing.cubic),
+       useNativeDriver: true
+     }).start();
+     handleTimeout(() => backdropPress(), 200);
+diff --git a/node_modules/rn-emoji-keyboard/src/components/ModalWithBackdrop.tsx b/node_modules/rn-emoji-keyboard/src/components/ModalWithBackdrop.tsx
+index b1aad6d..80b6611 100644
+--- a/node_modules/rn-emoji-keyboard/src/components/ModalWithBackdrop.tsx
++++ b/node_modules/rn-emoji-keyboard/src/components/ModalWithBackdrop.tsx
+@@ -2,6 +2,7 @@ import * as React from 'react'
+ import {
+   Modal,
+   Animated,
++  Easing,
+   useWindowDimensions,
+   StyleSheet,
+   TouchableOpacity,
+@@ -30,15 +31,19 @@ export const ModalWithBackdrop = ({
+   const handleTimeout = useTimeout()
+ 
+   React.useEffect(() => {
+-    Animated.spring(translateY, {
++    Animated.timing(translateY, {
+       toValue: isOpen ? 0 : screenHeight,
++      duration: isOpen ? 280 : 200,
++      easing: isOpen ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+       useNativeDriver: true,
+     }).start()
+   }, [isOpen, screenHeight, translateY])
+ 
+   const handleClose = () => {
+-    Animated.spring(translateY, {
++    Animated.timing(translateY, {
+       toValue: screenHeight,
++      duration: 200,
++      easing: Easing.in(Easing.cubic),
+       useNativeDriver: true,
+     }).start()
+     handleTimeout(() => backdropPress(), 200)

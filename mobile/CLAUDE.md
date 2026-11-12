@@ -145,6 +145,7 @@ mobile/
       community.ts                  COMMUNITY_SPEC §13 constants (same names as the web's utils/community.js),
                                     formatCount, flagEmoji, formatPostTime, the optimistic reaction math
       klipy.ts                      THE only file that calls KLIPY (GIFs); reads EXPO_PUBLIC_KLIPY_API_KEY
+      motion.ts                     POPOVER_ENTER / DIALOG_ENTER: smooth, non-bouncing entrances (DESIGN.md "Motion")
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
     hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
                                     useProductActions (useToggleLike/Save — take a query key) ·
@@ -179,6 +180,9 @@ mobile/
   was placed under its shorter neighbour and overlapped it (27 Oct). Unfixed upstream as of
   2.3.3. **When upgrading flash-list, re-check `processAndReturnTallestItemInRow` in
   `GridLayoutManager` and regenerate or drop the patch** (`npx patch-package @shopify/flash-list`).
+- **rn-emoji-keyboard is patched too** (`patches/rn-emoji-keyboard+1.7.0.patch`): its sheet opened and
+  closed on a default `Animated.spring`, which bounced (12 Nov). The patch makes `ModalWithBackdrop` ease
+  (280 ms out, 200 ms in) in `src/` and both `lib/` builds. Re-check it when upgrading the library.
 - **Keyboard inside a Modal:** wrap the Modal's content in `<KeyboardAvoider fillsModal>`, as its
   root. A `statusBarTranslucent` Modal is its own window starting at the screen's top, so the
   plain avoider (measured against the app window) lifted the buyer picker a status bar too far
@@ -237,7 +241,8 @@ confident accent on a soft neutral canvas.
 ## UI stack & animation rules (Expo)
 Before ANY UI work, read DESIGN.md fully. Its tokens (src/theme/tokens.ts) are canonical.
 
-- Animation default: react-native-reanimated (springs, entering/exiting, layout transitions) +
+- Animation default: react-native-reanimated (timing curves, entering/exiting, layout transitions; no
+  bouncing entrances, see DESIGN.md "Motion") +
   react-native-gesture-handler for swipe/drag. All animation on the UI thread — never setState/JS timers.
 - Moti: simple one-off fade/slide only. Lottie: hero moments only (onboarding, success, empty states) — never on feeds.
 - Premium effects: @shopify/react-native-skia for gradients/glows/celebrations — never inside list rows.

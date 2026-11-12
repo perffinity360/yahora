@@ -9,15 +9,14 @@ import Reanimated, {
   useReducedMotion,
   useSharedValue,
   withSequence,
-  withSpring,
   withTiming,
-  ZoomIn,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../AppText';
 import { usePostActions } from './PostActions';
 import { QUICK_REACTIONS, REACTION_LONG_PRESS_MS } from '../../lib/community';
+import { EASE_OUT, POPOVER_ENTER } from '../../lib/motion';
 import { colors, shadows } from '../../theme';
 
 /**
@@ -25,8 +24,12 @@ import { colors, shadows } from '../../theme';
  *
  *   · tap React        — the quick bar; tapping React again closes it
  *   · long-press React — the quick bar too (the card's long-press calls `open`)
- *   · in the bar       — your current emoji sits on a reactionMineBg circle:
- *                        choosing it again removes it, another replaces it
+ *   · in the bar       — your current emoji sits first, on a reactionMineBg
+ *                        circle: choosing it again removes it, another
+ *                        replaces it. One picked from ⊕ takes the first place
+ *                        too and the last of the six steps out, so removing
+ *                        it never means finding it in the picker again
+ *                        (owner, 12 Nov; the website's quickBar() does the same)
  *   · ⊕                — the full picker (spec §5.2), opened by the screen's
  *                        PostActionsProvider once the bar has closed
  *
@@ -47,7 +50,12 @@ const BAR_HEIGHT = CELL + BAR_PAD * 2;
 const GAP = 8;
 const EDGE = 8;
 const STAGGER_MS = 18;
-const EASE = Easing.bezier(0.2, 0.8, 0.2, 1); // communityEase
+
+/** The bar's six: your reaction first, then the usual ones in their order. */
+function quickBar(reaction: string | null): readonly string[] {
+  if (!reaction) return QUICK_REACTIONS;
+  return [reaction, ...QUICK_REACTIONS.filter((e) => e !== reaction)].slice(0, QUICK_REACTIONS.length);
+}
 
 export type ReactButtonHandle = { open: () => void };
 
@@ -87,13 +95,14 @@ export const ReactButton = memo(function ReactButton({
       onReact(next);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       if (next && !reduceMotion) {
-        // The chosen emoji pops, up to 1.35 over 320 ms, with a ring going out.
+        // The chosen emoji swells a little and settles, with a ring going out.
+        // Timing curves only, no spring: the old spring wobbled (owner, 12 Nov).
         scale.value = withSequence(
-          withTiming(1.35, { duration: 140, easing: EASE }),
-          withSpring(1, { damping: 9, stiffness: 260 }),
+          withTiming(1.2, { duration: 120, easing: EASE_OUT }),
+          withTiming(1, { duration: 200, easing: Easing.inOut(Easing.cubic) }),
         );
         ring.value = 0;
-        ring.value = withTiming(1, { duration: 320, easing: EASE }, () => {
+        ring.value = withTiming(1, { duration: 320, easing: EASE_OUT }, () => {
           ring.value = 0;
         });
       }
@@ -171,14 +180,14 @@ function QuickBar({
   const left = Math.min(Math.max(anchor.x - CELL / 2, EDGE), screenW - BAR_WIDTH - EDGE);
   const above = anchor.y - GAP - BAR_HEIGHT >= insets.top + EDGE;
   const top = above ? anchor.y - GAP - BAR_HEIGHT : anchor.y + anchor.height + GAP;
-  // It springs from the button: scale from the point over (or under) it.
+  // It grows out of the button: scale from the point over (or under) it.
   const originX = Math.min(Math.max(anchor.x + anchor.width / 2 - left, 0), BAR_WIDTH);
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close reactions" />
       <Reanimated.View
-        entering={ZoomIn.springify().damping(16).stiffness(260)}
+        entering={POPOVER_ENTER}
         style={[
           styles.bar,
           { left, top, transformOrigin: [originX, above ? BAR_HEIGHT : 0, 0] },
@@ -186,7 +195,7 @@ function QuickBar({
         accessibilityRole="toolbar"
         accessibilityLabel="Reactions"
       >
-        {QUICK_REACTIONS.map((emoji, i) => {
+        {quickBar(current).map((emoji, i) => {
           const mine = emoji === current;
           return (
             <Reanimated.View key={emoji} entering={FadeIn.delay(i * STAGGER_MS).duration(180)}>
