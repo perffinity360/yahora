@@ -61,9 +61,8 @@ None in V-D. **But every migration is now on production** (Vishwajeet pushed, 12
 - Replies have a Hot score, and `get_post_replies()` can answer in Hot order.
 - **What you reported now stays hidden on production too:** the feeds, `/by-user`, the thread,
   `top_replies` and the new-posts count all skip it.
-- **Hot-ordered replies also need the backend that asks for them** (`p_sort: 'hot'`, on `main`
-  since PR #103). The database defaults to oldest first until that build is live on Render, where
-  auto-deploy is off. Both clients show replies in whatever order the API sends.
+- **Replies are in Hot order on production:** the backend from PR #103 (`p_sort: 'hot'`) is deployed on
+  Render (Vishwajeet, 13 Nov).
 
 ## New endpoints
 
@@ -118,4 +117,16 @@ None new. T2 uses the existing seed: `arjun.mehta` (IIITDM Kurnool), `sneha.gupt
 - **The switcher's pills line up with the cards' edges** (10 in from each side, like the cards).
 - **The feed and the post page no longer scroll under the status bar:** a solid strip in the feed's
   colour sits behind it.
+
+## Fixed on 13 Nov, third round on the POCO
+
+- **Menus still covered their buttons** (the 12 Nov fix measured the Modal's own layer, which reads 0).
+  `AnchoredModal` now subtracts a marker at the app's root, measured the same way as the button. App only.
+- **The quick bar stands off the white cards, on the website too.** ⚠ **I edited your
+  `frontend/src/styles/global.css`** (two new variables, `--quick-bar-ring` and
+  `--quick-bar-raised-shadow`) **and `ReactionBar.module.css`** (`.quickBar`'s `box-shadow` only). The bar
+  stays white, so the emoji keep their colours, with a 1 px purple ring and a deeper two-layer shadow. It's
+  a ring, not a border, so the bar's size and the Popover's placing don't change. `--quick-bar-shadow` and
+  everything else using it are unchanged. Not checked in a browser.
+- **The switcher's pills sit 4 inside the cards' edges** (14 from the screen's side). App only.
 

@@ -271,8 +271,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: SWITCHER_HEIGHT,
-    // The pills' outer edges on the cards' borders (owner, 12 Nov).
-    paddingHorizontal: CARD_INSET,
+    // The pills sit a touch inside the cards' borders: exactly on them read as
+    // touching the edge (owner, 12–13 Nov).
+    paddingHorizontal: CARD_INSET + 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 999,
     backgroundColor: colors.white,
-    boxShadow: shadows.quickBar,
+    boxShadow: shadows.quickBarRaised,
   },
   cell: {
     width: CELL,

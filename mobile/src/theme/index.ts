@@ -375,6 +375,11 @@ export const EMOJI_SIZES = {
  */
 export const shadows = {
   quickBar: '0px 6px 20px rgba(11,11,11,0.16)',
+  /** The quick bar itself: white over white cards, so a hairline ring (spread, so the bar's size is
+   *  unchanged) and a deeper two-layer shadow (owner, 13 Nov). Web: --quick-bar-raised-shadow plus
+   *  0 0 0 1px --quick-bar-ring. */
+  quickBarRaised:
+    '0px 0px 0px 1px rgba(128,0,128,0.16), 0px 1px 3px rgba(42,8,42,0.14), 0px 10px 28px rgba(42,8,42,0.22)',
   communityCard: '0px 2px 10px rgba(79,1,79,0.04)',
   communityFloat: '0px 4px 16px rgba(42,8,42,0.12)',
 } as const;

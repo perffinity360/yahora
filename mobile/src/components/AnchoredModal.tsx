@@ -1,24 +1,54 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 
 /** A box measured with `measureInWindow`. */
 export type WindowRect = { x: number; y: number; width: number; height: number };
 
+/*
+ * WHY THERE IS A MARKER AT THE APP'S ROOT.
+ *
+ * On Android, `measureInWindow` reports a view one status bar higher than it
+ * is drawn (it counts from below the status bar), but a `statusBarTranslucent`
+ * Modal draws from the very top of the screen. Placing a menu straight from a
+ * button's numbers put it ~40 dp too high on the POCO: the country dropdown and
+ * the ⋯ menu covered their own buttons, and the quick bar floated far above
+ * React (12 Nov).
+ *
+ * Measuring the Modal's own layer did NOT fix it (13 Nov): inside the Modal the
+ * layer measures 0, with no offset to cancel. What does: measure a view that
+ * fills the app's root, in the SAME tree as the button. It is drawn at the
+ * screen's top (the app is edge to edge), so it gets the same offset as the
+ * button, and `button − root` is the button's true place on screen, which is
+ * where the Modal draws. On iOS both offsets are 0 and nothing changes.
+ */
+let rootMarker: ViewInstance | null = null;
+
+/** Rendered once, filling the app's root (`app/_layout.tsx`). Touch-transparent. */
+export function WindowOriginMarker() {
+  return (
+    <View
+      ref={(node) => {
+        rootMarker = node;
+      }}
+      collapsable={false}
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
+
+function measureRoot(done: (x: number, y: number) => void) {
+  if (!rootMarker) done(0, 0);
+  else rootMarker.measureInWindow((x, y) => done(x, y));
+}
+
 /**
  * A transparent Modal for something that hangs off a button: the quick bar, the
- * ⋯ menu, the country dropdown. A tap anywhere else closes it.
+ * ⋯ menu, the country dropdown. A tap anywhere else closes it. `children` gets
+ * the button in the Modal's own coordinates, and the Modal's size.
  *
- * WHY IT MEASURES ITSELF. On Android, `measureInWindow` counts from below the
- * status bar, but a `statusBarTranslucent` Modal starts at the top of the
- * screen. Placing a menu straight from the button's numbers put it one status
- * bar too high: the dropdown and the ⋯ menu covered their own buttons, and the
- * quick bar floated far above React (POCO, 12 Nov). So the Modal's own layer is
- * measured the same way, and `children` gets the button in the layer's
- * coordinates: whatever offset the platform adds cancels out. The chat's
- * long-press menu solves the same problem the same way (`app/chat/[contactId]`).
- *
- * Nothing renders until the layer is measured (one frame), so the entrance
- * animation starts in the right place.
+ * Nothing renders until both are known (a frame), so the entrance animation
+ * starts in the right place.
  */
 export function AnchoredModal({
   anchor,
@@ -30,24 +60,26 @@ export function AnchoredModal({
   anchor: WindowRect;
   onClose: () => void;
   closeLabel?: string;
-  /** `anchor` moved into the layer, and the layer's own size. */
   children: (anchor: WindowRect, layer: { width: number; height: number }) => ReactNode;
 }) {
-  const layerRef = useRef<ViewInstance>(null);
-  const [layer, setLayer] = useState<WindowRect | null>(null);
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
 
-  const measure = useCallback(() => {
-    layerRef.current?.measureInWindow((x, y, width, height) => setLayer({ x, y, width, height }));
+  useEffect(() => {
+    measureRoot((x, y) => setOrigin({ x, y }));
   }, []);
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
-      <View ref={layerRef} collapsable={false} style={StyleSheet.absoluteFill} onLayout={measure}>
+      <View
+        style={StyleSheet.absoluteFill}
+        onLayout={(e) => setSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={closeLabel} />
-        {layer
+        {origin && size
           ? children(
-              { x: anchor.x - layer.x, y: anchor.y - layer.y, width: anchor.width, height: anchor.height },
-              { width: layer.width, height: layer.height },
+              { x: anchor.x - origin.x, y: anchor.y - origin.y, width: anchor.width, height: anchor.height },
+              size,
             )
           : null}
       </View>

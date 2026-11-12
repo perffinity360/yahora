@@ -97,7 +97,9 @@ like the backend being down. It has already cost an hour once. So:
 
 ## Workflow
 - After changes: run `npx tsc --noEmit` (types) and `npx expo start` (bundles/runs).
-- **Do not self-verify with screenshots** — instead, report what the human should check on their phone.
+- **Testing:** follow the root `CLAUDE.md`, "How we work" (owner, 13 Nov): test yourself only when it's quick and
+  reliable, and otherwise report exactly what the human should check on the phone, and how. This Mac has no
+  `adb`, Android emulator or iOS simulator today, so on-device checks go to the human.
 - Never run `npm audit fix --force`.
 - Work in **small phases**; don't commit yourself and ask the owner to commit after each working phase with a clear, conventional message.
 
@@ -198,8 +200,9 @@ mobile/
   a bare `<Modal>` placed from `measureInWindow`. On Android `measureInWindow` counts from below the
   status bar, but a `statusBarTranslucent` Modal starts at the top of the screen, so menus landed a
   status bar too high and covered their own buttons (country dropdown, ⋯ menu, quick bar; POCO, 12 Nov).
-  `AnchoredModal` measures its own layer the same way and hands `children` the button in its
-  coordinates, so the offset cancels out on any phone.
+  `AnchoredModal` subtracts the position of `WindowOriginMarker` (a view filling the app's root, mounted
+  in `app/_layout.tsx`), measured the same way, so the offset cancels out on any phone. Measuring the
+  Modal's own layer does NOT work: inside the Modal it reads 0 (tried 12 Nov, still wrong on the POCO).
 - **Edge-to-edge screens keep the status bar solid.** A screen that draws under the status bar (the
   community feed, the post page) renders `StatusBarGround` after its list, in its own background colour,
   so content never scrolls under the clock.

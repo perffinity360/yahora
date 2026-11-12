@@ -43,7 +43,7 @@ interaction should feel intentionally designed for mobile.
 
 ### 4. Native-Feeling Interactions & Animations
 - Implement fluid navigation, gestures, transitions, micro-interactions, and natural motion.
-- Use appropriate spring physics, subtle haptics, animated state changes, and gesture feedback.
+- Use appropriate physics, subtle haptics, animated state changes, and gesture feedback.
 - Make bottom sheets, modals, tab navigation, drawers, lists, and cards feel polished.
 - Use native capabilities and platform conventions where appropriate.
 - Respect reduced-motion settings.
@@ -206,10 +206,11 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   form wobbled and read as bouncing. Use `src/lib/motion.ts`: `POPOVER_ENTER` (fade + scale 0.94 → 1,
   180 ms, grown from the button through `transformOrigin`) for what hangs off a button, `DIALOG_ENTER`
   (220 ms) for a centred card. Sheets slide up 280 ms, ease-out cubic. Never grow from scale 0.
-- **Springs are welcome where they don't wobble** (the standard's §4, "appropriate spring physics"): where a
-  finger drives the motion (a swipe, a drag, a pager settling, a thumb released), and for state changes,
-  with damping high enough, or `overshootClamping`, that nothing visibly overshoots. An over-bouncy spring
-  (Reanimated's `springify()` defaults, `damping` under about 15) is the thing to avoid.
+- **Physics is welcome where it doesn't wobble** (the standard's §4, "appropriate physics": springs, momentum,
+  friction, decay). Use it where a finger drives the motion (a swipe, a drag, a fling, a pager settling, a
+  thumb released) and for state changes, with damping high enough, or `overshootClamping`, that nothing
+  visibly overshoots. An over-bouncy spring (Reanimated's `springify()` defaults, `damping` under about 15)
+  is the thing to avoid.
 - Press: scale with a light haptic (`PressableScale`). Small reveals: 180–280 ms. Entrances: up to 320 ms, moving
   4–8 pt, fading as they move.
 - Stagger short lists by 18–28 ms, and stop after about six items.

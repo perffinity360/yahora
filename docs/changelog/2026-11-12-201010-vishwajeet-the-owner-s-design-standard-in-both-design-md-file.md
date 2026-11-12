@@ -23,9 +23,14 @@ changed. Three documentation changes, no code:
      cage: when you go beyond or against them, say so once beforehand, and update them if it turns out
      better.
    - Ownership, the database rules and this changelog protocol still hold.
-3. **One overlap to know about, not yet decided:** both standards end with "inspect the actual rendered
-   interface", but `frontend/CLAUDE.md` §2 and §14 still say verification is the human's job. Until the
-   owner settles it, both rules stand as written.
+3. **Testing is settled (owner, 13 Nov), in the root `CLAUDE.md`, "How we work":** test only when it can
+   be done quickly, reliably and cheaply, with the expected outcome clear. Otherwise ask, or hand the
+   check to the humans with exactly what to look at. It replaces the blanket "Claude never verifies UI"
+   lines in `frontend/CLAUDE.md` §2.4, §14 and §16; I left your file's lines as they are, so you may want
+   to point them at the new rule.
+4. **`mobile/DESIGN.md`'s standard says "appropriate physics"** where the owner first wrote "appropriate
+   spring physics" (owner, 13 Nov: more general). The web standard's "Explore spring animations" is
+   unchanged.
 
 ## Migrations applied
 

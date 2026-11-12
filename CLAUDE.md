@@ -51,6 +51,14 @@ docs/changelog/README.md.
   to build things better, whatever the method. `frontend/DESIGN.md` and `mobile/DESIGN.md` (each opens
   with the owner's standard) are guidance, not a cage. When doing better means going beyond or against
   them, say so once, before doing it; if it turns out better, update the DESIGN.md too.
+- **Testing, web and app (owner, 13 Nov).** Test only when it can be done quickly, reliably, and without
+  unnecessary token or resource use. Before testing, be clear what the expected outcome is and that your
+  reading matches what the owner wants. If anything is ambiguous, ask first, or hand the test to the
+  humans with exactly what to check and how. Never test on an assumption that could check the wrong thing
+  or give a misleading result. The aim is quality without wasting tokens and resources on
+  miscommunication or unnecessary tests. This replaces the older blanket rules that Claude never
+  verifies UI itself (`mobile/CLAUDE.md` "Workflow", `frontend/CLAUDE.md` §2.4, §14, §16): when a quick,
+  reliable check exists, do it; otherwise hand over a checklist.
 - The ownership split, the database rules below and the changelog protocol are **not** design rules:
   they still hold.
 
