@@ -105,3 +105,17 @@ None new. T2 uses the existing seed: `arjun.mehta` (IIITDM Kurnool), `sneha.gupt
 - **The switcher's two pills are solid white,** not frosted (`rgba(255,255,255,0.74)`), so posts no
   longer show through them. That's the campus / country pill and the Hot · New pill beside it. The
   new-posts pill and the other floating buttons keep the frosted look.
+
+## Fixed on 12 Nov, second round on the POCO (app only)
+
+- **⊕ crashed the app.** `rn-emoji-keyboard` 1.7.0 calls `InteractionManager`, which React Native 0.88
+  removed. It's patched now. If the website ever moves to React Native Web, the same library would
+  need the same patch; today the website uses `emoji-picker-react`, so nothing changes for you.
+- **The country dropdown and the ⋯ menu covered their own buttons, and the quick bar floated far above
+  React.** On Android the menus were placed one status bar too high. Fixed with a shared
+  `AnchoredModal`. The quick bar now lines up like your Popover: its left end on the React button's,
+  8 above it.
+- **The switcher's pills line up with the cards' edges** (10 in from each side, like the cards).
+- **The feed and the post page no longer scroll under the status bar:** a solid strip in the feed's
+  colour sits behind it.
+

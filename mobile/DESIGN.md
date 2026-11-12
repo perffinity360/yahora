@@ -7,6 +7,112 @@ change both.
 **Brand:** Inter for text. Bree Serif, regular 400 only, for headings and prices. Colours come from
 `src/theme`.
 
+## The standard: Mobile app UI/UX excellence, design first, always (owner, 12 Nov)
+
+Written by the owner for everyone who works on Yahora. Every section below this one serves it; when a
+narrower rule in this file stands in the way of a better result, see "How we work" just after it.
+
+Build exceptionally beautiful, modern, intuitive, fluid, and production-quality mobile applications. Think
+like a world-class Mobile Product Designer, UX Researcher, Interaction Designer, and Senior Mobile Engineer.
+
+The goal is to create applications that feel natural, responsive, delightful, and effortless to use. Every
+interaction should feel intentionally designed for mobile.
+
+### 1. Mobile-First Design Excellence
+- Create premium, distinctive, visually cohesive interfaces.
+- Prioritize typography, spacing, visual hierarchy, color, contrast, and balanced layouts.
+- Design specifically for mobile screens rather than shrinking web interfaces.
+- Maintain consistency across screens, navigation, components, and design tokens.
+- Avoid generic templates, clutter, and unnecessary visual decoration.
+
+### 2. Research & Platform Conventions
+- Study exceptional mobile applications and established interaction patterns before designing.
+- Draw inspiration from Apple, Airbnb, Instagram, Linear, Notion, and other relevant products.
+- Follow Apple Human Interface Guidelines and Android Material Design 3 principles where applicable.
+- Respect platform-specific navigation, gestures, dialogs, permissions, controls, and user expectations.
+- Use established patterns for familiarity while introducing thoughtful product-specific innovations.
+
+### 3. Exceptional Mobile UX
+- Make every important action easy to discover and execute.
+- Minimize taps, unnecessary navigation, cognitive load, and repetitive input.
+- Design intuitive onboarding, authentication, search, discovery, forms, and core user journeys.
+- Use progressive disclosure to prevent overwhelming users.
+- Provide immediate and understandable feedback.
+- Prioritize one-handed usability and comfortable interaction.
+- Handle interruptions, offline conditions, and session restoration gracefully.
+
+### 4. Native-Feeling Interactions & Animations
+- Implement fluid navigation, gestures, transitions, micro-interactions, and natural motion.
+- Use appropriate spring physics, subtle haptics, animated state changes, and gesture feedback.
+- Make bottom sheets, modals, tab navigation, drawers, lists, and cards feel polished.
+- Use native capabilities and platform conventions where appropriate.
+- Respect reduced-motion settings.
+- Never introduce distracting animations or unnecessary interaction complexity.
+
+### 5. Mobile-Specific Design Considerations
+- Account for safe areas, notches, dynamic islands, status bars, and system navigation.
+- Support different screen sizes, densities, orientations, and device capabilities.
+- Use appropriately sized touch targets and comfortable spacing.
+- Consider keyboards, focus behavior, scrolling, and input ergonomics.
+- Design adaptive layouts for small phones, large phones, and tablets.
+- Ensure dialogs, sheets, and navigation behave naturally on each platform.
+
+### 6. Complete UI States
+Design every relevant state:
+- Loading, skeleton, and progress indicators.
+- Empty states and first-time experiences.
+- Errors, validation, and recovery.
+- Success feedback and notifications.
+- Focused, pressed, selected, disabled, and active states.
+- Offline, slow network, and interrupted operations.
+- Permission denied, unavailable device features, and expired sessions.
+
+### 7. Performance, Accessibility & Reliability
+- Maintain smooth scrolling, responsive gestures, and fluid animations.
+- Optimize rendering, image loading, memory usage, and network requests.
+- Avoid unnecessary re-renders, dropped frames, and excessive resource consumption.
+- Support screen readers, dynamic text sizing, sufficient contrast, and accessible controls.
+- Respect system preferences, including dark mode and reduced motion.
+- Handle app lifecycle events, backgrounding, reconnection, and state restoration.
+- Ensure reliable behavior across supported devices and OS versions.
+
+### 8. Proactive Product Thinking
+- Study the existing application, architecture, navigation, and user journeys before making changes.
+- Identify missing features, usability problems, friction points, and opportunities independently.
+- Suggest better workflows, interactions, and product improvements.
+- Explore creative solutions instead of blindly following existing implementation patterns.
+- Preserve existing functionality and business logic.
+- Take initiative on small, reversible design decisions.
+- Consult me before major decisions involving product direction, branding, navigation architecture, core user journeys, or significant feature changes.
+
+### 9. Quality Assurance
+Before completing any feature, test the actual application:
+- Different device sizes and screen densities.
+- Navigation, gestures, touch targets, and keyboard behavior.
+- Animation smoothness and scrolling performance.
+- Safe areas and system UI integration.
+- Loading, empty, error, offline, and success states.
+- Accessibility and screen-reader behavior.
+- Real-world user journeys and lifecycle interruptions.
+- Platform-specific behavior on supported iOS and Android versions.
+
+Never settle for an interface that merely works. Refine the details until the application feels polished,
+natural, and production-ready.
+
+**Core principle: Build mobile experiences that feel native, look exceptional, respond instantly, and make
+every interaction a pleasure.**
+
+## How we work (owner, 12 Nov)
+
+The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone on Yahora. In short:
+
+- **Decide and do the small things yourself.** Execution and small, reversible design decisions don't need
+  the owner. Decisions that could fundamentally or drastically change the product experience do: product
+  direction, branding, navigation architecture, core user journeys, significant feature changes.
+- **This file is guidance, not a cage.** Use every skill, tool and method that builds the thing better. When
+  that means going beyond or against a rule here, say so once, before doing it. If the result is better,
+  update the rule.
+
 ## Before building any screen
 
 1. List the scenarios: empty, loading, error, long text, big numbers, small and large phones, keyboard open,
@@ -95,13 +201,15 @@ change both.
 ## Motion
 
 - Reanimated on the UI thread.
-- **Nothing that opens bounces** (owner, 12 Nov). Menus, popovers, the quick bar, dialogs and sheets ease out
-  on a timing curve and never overshoot: no `springify()`, no `withSpring` for an entrance. The springy
-  `ZoomIn` on the community's quick bar, ⋯ menu, country dropdown and report form read as bouncing. Use
-  `src/lib/motion.ts`: `POPOVER_ENTER` (fade + scale 0.94 → 1, 180 ms, grown from the button through
-  `transformOrigin`) for what hangs off a button, `DIALOG_ENTER` (220 ms) for a centred card. Sheets slide up
-  280 ms, ease-out cubic. Never grow from scale 0. A spring stays fine where a finger drives the motion
-  (a swipe, a drag, a pager settling), with `overshootClamping` where a bounce would show.
+- **Nothing that opens bounces** (owner, 12 Nov). Menus, popovers, the quick bar, dialogs and sheets settle
+  without overshoot. The springy `ZoomIn` on the community's quick bar, ⋯ menu, country dropdown and report
+  form wobbled and read as bouncing. Use `src/lib/motion.ts`: `POPOVER_ENTER` (fade + scale 0.94 → 1,
+  180 ms, grown from the button through `transformOrigin`) for what hangs off a button, `DIALOG_ENTER`
+  (220 ms) for a centred card. Sheets slide up 280 ms, ease-out cubic. Never grow from scale 0.
+- **Springs are welcome where they don't wobble** (the standard's §4, "appropriate spring physics"): where a
+  finger drives the motion (a swipe, a drag, a pager settling, a thumb released), and for state changes,
+  with damping high enough, or `overshootClamping`, that nothing visibly overshoots. An over-bouncy spring
+  (Reanimated's `springify()` defaults, `damping` under about 15) is the thing to avoid.
 - Press: scale with a light haptic (`PressableScale`). Small reveals: 180–280 ms. Entrances: up to 320 ms, moving
   4–8 pt, fading as they move.
 - Stagger short lists by 18–28 ms, and stop after about six items.

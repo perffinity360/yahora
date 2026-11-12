@@ -7,6 +7,105 @@ change both.
 **Brand:** Inter for text. Bree Serif, regular 400 only, for headings and prices. Colours come from
 the variables in `src/styles/global.css`.
 
+## The standard: Web UI/UX excellence, design first, always (owner, 12 Nov)
+
+Written by the owner for everyone who works on Yahora. Every section below this one serves it; when a
+narrower rule in this file stands in the way of a better result, see "How we work" just after it.
+
+Build exceptionally beautiful, modern, intuitive, responsive, and production-quality web applications. Think
+like a world-class Product Designer, UX Researcher, Interaction Designer, and Senior Frontend Engineer.
+
+The objective is not merely to make websites functional. Build experiences that look exceptional, feel
+effortless, perform flawlessly, and make users love using them.
+
+### 1. Design & Visual Excellence
+- Create distinctive, premium, polished interfaces. Avoid generic templates and uninspired layouts.
+- Master typography, color palettes, visual hierarchy, whitespace, spacing, grids, shadows, gradients, borders, and depth.
+- Maintain consistent design tokens, components, icons, and visual language.
+- Use appropriate visual styles for the product, audience, and brand.
+- Make every screen feel intentional, cohesive, and production-ready.
+
+### 2. Research & Industry Standards
+- Study best-in-class products and established design systems before making important design decisions.
+- Draw inspiration from Linear, Stripe, Apple, Notion, Airbnb, Vercel, Figma, and other relevant products.
+- Explore proven UX patterns, accessibility standards, modern CSS capabilities, and emerging frontend techniques.
+- Follow useful industry trends, but never adopt trends just for aesthetics.
+- Reuse proven patterns when they improve usability; experiment when original ideas offer meaningful improvements.
+
+### 3. Exceptional UX
+- Prioritize clarity, simplicity, discoverability, and intuitive navigation.
+- Minimize cognitive load, unnecessary steps, and friction.
+- Establish clear information architecture and visual hierarchy.
+- Make primary actions obvious and provide immediate feedback.
+- Design thoughtful onboarding, forms, search, filters, navigation, and user journeys.
+- Use clear, human-friendly language.
+- Anticipate user needs instead of waiting for explicit instructions.
+
+### 4. Modern Interactions & Motion
+- Implement smooth, purposeful animations, transitions, hover effects, micro-interactions, and meaningful loading feedback.
+- Explore spring animations, scroll-triggered effects, parallax, shared-element transitions, and gesture-like interactions where appropriate.
+- Make menus, dialogs, page transitions, cards, and interactive elements feel polished.
+- Respect reduced-motion preferences.
+- Never use excessive animation or compromise usability and performance for visual effects.
+
+### 5. Responsive Design
+- Design mobile-first where appropriate and optimize for mobile, tablet, laptop, and large desktop screens.
+- Adapt layouts intelligently instead of simply shrinking desktop interfaces.
+- Ensure excellent touch, mouse, keyboard, and trackpad interactions.
+- Prevent horizontal overflow, broken layouts, awkward spacing, and unreadable content at every breakpoint.
+
+### 6. Complete UI States
+Design every relevant state, not just the ideal screen:
+- Loading, skeleton, and progress states.
+- Empty states and first-time experiences.
+- Errors, validation, and recovery.
+- Success feedback and notifications.
+- Hover, focus, active, selected, and disabled states.
+- Slow networks, failed requests, missing images, and edge cases.
+
+### 7. Design Systems & Frontend Quality
+- Build reusable, composable, maintainable components.
+- Establish consistent design tokens for typography, colors, spacing, radii, shadows, and motion.
+- Use semantic HTML, accessible components, and appropriate ARIA attributes.
+- Optimize images, fonts, assets, rendering, and loading performance.
+- Avoid unnecessary dependencies, excessive JavaScript, layout shifts, and visual glitches.
+- Ensure all interactive elements genuinely work.
+
+### 8. Proactive Product Thinking
+- Study the existing application, architecture, workflows, and visual identity before making changes.
+- Identify missing features, confusing workflows, design weaknesses, and opportunities for improvement.
+- Propose useful components, interactions, and product enhancements independently.
+- Preserve existing functionality and business logic.
+- Take initiative on small design decisions.
+- Discuss major decisions involving branding, navigation, information architecture, user journeys, and architecture with me before committing.
+
+### 9. Quality Assurance
+Before completing any feature, inspect the actual rendered interface and test:
+- Visual hierarchy, spacing, alignment, and consistency.
+- Responsiveness across viewport sizes.
+- Real interactions and complete user journeys.
+- Accessibility and keyboard navigation.
+- Animation smoothness and performance.
+- Loading, empty, error, and success states.
+- Cross-browser compatibility where relevant.
+
+Never settle for the first acceptable implementation. Explore, compare, refine, and polish until the result
+meets an exceptionally high standard.
+
+**Core principle: Build web experiences that are visually outstanding, intuitively usable, technically
+excellent, and genuinely delightful.**
+
+## How we work (owner, 12 Nov)
+
+The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone on Yahora. In short:
+
+- **Decide and do the small things yourself.** Execution and small, reversible design decisions don't need
+  the owner. Decisions that could fundamentally or drastically change the product experience do: product
+  direction, branding, navigation architecture, core user journeys, significant feature changes.
+- **This file is guidance, not a cage.** Use every skill, tool and method that builds the thing better. When
+  that means going beyond or against a rule here, say so once, before doing it. If the result is better,
+  update the rule.
+
 ## Before building any screen
 
 1. List the scenarios: empty, loading, error, long text, big numbers, narrowest and widest size, touch

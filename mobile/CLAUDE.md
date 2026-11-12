@@ -154,12 +154,13 @@ mobile/
                                     useCommunity (feeds, threads, the post page, profiles' Posts,
                                     reactions, posting, delete, report, the new-posts count — and the
                                     cache helpers that keep every list in step) · useComposer · useGifs
-    components/                     ProductCard · Skeleton · ExpandableBio · AvatarSheet ·
+    components/                     AnchoredModal (menus that hang off a button) · ProductCard · Skeleton ·
+                                    ExpandableBio · AvatarSheet ·
                                     SearchablePicker · AuroraBackground · UniversitiesModal · DemoModal ·
                                     FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
                                     community/ (PostCard, PostThread, PostText, PostMedia, ReactionBar,
                                     ReactionSummary, CommunitySwitcher, CommunityWallpaper, GlobeIcon,
-                                    ComposerDock, GifPicker, SupportCard, PostActions (the ⋯ menu,
+                                    ComposerDock, GifPicker, SupportCard, StatusBarGround, PostActions (the ⋯ menu,
                                     report, delete, ⊕ and the breakdown, once per screen), ReportSheet,
                                     ReactionBreakdownSheet, EmojiPickerSheet (rn-emoji-keyboard),
                                     UserPostsList)
@@ -180,9 +181,28 @@ mobile/
   was placed under its shorter neighbour and overlapped it (27 Oct). Unfixed upstream as of
   2.3.3. **When upgrading flash-list, re-check `processAndReturnTallestItemInRow` in
   `GridLayoutManager` and regenerate or drop the patch** (`npx patch-package @shopify/flash-list`).
-- **rn-emoji-keyboard is patched too** (`patches/rn-emoji-keyboard+1.7.0.patch`): its sheet opened and
-  closed on a default `Animated.spring`, which bounced (12 Nov). The patch makes `ModalWithBackdrop` ease
-  (280 ms out, 200 ms in) in `src/` and both `lib/` builds. Re-check it when upgrading the library.
+- **rn-emoji-keyboard is patched too** (`patches/rn-emoji-keyboard+1.7.0.patch`), in `src/` and both `lib/`
+  builds (Metro reads `src/`). Two fixes, 12 Nov: (1) `EmojiCategory` called
+  `InteractionManager.runAfterInteractions`, and **opening ⊕ crashed the app**; it now defers with a
+  `setTimeout` in an effect. (2) `ModalWithBackdrop` opened on a default `Animated.spring`, which bounced;
+  it now eases (280 ms out, 200 ms in). It still uses React Native's deprecated `SafeAreaView` (the
+  "SafeAreaView has been deprecated" warning in the log); when RN removes it, the picker breaks again.
+  Re-check all three when upgrading the library.
+- **React Native 0.88 removed `InteractionManager`: touching it throws** ("has been removed from
+  react-native core"). A library that still uses it passes `tsc` and `expo export` and crashes only when
+  that code runs, which is how ⊕ shipped broken. **After adding or upgrading a library, and before
+  handing a block over**, export the Android bundle and scan it:
+  `npx expo export --platform android --output-dir <scratch> && strings <scratch>/_expo/static/js/android/*.hbc | grep -c runAfterInteractions`
+  must print 0. Then open every new screen and overlay path on the phone, not only the main one.
+- **A menu that hangs off a button goes in `AnchoredModal`** (`src/components/AnchoredModal.tsx`), never
+  a bare `<Modal>` placed from `measureInWindow`. On Android `measureInWindow` counts from below the
+  status bar, but a `statusBarTranslucent` Modal starts at the top of the screen, so menus landed a
+  status bar too high and covered their own buttons (country dropdown, ⋯ menu, quick bar; POCO, 12 Nov).
+  `AnchoredModal` measures its own layer the same way and hands `children` the button in its
+  coordinates, so the offset cancels out on any phone.
+- **Edge-to-edge screens keep the status bar solid.** A screen that draws under the status bar (the
+  community feed, the post page) renders `StatusBarGround` after its list, in its own background colour,
+  so content never scrolls under the clock.
 - **Keyboard inside a Modal:** wrap the Modal's content in `<KeyboardAvoider fillsModal>`, as its
   root. A `statusBarTranslucent` Modal is its own window starting at the screen's top, so the
   plain avoider (measured against the app window) lifted the buyer picker a status bar too far

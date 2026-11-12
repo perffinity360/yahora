@@ -1,8 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, useWindowDimensions, type StyleProp, type ViewInstance, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, type StyleProp, type ViewInstance, type ViewStyle } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 
+import { AnchoredModal, type WindowRect } from '../AnchoredModal';
 import { AppText } from '../AppText';
 import { AppToast, useToast } from '../AppToast';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -33,7 +34,7 @@ import type { PostItem } from '../../types';
  * `onRemoved(post, why)` lets the screen react too (the post page shows
  * "This post was deleted." for its own post).
  */
-type Anchor = { x: number; y: number; width: number; height: number };
+type Anchor = WindowRect;
 type PickerRequest = { current: string | null; onPick: (emoji: string | null) => void };
 type BreakdownRequest = { post: PostItem; onReact: (emoji: string | null) => void };
 
@@ -179,6 +180,8 @@ export function PostActionsProvider({
 
 /** The ⋯ menu: one row, under the button, kept on screen. */
 const MENU_W = 168;
+/** One 44-tall item and the menu's padding. */
+const MENU_H = 52;
 
 function PostMenu({
   post,
@@ -193,39 +196,43 @@ function PostMenu({
   onReport: () => void;
   onDelete: () => void;
 }) {
-  const { width, height } = useWindowDimensions();
-  const left = Math.min(Math.max(anchor.x + anchor.width - MENU_W, 8), width - MENU_W - 8);
-  const below = anchor.y + anchor.height + 4;
-  const top = below + 52 > height - 8 ? anchor.y - 52 : below;
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-      <Reanimated.View
-        entering={POPOVER_ENTER}
-        style={[styles.menu, { left, top, transformOrigin: 'top right' }]}
-        accessibilityRole="menu"
-      >
-        {post.is_mine ? (
-          <Pressable
-            onPress={onDelete}
-            accessibilityRole="menuitem"
-            style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+    <AnchoredModal anchor={anchor} onClose={onClose}>
+      {(button, layer) => {
+        // Under the ⋯ button, right edges lined up; above it near the bottom.
+        const left = Math.min(Math.max(button.x + button.width - MENU_W, 8), layer.width - MENU_W - 8);
+        const below = button.y + button.height + 4;
+        const above = below + MENU_H > layer.height - 8;
+        const top = above ? button.y - 4 - MENU_H : below;
+        return (
+          <Reanimated.View
+            entering={POPOVER_ENTER}
+            style={[styles.menu, { left, top, transformOrigin: above ? 'bottom right' : 'top right' }]}
+            accessibilityRole="menu"
           >
-            <Feather name="trash-2" size={15} color={colors.errorText} />
-            <AppText style={[styles.itemText, styles.danger]}>Delete</AppText>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={onReport}
-            accessibilityRole="menuitem"
-            style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-          >
-            <Feather name="flag" size={15} color={colors.blackSoft} />
-            <AppText style={styles.itemText}>Report</AppText>
-          </Pressable>
-        )}
-      </Reanimated.View>
-    </Modal>
+            {post.is_mine ? (
+              <Pressable
+                onPress={onDelete}
+                accessibilityRole="menuitem"
+                style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+              >
+                <Feather name="trash-2" size={15} color={colors.errorText} />
+                <AppText style={[styles.itemText, styles.danger]}>Delete</AppText>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={onReport}
+                accessibilityRole="menuitem"
+                style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+              >
+                <Feather name="flag" size={15} color={colors.blackSoft} />
+                <AppText style={styles.itemText}>Report</AppText>
+              </Pressable>
+            )}
+          </Reanimated.View>
+        );
+      }}
+    </AnchoredModal>
   );
 }
 

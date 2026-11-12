@@ -1,15 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { memo, useEffect, useRef, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-  type ViewInstance,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type ViewInstance } from 'react-native';
 import Reanimated, {
   Easing,
   FadeIn,
@@ -19,8 +11,10 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AnchoredModal, type WindowRect } from '../AnchoredModal';
 import { AppText } from '../AppText';
 import { GlobeIcon } from './GlobeIcon';
+import { CARD_INSET } from './PostCard';
 import { countryName, flagEmoji, GLOBAL, type FeedSort, type WorldFeed } from '../../lib/community';
 import { POPOVER_ENTER } from '../../lib/motion';
 import { colors, font, shadows } from '../../theme';
@@ -78,11 +72,11 @@ export const CommunitySwitcher = memo(function CommunitySwitcher({
 }) {
   const insets = useSafeAreaInsets();
   const worldRef = useRef<ViewInstance>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; width: number } | null>(null);
+  const [menu, setMenu] = useState<WindowRect | null>(null);
   const onWorldSide = side === 'world';
 
   const openMenu = () => {
-    worldRef.current?.measureInWindow((x, y, width, height) => setMenu({ x, y: y + height, width }));
+    worldRef.current?.measureInWindow((x, y, width, height) => setMenu({ x, y, width, height }));
   };
 
   const onWorldPress = () => {
@@ -212,19 +206,15 @@ function CountryMenu({
   onPick,
   onClose,
 }: {
-  anchor: { x: number; y: number; width: number };
+  anchor: WindowRect;
   countries: Country[];
   selected: WorldFeed | null;
   onPick: (world: WorldFeed) => void;
   onClose: () => void;
 }) {
-  const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const mine = countries.find((c) => c.is_mine);
   const others = countries.filter((c) => !c.is_mine).sort((a, b) => a.name.localeCompare(b.name));
-  const width = Math.min(260, screenW - 16);
-  const left = Math.min(Math.max(anchor.x, 8), screenW - width - 8);
-  const top = anchor.y + 6;
 
   const row = (value: WorldFeed, label: string, note?: string) => {
     const on = value === selected;
@@ -247,24 +237,31 @@ function CountryMenu({
   };
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-      <Reanimated.View
-        entering={POPOVER_ENTER}
-        style={[
-          styles.menu,
-          { left, top, width, maxHeight: screenH - top - insets.bottom - 80, transformOrigin: 'top left' },
-        ]}
-        accessibilityRole="menu"
-      >
-        <ScrollView bounces={false}>
-          {mine ? row(mine.code, mine.name, '(your country)') : null}
-          {row(GLOBAL, 'Global')}
-          {others.length ? <View style={styles.menuRule} /> : null}
-          {others.map((c) => row(c.code, c.name))}
-        </ScrollView>
-      </Reanimated.View>
-    </Modal>
+    <AnchoredModal anchor={anchor} onClose={onClose}>
+      {(pill, layer) => {
+        // Hangs 6 under the purple pill, its left end on the pill's.
+        const width = Math.min(260, layer.width - 16);
+        const left = Math.min(Math.max(pill.x, 8), layer.width - width - 8);
+        const top = pill.y + pill.height + 6;
+        return (
+          <Reanimated.View
+            entering={POPOVER_ENTER}
+            style={[
+              styles.menu,
+              { left, top, width, maxHeight: layer.height - top - insets.bottom - 80, transformOrigin: 'top left' },
+            ]}
+            accessibilityRole="menu"
+          >
+            <ScrollView bounces={false}>
+              {mine ? row(mine.code, mine.name, '(your country)') : null}
+              {row(GLOBAL, 'Global')}
+              {others.length ? <View style={styles.menuRule} /> : null}
+              {others.map((c) => row(c.code, c.name))}
+            </ScrollView>
+          </Reanimated.View>
+        );
+      }}
+    </AnchoredModal>
   );
 }
 
@@ -274,7 +271,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: SWITCHER_HEIGHT,
-    paddingHorizontal: 8,
+    // The pills' outer edges on the cards' borders (owner, 12 Nov).
+    paddingHorizontal: CARD_INSET,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

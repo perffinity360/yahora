@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import * as Haptics from 'expo-haptics';
 import { memo, useCallback, useImperativeHandle, useRef, useState, type Ref } from 'react';
-import { Modal, Pressable, StyleSheet, useWindowDimensions, View, type ViewInstance } from 'react-native';
+import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import Reanimated, {
   Easing,
   FadeIn,
@@ -13,6 +13,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AnchoredModal, type WindowRect } from '../AnchoredModal';
 import { AppText } from '../AppText';
 import { usePostActions } from './PostActions';
 import { QUICK_REACTIONS, REACTION_LONG_PRESS_MS } from '../../lib/community';
@@ -37,9 +38,11 @@ import { colors, shadows } from '../../theme';
  * offers the six, or the other five would stay hidden. The runbook's CC-V4a
  * text ("tap React toggles ❤️") predates that decision; the spec wins.
  *
- * The bar opens in a transparent Modal laid over the screen, measured from the
- * button, so it is never clipped by the card or the list. It reports only the
- * choice, through onReact(emoji | null).
+ * The bar opens in an AnchoredModal laid over the screen, measured from the
+ * button, so it is never clipped by the card or the list. Like the website's
+ * Popover (and Facebook's and LinkedIn's bars), its left end lines up with the
+ * button's and it sits 8 above it; below it only when there's no room above.
+ * It reports only the choice, through onReact(emoji | null).
  */
 
 /** Quick-bar emoji: 26 in a 44 × 44 button on a touch screen (spec §5.1). */
@@ -59,7 +62,6 @@ function quickBar(reaction: string | null): readonly string[] {
 
 export type ReactButtonHandle = { open: () => void };
 
-type Anchor = { x: number; y: number; width: number; height: number };
 
 export const ReactButton = memo(function ReactButton({
   reaction,
@@ -71,7 +73,7 @@ export const ReactButton = memo(function ReactButton({
   ref?: Ref<ReactButtonHandle>;
 }) {
   const buttonRef = useRef<ViewInstance>(null);
-  const [anchor, setAnchor] = useState<Anchor | null>(null);
+  const [anchor, setAnchor] = useState<WindowRect | null>(null);
   const reduceMotion = useReducedMotion();
   const actions = usePostActions();
 
@@ -165,69 +167,66 @@ function QuickBar({
   onMore,
   onClose,
 }: {
-  anchor: Anchor;
+  anchor: WindowRect;
   current: string | null;
   onChoose: (emoji: string) => void;
   onMore: () => void;
   onClose: () => void;
 }) {
-  const { width: screenW } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  // Over the button, its left end a little left of the button so the button
-  // sits under the first emojis; kept on screen. Below it when there's no room
-  // above (a post at the very top of the feed).
-  const left = Math.min(Math.max(anchor.x - CELL / 2, EDGE), screenW - BAR_WIDTH - EDGE);
-  const above = anchor.y - GAP - BAR_HEIGHT >= insets.top + EDGE;
-  const top = above ? anchor.y - GAP - BAR_HEIGHT : anchor.y + anchor.height + GAP;
-  // It grows out of the button: scale from the point over (or under) it.
-  const originX = Math.min(Math.max(anchor.x + anchor.width / 2 - left, 0), BAR_WIDTH);
-
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close reactions" />
-      <Reanimated.View
-        entering={POPOVER_ENTER}
-        style={[
-          styles.bar,
-          { left, top, transformOrigin: [originX, above ? BAR_HEIGHT : 0, 0] },
-        ]}
-        accessibilityRole="toolbar"
-        accessibilityLabel="Reactions"
-      >
-        {quickBar(current).map((emoji, i) => {
-          const mine = emoji === current;
-          return (
-            <Reanimated.View key={emoji} entering={FadeIn.delay(i * STAGGER_MS).duration(180)}>
+    <AnchoredModal anchor={anchor} onClose={onClose} closeLabel="Close reactions">
+      {(button, layer) => {
+        // The bar's left end on the button's, kept on screen; 8 above the
+        // button, or 8 below it for a post at the very top of the feed.
+        const left = Math.min(Math.max(button.x, EDGE), layer.width - BAR_WIDTH - EDGE);
+        const above = button.y - GAP - BAR_HEIGHT >= insets.top + EDGE;
+        const top = above ? button.y - GAP - BAR_HEIGHT : button.y + button.height + GAP;
+        // It grows out of the button: scale from the point over (or under) it.
+        const originX = Math.min(Math.max(button.x + button.width / 2 - left, 0), BAR_WIDTH);
+        return (
+          <Reanimated.View
+            entering={POPOVER_ENTER}
+            style={[styles.bar, { left, top, transformOrigin: [originX, above ? BAR_HEIGHT : 0, 0] }]}
+            accessibilityRole="toolbar"
+            accessibilityLabel="Reactions"
+          >
+            {quickBar(current).map((emoji, i) => {
+              const mine = emoji === current;
+              return (
+                <Reanimated.View key={emoji} entering={FadeIn.delay(i * STAGGER_MS).duration(180)}>
+                  <Pressable
+                    onPress={() => onChoose(emoji)}
+                    accessibilityRole="button"
+                    accessibilityLabel={mine ? `${emoji}, your reaction. Remove it` : `React with ${emoji}`}
+                    accessibilityState={{ selected: mine }}
+                    style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
+                  >
+                    <View style={[styles.cellInner, mine && styles.cellMine]}>
+                      <AppText style={styles.quickEmoji} maxFontSizeMultiplier={1}>
+                        {emoji}
+                      </AppText>
+                    </View>
+                  </Pressable>
+                </Reanimated.View>
+              );
+            })}
+            <Reanimated.View entering={FadeIn.delay(QUICK_REACTIONS.length * STAGGER_MS).duration(180)}>
+              {/* ⊕ — the full emoji picker (spec §5.2). */}
               <Pressable
-                onPress={() => onChoose(emoji)}
+                onPress={onMore}
                 accessibilityRole="button"
-                accessibilityLabel={mine ? `${emoji}, your reaction. Remove it` : `React with ${emoji}`}
-                accessibilityState={{ selected: mine }}
+                accessibilityLabel="More emoji"
                 style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
               >
-                <View style={[styles.cellInner, mine && styles.cellMine]}>
-                  <AppText style={styles.quickEmoji} maxFontSizeMultiplier={1}>
-                    {emoji}
-                  </AppText>
-                </View>
+                <Feather name="plus-circle" size={21} color={colors.communityMuted} />
               </Pressable>
             </Reanimated.View>
-          );
-        })}
-        <Reanimated.View entering={FadeIn.delay(QUICK_REACTIONS.length * STAGGER_MS).duration(180)}>
-          {/* ⊕ — the full emoji picker (spec §5.2). */}
-          <Pressable
-            onPress={onMore}
-            accessibilityRole="button"
-            accessibilityLabel="More emoji"
-            style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
-          >
-            <Feather name="plus-circle" size={21} color={colors.communityMuted} />
-          </Pressable>
-        </Reanimated.View>
-      </Reanimated.View>
-    </Modal>
+          </Reanimated.View>
+        );
+      }}
+    </AnchoredModal>
   );
 }
 

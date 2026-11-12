@@ -42,6 +42,9 @@ import type { PostItem } from '../../types';
  * Memoised: a card re-renders only when its own post or flags change. A
  * reaction replaces the post object in the cache, so only that card redraws.
  */
+/** Cards sit this far in from each side of the screen (spec §3). The switcher's
+ *  pills line up with it. */
+export const CARD_INSET = 10;
 const STAGGER_MS = 28;
 const STAGGER_MAX = 6;
 const AVATAR = 28;
@@ -281,7 +284,7 @@ export function PostCardSkeleton({ zone }: { zone: 'campus' | 'world' }) {
 
 const styles = StyleSheet.create({
   /* Cards 6 apart, 10 in from each side (spec §3), at most 860 wide. */
-  cardWrap: { paddingHorizontal: 10, paddingBottom: 6, alignItems: 'center' },
+  cardWrap: { paddingHorizontal: CARD_INSET, paddingBottom: 6, alignItems: 'center' },
   card: {
     width: '100%',
     maxWidth: 860,

@@ -10,6 +10,7 @@ import { AppText } from '../../src/components/AppText';
 import { AppToast, useToast } from '../../src/components/AppToast';
 import { CommunitySwitcher, SWITCHER_HEIGHT, worldLabel } from '../../src/components/community/CommunitySwitcher';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
+import { StatusBarGround } from '../../src/components/community/StatusBarGround';
 import { ComposerDock, DOCK_HEIGHT } from '../../src/components/community/ComposerDock';
 import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
@@ -258,6 +259,7 @@ export default function CommunityScreen() {
   );
 
   const topPad = insets.top + SWITCHER_HEIGHT;
+  const ground = zone === 'campus' ? colors.communityPanelCampus : colors.communityPanelWorld;
   const dockHeight = viewOnly ? VIEW_ONLY_HEIGHT : showComposer ? DOCK_HEIGHT : 0;
   const hint =
     kind === 'campus'
@@ -270,7 +272,7 @@ export default function CommunityScreen() {
   return (
     <PostActionsProvider toastBottom={dockHeight + 16}>
       <View style={styles.screen}>
-        <CommunityWallpaper ground={zone === 'campus' ? colors.communityPanelCampus : colors.communityPanelWorld} />
+        <CommunityWallpaper ground={ground} />
 
         <FlashList
           // A new list per feed: each starts at its own top, and the cards'
@@ -301,6 +303,8 @@ export default function CommunityScreen() {
             />
           }
         />
+
+        <StatusBarGround color={ground} />
 
         <CommunitySwitcher
           side={side}

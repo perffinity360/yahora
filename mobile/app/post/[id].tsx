@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AppText } from '../../src/components/AppText';
 import { BackButton } from '../../src/components/CircleButton';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
+import { StatusBarGround } from '../../src/components/community/StatusBarGround';
 import { ComposerDock, DOCK_HEIGHT } from '../../src/components/community/ComposerDock';
 import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
@@ -69,6 +70,7 @@ export default function PostScreen() {
   const canReply = query.data?.can_reply === true;
   const gone: PostGone | null = deletedHere ? 'POST_DELETED' : query.isError ? goneCode(query.error) : null;
   const zone = post && post.scope !== 'campus' ? 'world' : 'campus';
+  const ground = zone === 'campus' ? colors.communityPanelCampus : colors.communityPanelWorld;
   const here = postId ? `/post/${postId}` : '/(tabs)/community';
 
   const goBack = () =>
@@ -162,7 +164,7 @@ export default function PostScreen() {
       }}
     >
       <View style={styles.screen}>
-        <CommunityWallpaper ground={zone === 'campus' ? colors.communityPanelCampus : colors.communityPanelWorld} />
+        <CommunityWallpaper ground={ground} />
         <ScrollView
           contentContainerStyle={{ paddingTop: floatingTop + 50, paddingBottom: dockHeight + 16 }}
           refreshControl={
@@ -178,6 +180,7 @@ export default function PostScreen() {
           {body}
         </ScrollView>
 
+        <StatusBarGround color={ground} />
         <BackButton onPress={goBack} style={[styles.back, { top: floatingTop }]} />
 
         {showReplyBar && post ? (

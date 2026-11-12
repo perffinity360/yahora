@@ -1,3 +1,29 @@
+diff --git a/node_modules/rn-emoji-keyboard/lib/commonjs/components/EmojiCategory.js b/node_modules/rn-emoji-keyboard/lib/commonjs/components/EmojiCategory.js
+index 2c01afd..20a080f 100644
+--- a/node_modules/rn-emoji-keyboard/lib/commonjs/components/EmojiCategory.js
++++ b/node_modules/rn-emoji-keyboard/lib/commonjs/components/EmojiCategory.js
+@@ -115,13 +115,14 @@ const EmojiCategory = /*#__PURE__*/React.memo(_ref2 => {
+   const keyExtractor = React.useCallback(item => item.name, []);
+   const [maxIndex, setMaxIndex] = React.useState(0);
+ 
+-  // with InteractionManager we can show emojis after interaction is finished
+-  // It helps with delay during category change animation
+-  _reactNative.InteractionManager.runAfterInteractions(() => {
+-    if (maxIndex === 0 && data.length) {
+-      setMaxIndex(minimalEmojisAmountToDisplay);
+-    }
+-  });
++  // React Native 0.80+ removed InteractionManager (it throws on access), which
++  // crashed the picker on open (Yahora, 12 Nov). Defer the first batch of
++  // emojis to the next tick instead, so the sheet's animation still goes first.
++  React.useEffect(() => {
++    if (maxIndex !== 0 || !data.length) return;
++    const timer = setTimeout(() => setMaxIndex(minimalEmojisAmountToDisplay), 0);
++    return () => clearTimeout(timer);
++  }, [maxIndex, data.length]);
+   const onEndReached = () => {
+     if (maxIndex <= data.length) {
+       setMaxIndex(data.length);
 diff --git a/node_modules/rn-emoji-keyboard/lib/commonjs/components/ModalWithBackdrop.js b/node_modules/rn-emoji-keyboard/lib/commonjs/components/ModalWithBackdrop.js
 index befb2d6..c6f5115 100644
 --- a/node_modules/rn-emoji-keyboard/lib/commonjs/components/ModalWithBackdrop.js
@@ -23,6 +49,40 @@ index befb2d6..c6f5115 100644
        useNativeDriver: true
      }).start();
      handleTimeout(() => backdropPress(), 200);
+diff --git a/node_modules/rn-emoji-keyboard/lib/module/components/EmojiCategory.js b/node_modules/rn-emoji-keyboard/lib/module/components/EmojiCategory.js
+index a858fed..6613c76 100644
+--- a/node_modules/rn-emoji-keyboard/lib/module/components/EmojiCategory.js
++++ b/node_modules/rn-emoji-keyboard/lib/module/components/EmojiCategory.js
+@@ -8,7 +8,6 @@ import { useKeyboardStore } from '../store/useKeyboardStore';
+ import { parseEmoji } from '../utils/parseEmoji';
+ import { removeSkinToneModifier } from '../utils/skinToneSelectorUtils';
+ import { useKeyboard } from '../hooks/useKeyboard';
+-import { InteractionManager } from 'react-native';
+ const emptyEmoji = {
+   emoji: '',
+   name: 'blank emoji',
+@@ -108,13 +107,14 @@ export const EmojiCategory = /*#__PURE__*/React.memo(_ref2 => {
+   const keyExtractor = React.useCallback(item => item.name, []);
+   const [maxIndex, setMaxIndex] = React.useState(0);
+ 
+-  // with InteractionManager we can show emojis after interaction is finished
+-  // It helps with delay during category change animation
+-  InteractionManager.runAfterInteractions(() => {
+-    if (maxIndex === 0 && data.length) {
+-      setMaxIndex(minimalEmojisAmountToDisplay);
+-    }
+-  });
++  // React Native 0.80+ removed InteractionManager (it throws on access), which
++  // crashed the picker on open (Yahora, 12 Nov). Defer the first batch of
++  // emojis to the next tick instead, so the sheet's animation still goes first.
++  React.useEffect(() => {
++    if (maxIndex !== 0 || !data.length) return;
++    const timer = setTimeout(() => setMaxIndex(minimalEmojisAmountToDisplay), 0);
++    return () => clearTimeout(timer);
++  }, [maxIndex, data.length]);
+   const onEndReached = () => {
+     if (maxIndex <= data.length) {
+       setMaxIndex(data.length);
 diff --git a/node_modules/rn-emoji-keyboard/lib/module/components/ModalWithBackdrop.js b/node_modules/rn-emoji-keyboard/lib/module/components/ModalWithBackdrop.js
 index 2e2b55e..82b77d5 100644
 --- a/node_modules/rn-emoji-keyboard/lib/module/components/ModalWithBackdrop.js
@@ -56,6 +116,40 @@ index 2e2b55e..82b77d5 100644
        useNativeDriver: true
      }).start();
      handleTimeout(() => backdropPress(), 200);
+diff --git a/node_modules/rn-emoji-keyboard/src/components/EmojiCategory.tsx b/node_modules/rn-emoji-keyboard/src/components/EmojiCategory.tsx
+index 6869a04..af3ab82 100644
+--- a/node_modules/rn-emoji-keyboard/src/components/EmojiCategory.tsx
++++ b/node_modules/rn-emoji-keyboard/src/components/EmojiCategory.tsx
+@@ -14,7 +14,6 @@ import { useKeyboardStore } from '../store/useKeyboardStore'
+ import { parseEmoji } from '../utils/parseEmoji'
+ import { removeSkinToneModifier } from '../utils/skinToneSelectorUtils'
+ import { useKeyboard } from '../hooks/useKeyboard'
+-import { InteractionManager } from 'react-native'
+ 
+ const emptyEmoji: JsonEmoji = {
+   emoji: '',
+@@ -147,13 +146,14 @@ export const EmojiCategory = React.memo(
+ 
+     const [maxIndex, setMaxIndex] = React.useState(0)
+ 
+-    // with InteractionManager we can show emojis after interaction is finished
+-    // It helps with delay during category change animation
+-    InteractionManager.runAfterInteractions(() => {
+-      if (maxIndex === 0 && data.length) {
+-        setMaxIndex(minimalEmojisAmountToDisplay)
+-      }
+-    })
++    // React Native 0.80+ removed InteractionManager (it throws on access), which
++    // crashed the picker on open (Yahora, 12 Nov). Defer the first batch of
++    // emojis to the next tick instead, so the sheet's animation still goes first.
++    React.useEffect(() => {
++      if (maxIndex !== 0 || !data.length) return
++      const timer = setTimeout(() => setMaxIndex(minimalEmojisAmountToDisplay), 0)
++      return () => clearTimeout(timer)
++    }, [maxIndex, data.length])
+ 
+     const onEndReached = () => {
+       if (maxIndex <= data.length) {
 diff --git a/node_modules/rn-emoji-keyboard/src/components/ModalWithBackdrop.tsx b/node_modules/rn-emoji-keyboard/src/components/ModalWithBackdrop.tsx
 index b1aad6d..80b6611 100644
 --- a/node_modules/rn-emoji-keyboard/src/components/ModalWithBackdrop.tsx
