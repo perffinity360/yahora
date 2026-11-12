@@ -22,7 +22,7 @@ import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import useReactionPatches, { applyPatches } from "../../hooks/useReactionPatches";
 import { getReplies, getUserPosts } from "./api";
 import { SkeletonPost, loadProfile } from "./CommunityFeed";
-import PostActionsProvider from "./PostActions";
+import PostActionsProvider, { useReplyCounts, withReplyCount } from "./PostActions";
 import styles from "./Community.module.css";
 
 function PostsList({ userId }) {
@@ -94,6 +94,8 @@ function PostsList({ userId }) {
     [onReact],
   );
   const loadReplies = useCallback((postId, from) => getReplies(postId, from), []);
+  // A reply deleted here: the parent's 💬 count follows at once.
+  useReplyCounts((parentId, delta) => setItems((prev) => withReplyCount(prev, parentId, delta)));
 
   return (
     <div className={styles.feed}>

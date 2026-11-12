@@ -71,6 +71,7 @@ import useInfiniteScroll from "../../hooks/useInfiniteScroll";
 import { applyPatches } from "../../hooks/useReactionPatches";
 import { NEW_POSTS_POLL_MS } from "../../utils/community";
 import { createPost, getFeed, getNewCount, getReplies } from "./api";
+import { useReplyCounts, withReplyCount } from "./PostActions";
 import styles from "./Community.module.css";
 
 /* ⚠ No route sends the profile glimpse's counts and photos yet (spec §4.1:
@@ -321,6 +322,10 @@ export default function CommunityFeed({
     (postId, emoji) => onReact(postId, emoji, shownRef.current.find((p) => p.id === postId)),
     [onReact],
   );
+
+  // A reply deleted from its ⋯ menu (or put back when that fails): this
+  // feed's copy of the parent's 💬 count follows at once.
+  useReplyCounts((parentId, delta) => setItems((prev) => withReplyCount(prev, parentId, delta)));
 
   const onPosted = useCallback((post) => {
     if (post.parent_post_id) {

@@ -204,18 +204,25 @@ export default function PostThread({
 
   // Folded: the preview and what you just wrote. Unfolded: the pages too. A
   // preview reply comes round again in the oldest-first pages, so each id is
-  // kept only once.
+  // kept only once. A reply deleted or reported here (`hidden`) is left out of
+  // both before anything is counted, so with the post's lowered replies_count
+  // "Show more replies" still adds up.
+  const hidden = usePostActions()?.hidden;
   const folded = useMemo(
     () =>
-      distinct([...(post.top_replies ?? []), ...(selfPreview ? loaded : []), ...(addedReplies ?? [])]),
-    [post.top_replies, selfPreview, loaded, addedReplies],
+      distinct([...(post.top_replies ?? []), ...(selfPreview ? loaded : []), ...(addedReplies ?? [])]).filter(
+        (r) => !hidden?.has(r.id),
+      ),
+    [post.top_replies, selfPreview, loaded, addedReplies, hidden],
   );
   const unfolded = useMemo(
-    () => distinct([...(post.top_replies ?? []), ...loaded, ...(addedReplies ?? [])]),
-    [post.top_replies, loaded, addedReplies],
+    () =>
+      distinct([...(post.top_replies ?? []), ...loaded, ...(addedReplies ?? [])]).filter(
+        (r) => !hidden?.has(r.id),
+      ),
+    [post.top_replies, loaded, addedReplies, hidden],
   );
-  const hidden = usePostActions()?.hidden;
-  const replies = (expanded ? unfolded : folded).filter((r) => !hidden?.has(r.id));
+  const replies = expanded ? unfolded : folded;
 
   const total = Math.max(post.replies_count ?? 0, unfolded.length);
   const canLoad = !exhausted && total > unfolded.length;
