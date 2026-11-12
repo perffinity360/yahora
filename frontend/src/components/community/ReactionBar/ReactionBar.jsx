@@ -14,7 +14,10 @@
 //   · ⊕                    — the full picker (§5.2), opened against the
 //                            quick bar so its six emojis stay where they were
 //
-// Your current emoji sits marked in the bar; choosing it again removes it.
+// Your current emoji sits marked in the bar, first in it; choosing it again
+// removes it. One picked from the full picker takes the first place too, and
+// the last of the six steps out, so removing it never means searching the
+// picker for it again (owner, 12 Nov; website only).
 
 // One reaction per person: choosing your current emoji removes it, choosing
 // another replaces it. The component only reports the choice through
@@ -58,6 +61,12 @@ function pickerPlacement(bar) {
   // Shift left if the picker, wider than the bar, would leave the window.
   const shift = Math.min(0, vw - EDGE - (r.left + PICKER_WIDTH));
   return { dir, height, shift };
+}
+
+/* The bar's six: your reaction first, then the usual ones in their order. */
+function quickBar(reaction) {
+  if (!reaction) return QUICK_REACTIONS;
+  return [reaction, ...QUICK_REACTIONS.filter((e) => e !== reaction)].slice(0, QUICK_REACTIONS.length);
 }
 
 export default function ReactionBar({ reaction, onReact }) {
@@ -221,7 +230,7 @@ export default function ReactionBar({ reaction, onReact }) {
               hangs off it (absolute), so opening it never moves the bar. */}
           <div className={styles.stack}>
             <div ref={barRef} className={styles.quickBar} onKeyDown={onBarKeyDown}>
-              {QUICK_REACTIONS.map((emoji, i) => (
+              {quickBar(reaction).map((emoji, i) => (
                 <button
                   key={emoji}
                   type="button"
