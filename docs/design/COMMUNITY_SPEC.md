@@ -685,6 +685,10 @@ reaction; picking your current one again removes it. Replies have only a like (�
     long-press for **450 ms** (`REACTION_LONG_PRESS_MS`) opens it too.
   - **Everywhere,** your current reaction sits on its `reactionMineBg` circle: choosing it again removes
     it, choosing another replaces it. `DEFAULT_REACTION` (❤️) is now only a reply's like (§4).
+  - **Website:** your current reaction also moves to the **first place** in the bar. If it isn't one of
+    the six (you chose it from ⊕), it takes the first place and the last of the six steps out, so you
+    can remove it from the bar without finding it in the picker again (owner, 12 Nov). The app keeps
+    the six in their fixed order.
 - **Animation:** the bar springs up from the button and its emoji arrive left to right, 18 ms apart.
   Hovered emoji lift and grow. The chosen emoji pops (up to 1.35 over 320 ms) with a ring going out
   behind it. With reduced motion turned on, none of this moves.
