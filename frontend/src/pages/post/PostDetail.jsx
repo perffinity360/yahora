@@ -26,7 +26,7 @@ import useReactionPatches, { applyPatches } from "../../hooks/useReactionPatches
 import { countryName } from "../../utils/community";
 import { createPost, getPost, getReplies, getViewerProfile } from "../community/api";
 import { SkeletonPost, loadProfile } from "../community/CommunityFeed";
-import PostActionsProvider from "../community/PostActions";
+import PostActionsProvider, { useReplyCounts, withReplyCount } from "../community/PostActions";
 import styles from "../community/Community.module.css";
 import pageStyles from "./PostDetail.module.css";
 
@@ -47,6 +47,12 @@ function goneCode(err) {
   if (code === "POST_DELETED" || code === "POST_REMOVED" || code === "POST_UNDER_REVIEW") return code;
   // 404, and a link whose id isn't even a uuid (400).
   if (err?.status === 404 || err?.status === 400) return "POST_NOT_FOUND";
+  return null;
+}
+
+/* Listens inside the provider, which this page renders itself. */
+function ReplyCounts({ update }) {
+  useReplyCounts(update);
   return null;
 }
 
@@ -108,6 +114,13 @@ export default function PostDetail() {
     setAdded((prev) => [...prev, reply]);
     setPost((p) => (p ? { ...p, replies_count: p.replies_count + 1 } : p));
   }, []);
+
+  // A reply deleted from its ⋯ menu (or put back when that fails): the
+  // post's 💬 count follows at once.
+  const changeReplyCount = useCallback(
+    (parentId, delta) => setPost((p) => (p ? withReplyCount([p], parentId, delta)[0] : p)),
+    [],
+  );
 
   // Deleting the post itself from its ⋯ menu leaves only the notice.
   const onRemoved = useCallback(
@@ -178,6 +191,7 @@ export default function PostDetail() {
 
   return (
     <PostActionsProvider onRemoved={onRemoved}>
+      <ReplyCounts update={changeReplyCount} />
       <div className={`${styles.narrow} ${pageStyles.page}`} data-feed={world ? "world" : "campus"}>
         <div className={`${styles.feed} ${pageStyles.feed}`}>{body}</div>
         {dock && (
