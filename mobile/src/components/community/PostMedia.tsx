@@ -157,9 +157,13 @@ function Chevron({ side, onPress }: { side: 'left' | 'right'; onPress: () => voi
 
 /**
  * COMMUNITY_SPEC.md §3 "GIF": at most `maxWidth` wide (280 on a post, 180 on a
- * reply), on a see-through tint, with a small GIF badge. It plays while on
- * screen and pauses when it scrolls away: the feed tells it with `playing`,
- * from FlashList's viewability.
+ * reply), with a small GIF badge. It plays while on screen and pauses when it
+ * scrolls away: the feed tells it with `playing`, from FlashList's viewability.
+ *
+ * The frame takes the shape of the GIF as it actually loads and has no ground
+ * of its own, so nothing shows round it but its rounded corners (owner, 13 Nov).
+ * KLIPY's width × height is only the first guess: some renditions come back a
+ * few pixels off it, and the old tint showed as a strip in the gap.
  */
 export const PostGif = memo(function PostGif({
   gif,
@@ -171,7 +175,8 @@ export const PostGif = memo(function PostGif({
   maxWidth?: number;
 }) {
   const imageRef = useRef<Image>(null);
-  const ratio = gif.width > 0 && gif.height > 0 ? gif.width / gif.height : 1;
+  const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
+  const ratio = loadedRatio ?? (gif.width > 0 && gif.height > 0 ? gif.width / gif.height : 1);
 
   useEffect(() => {
     if (playing) void imageRef.current?.startAnimating();
@@ -185,9 +190,13 @@ export const PostGif = memo(function PostGif({
         source={{ uri: gif.url }}
         placeholder={gif.preview_url ? { uri: gif.preview_url } : undefined}
         style={StyleSheet.absoluteFill}
-        contentFit="contain"
+        // The frame is the image's own shape once loaded, so cover crops
+        // nothing; before that it hides a guess that's a pixel or two off.
+        contentFit="cover"
         autoplay={playing}
-        onLoad={() => {
+        onLoad={(e) => {
+          const { width: w, height: h } = e.source;
+          if (w > 0 && h > 0) setLoadedRatio(w / h);
           if (!playing) void imageRef.current?.stopAnimating();
         }}
         accessibilityLabel="GIF"
@@ -237,7 +246,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: colors.reactionPillBorder,
   },
   gifBadge: {
     position: 'absolute',

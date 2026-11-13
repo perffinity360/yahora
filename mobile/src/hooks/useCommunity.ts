@@ -294,9 +294,12 @@ function insertNewPost(client: ReturnType<typeof useQueryClient>, post: PostItem
   });
 }
 
-/** A new reply joins its post's preview in every feed (after the top replies,
- *  as on the website: "the preview, plus anything you just replied"), counts
- *  one more reply, and goes at the end of any thread already loaded. */
+/** A new reply goes FIRST: at the front of its post's preview in every feed
+ *  and of any thread already loaded, above the Hot ones, and counts one more
+ *  reply (owner, 13 Nov: the author sees what they just wrote on top, and the
+ *  screen takes them to it, useRevealReply). Only their own cache is changed,
+ *  so everyone else keeps the API's Hot order; a refresh brings it back here
+ *  too. */
 function insertNewReply(client: ReturnType<typeof useQueryClient>, reply: PostItem) {
   const parentId = reply.parent_post_id;
   if (!parentId) return;
@@ -305,17 +308,15 @@ function insertNewReply(client: ReturnType<typeof useQueryClient>, reply: PostIt
       ? {
           ...item,
           replies_count: (item.replies_count ?? 0) + 1,
-          top_replies: distinctById([...(item.top_replies ?? []), reply]),
+          top_replies: distinctById([reply, ...(item.top_replies ?? [])]),
         }
       : item,
   );
   // The feed's thread and the post page's thread (both start with this key).
   client.setQueriesData<ThreadCache>({ queryKey: [...THREADS, parentId] }, (data) => {
     if (!data?.pages?.length) return data;
-    const pages = [...data.pages];
-    const last = pages[pages.length - 1];
-    pages[pages.length - 1] = { ...last, items: distinctById([...(last?.items ?? []), reply]) };
-    return { ...data, pages };
+    const [first, ...rest] = data.pages;
+    return { ...data, pages: [{ ...first, items: distinctById([reply, ...(first?.items ?? [])]) }, ...rest] };
   });
 }
 

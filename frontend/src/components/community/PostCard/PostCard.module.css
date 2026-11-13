@@ -233,6 +233,13 @@ a.time:hover {
   white-space: nowrap;
 }
 
+/* Being checked: blue, a check in progress (owner, 13 Nov). Under review stays grey. */
+.statusPending {
+  border-color: transparent;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
+}
+
 /* ── A reply's campus on a line of its own, in a narrow feed ───────────── */
 
 /* A reply's campus and time sit in .byline. On a wide feed it adds no box of
@@ -539,14 +546,15 @@ a.time:hover {
 
 /* ── GIF ───────────────────────────────────────────────────────────────── */
 
+/* The frame is the GIF's own shape (PostGif.jsx sets --gif-ratio from the
+   loaded image), at most 280 wide and 360 tall, and has no ground of its own:
+   nothing shows round the GIF but its rounded corners (owner, 13 Nov). */
 .gif {
   position: relative;
-  width: min(100%, 280px);
-  max-height: 360px;
+  width: min(100%, 280px, calc(360px * var(--gif-ratio, 1)));
   margin-top: 6px;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--reaction-pill-border);
 }
 
 .gifMedia {
@@ -691,6 +699,12 @@ a.time:hover {
   column-gap: 8px;
   padding: 4px 0 2px;
   animation: replyIn 260ms var(--community-ease) backwards;
+}
+
+/* The reply you just wrote, scrolled into view (PostThread.jsx): it stops
+   clear of the sticky header above and the composer docked below. */
+.replyReveal {
+  scroll-margin: 88px 0 120px;
 }
 
 /* The first row takes --thread-lead on top. Its piece of the line spans the
@@ -1028,7 +1042,7 @@ a.time:hover {
 }
 
 .replyGif .gif {
-  width: min(100%, 180px);
+  width: min(100%, 180px, calc(360px * var(--gif-ratio, 1)));
 }
 
 .showMore {

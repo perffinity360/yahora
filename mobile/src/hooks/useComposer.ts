@@ -9,6 +9,7 @@ import {
   POST_MAX_CHARS,
   POST_MAX_PHOTOS,
   POST_PHOTO_MAX_BYTES,
+  rateLimitText,
 } from '../lib/community';
 import type { GifRef } from '../types';
 
@@ -222,7 +223,10 @@ export function useComposer({
         const code = e?.fromApi ? (e.body?.error as string | undefined) : undefined;
         let next: ComposerResult = 'error';
         if (e?.status === 422 && code === 'MODERATION_NUDGE') next = 'nudge';
-        else if (e?.status === 429 && (code === 'RATE_LIMIT_POSTS' || code === 'RATE_LIMIT_REPLIES')) next = 'rate-limited';
+        else if (e?.status === 429 && (code === 'RATE_LIMIT_POSTS' || code === 'RATE_LIMIT_REPLIES')) {
+          next = 'rate-limited';
+          setMessage(rateLimitText(code, e.body?.next_allowed_at));
+        }
         else if (e?.status === 403 && code === 'NOT_ALLOWED_HERE') next = 'not-allowed';
         else if (e?.status === 400 && code && INVALID_MESSAGES[code]) {
           next = 'invalid';

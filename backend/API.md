@@ -111,8 +111,8 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `NESTED_REPLY_NOT_ALLOWED` | 400 | Phase 7 — the `posts` insert trigger: replying to a reply | — |
 | `ACCOUNT_SUSPENDED` | **403 or 400 — see below** | Not raised in Phase 7: the `posts` insert trigger has no suspension check | — |
 | `POSTING_RESTRICTED` | **403 or 400 — see below** | Not raised in Phase 7, for the same reason | `until` |
-| `RATE_LIMIT_POSTS` | 429 | Phase 7 — the `posts` insert trigger: 15 campus, 8 country or 8 Global posts in any 60 minutes, each counted on its own | — |
-| `RATE_LIMIT_REPLIES` | 429 | Phase 7 — the `posts` insert trigger: 45 replies in any 60 minutes | — |
+| `RATE_LIMIT_POSTS` | 429 | Phase 7 — the `posts` insert trigger: 15 campus, 8 country or 8 Global posts in any 60 minutes, each counted on its own | `next_allowed_at` (13 Nov, migration `post_rate_limit_retry_at`) |
+| `RATE_LIMIT_REPLIES` | 429 | Phase 7 — the `posts` insert trigger: 45 replies in any 60 minutes | `next_allowed_at` (the same) |
 | `POST_NOT_FOUND` | 404 | Phase 7 — the database: no such post, or you're not allowed to see it | — |
 | `NOT_ALLOWED_HERE` | 403 | Phase 7 — the database: posting or replying in a feed you can only view | — |
 | `CANNOT_REPORT_OWN` | 400 | Phase 7 — `create_report()`: reporting your own post | — |
@@ -3363,7 +3363,12 @@ isn't a single text field, or a file sent under a field other than `images`
 **422:** `{ "error": "MODERATION_NUDGE", "categories": ["harassment"] }` — **nothing was saved or
 uploaded.** Ask `Post this?` with **Edit** and **Post anyway**; Post anyway re-sends with
 `confirm=true`
-**429:** `{ "error": "RATE_LIMIT_POSTS" }` / `{ "error": "RATE_LIMIT_REPLIES" }`
+**429:** `{ "error": "RATE_LIMIT_POSTS", "next_allowed_at": "2026-11-13T12:49:35.539Z" }` /
+`{ "error": "RATE_LIMIT_REPLIES", "next_allowed_at": "…" }`. `next_allowed_at` (ISO 8601, UTC) is when the
+60-minute window has room again: an hour after the post or reply whose leaving it brings the count under
+the limit (13 Nov, migration `post_rate_limit_retry_at`; `prepare_post()` raises it as the exception's
+HINT and `mapDbError()` passes it on). Show it to the student ("Try again at 6:19 pm, in 26 minutes").
+It is left out if the database predates that migration, so a client must still cope without it.
 **Enforced by:** the `posts` BEFORE INSERT trigger fills `university_id`, `country_code` and
 `is_demo`, ignoring whatever the caller sent. It also enforces the reply rules and the rate limits:
 per person, in any 60 minutes, **15 campus posts, 8 country posts, 8 Global posts and 45 replies**,

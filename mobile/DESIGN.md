@@ -139,9 +139,11 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   patterned ground uses slim frosted cards** (the website's community, owner 7 Nov): white at about 94%,
   radius 16, padding about 12 / 14, 12 apart, with the pattern itself faint (about 5%).
 - **Floating chrome.** Switchers float, with content passing underneath. Use `expo-blur` for the glass.
-  It feels more spacious than a solid bar. **A composer at the bottom is the exception: a solid dock, edge
-  to edge** (owner, 10 Nov). Floating, it left a gap below it, and the posts passing through that gap and
-  around its ends looked messy and confusing.
+  It feels more spacious than a solid bar. **A screen that only needs a way into the composer gets a
+  floating action pill, not a composer** (owner, 13 Nov): the community feed's `✏️ Post` (`PostFab`), bottom
+  right, the posts scrolling on under it, the list padded so its last item clears it. **A real input field
+  at the bottom is a solid dock, edge to edge** (owner, 10 Nov), like the post page's reply bar: floating,
+  a field left a gap below it, and the posts passing through that gap and around its ends looked messy.
   **The dock's colour runs on behind the home indicator / navigation bar:** pad it by the bottom safe-area
   inset instead of stopping above it, so that strip is never a different colour.
 - **Never put text straight on a pattern.** The website's text halo still read as messy and was removed

@@ -40,6 +40,16 @@ const RAISED_STATUS = {
   MESSAGE_DELETED: 400,
 };
 
+/** The posting limits say when the window has room again (migration
+ *  post_rate_limit_retry_at): prepare_post() puts it in the exception's HINT
+ *  as an ISO timestamp. Sent as `next_allowed_at`; left out if it's missing
+ *  or isn't a time, so a database without that migration answers as before. */
+function rateLimitExtra(code, error) {
+  if (code !== 'RATE_LIMIT_POSTS' && code !== 'RATE_LIMIT_REPLIES') return {};
+  const at = typeof error.hint === 'string' ? new Date(error.hint) : null;
+  return at && !Number.isNaN(at.getTime()) ? { next_allowed_at: at.toISOString() } : {};
+}
+
 /** Maps a Postgres/Supabase error to our standard response. */
 export function mapDbError(res, error) {
   if (error.code === '23505') return sendError(res, 400, 'DUPLICATE');
@@ -48,7 +58,7 @@ export function mapDbError(res, error) {
   // Matched by name inside the message. No name here is part of another
   // name — keep it that way, or the wrong one can match first.
   const raised = Object.keys(RAISED_STATUS).find((name) => error.message?.includes(name));
-  if (raised) return sendError(res, RAISED_STATUS[raised], raised);
+  if (raised) return sendError(res, RAISED_STATUS[raised], raised, rateLimitExtra(raised, error));
 
   console.error('[db]', error);
   return sendError(res, 500, 'INTERNAL_ERROR');

@@ -2,7 +2,7 @@
 //
 // The replies under a post — docs/design/COMMUNITY_SPEC.md §4. The most-liked
 // replies show by default (`post.top_replies`), then "Show more replies" loads
-// the next REPLIES_PAGE_SIZE in place, oldest first, and comes back while there
+// the next REPLIES_PAGE_SIZE in place, in Hot order, and comes back while there
 // are more. Once it has been pressed, "Hide replies" folds the thread back to
 // the preview, and "Show more replies" unfolds it again without reloading.
 //
@@ -21,10 +21,15 @@
 // the post's reply button open the thread where the student can't reply.
 //
 // PostPageThread is the post's own page (spec §4): no preview, every reply
-// oldest first, a page at a time behind "Load more replies".
+// in Hot order, a page at a time behind "Load more replies".
 //
 // A reply reported or deleted from its ⋯ menu leaves the thread at once
 // (`hidden`, from PostActionsContext).
+//
+// What you just replied (`addedReplies`) goes FIRST, newest on top, on both,
+// and the newest one is scrolled into view (owner, 13 Nov: "for the author,
+// show the reply at the top and take them to it"). Only the author sees this
+// order: it's their own screen's copy; everyone else gets the API's Hot order.
 
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -53,6 +58,11 @@ const BRANCH = `M0 0A${RAIL_RADIUS} ${RAIL_RADIUS} 0 0 0 ${RAIL_RADIUS} ${RAIL_R
 
 /* Never more rounds than this for one press, whatever the counts say. */
 const MAX_PAGES_PER_PRESS = 3;
+
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Newest first: the order a student's own new replies show in. */
+const newestFirst = (list) => (list ? [...list].reverse() : []);
 
 function distinct(list) {
   const seen = new Set();
@@ -88,7 +98,8 @@ function Rail() {
   );
 }
 
-const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, loadProfile }) {
+const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, loadProfile, reveal = false }) {
+  const rowRef = useRef(null);
   const [mine, setMine] = useState(reply.viewer_reaction);
   const [total, setTotal] = useState(reply.reactions_total);
   const [popKey, setPopKey] = useState(0);
@@ -111,6 +122,19 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
     });
   };
 
+  // The reply you just wrote: brought on screen, as little as needed. The
+  // row's scroll-margin (.replyReveal) keeps it clear of the header above and
+  // the composer floating below.
+  useEffect(() => {
+    if (!reveal) return;
+    const id = requestAnimationFrame(() =>
+      rowRef.current?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" }),
+    );
+    return () => cancelAnimationFrame(id);
+    // Once, when it first appears.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const person = {
     id: reply.author_id,
     name: reply.author_name, // the avatar's initials only; never shown
@@ -120,7 +144,7 @@ const ReplyRow = memo(function ReplyRow({ reply, isAuthor, showCampus, onReact, 
   };
 
   return (
-    <li className={styles.reply}>
+    <li ref={rowRef} className={`${styles.reply} ${reveal ? styles.replyReveal : ""}`}>
       <Rail />
       {/* The avatar opens the profile glimpse too, like the username. */}
       <ProfileHover person={person} loadProfile={loadProfile}>
@@ -202,27 +226,28 @@ export default function PostThread({
   const previewKnown = Array.isArray(post.top_replies);
   const [selfPreview, setSelfPreview] = useState(false);
 
-  // Folded: the preview and what you just wrote. Unfolded: the pages too. A
-  // preview reply comes round again in the oldest-first pages, so each id is
+  // Folded: what you just wrote (first) and the preview. Unfolded: the pages
+  // too. A preview reply comes round again in the Hot pages, so each id is
   // kept only once. A reply deleted or reported here (`hidden`) is left out of
   // both before anything is counted, so with the post's lowered replies_count
   // "Show more replies" still adds up.
   const hidden = usePostActions()?.hidden;
   const folded = useMemo(
     () =>
-      distinct([...(post.top_replies ?? []), ...(selfPreview ? loaded : []), ...(addedReplies ?? [])]).filter(
+      distinct([...newestFirst(addedReplies), ...(post.top_replies ?? []), ...(selfPreview ? loaded : [])]).filter(
         (r) => !hidden?.has(r.id),
       ),
     [post.top_replies, selfPreview, loaded, addedReplies, hidden],
   );
   const unfolded = useMemo(
     () =>
-      distinct([...(post.top_replies ?? []), ...loaded, ...(addedReplies ?? [])]).filter(
+      distinct([...newestFirst(addedReplies), ...(post.top_replies ?? []), ...loaded]).filter(
         (r) => !hidden?.has(r.id),
       ),
     [post.top_replies, loaded, addedReplies, hidden],
   );
   const replies = expanded ? unfolded : folded;
+  const revealId = addedReplies?.[addedReplies.length - 1]?.id;
 
   const total = Math.max(post.replies_count ?? 0, unfolded.length);
   const canLoad = !exhausted && total > unfolded.length;
@@ -309,6 +334,7 @@ export default function PostThread({
           showCampus={showCampus}
           onReact={onReact}
           loadProfile={loadProfile}
+          reveal={reply.id === revealId}
         />
       ))}
       {(showMore || showHide) && (
@@ -344,7 +370,7 @@ export default function PostThread({
   );
 }
 
-/** The post's own page: every reply, oldest first, `pageSize` at a time.
+/** The post's own page: every reply, in Hot order, `pageSize` at a time.
     The first page loads by itself; "Load more replies" brings the next. */
 export function PostPageThread({
   post,
@@ -396,9 +422,10 @@ export function PostPageThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
 
-  // What you just replied comes after what has loaded. A later page that
-  // brings it again keeps it only once.
-  const replies = distinct([...loaded, ...(addedReplies ?? [])]).filter((r) => !hidden?.has(r.id));
+  // What you just replied comes first, newest on top, above what has loaded.
+  // A later page that brings it again keeps it only once.
+  const replies = distinct([...newestFirst(addedReplies), ...loaded]).filter((r) => !hidden?.has(r.id));
+  const revealId = addedReplies?.[addedReplies.length - 1]?.id;
   const showButton = more || failed;
 
   if (replies.length === 0 && !showButton) return null;
@@ -413,6 +440,7 @@ export function PostPageThread({
           showCampus={showCampus}
           onReact={onReact}
           loadProfile={loadProfile}
+          reveal={reply.id === revealId}
         />
       ))}
       {showButton && (

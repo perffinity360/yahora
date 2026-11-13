@@ -1,4 +1,3 @@
-import Feather from '@expo/vector-icons/Feather';
 import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -7,15 +6,17 @@ import { Avatar } from '../Avatar';
 import { colors, font } from '../../theme';
 
 /**
- * The closed composer — COMMUNITY_SPEC.md §2.1, on a phone: a solid dock at the
- * bottom of the feed, edge to edge (owner, 10 Nov: floating, the posts passing
- * through the gap under it looked messy). A white one-line field, 41 tall on a
- * touch screen, outlined in the feed's dark accent all the time (a narrow
- * window), with your avatar mirroring the Post pill at the other end (§2.2).
+ * The post page's reply bar — COMMUNITY_SPEC.md §2.1 and §4, on a phone: a
+ * solid dock at the bottom, edge to edge (owner, 10 Nov: floating, the posts
+ * passing through the gap under it looked messy). A white one-line field, 41
+ * tall on a touch screen, outlined in the zone's dark accent all the time,
+ * with your avatar mirroring the Reply pill at the other end (§2.2).
  *
- * Tapping anywhere opens the compose screen; the photo icon opens it straight
- * into the photo library. A half-written post shows its text instead of the
- * grey hint, so it's clear it is still there.
+ * The feeds no longer have one: they post from a floating button (PostFab;
+ * owner, 13 Nov). A reply bar stays, as under a post in WhatsApp or X.
+ *
+ * Tapping anywhere opens the compose screen as a reply. A half-written reply
+ * shows its text instead of the grey hint, so it's clear it is still there.
  */
 export const DOCK_HEIGHT = 1.5 + 2 + 41 + 2;
 const FIELD = 41;
@@ -29,7 +30,6 @@ export const ComposerDock = memo(function ComposerDock({
   avatarName,
   avatarUri,
   onOpen,
-  onPhotos,
   reply = false,
   bottomInset = 0,
 }: {
@@ -39,8 +39,7 @@ export const ComposerDock = memo(function ComposerDock({
   avatarName?: string | null;
   avatarUri?: string | null;
   onOpen: () => void;
-  onPhotos?: () => void;
-  /** A post page's reply bar: no photo button (replies take none), `Reply`. */
+  /** `Reply` on the pill instead of `Post`. */
   reply?: boolean;
   /** Where nothing sits under the dock (a post page, no tab bar), it runs on
    *  behind the phone's own bar in the same colour (DESIGN.md "Surfaces"). */
@@ -60,17 +59,6 @@ export const ComposerDock = memo(function ComposerDock({
         <AppText numberOfLines={1} style={[styles.hint, draft ? styles.draft : null]}>
           {draft || hint}
         </AppText>
-        {!reply && onPhotos ? (
-          <Pressable
-            onPress={onPhotos}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
-            accessibilityRole="button"
-            accessibilityLabel="Add photos"
-            style={({ pressed }) => [styles.photo, pressed && styles.pressed]}
-          >
-            <Feather name="image" size={18} color={pill} />
-          </Pressable>
-        ) : null}
         <View style={[styles.post, { backgroundColor: pill }]} pointerEvents="none">
           <AppText style={styles.postText}>{reply ? 'Reply' : 'Post'}</AppText>
         </View>
@@ -111,9 +99,6 @@ const styles = StyleSheet.create({
     color: colors.mutedLabel,
   },
   draft: { color: colors.blackSoft },
-  // The photo icon at 65% until the composer is in use (spec §2.1).
-  photo: { width: 34, height: PILL, alignItems: 'center', justifyContent: 'center', opacity: 0.65 },
-  pressed: { opacity: 0.4 },
   post: {
     height: PILL,
     paddingHorizontal: 16,

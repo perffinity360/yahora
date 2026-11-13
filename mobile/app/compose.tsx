@@ -3,7 +3,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,6 +13,7 @@ import { AppToast, useToast } from '../src/components/AppToast';
 import { Avatar } from '../src/components/Avatar';
 import { ConfirmDialog } from '../src/components/ConfirmDialog';
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
+import { EmojiPickerSheet } from '../src/components/community/EmojiPickerSheet';
 import { GifPicker } from '../src/components/community/GifPicker';
 import { SupportCard } from '../src/components/community/SupportCard';
 import { WorldGlyph } from '../src/components/community/CommunitySwitcher';
@@ -57,6 +58,36 @@ export default function ComposeScreen() {
 
   const c = useComposer({ scope, parentId });
   const [gifOpen, setGifOpen] = useState(false);
+
+  /* ☺ — emoji, as on the website's composer (owner, 13 Nov). The picker is
+     its own sheet and stays open to add several; each goes in where the
+     cursor was, and closing it puts the cursor back after the last one. */
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const selection = useRef({ start: 0, end: 0 });
+  const textNow = useRef(c.text);
+  textNow.current = c.text;
+  const onEmojiPress = () => {
+    Keyboard.dismiss();
+    setEmojiOpen(true);
+  };
+  const insertEmoji = (emoji: string) => {
+    const t = textNow.current;
+    const start = Math.min(selection.current.start, t.length);
+    const end = Math.min(selection.current.end, t.length);
+    const next = t.slice(0, start) + emoji + t.slice(end);
+    const caret = start + emoji.length;
+    textNow.current = next;
+    selection.current = { start: caret, end: caret };
+    c.setText(next);
+  };
+  const closeEmoji = () => {
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelection(selection.current.start, selection.current.end);
+    });
+  };
   const world = scope === 'country' ? (params.country ?? '').toUpperCase() : scope === 'global' ? GLOBAL : null;
   const accent = scope === 'campus' ? colors.purpleDark : colors.communityWorldStrong;
 
@@ -98,7 +129,7 @@ export default function ComposeScreen() {
 
   const inline =
     c.result === 'rate-limited'
-      ? COMPOSER_TEXT.rateLimited
+      ? (c.message ?? COMPOSER_TEXT.rateLimited)
       : c.result === 'not-allowed'
         ? COMPOSER_TEXT.notAllowed
         : c.result === 'invalid'
@@ -154,8 +185,12 @@ export default function ComposeScreen() {
             <View style={styles.writeRow}>
               <Avatar name={profile?.full_name} uri={profile?.avatar_url} size={36} />
               <AppTextInput
+                ref={inputRef}
                 value={c.text}
                 onChangeText={c.setText}
+                onSelectionChange={(e) => {
+                  selection.current = e.nativeEvent.selection;
+                }}
                 placeholder={placeholder}
                 placeholderTextColor={colors.mutedLabel}
                 multiline
@@ -180,9 +215,7 @@ export default function ComposeScreen() {
 
             {c.gif ? (
               <Reanimated.View entering={FadeIn.duration(180)} style={styles.gifWrap}>
-                <View style={[styles.gif, { aspectRatio: c.gif.width / c.gif.height || 1 }]}>
-                  <Image source={{ uri: c.gif.url }} style={StyleSheet.absoluteFill} contentFit="contain" />
-                </View>
+                <ChosenGif gif={c.gif} />
                 <RemoveButton label="Remove the GIF" onPress={c.removeGif} />
               </Reanimated.View>
             ) : null}
@@ -205,6 +238,7 @@ export default function ComposeScreen() {
               />
             ) : null}
             <ToolButton gif label="Add a GIF" blocked={!!c.gifBlocked} color={accent} onPress={onGifPress} />
+            <ToolButton icon="smile" label="Add an emoji" blocked={false} color={accent} onPress={onEmojiPress} />
             <View style={styles.flex} />
             {c.showCounter ? (
               <AppText style={[styles.counter, c.remaining <= 0 && styles.counterOver]}>{c.remaining}</AppText>
@@ -245,6 +279,7 @@ export default function ComposeScreen() {
                 confirmLabel: 'Edit',
                 cancelLabel: 'Post anyway',
                 icon: 'edit-3',
+                compact: true,
               }
             : null
         }
@@ -256,6 +291,8 @@ export default function ComposeScreen() {
         }}
       />
 
+      <EmojiPickerSheet open={emojiOpen} current={null} multiple onPick={insertEmoji} onClose={closeEmoji} />
+
       <GifPicker
         visible={gifOpen}
         onClose={() => setGifOpen(false)}
@@ -266,6 +303,26 @@ export default function ComposeScreen() {
       />
 
       <AppToast message={toast} bottom={insets.bottom + 72} />
+    </View>
+  );
+}
+
+/** The chosen GIF, in its own loaded shape with no ground behind it, so no
+ *  strip shows at its edges (owner, 13 Nov; the same as PostGif). */
+function ChosenGif({ gif }: { gif: { url: string; width: number; height: number } }) {
+  const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
+  const ratio = loadedRatio ?? (gif.width > 0 && gif.height > 0 ? gif.width / gif.height : 1);
+  return (
+    <View style={[styles.gif, { aspectRatio: ratio }]}>
+      <Image
+        source={{ uri: gif.url }}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        onLoad={(e) => {
+          const { width: w, height: h } = e.source;
+          if (w > 0 && h > 0) setLoadedRatio(w / h);
+        }}
+      />
     </View>
   );
 }
@@ -375,7 +432,7 @@ const styles = StyleSheet.create({
   previews: { flexDirection: 'row', gap: 8, paddingLeft: 46 },
   photo: { width: 56, height: 56, borderRadius: 8, backgroundColor: colors.inputBg },
   gifWrap: { marginLeft: 46, alignSelf: 'flex-start', width: 200 },
-  gif: { width: '100%', borderRadius: 8, overflow: 'hidden', backgroundColor: colors.reactionPillBorder },
+  gif: { width: '100%', borderRadius: 8, overflow: 'hidden' },
   remove: {
     position: 'absolute',
     top: 4,
