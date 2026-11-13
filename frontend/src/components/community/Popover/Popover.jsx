@@ -51,6 +51,8 @@ export default function Popover({
   role = "dialog",
   ariaLabel,
   reserveHeight = 0,
+  // Between the anchor and the popover. The quick bar passes 4 (owner, 13 Nov).
+  gap = GAP,
 }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
@@ -78,8 +80,8 @@ export default function Popover({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    const roomAbove = a.top - GAP - EDGE;
-    const roomBelow = vh - a.bottom - GAP - EDGE;
+    const roomAbove = a.top - gap - EDGE;
+    const roomBelow = vh - a.bottom - gap - EDGE;
     const need = Math.max(h, reserveHeight);
     let side = placement;
     if (locked.current?.anchorEl === anchorEl) {
@@ -92,12 +94,12 @@ export default function Popover({
 
     // When neither side has room, it slides over the anchor rather than off
     // screen: the whole popover always stays in the window.
-    let top = side === "top" ? a.top - GAP - h : a.bottom + GAP;
+    let top = side === "top" ? a.top - gap - h : a.bottom + gap;
     top = Math.min(Math.max(top, EDGE), Math.max(EDGE, vh - h - EDGE));
     let left = align === "end" ? a.right - w : a.left;
     left = Math.min(Math.max(left, EDGE), Math.max(EDGE, vw - w - EDGE));
     setPos({ top, left, side });
-  }, [anchorEl, placement, align, reserveHeight]);
+  }, [anchorEl, placement, align, reserveHeight, gap]);
 
   useLayoutEffect(() => {
     place();

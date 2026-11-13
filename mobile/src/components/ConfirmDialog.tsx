@@ -28,6 +28,8 @@ export interface ConfirmDialogContent {
   /** The explanation under the title. Nest `<ConfirmDialog.Strong>` for a bold name. */
   message: ReactNode;
   confirmLabel: string;
+  /** The other button's word. 'Cancel' unless given (the nudge's `Post anyway`). */
+  cancelLabel?: string;
   /** The badge on the photo (or the whole medallion when there is no photo). */
   icon: keyof typeof Feather.glyphMap;
   /** The listing's photo, so the dialog shows WHICH item it is about. */
@@ -59,11 +61,19 @@ export function ConfirmDialog({
   content,
   onConfirm,
   onCancel,
+  onDismiss,
 }: {
   content: ConfirmDialogContent | null;
   onConfirm: () => void;
   onCancel: () => void;
+  /**
+   * A tap on the scrim, or the phone's back. `onCancel` unless given. The
+   * nudge needs its own: there the other button is `Post anyway`, which a
+   * stray tap outside the card must never do.
+   */
+  onDismiss?: () => void;
 }) {
+  const dismiss = onDismiss ?? onCancel;
   const shownRef = useRef<ConfirmDialogContent | null>(content);
   if (content) shownRef.current = content;
   const shown = shownRef.current;
@@ -82,10 +92,10 @@ export function ConfirmDialog({
       animationType="fade"
       statusBarTranslucent
       navigationBarTranslucent
-      onRequestClose={onCancel}
+      onRequestClose={dismiss}
     >
       <View style={styles.overlay}>
-        <Pressable style={styles.scrim} onPress={onCancel} accessibilityLabel="Cancel" />
+        <Pressable style={styles.scrim} onPress={dismiss} accessibilityLabel="Close" />
         {shown ? (
           <Reanimated.View
             entering={CARD_ENTER}
@@ -125,7 +135,7 @@ export function ConfirmDialog({
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.button, styles.cancel, pressed && styles.cancelPressed]}
               >
-                <AppText style={styles.cancelText}>Cancel</AppText>
+                <AppText style={styles.cancelText}>{shown.cancelLabel ?? 'Cancel'}</AppText>
               </Pressable>
               <Pressable
                 onPress={confirm}

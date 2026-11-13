@@ -104,7 +104,8 @@
   padding: 2px 3px;
   border-radius: 999px;
   background: var(--white);
-  box-shadow: var(--quick-bar-shadow);
+  /* A ring, not a border, so the bar's size (and the Popover's placing) is unchanged. */
+  box-shadow: var(--quick-bar-raised-shadow), 0 0 0 1px var(--quick-bar-ring);
   transform-origin: 20px bottom;
   animation: barIn 220ms var(--community-spring);
 }

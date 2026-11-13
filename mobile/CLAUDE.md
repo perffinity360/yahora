@@ -97,7 +97,9 @@ like the backend being down. It has already cost an hour once. So:
 
 ## Workflow
 - After changes: run `npx tsc --noEmit` (types) and `npx expo start` (bundles/runs).
-- **Do not self-verify with screenshots** — instead, report what the human should check on their phone.
+- **Testing:** follow the root `CLAUDE.md`, "How we work" (owner, 13 Nov): test yourself only when it's quick and
+  reliable, and otherwise report exactly what the human should check on the phone, and how. This Mac has no
+  `adb`, Android emulator or iOS simulator today, so on-device checks go to the human.
 - Never run `npm audit fix --force`.
 - Work in **small phases**; don't commit yourself and ask the owner to commit after each working phase with a clear, conventional message.
 
@@ -124,11 +126,14 @@ mobile/
     _layout.tsx                     root: GestureHandlerRootView + QueryClient + AuthProvider + routing guard
     (auth)/                         login (6-digit OTP + demo) · onboarding
     (tabs)/
-      _layout.tsx                   tab bar (Feather icons: shopping-bag / message-square / user)
+      _layout.tsx                   tab bar (Feather icons: shopping-bag / users / message-square / user)
       index.tsx                     Marketplace: FlashList grid + swipe deck + filters/sort + campus switch
+      community.tsx                 Community (Phase 7): floating switcher, campus / country / Global feeds
       messages.tsx                  Messages placeholder
       profile.tsx                   Dashboard (own profile + listings/purchases, avatar, bio)
     profile/[id].tsx                public profile (read-only)
+    post/[id].tsx                   a post's own page: the post, every reply paged, the reply bar
+    compose.tsx                     write a post or reply (modal): photos / GIF, every result of posting
     edit-profile.tsx                edit-profile form
     sell.tsx                        create/edit listing (multipart upload + live ProductCard preview)
   src/
@@ -139,14 +144,29 @@ mobile/
       supabase.ts                   Supabase client (AsyncStorage session; URL from config.ts)
       upload.ts                     toUploadFile(): FormData file part with .bytes() for Winter fetch
       marketplace.ts                filter/sort constants + isWithinPostingDate + formatRupees
+      community.ts                  COMMUNITY_SPEC §13 constants (same names as the web's utils/community.js),
+                                    formatCount, flagEmoji, formatPostTime, the optimistic reaction math
+      klipy.ts                      THE only file that calls KLIPY (GIFs); reads EXPO_PUBLIC_KLIPY_API_KEY
+      motion.ts                     POPOVER_ENTER / DIALOG_ENTER / SHEET_RISE: smooth, non-bouncing entrances (DESIGN.md "Motion")
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
     hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
                                     useProductActions (useToggleLike/Save — take a query key) ·
                                     useMarketplace (useMarketplaceFeed) · useMarketplaceFilters ·
-                                    useProduct · useAcademics · useAvatarActions
-    components/                     ProductCard · Skeleton · ExpandableBio · AvatarSheet ·
+                                    useProduct · useAcademics · useAvatarActions ·
+                                    useCommunity (feeds, threads, the post page, profiles' Posts,
+                                    reactions, posting, delete, report, the new-posts count — and the
+                                    cache helpers that keep every list in step) · useComposer · useGifs
+    components/                     AnchoredModal (menus that hang off a button) · ModalSafeArea (insets inside
+                                    a Modal) · ProductCard · Skeleton ·
+                                    ExpandableBio · AvatarSheet ·
                                     SearchablePicker · AuroraBackground · UniversitiesModal · DemoModal ·
-                                    FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert
+                                    FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
+                                    community/ (PostCard, PostThread, PostText, PostMedia, ReactionBar,
+                                    ReactionSummary, CommunitySwitcher, CommunityWallpaper, GlobeIcon,
+                                    ComposerDock, GifPicker, SupportCard, StatusBarGround, PostActions (the ⋯ menu,
+                                    report, delete, ⊕ and the breakdown, once per screen), ReportSheet,
+                                    ReactionBreakdownSheet, EmojiPickerSheet (rn-emoji-keyboard),
+                                    UserPostsList)
     types/index.ts                  University, UserProfile, Product, MarketplaceProduct, …
 ```
 
@@ -164,6 +184,37 @@ mobile/
   was placed under its shorter neighbour and overlapped it (27 Oct). Unfixed upstream as of
   2.3.3. **When upgrading flash-list, re-check `processAndReturnTallestItemInRow` in
   `GridLayoutManager` and regenerate or drop the patch** (`npx patch-package @shopify/flash-list`).
+- **rn-emoji-keyboard is patched too** (`patches/rn-emoji-keyboard+1.7.0.patch`), in `src/` and both `lib/`
+  builds (Metro reads `src/`). Two fixes, 12 Nov: (1) `EmojiCategory` called
+  `InteractionManager.runAfterInteractions`, and **opening ⊕ crashed the app**; it now defers with a
+  `setTimeout` in an effect. (2) `ModalWithBackdrop` opened on a default `Animated.spring`, which bounced;
+  it now eases (280 ms out, 200 ms in). It still uses React Native's deprecated `SafeAreaView` (the
+  "SafeAreaView has been deprecated" warning in the log); when RN removes it, the picker breaks again.
+  Re-check all three when upgrading the library.
+- **React Native 0.88 removed `InteractionManager`: touching it throws** ("has been removed from
+  react-native core"). A library that still uses it passes `tsc` and `expo export` and crashes only when
+  that code runs, which is how ⊕ shipped broken. **After adding or upgrading a library, and before
+  handing a block over**, export the Android bundle and scan it:
+  `npx expo export --platform android --output-dir <scratch> && strings <scratch>/_expo/static/js/android/*.hbc | grep -c runAfterInteractions`
+  must print 0. Then open every new screen and overlay path on the phone, not only the main one.
+- **A menu that hangs off a button goes in `AnchoredModal`** (`src/components/AnchoredModal.tsx`), never
+  a bare `<Modal>` placed from `measureInWindow`. On Android `measureInWindow` counts from below the
+  status bar, but a `statusBarTranslucent` Modal starts at the top of the screen, so menus landed a
+  status bar too high and covered their own buttons (country dropdown, ⋯ menu, quick bar; POCO, 12 Nov).
+  `AnchoredModal` subtracts the position of `WindowOriginMarker` (a view filling the app's root, mounted
+  in `app/_layout.tsx`), measured the same way, so the offset cancels out on any phone. Measuring the
+  Modal's own layer does NOT work: inside the Modal it reads 0 (tried 12 Nov, still wrong on the POCO).
+- **A bottom sheet in a Modal: `ModalSafeArea` for its insets, `SHEET_RISE` for its entrance.** Inside a
+  Modal, `useSafeAreaInsets()` returns the screen's insets from outside it, which left the reaction
+  breakdown's pills under the POCO's three-button bar. The native `SafeAreaView` fixed that but padded a
+  frame late, so the sheet grew mid-rise and jumped. Wrap the Modal's content in `ModalSafeArea`
+  (`src/components/ModalSafeArea.tsx`): its insets are the Modal's own, known before the first frame. And
+  rise on your own clock (a shared value 0 → 1 times the measured height, `SHEET_RISE` in
+  `src/lib/motion.ts`), never `SlideInDown`, which can draw the sheet in place for a frame first.
+  `ReactionBreakdownSheet`, `GifPicker` and `BuyerPickerSheet` are the examples.
+- **Edge-to-edge screens keep the status bar solid.** A screen that draws under the status bar (the
+  community feed, the post page) renders `StatusBarGround` after its list, in its own background colour,
+  so content never scrolls under the clock.
 - **Keyboard inside a Modal:** wrap the Modal's content in `<KeyboardAvoider fillsModal>`, as its
   root. A `statusBarTranslucent` Modal is its own window starting at the screen's top, so the
   plain avoider (measured against the app window) lifted the buyer picker a status bar too far
@@ -222,7 +273,8 @@ confident accent on a soft neutral canvas.
 ## UI stack & animation rules (Expo)
 Before ANY UI work, read DESIGN.md fully. Its tokens (src/theme/tokens.ts) are canonical.
 
-- Animation default: react-native-reanimated (springs, entering/exiting, layout transitions) +
+- Animation default: react-native-reanimated (timing curves, entering/exiting, layout transitions; no
+  bouncing entrances, see DESIGN.md "Motion") +
   react-native-gesture-handler for swipe/drag. All animation on the UI thread — never setState/JS timers.
 - Moti: simple one-off fade/slide only. Lottie: hero moments only (onboarding, success, empty states) — never on feeds.
 - Premium effects: @shopify/react-native-skia for gradients/glows/celebrations — never inside list rows.

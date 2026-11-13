@@ -84,6 +84,11 @@
   --reaction-mine-bg: rgba(128,0,128,0.10);
   --reaction-mine-border: rgba(128,0,128,0.35);
   --quick-bar-shadow: 0 6px 20px rgba(11,11,11,0.16);
+  /* The quick bar itself is white over white cards, so it gets a hairline ring
+     and a deeper, two-layer shadow to stand off them (owner, 13 Nov). Twins of
+     mobile's quickBarRing and shadows.quickBarRaised. */
+  --quick-bar-ring: rgba(128,0,128,0.16);
+  --quick-bar-raised-shadow: 0 1px 3px rgba(42,8,42,0.14), 0 10px 28px rgba(42,8,42,0.22);
 
   /* Community redesign — docs/design/COMMUNITY_SPEC.md §12 (Block V-P).
      Canvas and tile strength are the chat's (MESSAGES_SPEC §2), so the two
@@ -113,11 +118,13 @@
   /* Two zones (owner, 7 Nov): each panel's own ground, with the doodles at 5%
      (the veil is the ground at 95% over the tile). */
   /* (8 Nov: a more purple campus, a pinker world; the doodles at 15%, after
-     5% and 8% left them invisible.) */
+     5% and 8% left them invisible.) 13 Nov (owner): the doodles at 30% on both
+     the website and the app, so the veil is the ground at 70%. Twin of the
+     app's COMMUNITY_WALLPAPER_OPACITY (0.30). */
   --community-panel-campus: #F0E5F7;
-  --community-panel-campus-veil: rgba(240,229,247,0.75);
+  --community-panel-campus-veil: rgba(240,229,247,0.7);
   --community-panel-world: #FCE9F1;
-  --community-panel-world-veil: rgba(252,233,241,0.75);
+  --community-panel-world-veil: rgba(252,233,241,0.7);
   /* Each panel's header: glass that runs from the zone's tint at the outer
      edge to white where the two headers meet. */
   --community-header-campus: linear-gradient(90deg, rgba(232,212,244,0.95) 0%, rgba(255,255,255,0.88) 100%);

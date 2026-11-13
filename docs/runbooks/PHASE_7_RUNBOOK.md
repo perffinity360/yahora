@@ -1403,8 +1403,12 @@ after its checkpoint, so the next starts from `main`.
 3. Tap the second segment: **🇮🇳 India** is selected. Tap it again: the dropdown shows India
    (your country) first, then Global, then Germany (the local test campus CC-V2 adds).
 4. Switch to **Global**, then flip **Hot · New**: the order changes.
-5. Tap **♡** on a post: it becomes ❤️ and the summary count goes up by 1. Tap again: back to ♡.
-6. Long-press ♡: the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕) appears. Pick 😂: the button shows 😂.
+5. Tap the **React** smiley on a post: the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕) opens (spec 3.9: a tap
+   always opens it, never gives ❤️ by itself). Pick ❤️: the button shows ❤️ and the summary goes up
+   by 1. Open it again and pick ❤️: it's removed. Long-press the React button, or the post itself:
+   the bar opens too.
+6. Pick 😂: the button shows 😂, the summary's ❤️ goes down and 😂 up. On a reply, the heart is a
+   plain like: tap it, it fills and counts 1; tap again, it's gone.
 7. Turn on airplane mode and pull to refresh: a friendly error, no crash. Turn it off again.
 
 **👁️ CHECKPOINT V-D4b**
@@ -1422,9 +1426,11 @@ after its checkpoint, so the next starts from `main`.
    is kept. Then post in **Global**: it goes through, because each feed is counted on its own.
 
 **👁️ CHECKPOINT V-D4c**
-1. Tap a post's 💬: the post page, with replies oldest first, and **Load more replies** when
-   there are more than 20.
-2. Reply with text and a GIF: it appears at the bottom.
+1. Tap a post's time (or its 💬 on a profile's Posts): the post page, with its replies in Hot
+   order (the API's order since 11 Nov, spec §4), and **Load more replies** when there are more
+   than 20.
+2. Reply from the bar at the bottom with text and a GIF: it appears at the end of the replies.
+   (In a feed, 💬 opens the reply composer straight away, and the reply joins the post's preview.)
 3. Open the India feed while logged in as a seeded **NIET** student (`sneha.gupta`): you can
    reply, because NIET is in India too. *(A view-only test needs a campus in another country:
    CC-V2's seed adds a test campus in Germany with one student, `lena.test`. Log in as her
@@ -2313,8 +2319,8 @@ posts" pill. Read: spec §3.1, §4, §5.2, §5.4, §7, §8, §10; runbook §1.7,
 §1.8.
 
 1. From mobile/, install the emoji picker: npx expo install rn-emoji-keyboard
-   If it doesn't install cleanly on SDK 57, STOP and tell me. Don't choose
-   another library on your own.
+   If it doesn't install cleanly on SDK 58, choose
+   another best library on your own.
 2. ⊕ in ReactionBar opens the full picker (search, frequently used,
    categories), styled as spec §5.2. The chosen emoji becomes the reaction.
 3. ReactionBreakdownSheet.tsx (spec §5.4): the title "N reactions"; a grid

@@ -11,10 +11,14 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackButton } from '../../src/components/CircleButton';
+import { PostActionsProvider } from '../../src/components/community/PostActions';
+import { UserPostsList } from '../../src/components/community/UserPostsList';
 import { AppText } from '../../src/components/AppText';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { ProductCard } from '../../src/components/ProductCard';
@@ -22,6 +26,7 @@ import { ScreenGradient } from '../../src/components/ScreenGradient';
 import { Skeleton } from '../../src/components/Skeleton';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
+import { useUserPosts } from '../../src/hooks/useCommunity';
 import { useToggleLike } from '../../src/hooks/useProductActions';
 import { isProfileUnavailable, usePublicProfile } from '../../src/hooks/usePublicProfile';
 import { resolveMediaUrl } from '../../src/lib/config';
@@ -62,6 +67,7 @@ export default function PublicProfileScreen() {
 
   const { data, isLoading, isError, error, refetch } = usePublicProfile(profileUserId);
   const toggleLike = useToggleLike(['publicProfile', profileUserId]);
+  const userPosts = useUserPosts(profileUserId, !!data?.profile);
 
   const { width } = useWindowDimensions();
   const floatingTop = useFloatingTopInset();
@@ -71,11 +77,21 @@ export default function PublicProfileScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refetch();
+      await Promise.all([refetch(), userPosts.refetch()]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch]);
+  }, [refetch, userPosts]);
+
+  /* The Posts section loads its next page as the screen nears its end. */
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!userPosts.hasNextPage || userPosts.isFetchingNextPage || userPosts.isError) return;
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 600) void userPosts.fetchNextPage();
+    },
+    [userPosts],
+  );
 
   // Root layout renders a <Slot/>, so router.back() re-mounts the tabs at their
   // initial route rather than where the user came from. Return precisely via the
@@ -101,120 +117,67 @@ export default function PublicProfileScreen() {
   const showSkeleton = isLoading && !profile;
 
   return (
-    <View style={styles.root}>
-      <ScreenGradient />
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.purple}
-              colors={[colors.purple]}
-            />
-          }
-        >
-          {isOwnProfile && !showSkeleton ? (
-            <View style={styles.ownBanner}>
-              <Feather name="eye" size={14} color={colors.purpleDark} />
-              <AppText style={styles.ownBannerText}>This is how others see your profile.</AppText>
-            </View>
-          ) : null}
-
-          {showSkeleton ? (
-            <>
-              <HeaderSkeleton />
-              <ListingsSkeleton cardWidth={cardWidth} />
-            </>
-          ) : isError && !profile && isProfileUnavailable(error) ? (
-            <UnavailableState onBack={goBack} onLogIn={isDemoUser ? logInAsStudent : undefined} />
-          ) : isError && !profile ? (
-            <ErrorState onRetry={refetch} />
-          ) : profile ? (
-            <>
-              <Header profile={profile} />
-
-              <View style={styles.listingsHead}>
-                <AppText style={styles.listingsTitle}>
-                  {isOwnProfile ? 'My active listings' : `${firstName}'s listings`}
-                </AppText>
-                {listings.length ? (
-                  <View style={styles.countChip}>
-                    <AppText style={styles.countChipText}>{listings.length}</AppText>
-                  </View>
-                ) : null}
+    // ⋯, ⊕ and the breakdown on the Posts section (COMMUNITY_SPEC.md §10).
+    <PostActionsProvider>
+      <View style={styles.root}>
+        <ScreenGradient />
+        <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            onScroll={onScroll}
+            scrollEventThrottle={200}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.purple}
+                colors={[colors.purple]}
+              />
+            }
+          >
+            {isOwnProfile && !showSkeleton ? (
+              <View style={styles.ownBanner}>
+                <Feather name="eye" size={14} color={colors.purpleDark} />
+                <AppText style={styles.ownBannerText}>This is how others see your profile.</AppText>
               </View>
+            ) : null}
 
-              {listings.length ? (
-                <View style={styles.grid}>
-                  {listings.map((item) => (
-                    <ProductCard
-                      key={item.id}
-                      product={item}
-                      style={{ width: cardWidth }}
-                      isLiked={item.is_liked}
-                      // The public-profile endpoint does not join a seller onto
-                      // its listing rows — every listing on this screen belongs
-                      // to the profile being viewed, so that is the seller.
-                      sellerName={profile.full_name}
-                      sellerAvatarUrl={profile.avatar_url}
-                      onPress={() =>
-                        router.push(
-                          hrefWithFrom(
-                            `/product/${item.id}`,
-                            hrefWithFrom(`/profile/${profileUserId}`, fromParam),
-                          ),
-                        )
-                      }
-                      onLike={() => toggleLike.mutate({ productId: item.id })}
-                    />
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.empty}>
-                  <View style={styles.emptyIcon}>
-                    <Feather name="tag" size={26} color={colors.purple} />
-                  </View>
-                  <Text style={styles.emptyTitle}>No active listings</Text>
-                  <Text style={styles.emptySubtitle}>
-                    {isOwnProfile
-                      ? 'Items you list will show up here for the campus to see.'
-                      : `${firstName} has no active items for sale right now.`}
-                  </Text>
-                </View>
-              )}
+            {showSkeleton ? (
+              <>
+                <HeaderSkeleton />
+                <ListingsSkeleton cardWidth={cardWidth} />
+              </>
+            ) : isError && !profile && isProfileUnavailable(error) ? (
+              <UnavailableState onBack={goBack} onLogIn={isDemoUser ? logInAsStudent : undefined} />
+            ) : isError && !profile ? (
+              <ErrorState onRetry={refetch} />
+            ) : profile ? (
+              <>
+                <Header profile={profile} />
 
-              {/* MARK_SOLD_SPEC §5: the seller's finished sales, newest first,
-                  at most 12. Listings only: never who bought them. */}
-              {soldCount > 0 && soldListings.length ? (
-                <>
-                  <SectionRule />
-                  <View style={[styles.listingsHead, styles.soldHead]}>
-                    {/* The listings header's look, count chip included (owner,
-                        27 Oct: "Sold · 1" beside "listings (4)" read as a
-                        mismatch). MARK_SOLD_SPEC §5 v1.3. */}
-                    <AppText style={styles.listingsTitle}>Sold</AppText>
+                <View style={styles.listingsHead}>
+                  <AppText style={styles.listingsTitle}>
+                    {isOwnProfile ? 'My active listings' : `${firstName}'s listings`}
+                  </AppText>
+                  {listings.length ? (
                     <View style={styles.countChip}>
-                      <AppText style={styles.countChipText}>{soldCount}</AppText>
+                      <AppText style={styles.countChipText}>{listings.length}</AppText>
                     </View>
-                  </View>
+                  ) : null}
+                </View>
+
+                {listings.length ? (
                   <View style={styles.grid}>
-                    {soldListings.map((item) => (
+                    {listings.map((item) => (
                       <ProductCard
                         key={item.id}
-                        // The sold rows carry only what a sold card shows; the
-                        // footer's time is when it sold.
-                        product={{
-                          ...item,
-                          status: 'sold',
-                          created_at: item.sold_at ?? '',
-                          likes_count: 0,
-                          views: 0,
-                        }}
+                        product={item}
                         style={{ width: cardWidth }}
-                        hideLikes
+                        isLiked={item.is_liked}
+                        // The public-profile endpoint does not join a seller onto
+                        // its listing rows — every listing on this screen belongs
+                        // to the profile being viewed, so that is the seller.
                         sellerName={profile.full_name}
                         sellerAvatarUrl={profile.avatar_url}
                         onPress={() =>
@@ -225,18 +188,94 @@ export default function PublicProfileScreen() {
                             ),
                           )
                         }
+                        onLike={() => toggleLike.mutate({ productId: item.id })}
                       />
                     ))}
                   </View>
-                </>
-              ) : null}
-            </>
-          ) : null}
-        </ScrollView>
+                ) : (
+                  <View style={styles.empty}>
+                    <View style={styles.emptyIcon}>
+                      <Feather name="tag" size={26} color={colors.purple} />
+                    </View>
+                    <Text style={styles.emptyTitle}>No active listings</Text>
+                    <Text style={styles.emptySubtitle}>
+                      {isOwnProfile
+                        ? 'Items you list will show up here for the campus to see.'
+                        : `${firstName} has no active items for sale right now.`}
+                    </Text>
+                  </View>
+                )}
 
-        <BackButton onPress={goBack} style={[styles.backBtn, { top: floatingTop }]} />
-      </SafeAreaView>
-    </View>
+                {/* MARK_SOLD_SPEC §5: the seller's finished sales, newest first,
+                    at most 12. Listings only: never who bought them. */}
+                {soldCount > 0 && soldListings.length ? (
+                  <>
+                    <SectionRule />
+                    <View style={[styles.listingsHead, styles.soldHead]}>
+                      {/* The listings header's look, count chip included (owner,
+                          27 Oct: "Sold · 1" beside "listings (4)" read as a
+                          mismatch). MARK_SOLD_SPEC §5 v1.3. */}
+                      <AppText style={styles.listingsTitle}>Sold</AppText>
+                      <View style={styles.countChip}>
+                        <AppText style={styles.countChipText}>{soldCount}</AppText>
+                      </View>
+                    </View>
+                    <View style={styles.grid}>
+                      {soldListings.map((item) => (
+                        <ProductCard
+                          key={item.id}
+                          // The sold rows carry only what a sold card shows; the
+                          // footer's time is when it sold.
+                          product={{
+                            ...item,
+                            status: 'sold',
+                            created_at: item.sold_at ?? '',
+                            likes_count: 0,
+                            views: 0,
+                          }}
+                          style={{ width: cardWidth }}
+                          hideLikes
+                          sellerName={profile.full_name}
+                          sellerAvatarUrl={profile.avatar_url}
+                          onPress={() =>
+                            router.push(
+                              hrefWithFrom(
+                                `/product/${item.id}`,
+                                hrefWithFrom(`/profile/${profileUserId}`, fromParam),
+                              ),
+                            )
+                          }
+                        />
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+
+                {/* COMMUNITY_SPEC.md §10: their posts you may see, all feeds
+                    mixed. Your own include your held and covered ones. */}
+                <SectionRule />
+                <View style={[styles.listingsHead, styles.soldHead]}>
+                  <AppText style={styles.listingsTitle}>Posts</AppText>
+                </View>
+                <View style={styles.posts}>
+                  <UserPostsList
+                    posts={userPosts.data ?? []}
+                    loading={userPosts.isLoading}
+                    failed={userPosts.isError}
+                    loadingMore={userPosts.isFetchingNextPage}
+                    own={isOwnProfile}
+                    from={hrefWithFrom(`/profile/${profileUserId}`, fromParam)}
+                    onRetry={() => void userPosts.refetch()}
+                  />
+                </View>
+              </>
+            ) : null}
+          </ScrollView>
+
+          <BackButton onPress={goBack} style={[styles.backBtn, { top: floatingTop }]} />
+        </SafeAreaView>
+      </View>
+    </PostActionsProvider>
   );
 }
 
@@ -494,6 +533,8 @@ function SectionRule() {
 }
 
 const styles = StyleSheet.create({
+  // The post cards bring their own 10 in from each side (COMMUNITY_SPEC.md §3).
+  posts: { marginTop: 4 },
   root: {
     flex: 1,
     backgroundColor: colors.appBgBottom,
