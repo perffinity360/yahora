@@ -5,6 +5,72 @@
 // ══════════════════════════════════════════════
 import cron from 'node-cron';
 import { supabase } from '../config/supabase.js';
+import { recheckUncheckedPosts } from './moderation.js';
+
+// ─── Deleted posts, removed for good after 90 days (Phase 7 V-C) ───────────
+//
+// Runbook §1.8. A deleted post disappears at once but its row is kept 90 days
+// for moderation. Then this removes it: FIRST its photos from the 'posts'
+// bucket, through the Storage API (SQL can't delete Storage files, which is
+// why this is here and not in pg_cron), THEN the rows. Replies and reactions
+// go with a post by cascade; replies never have photos.
+//
+// If the photos can't be removed, that batch's rows are kept for tomorrow's
+// run, so no file is ever left with nothing pointing at it.
+const DELETED_POST_RETENTION_DAYS = 90;
+const PURGE_BATCH = 200;
+const PURGE_MAX_BATCHES = 25; // at most 5,000 posts a night; the rest wait a day
+const POSTS_BUCKET = 'posts';
+
+/**
+ * The bucket path of a photo we stored, from its public URL
+ * (…/storage/v1/object/public/posts/<path>). null for anything else, such as
+ * the demo personas' Unsplash photos, which aren't ours to delete.
+ */
+function storedPhotoPath(url) {
+    const marker = `/storage/v1/object/public/${POSTS_BUCKET}/`;
+    const at = typeof url === 'string' ? url.indexOf(marker) : -1;
+    if (at === -1) return null;
+    const path = decodeURIComponent(url.slice(at + marker.length).split('?')[0]);
+    return path.length > 0 ? path : null;
+}
+
+/** Answers `{ posts, photos }` removed. Throws on a failure that stops the run. */
+export async function purgeDeletedPosts() {
+    const cutoff = new Date(Date.now() - DELETED_POST_RETENTION_DAYS * 86_400_000).toISOString();
+    let posts = 0;
+    let photos = 0;
+
+    for (let batch = 0; batch < PURGE_MAX_BATCHES; batch += 1) {
+        const { data: rows, error } = await supabase
+            .from('posts')
+            .select('id, image_urls')
+            .lt('deleted_at', cutoff)
+            .order('deleted_at', { ascending: true })
+            .limit(PURGE_BATCH);
+        if (error) throw error;
+        if (rows.length === 0) break;
+
+        const paths = rows.flatMap((row) => (row.image_urls ?? []).map(storedPhotoPath).filter(Boolean));
+        if (paths.length > 0) {
+            const { error: storageError } = await supabase.storage.from(POSTS_BUCKET).remove(paths);
+            if (storageError) throw storageError;
+            photos += paths.length;
+        }
+
+        const { error: deleteError } = await supabase
+            .from('posts')
+            .delete()
+            .in('id', rows.map((row) => row.id))
+            .lt('deleted_at', cutoff);
+        if (deleteError) throw deleteError;
+        posts += rows.length;
+
+        if (rows.length < PURGE_BATCH) break;
+    }
+
+    return { posts, photos };
+}
 
 export const startCronJobs = () => {
     // Schedule: Runs at 00:00 (midnight) every single day
@@ -76,6 +142,46 @@ export const startCronJobs = () => {
             console.log(`✅ [CRON] OTP ledger cleanup completed. Deleted ${data ?? 0} row(s).`);
         } catch (error) {
             console.error('❌ [CRON] OTP ledger cleanup failed:', error.message);
+        }
+    });
+
+    // ─── Community: re-check unchecked posts (Phase 7 V-C) ──────────────────
+    //
+    // Every 10 minutes. Posts whose moderation check couldn't run wait as
+    // 'pending' ("Being checked"); recheckUncheckedPosts() (utils/moderation.js)
+    // decides them, oldest first. A run that is still going when the next one
+    // is due is not doubled up: the next one is skipped.
+    let recheckRunning = false;
+    cron.schedule('*/10 * * * *', async () => {
+        if (recheckRunning) {
+            console.log('⏭️  [CRON] Moderation re-check skipped: the previous run is still going.');
+            return;
+        }
+        recheckRunning = true;
+        try {
+            const r = await recheckUncheckedPosts();
+            console.log(
+                `🛡️  [CRON] Moderation re-check: ${r.picked} picked — ${r.published} published, ` +
+                `${r.nudged} published flagged, ${r.held} held, ${r.unchecked} still unchecked, ` +
+                `${r.photoFailures} photo failure(s), ${r.errors} error(s).`
+            );
+        } catch (error) {
+            console.error('❌ [CRON] Moderation re-check failed:', error?.message ?? error);
+        } finally {
+            recheckRunning = false;
+        }
+    });
+
+    // ─── Community: remove posts deleted 90 days ago (Phase 7 V-C) ─────────
+    //
+    // Daily at 00:30, after the midnight jobs above, so the bulk deletes don't
+    // compete for the same connection.
+    cron.schedule('30 0 * * *', async () => {
+        try {
+            const { posts, photos } = await purgeDeletedPosts();
+            console.log(`🧹 [CRON] Deleted-post purge: removed ${posts} post(s) and ${photos} photo(s).`);
+        } catch (error) {
+            console.error('❌ [CRON] Deleted-post purge failed:', error?.message ?? error);
         }
     });
 

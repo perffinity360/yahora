@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,6 +13,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,6 +22,8 @@ import { AppText } from '../../src/components/AppText';
 import { AvatarSheet } from '../../src/components/AvatarSheet';
 import { BuyerPickerSheet } from '../../src/components/BuyerPickerSheet';
 import { ConfirmDialog, type ConfirmDialogContent } from '../../src/components/ConfirmDialog';
+import { PostActionsProvider } from '../../src/components/community/PostActions';
+import { UserPostsList } from '../../src/components/community/UserPostsList';
 import { ExpandableBio } from '../../src/components/ExpandableBio';
 import { formatPrice, ProductCard, type SaleSummary } from '../../src/components/ProductCard';
 import { ScreenGradient } from '../../src/components/ScreenGradient';
@@ -27,6 +31,7 @@ import { Skeleton } from '../../src/components/Skeleton';
 import { ZoomableImageViewer } from '../../src/components/ZoomableImageViewer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useAvatarActions } from '../../src/hooks/useAvatarActions';
+import { useUserPosts } from '../../src/hooks/useCommunity';
 import { useDashboard } from '../../src/hooks/useDashboard';
 import { useDashboardActions } from '../../src/hooks/useDashboardActions';
 import { useToggleLike } from '../../src/hooks/useProductActions';
@@ -45,11 +50,13 @@ const GRID_PAD = 12;
 const GRID_COL_GAP = 10;
 const GRID_ROW_GAP = 12;
 
-type TabKey = 'listings' | 'purchases' | 'watchlist';
+// Posts after Watchlist (COMMUNITY_SPEC.md §10, Phase 7).
+type TabKey = 'listings' | 'purchases' | 'watchlist' | 'posts';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'listings', label: 'Listings' },
   { key: 'purchases', label: 'Purchases' },
   { key: 'watchlist', label: 'Watchlist' },
+  { key: 'posts', label: 'Posts' },
 ];
 
 /** A person's name as a sale line shows it (MARK_SOLD_SPEC §3, §4). */
@@ -137,6 +144,23 @@ export default function ProfileScreen() {
   const { uploadAvatar, removeAvatar } = useAvatarActions(userId);
 
   const [tab, setTab] = useState<TabKey>('listings');
+  // Loaded the first time the Posts tab is opened, then kept.
+  const [postsWanted, setPostsWanted] = useState(false);
+  const userPosts = useUserPosts(userId, postsWanted);
+  useEffect(() => {
+    if (tab === 'posts') setPostsWanted(true);
+  }, [tab]);
+
+  /* The Posts tab loads its next page as the screen nears its end (the whole
+     dashboard is one ScrollView, so the list can't watch its own end). */
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (tab !== 'posts' || !userPosts.hasNextPage || userPosts.isFetchingNextPage || userPosts.isError) return;
+      const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 600) void userPosts.fetchNextPage();
+    },
+    [tab, userPosts],
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -161,11 +185,11 @@ export default function ProfileScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refetch();
+      await Promise.all([refetch(), tab === 'posts' ? userPosts.refetch() : null]);
     } finally {
       setRefreshing(false);
     }
-  }, [refetch]);
+  }, [refetch, tab, userPosts]);
 
   const handleSignOut = useCallback(async () => {
     setSignOutError(null);
@@ -249,211 +273,230 @@ export default function ProfileScreen() {
   const showSkeleton = isLoading && !profile;
 
   return (
-    <View style={styles.root}>
-      <ScreenGradient />
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.purple}
-              colors={[colors.purple]}
-            />
-          }
-        >
-          {showSkeleton ? (
-            <>
-              <HeaderSkeleton />
-              <ListingsSkeleton cardWidth={cardWidth} />
-            </>
-          ) : isError && !profile ? (
-            <ErrorState onRetry={refetch} onSignOut={handleSignOut} signingOut={signingOut} />
-          ) : (
-            <>
-              <ProfileHeader
-                profile={profile}
-                isDemoUser={isDemoUser}
-                onViewPublic={() =>
-                  userId && router.push(hrefWithFrom(`/profile/${userId}`, '/(tabs)/profile'))
-                }
-                onEditProfile={() => router.push('/edit-profile')}
-                canViewPublic={!!userId}
-                onViewPhoto={() => setImageViewerOpen(true)}
-                onEditPhoto={() => setAvatarSheetOpen(true)}
-                avatarBusy={avatarBusy}
+    // ⋯, ⊕ and the breakdown on the Posts tab (COMMUNITY_SPEC.md §10).
+    <PostActionsProvider>
+      <View style={styles.root}>
+        <ScreenGradient />
+        <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            onScroll={onScroll}
+            scrollEventThrottle={200}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.purple}
+                colors={[colors.purple]}
               />
-              {avatarError ? <AppText style={styles.avatarErrorText}>{avatarError}</AppText> : null}
-
-              <ListNewItemCard onPress={() => router.push('/sell')} />
-
-              <View style={styles.segmentBar}>
-                {TABS.map((t) => {
-                  const active = tab === t.key;
-                  return (
-                    <Pressable
-                      key={t.key}
-                      onPress={() => setTab(t.key)}
-                      style={styles.segment}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                    >
-                      {active ? (
-                        <LinearGradient
-                          colors={BRAND}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={StyleSheet.absoluteFill}
-                        />
-                      ) : null}
-                      <AppText style={[styles.segmentText, active && styles.segmentTextActive]}>
-                        {t.label}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View style={styles.content}>
-                {tab === 'listings' ? (
-                  listings.length ? (
-                    <View style={styles.grid}>
-                      {listings.map((item) => (
-                        <ProductCard
-                          key={item.id}
-                          product={item}
-                          style={{ width: cardWidth }}
-                          showManageActions
-                          // The dashboard endpoint returns the signed-in
-                          // student's own listings with no seller joined onto
-                          // them. The card names the seller on EVERY surface,
-                          // your own listings included, so pass yourself.
-                          sellerName={profile?.full_name}
-                          sellerAvatarUrl={profile?.avatar_url}
-                          onPress={() =>
-                            router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
-                          }
-                          // The dashboard sends `is_liked` since 27 Oct; before
-                          // that every tap was sent as a new like and the server
-                          // took it away (1 → 2 → 1 → 0).
-                          onLike={() => toggleLike.mutate({ productId: item.id })}
-                          onEdit={() => router.push(`/sell?edit=${item.id}`)}
-                          onMarkSold={() => confirmSold(item)}
-                          onMarkAvailable={() => confirmAvailable(item)}
-                          sale={item.status === 'sold' ? saleFor(item) : undefined}
-                          onChangeBuyer={() => changeBuyer(item)}
-                          onDelete={() => confirmDelete(item)}
-                        />
-                      ))}
-                    </View>
-                  ) : (
-                    <EmptyState
-                      icon="tag"
-                      title="You haven't listed anything yet"
-                      subtitle="Items you put up for sale will show up here."
-                    />
-                  )
-                ) : null}
-
-                {tab === 'purchases' ? (
-                  purchases.length ? (
-                    <View style={styles.grid}>
-                      {purchases.map((item) => (
-                        <PurchaseCard
-                          key={item.id}
-                          purchase={item}
-                          width={cardWidth}
-                          onNotMe={() => confirmNotMe(item)}
-                        />
-                      ))}
-                    </View>
-                  ) : (
-                    <EmptyState
-                      icon="shopping-bag"
-                      title="You haven't bought anything yet"
-                      subtitle="Go explore the marketplace!"
-                    />
-                  )
-                ) : null}
-
-                {/* TODO: wire to a saved-items endpoint once the marketplace/swipe lands. */}
-                {tab === 'watchlist' ? (
-                  <EmptyState
-                    icon="bookmark"
-                    title="Your wishlist is empty"
-                    subtitle="Swipe right on items you love!"
-                  />
-                ) : null}
-              </View>
-
-              <Pressable
-                onPress={handleSignOut}
-                disabled={signingOut}
-                style={({ pressed }) => [styles.signOutBtn, pressed && styles.signOutBtnPressed]}
-              >
-                {signingOut ? (
-                  <ActivityIndicator color={colors.pinkDark} />
-                ) : (
-                  <>
-                    <Feather name="log-out" size={16} color={colors.pinkDark} />
-                    <AppText style={styles.signOutText}>Sign out</AppText>
-                  </>
-                )}
-              </Pressable>
-              {signOutError ? <AppText style={styles.signOutError}>{signOutError}</AppText> : null}
-            </>
-          )}
-        </ScrollView>
-
-        <AvatarSheet
-          visible={avatarSheetOpen}
-          hasAvatar={!!profile?.avatar_url}
-          onChangePhoto={handleChangePhoto}
-          onRemovePhoto={handleRemovePhoto}
-          onClose={() => setAvatarSheetOpen(false)}
-        />
-
-        {/* Mounted only while open, so each open starts fresh. */}
-        {soldTarget ? (
-          <BuyerPickerSheet
-            visible
-            onClose={() => setSoldTarget(null)}
-            product={soldTarget.item}
-            initialBuyerId={
-              soldTarget.mode === 'change' ? (soldTarget.item.buyer?.id ?? null) : undefined
             }
-            mode={soldTarget.mode}
+          >
+            {showSkeleton ? (
+              <>
+                <HeaderSkeleton />
+                <ListingsSkeleton cardWidth={cardWidth} />
+              </>
+            ) : isError && !profile ? (
+              <ErrorState onRetry={refetch} onSignOut={handleSignOut} signingOut={signingOut} />
+            ) : (
+              <>
+                <ProfileHeader
+                  profile={profile}
+                  isDemoUser={isDemoUser}
+                  onViewPublic={() =>
+                    userId && router.push(hrefWithFrom(`/profile/${userId}`, '/(tabs)/profile'))
+                  }
+                  onEditProfile={() => router.push('/edit-profile')}
+                  canViewPublic={!!userId}
+                  onViewPhoto={() => setImageViewerOpen(true)}
+                  onEditPhoto={() => setAvatarSheetOpen(true)}
+                  avatarBusy={avatarBusy}
+                />
+                {avatarError ? <AppText style={styles.avatarErrorText}>{avatarError}</AppText> : null}
+
+                <ListNewItemCard onPress={() => router.push('/sell')} />
+
+                <View style={styles.segmentBar}>
+                  {TABS.map((t) => {
+                    const active = tab === t.key;
+                    return (
+                      <Pressable
+                        key={t.key}
+                        onPress={() => setTab(t.key)}
+                        style={styles.segment}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                      >
+                        {active ? (
+                          <LinearGradient
+                            colors={BRAND}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={StyleSheet.absoluteFill}
+                          />
+                        ) : null}
+                        <AppText numberOfLines={1} style={[styles.segmentText, active && styles.segmentTextActive]}>
+                          {t.label}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.content}>
+                  {tab === 'listings' ? (
+                    listings.length ? (
+                      <View style={styles.grid}>
+                        {listings.map((item) => (
+                          <ProductCard
+                            key={item.id}
+                            product={item}
+                            style={{ width: cardWidth }}
+                            showManageActions
+                            // The dashboard endpoint returns the signed-in
+                            // student's own listings with no seller joined onto
+                            // them. The card names the seller on EVERY surface,
+                            // your own listings included, so pass yourself.
+                            sellerName={profile?.full_name}
+                            sellerAvatarUrl={profile?.avatar_url}
+                            onPress={() =>
+                              router.push(hrefWithFrom(`/product/${item.id}`, '/(tabs)/profile'))
+                            }
+                            // The dashboard sends `is_liked` since 27 Oct; before
+                            // that every tap was sent as a new like and the server
+                            // took it away (1 → 2 → 1 → 0).
+                            onLike={() => toggleLike.mutate({ productId: item.id })}
+                            onEdit={() => router.push(`/sell?edit=${item.id}`)}
+                            onMarkSold={() => confirmSold(item)}
+                            onMarkAvailable={() => confirmAvailable(item)}
+                            sale={item.status === 'sold' ? saleFor(item) : undefined}
+                            onChangeBuyer={() => changeBuyer(item)}
+                            onDelete={() => confirmDelete(item)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <EmptyState
+                        icon="tag"
+                        title="You haven't listed anything yet"
+                        subtitle="Items you put up for sale will show up here."
+                      />
+                    )
+                  ) : null}
+
+                  {tab === 'purchases' ? (
+                    purchases.length ? (
+                      <View style={styles.grid}>
+                        {purchases.map((item) => (
+                          <PurchaseCard
+                            key={item.id}
+                            purchase={item}
+                            width={cardWidth}
+                            onNotMe={() => confirmNotMe(item)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <EmptyState
+                        icon="shopping-bag"
+                        title="You haven't bought anything yet"
+                        subtitle="Go explore the marketplace!"
+                      />
+                    )
+                  ) : null}
+
+                  {tab === 'posts' ? (
+                    <View style={styles.posts}>
+                      <UserPostsList
+                        posts={userPosts.data ?? []}
+                        loading={userPosts.isLoading || (!userPosts.data && !userPosts.isError)}
+                        failed={userPosts.isError}
+                        loadingMore={userPosts.isFetchingNextPage}
+                        own
+                        from="/(tabs)/profile"
+                        onRetry={() => void userPosts.refetch()}
+                      />
+                    </View>
+                  ) : null}
+
+                  {/* TODO: wire to a saved-items endpoint once the marketplace/swipe lands. */}
+                  {tab === 'watchlist' ? (
+                    <EmptyState
+                      icon="bookmark"
+                      title="Your wishlist is empty"
+                      subtitle="Swipe right on items you love!"
+                    />
+                  ) : null}
+                </View>
+
+                <Pressable
+                  onPress={handleSignOut}
+                  disabled={signingOut}
+                  style={({ pressed }) => [styles.signOutBtn, pressed && styles.signOutBtnPressed]}
+                >
+                  {signingOut ? (
+                    <ActivityIndicator color={colors.pinkDark} />
+                  ) : (
+                    <>
+                      <Feather name="log-out" size={16} color={colors.pinkDark} />
+                      <AppText style={styles.signOutText}>Sign out</AppText>
+                    </>
+                  )}
+                </Pressable>
+                {signOutError ? <AppText style={styles.signOutError}>{signOutError}</AppText> : null}
+              </>
+            )}
+          </ScrollView>
+
+          <AvatarSheet
+            visible={avatarSheetOpen}
+            hasAvatar={!!profile?.avatar_url}
+            onChangePhoto={handleChangePhoto}
+            onRemovePhoto={handleRemovePhoto}
+            onClose={() => setAvatarSheetOpen(false)}
           />
-        ) : null}
 
-        <ConfirmDialog
-          content={relistTarget ? relistDialogFor(relistTarget) : null}
-          onConfirm={relist}
-          onCancel={() => setRelistTarget(null)}
-        />
-        <ConfirmDialog
-          content={deleteTarget ? deleteDialogFor(deleteTarget) : null}
-          onConfirm={deleteListing}
-          onCancel={() => setDeleteTarget(null)}
-        />
-        <ConfirmDialog
-          content={notMeTarget ? notMeDialogFor(notMeTarget) : null}
-          onConfirm={removePurchase}
-          onCancel={() => setNotMeTarget(null)}
-        />
+          {/* Mounted only while open, so each open starts fresh. */}
+          {soldTarget ? (
+            <BuyerPickerSheet
+              visible
+              onClose={() => setSoldTarget(null)}
+              product={soldTarget.item}
+              initialBuyerId={
+                soldTarget.mode === 'change' ? (soldTarget.item.buyer?.id ?? null) : undefined
+              }
+              mode={soldTarget.mode}
+            />
+          ) : null}
 
-        {/* Pinch, drag, double-tap. The viewer owns its own gesture root —
-            see the note in ZoomableImageViewer about Modals on Android. */}
-        <ZoomableImageViewer
-          visible={imageViewerOpen}
-          uri={avatarSrc}
-          onClose={() => setImageViewerOpen(false)}
-          accessibilityLabel={`${profile?.full_name ?? 'Your'} profile photo`}
-        />
-      </SafeAreaView>
-    </View>
+          <ConfirmDialog
+            content={relistTarget ? relistDialogFor(relistTarget) : null}
+            onConfirm={relist}
+            onCancel={() => setRelistTarget(null)}
+          />
+          <ConfirmDialog
+            content={deleteTarget ? deleteDialogFor(deleteTarget) : null}
+            onConfirm={deleteListing}
+            onCancel={() => setDeleteTarget(null)}
+          />
+          <ConfirmDialog
+            content={notMeTarget ? notMeDialogFor(notMeTarget) : null}
+            onConfirm={removePurchase}
+            onCancel={() => setNotMeTarget(null)}
+          />
+
+          {/* Pinch, drag, double-tap. The viewer owns its own gesture root —
+              see the note in ZoomableImageViewer about Modals on Android. */}
+          <ZoomableImageViewer
+            visible={imageViewerOpen}
+            uri={avatarSrc}
+            onClose={() => setImageViewerOpen(false)}
+            accessibilityLabel={`${profile?.full_name ?? 'Your'} profile photo`}
+          />
+        </SafeAreaView>
+      </View>
+    </PostActionsProvider>
   );
 }
 
@@ -1114,6 +1157,9 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: colors.white,
   },
+
+  // The post cards bring their own 10 in from each side (COMMUNITY_SPEC.md §3).
+  posts: { marginHorizontal: -SCREEN_PAD },
 
   /* Content */
   content: {

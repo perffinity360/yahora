@@ -11,6 +11,12 @@
 // Placement prefers `placement` ("top" or "bottom") and flips when that side
 // lacks room. It follows the anchor while anything scrolls. Esc and a press
 // outside both the popover and the anchor call onClose.
+//
+// Content that grows after it opens (the profile glimpse, once its photos
+// load) passes `reserveHeight`, the tallest it can get: the side is then
+// chosen once, as if it were already that tall, and kept while it is open.
+// Deciding on the first, shorter size opened the glimpse below a name low on
+// the screen and then flipped it above when the photos came (owner, 10 Nov).
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -44,9 +50,13 @@ export default function Popover({
   onPointerLeave,
   role = "dialog",
   ariaLabel,
+  reserveHeight = 0,
+  // Between the anchor and the popover. The quick bar passes 4 (owner, 13 Nov).
+  gap = GAP,
 }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
+  const locked = useRef(null); // with reserveHeight: { anchorEl, side }, once chosen
 
   // In a ref so an inline onClose from the caller doesn't rebuild `place`.
   const onCloseRef = useRef(onClose);
@@ -70,20 +80,26 @@ export default function Popover({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    const roomAbove = a.top - GAP - EDGE;
-    const roomBelow = vh - a.bottom - GAP - EDGE;
+    const roomAbove = a.top - gap - EDGE;
+    const roomBelow = vh - a.bottom - gap - EDGE;
+    const need = Math.max(h, reserveHeight);
     let side = placement;
-    if (side === "top" && h > roomAbove && roomBelow > roomAbove) side = "bottom";
-    if (side === "bottom" && h > roomBelow && roomAbove > roomBelow) side = "top";
+    if (locked.current?.anchorEl === anchorEl) {
+      side = locked.current.side;
+    } else {
+      if (side === "top" && need > roomAbove && roomBelow > roomAbove) side = "bottom";
+      if (side === "bottom" && need > roomBelow && roomAbove > roomBelow) side = "top";
+      if (reserveHeight) locked.current = { anchorEl, side };
+    }
 
     // When neither side has room, it slides over the anchor rather than off
     // screen: the whole popover always stays in the window.
-    let top = side === "top" ? a.top - GAP - h : a.bottom + GAP;
+    let top = side === "top" ? a.top - gap - h : a.bottom + gap;
     top = Math.min(Math.max(top, EDGE), Math.max(EDGE, vh - h - EDGE));
     let left = align === "end" ? a.right - w : a.left;
     left = Math.min(Math.max(left, EDGE), Math.max(EDGE, vw - w - EDGE));
     setPos({ top, left, side });
-  }, [anchorEl, placement, align]);
+  }, [anchorEl, placement, align, reserveHeight, gap]);
 
   useLayoutEffect(() => {
     place();

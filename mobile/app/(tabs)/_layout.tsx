@@ -58,6 +58,15 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Feather name="shopping-bag" size={size} color={color as string} />,
         }}
       />
+      {/* COMMUNITY_SPEC.md §1.2: between Marketplace and Messages. The app
+          still opens on Marketplace, the first tab. */}
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={color as string} />,
+        }}
+      />
       <Tabs.Screen
         name="messages"
         options={{

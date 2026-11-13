@@ -124,6 +124,37 @@ export const colors = {
   sectionRule: 'rgba(128,0,128,0.22)',
   sectionRuleFade: 'rgba(128,0,128,0)',
 
+  // ── COMMUNITY_SPEC.md §12 — the community (Phase 7) ──
+  // Same names and values as the website's --reaction-* / --community-*
+  // variables. The website-only ones (brand pill, divider grip, scrollbar,
+  // header gradients) are left out: the app has no such pieces.
+  reactionPillBg: '#FFFFFF',
+  reactionPillBorder: 'rgba(128,0,128,0.12)',
+  reactionMineBg: 'rgba(128,0,128,0.10)', // your own reaction
+  reactionMineBorder: 'rgba(128,0,128,0.35)',
+  communityGlass: 'rgba(255,255,255,0.74)', // floating pills
+  communityPill: '#F8ECF5', // every action pill under a post
+  communityPillPressed: '#EFD8EA', // the web's --community-pill-hover, as the pressed state
+  communityPillMinePressed: 'rgba(128,0,128,0.17)',
+  communityHairline: 'rgba(128,0,128,0.1)',
+  communityRail: '#D1AAD7', // the reply thread; opaque so its pieces join cleanly
+  communityRailCampus: '#A86BBB',
+  communityRailWorld: '#D27AA3',
+  communityPanelCampus: '#F0E5F7', // the campus feed's ground, a purple tint
+  communityPanelWorld: '#FCE9F1', // the country / Global feed's ground, a pink tint
+  communityCollegeBg: '#FAF0F9', // a post's college pill
+  communityCollegeText: '#6E2270',
+  communityCard: 'rgba(255,255,255,0.94)', // the frosted post card
+  communityCardBorder: 'rgba(128,0,128,0.11)',
+  communityGlobeLand: '#2E9E5E',
+  communityGlobeShade: 'rgba(5,40,90,0.38)',
+  communityDock: '#F9EEF8', // the composer's dock (and the view-only line's)
+  communityWorldStrong: '#C92C66',
+  communityWorldTint: 'rgba(235,72,127,0.16)',
+  communityMuted: '#5C5969', // secondary text on the wallpaper (5.58:1 on chatCanvas)
+  communityLike: '#D81E5B', // a liked reply; the ring when a reaction pops
+  communityNewPosts: 'rgba(128,0,128,0.86)',
+
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
   appBgBottom: '#F1E6FF',
@@ -349,3 +380,27 @@ export const EMOJI_SIZES = {
   // Was 48 / 40 / 32 — too big on device. Now ~1.9× / 1.7× / 1.4× the inline size.
   jumbo: { 1: 34, 2: 30, 3: 26 },
 } as const;
+
+/**
+ * COMMUNITY_SPEC.md §12 shadows, as React Native `boxShadow` strings (RN 0.76+,
+ * New Architecture). The same values as the website's variables of the same
+ * names, so a card or the quick bar floats the same on both.
+ */
+export const shadows = {
+  quickBar: '0px 6px 20px rgba(11,11,11,0.16)',
+  /** The quick bar itself: white over white cards, so a hairline ring (spread, so the bar's size is
+   *  unchanged) and a deeper two-layer shadow (owner, 13 Nov). Web: --quick-bar-raised-shadow plus
+   *  0 0 0 1px --quick-bar-ring. */
+  quickBarRaised:
+    '0px 0px 0px 1px rgba(128,0,128,0.16), 0px 1px 3px rgba(42,8,42,0.14), 0px 10px 28px rgba(42,8,42,0.22)',
+  communityCard: '0px 2px 10px rgba(79,1,79,0.04)',
+  communityFloat: '0px 4px 16px rgba(42,8,42,0.12)',
+} as const;
+
+/**
+ * The community's doodle wallpaper (spec §1.1): the chat's tile over the zone's
+ * ground. 30% on both platforms (owner, 13 Nov): the website lays its ground at
+ * 70% over the tile (`--community-panel-*-veil`), which leaves the tile at 30%;
+ * the app draws the tile at 30% over the ground. Same artwork, same 420 tile.
+ */
+export const COMMUNITY_WALLPAPER_OPACITY = 0.3;

@@ -91,7 +91,7 @@ here is wrong, fix it in this table first, then in the block it affects.
 | 18 | Rate limits | Per person, in a sliding 1-hour window: **15** campus posts, **8** country posts, **8** Global posts (each counted on its own), **45** replies. The same for new accounts. Stored in a settings table so the Phase 9 admin page can change them (2 Nov, §1.5) |
 | 19 | Deleting your own post | It disappears at once. The row is kept for **90 days** for moderation, then removed for good |
 | 20 | Editing posts | Not in Phase 7 |
-| 21 | Demo usernames | Made automatically at demo login, starting with **`demo.`** (example: `demo.sunny.otter`). The demo skips the username step. Real accounts can never start with `demo.`, `demo-` or `demo_` |
+| 21 | Demo usernames | Made automatically at demo login, starting with **`demo.`** (example: `demo.sunny.otter`). At onboarding the demo account can pick its own, after a fixed `demo.` (11 Nov, §1.11). Real accounts can never start with `demo.`, `demo-` or `demo_` |
 | 22 | The demo community | Separate: demo accounts see only demo posts, real students never see them |
 | 23 | Countries on campuses | Every campus gets a country code. Currency, several email domains per campus and the campus admin page are **Phase 9** |
 | 24 | Who builds the posts backend | **Neeraj** — the posts module is **lent** to him for Phase 7 (§2.2) |
@@ -667,8 +667,13 @@ the same separation you built for search in Phase 6A.
 **Demo usernames.** Today a demo account picks a username, which blocks that name for up to
 7 days. From Phase 7:
 
-- **At demo login**, the database gives the account a name like `demo.sunny.otter`. The demo
-  skips the username step.
+- **At demo login**, the database gives the account a name like `demo.sunny.otter`.
+- **At demo onboarding** (decided 11 Nov, replacing "the demo skips the username step"): the
+  username field shows **`demo.`** fixed in front of the input, which can't be deleted, and the
+  student types only the rest (`good_bunny` → `demo.good_bunny`), starting from the generated
+  name. The client adds the prefix before every availability check and the save; the server
+  accepts a demo account's own `demo.` name, and keeps the generated one when none is sent. No
+  suggestion chips for demo accounts (the suggestion endpoints don't know the prefix).
 - **A rule in the database**, both ways:
   - a demo-campus account's username **must** start with `demo.`;
   - a real account's username **must not** start with `demo.`, `demo-` or `demo_`, so no real
@@ -1398,8 +1403,12 @@ after its checkpoint, so the next starts from `main`.
 3. Tap the second segment: **🇮🇳 India** is selected. Tap it again: the dropdown shows India
    (your country) first, then Global, then Germany (the local test campus CC-V2 adds).
 4. Switch to **Global**, then flip **Hot · New**: the order changes.
-5. Tap **♡** on a post: it becomes ❤️ and the summary count goes up by 1. Tap again: back to ♡.
-6. Long-press ♡: the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕) appears. Pick 😂: the button shows 😂.
+5. Tap the **React** smiley on a post: the quick bar (❤️ 👍 😂 😮 😢 🙏 ⊕) opens (spec 3.9: a tap
+   always opens it, never gives ❤️ by itself). Pick ❤️: the button shows ❤️ and the summary goes up
+   by 1. Open it again and pick ❤️: it's removed. Long-press the React button, or the post itself:
+   the bar opens too.
+6. Pick 😂: the button shows 😂, the summary's ❤️ goes down and 😂 up. On a reply, the heart is a
+   plain like: tap it, it fills and counts 1; tap again, it's gone.
 7. Turn on airplane mode and pull to refresh: a friendly error, no crash. Turn it off again.
 
 **👁️ CHECKPOINT V-D4b**
@@ -1417,9 +1426,11 @@ after its checkpoint, so the next starts from `main`.
    is kept. Then post in **Global**: it goes through, because each feed is counted on its own.
 
 **👁️ CHECKPOINT V-D4c**
-1. Tap a post's 💬: the post page, with replies oldest first, and **Load more replies** when
-   there are more than 20.
-2. Reply with text and a GIF: it appears at the bottom.
+1. Tap a post's time (or its 💬 on a profile's Posts): the post page, with its replies in Hot
+   order (the API's order since 11 Nov, spec §4), and **Load more replies** when there are more
+   than 20.
+2. Reply from the bar at the bottom with text and a GIF: it appears at the end of the replies.
+   (In a feed, 💬 opens the reply composer straight away, and the reply joins the post's preview.)
 3. Open the India feed while logged in as a seeded **NIET** student (`sneha.gupta`): you can
    reply, because NIET is in India too. *(A view-only test needs a campus in another country:
    CC-V2's seed adds a test campus in Germany with one student, `lena.test`. Log in as her
@@ -2308,8 +2319,8 @@ posts" pill. Read: spec §3.1, §4, §5.2, §5.4, §7, §8, §10; runbook §1.7,
 §1.8.
 
 1. From mobile/, install the emoji picker: npx expo install rn-emoji-keyboard
-   If it doesn't install cleanly on SDK 58, STOP and tell me. Don't choose
-   another library on your own.
+   If it doesn't install cleanly on SDK 58, choose
+   another best library on your own.
 2. ⊕ in ReactionBar opens the full picker (search, frequently used,
    categories), styled as spec §5.2. The chosen emoji becomes the reaction.
 3. ReactionBreakdownSheet.tsx (spec §5.4): the title "N reactions"; a grid
@@ -2414,11 +2425,10 @@ VERIFY AFTER — report each
 Phase 7, Block V-F. The demo account's onboarding. Read spec §11 and
 runbook §1.11.
 
-1. app/(auth)/onboarding.tsx, for demo users (isDemoUser):
-   - hide the username input; show the generated handle read-only, with
-     the line "Demo accounts get a name automatically.";
-   - saving onboarding doesn't send a username;
-   - "Skip for now" stays.
+1. app/(auth)/onboarding.tsx, for demo users (isDemoUser): ✅ DONE in V-C
+   (11 Nov, runbook §1.11): UsernameField's `prefix` shows "demo." fixed,
+   the student types the rest, the screen sends "demo." + it, and demo
+   accounts get no suggestion chips. "Skip for now" stays. Nothing to do here.
 2. Wherever a real user picks or changes a username (UsernameField), a
    "demo." name must show as not available. That comes from the server's
    availability check after V-B, so try it first: if it already works,
@@ -3393,10 +3403,10 @@ Vishwajeet's V-C changelog entry (the API).
      the text is empty;
    - a reply quoting a GIF reads "GIF" (the server already sends
      reply_preview 'GIF').
-3. src/pages/onboarding/onboarding.jsx — for demo users (localStorage
-   yahora_demo_user): hide the username field and show the generated
-   handle read-only, with "Demo accounts get a name automatically." Don't
-   send a username when saving. "Skip for now" stays.
+3. src/pages/onboarding/onboarding.jsx — ✅ DONE in V-C (11 Nov, by
+   Vishwajeet's session, runbook §1.11): for demo users the field shows
+   "demo." fixed and the page sends "demo." + what was typed; no
+   suggestion chips. Nothing to do here.
 
 HARD CONSTRAINTS
 - Don't change paging, the unread band, read marking, the wallpaper or

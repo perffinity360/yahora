@@ -604,20 +604,25 @@
   padding-left: 26px;
 }
 
-/* < 1024 px: floats at the bottom of the window until the footer arrives.
-   14 px in from each side, like the brand pill, so a curved or rounded screen
-   doesn't cut its ends (owner, 8 Nov; was 8). */
+/* < 1024 px: the same solid dock as on a laptop, held at the bottom of the
+   window until the footer arrives (owner, 10 Nov). It used to float 14 px in
+   from each side with a gap under it, and posts scrolling past showed through
+   that gap and around its ends. The dock's own ground hides them. The strip
+   behind a phone's navigation buttons takes the page's background colour,
+   which Community.jsx sets to this dock's while the page is open. */
 .dockFloat {
   position: sticky;
   z-index: 15;
   bottom: 0;
-  min-height: 48px;
-  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
-  pointer-events: none;
+  padding-bottom: calc(2px + env(safe-area-inset-bottom));
 }
 
-.dockFloat > * {
-  pointer-events: auto;
+/* On a phone the composer's outline is always the feed's dark accent
+   (purpleDark on campus, pinkDark elsewhere), not the pale rail colour it has
+   at rest on a laptop (owner, 10 Nov). Clicking it still adds the soft tint
+   around it. */
+.dockFloat {
+  --composer-border: var(--composer-accent);
 }
 
 /* Spec §1.4. */
@@ -629,15 +634,6 @@
   min-height: 30px;
   font: 400 13px/18px "Inter", sans-serif;
   color: var(--community-muted);
-}
-
-.dockFloat .viewOnly {
-  padding: 7px 12px;
-  border-radius: 16px;
-  background: var(--community-glass);
-  box-shadow: var(--community-float-shadow);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
 }
 
 .viewOnlyIcon {
@@ -1059,6 +1055,84 @@
    measures it into --scrollbar-room, and scrollbar-gutter keeps it constant. */
 .list {
   padding: 6px max(0px, calc(10px - var(--scrollbar-room, 0px))) 0 max(10px, var(--scrollbar-room, 0px));
+}
+
+/* Spec §3.1: the support card under your own post held for self-harm, on
+   your Posts tab, as wide as the post above it. */
+.supportUnder {
+  max-width: 860px;
+  margin: 0 auto 6px;
+}
+
+/* Spec §8: the "new posts" pill floats over the feed and takes no space, so
+   nothing moves when it comes or goes. A zero-height sticky layer at the top
+   of the scroller, 8 px under the panel's 36 px header (laid over the
+   scroller's top); the pill hangs from it, absolute and centred. */
+.newPostsRow {
+  position: sticky;
+  z-index: 12;
+  top: 44px;
+  height: 0;
+  pointer-events: none;
+}
+
+/* On a narrow window, 8 px under the floating switcher (8 + 34 + 8). */
+.narrow .newPostsRow {
+  top: 58px;
+}
+
+.newPosts {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  /* The centring is its own property, so the entrance's transform keeps it. */
+  translate: -50% 0;
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--community-new-posts);
+  box-shadow: var(--quick-bar-shadow);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  font: 600 13px/18px "Inter", sans-serif;
+  color: var(--white);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: newPostsIn 200ms var(--community-ease);
+  transition: opacity 200ms var(--community-ease), background-color 140ms var(--community-ease);
+}
+
+.newPosts:hover {
+  background: var(--community-new-posts-hover);
+}
+
+.newPosts:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+}
+
+/* Leaving: it fades out, then CommunityFeed takes the row away. */
+.newPostsLeaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes newPostsIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newPosts {
+    animation: none;
+    transition: none;
+  }
 }
 
 .empty {

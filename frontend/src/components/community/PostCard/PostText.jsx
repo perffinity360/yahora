@@ -28,10 +28,11 @@ function withEmoji(text) {
   );
 }
 
-export default function PostText({ content, className = "" }) {
+/* `unfolded`: the whole text from the start (a post's own page). */
+export default function PostText({ content, className = "", unfolded = false }) {
   const boxRef = useRef(null);
   const innerRef = useRef(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(unfolded);
   const [overflows, setOverflows] = useState(false);
 
   useLayoutEffect(() => {

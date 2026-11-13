@@ -11,6 +11,7 @@ import { API_BASE_URL } from '../../config/urls';
 import { useHistoryEntryState } from "../../hooks/useScrollRestoration";
 import BuyerPicker from "../../components/BuyerPicker/BuyerPicker";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog";
+import UserPosts from "../community/UserPosts";
 // Renamed: the component has its own `firstName` (the greeting's), which
 // shadowed the helper and made the Relist dialog call a string.
 import { firstName as getFirstName } from "../../utils/messageActions";
@@ -1237,6 +1238,8 @@ export default function Dashboard() {
              { key: "listings", label: "My Items" },
              { key: "purchases", label: "Bought Items" },
              { key: "watchlist", label: "Watchlist" },
+             // COMMUNITY_SPEC §10: your posts, held and covered ones included.
+             { key: "posts", label: "Posts" },
            ].map((t) => (
              <button
                key={t.key}
@@ -1248,6 +1251,11 @@ export default function Dashboard() {
            ))}
          </div>
 
+         {tab === "posts" && (
+           <UserPosts userId={localStorage.getItem("yahora_user_id")} />
+         )}
+
+         {tab !== "posts" && (
          <div className={styles.grid} key={tab}>
            {tab === "listings" &&
              (listings.length ? (
@@ -1317,6 +1325,7 @@ export default function Dashboard() {
              </div>
            )}
          </div>
+         )}
        </div>
      </div>
 

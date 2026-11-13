@@ -111,6 +111,8 @@ function Navbar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [userName, setUserName] = useState("");
+  // The community's brand menu shows the username, never the full name.
+  const [userHandle, setUserHandle] = useState("");
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -161,6 +163,7 @@ function Navbar() {
             // Fall back to null so a removed photo reverts to initials.
             setAvatarUrl(data.profile?.avatar_url || null);
             if (data.profile?.full_name) setUserName(data.profile.full_name);
+            if (data.profile?.username) setUserHandle(data.profile.username);
           }
         } catch (e) {
           console.error("Could not load avatar:", e);
@@ -274,9 +277,9 @@ function Navbar() {
   }, [isAuthenticated, sessionReady]);
 
   useEffect(() => {
-    window.yahoraNavState = { unreadCount, avatarUrl, userName };
+    window.yahoraNavState = { unreadCount, avatarUrl, userName, userHandle };
     window.dispatchEvent(new CustomEvent(NAV_STATE_EVENT, { detail: window.yahoraNavState }));
-  }, [unreadCount, avatarUrl, userName]);
+  }, [unreadCount, avatarUrl, userName, userHandle]);
 
   const handleLogout = () => {
     logout();

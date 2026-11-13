@@ -19,6 +19,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { WindowOriginMarker } from '../src/components/AnchoredModal';
 import { ChatWallpaperPreload } from '../src/components/ChatWallpaperPreload';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { RealtimeProvider } from '../src/contexts/RealtimeContext';
@@ -195,6 +196,8 @@ export default function RootLayout() {
       </SafeAreaProvider>
       {/* The chat wallpaper, decoded before any chat opens. */}
       <ChatWallpaperPreload />
+      {/* Where the screen's top really is, for menus that hang off a button (AnchoredModal). */}
+      <WindowOriginMarker />
     </GestureHandlerRootView>
   );
 }

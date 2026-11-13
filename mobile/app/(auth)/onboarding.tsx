@@ -24,7 +24,11 @@ import { AuroraBackground } from '../../src/components/AuroraBackground';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { MIN_PASSWORD_LENGTH, PasswordField } from '../../src/components/PasswordField';
 import { SearchablePicker } from '../../src/components/SearchablePicker';
-import { UsernameField, type UsernameStatus } from '../../src/components/UsernameField';
+import {
+  DEMO_USERNAME_PREFIX,
+  UsernameField,
+  type UsernameStatus,
+} from '../../src/components/UsernameField';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useCourses, useSpecializations } from '../../src/hooks/useAcademics';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
@@ -105,7 +109,13 @@ export default function OnboardingScreen() {
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '');
 
   // Username: the value lives here, the availability check lives in the field.
-  const [username, setUsername] = useState('');
+  // A demo account holds only the part after "demo." here (the field shows the
+  // prefix fixed), starting from the name it was given at demo login.
+  const [username, setUsername] = useState(() =>
+    isDemoUser && profile?.username?.startsWith(DEMO_USERNAME_PREFIX)
+      ? profile.username.slice(DEMO_USERNAME_PREFIX.length)
+      : '',
+  );
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
   const [usernameServerError, setUsernameServerError] = useState<string | null>(null);
   /** Alternatives the availability check offers when a handle is unavailable. */
@@ -339,7 +349,8 @@ export default function OnboardingScreen() {
     // ── Username ──────────────────────────────────────────────────────────
     // Required by the backend since Phase 4; without it onboarding 400s and
     // there is no way past it inside the app.
-    const handle = username.trim();
+    const typed = username.trim();
+    const handle = isDemoUser && typed ? DEMO_USERNAME_PREFIX + typed : typed;
     if (!handle) {
       setUsernameServerError('Pick a username to finish signing up.');
       return;
@@ -593,9 +604,12 @@ export default function OnboardingScreen() {
                     onSuggestions={setServerSuggestions}
                     serverError={usernameServerError}
                     editable={!busy}
+                    prefix={isDemoUser ? DEMO_USERNAME_PREFIX : ''}
                   />
 
-                  {suggestions.length > 0 ? (
+                  {/* The suggestion endpoints don't know the demo. prefix yet, so a
+                      demo account gets none; it starts with a generated name. */}
+                  {!isDemoUser && suggestions.length > 0 ? (
                     <View style={styles.suggestionRow}>
                       {suggestions.map((handle) => (
                         <Pressable

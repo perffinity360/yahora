@@ -9,6 +9,8 @@ export interface UserProfile {
   id: string;
   university_id: string;
   full_name: string | null;
+  /** The handle; a demo account's is set at demo login (demo.sunny.otter). */
+  username?: string | null;
   avatar_url: string | null;
   qualification: string | null;
   course_id: string | null;
@@ -378,4 +380,69 @@ export interface DashboardData {
   profile: DashboardProfile;
   listings: ProductListing[];
   purchases: Purchase[];
+}
+
+/* ── Community (Phase 7) — backend/API.md, "posts module (Phase 7)" ── */
+
+/** A GIF picked from KLIPY (runbook §1.9). `url` is the small animated
+ *  rendition; `preview_url` its still frame. Only these six keys are stored. */
+export interface GifRef {
+  provider: 'klipy';
+  id: string;
+  url: string;
+  preview_url?: string | null;
+  width: number;
+  height: number;
+}
+
+/**
+ * One post or reply, flat — "The PostItem" in backend/API.md. Every feed, the
+ * replies list and a profile's posts send this one shape. A reply is a PostItem
+ * with `parent_post_id` set, and its own `top_replies` is always `[]`.
+ */
+export interface PostItem {
+  id: string;
+  parent_post_id: string | null;
+  scope: 'campus' | 'country' | 'global';
+  country_code: string | null;
+  content: string;
+  image_urls: string[];
+  gif: GifRef | null;
+  created_at: string;
+  reactions_total: number;
+  reaction_counts: Record<string, number>;
+  replies_count: number;
+  viewer_reaction: string | null;
+  /** `active` for everyone; only the author ever receives `pending` or `under_review`. */
+  moderation_status: 'active' | 'pending' | 'under_review';
+  moderation_support: boolean;
+  author_id: string;
+  author_username: string;
+  /** Picks the avatar's initials and colour only. Never shown (spec §3). */
+  author_name: string | null;
+  author_avatar: string | null;
+  author_university: string;
+  is_mine: boolean;
+  /** The first REPLY_PREVIEW_COUNT replies of GET /:id/replies, in its Hot order. */
+  top_replies: PostItem[];
+}
+
+/** A page of a feed. `can_post` comes with the country and Global feeds only. */
+export interface FeedPage extends Paged<PostItem> {
+  can_post?: boolean;
+}
+
+/** `GET /api/posts/countries` — your country first, then by name. */
+export interface Country {
+  code: string;
+  name: string;
+  is_mine: boolean;
+}
+
+/** `PUT` / `DELETE /api/posts/:id/reaction`. */
+export interface ReactionResult {
+  post_id: string;
+  viewer_reaction: string | null;
+  reactions_total: number;
+  reaction_counts: Record<string, number>;
 }

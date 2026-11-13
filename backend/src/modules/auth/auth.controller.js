@@ -522,7 +522,7 @@ export const verifyOtp = async (req, res) => {
  * All three tables are RLS-on / zero-grant; this works because the backend
  * client is service_role, which bypasses RLS.
  */
-async function classifyUnavailableUsername(username, userId) {
+async function classifyUnavailableUsername(username, userId, universityId) {
     const [reserved, taken, released] = await Promise.all([
         supabase
             .from('reserved_usernames')
@@ -552,7 +552,51 @@ async function classifyUnavailableUsername(username, userId) {
     // would leak who used to hold it.
     if (released.data?.length) return 'USERNAME_TAKEN';
 
+    // Phase 7 V-C: the demo. rule (runbook §1.11). A real student asking for
+    // demo.x, or a demo account asking for a plain name, breaks it, and that is
+    // USERNAME_RESERVED, not a format error. The rule is stated once, in
+    // username_breaks_world_rule(); this only asks it, like the lookups above.
+    // A NULL campus counts as real, as it does in the function.
+    const { data: breaksWorldRule, error: worldError } = await supabase.rpc(
+        'username_breaks_world_rule',
+        { p_username: username, p_university_id: universityId ?? null }
+    );
+    if (worldError) throw worldError;
+    if (breaksWorldRule === true) return 'USERNAME_RESERVED';
+
     return 'INVALID_FORMAT';
+}
+
+/**
+ * Gives a demo account its generated name (Phase 7 V-C, runbook §1.11), such as
+ * demo.sunny.otter, and returns the row as it is AFTER the update.
+ *
+ * generate_demo_username() only picks a name that is free at that moment, so
+ * two logins can draw the same one; the unique index then answers 23505 for
+ * the second, which simply draws again, up to 3 times. Anything else, or a
+ * third clash, throws.
+ */
+async function assignDemoUsername(userId) {
+    const ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+        const { data: name, error: nameError } = await supabase.rpc('generate_demo_username');
+        if (nameError) throw nameError;
+
+        const { data: row, error: updateError } = await supabase
+            .from('users')
+            .update({ username: name })
+            .eq('id', userId)
+            .select()
+            .maybeSingle();
+
+        if (!updateError) {
+            if (!row) throw new Error('assignDemoUsername: no profile row to name');
+            return row;
+        }
+        if (updateError.code !== '23505' || attempt === ATTEMPTS) throw updateError;
+    }
+    // Unreachable: the last attempt returns or throws.
+    throw new Error('assignDemoUsername: out of attempts');
 }
 
 // 3. Complete Onboarding
@@ -659,14 +703,56 @@ export const completeOnboarding = async (req, res) => {
             });
         }
 
-        // Fold first, exactly as is_username_available() does internally, so a
-        // caps-lock student asking about RAHUL is answered about rahul.
-        const username = typeof rawUsername === 'string' ? rawUsername.trim().toLowerCase() : '';
+        // Who is onboarding: their campus (is it the demo one?) and the name
+        // they already hold. maybeSingle: a missing row is a 404, as below.
+        const { data: caller, error: callerError } = await supabase
+            .from('users')
+            .select('username, university_id, university:universities(is_demo)')
+            .eq('id', userId)
+            .maybeSingle();
 
-        if (!username) {
-            return sendError(res, 400, 'INVALID_FORMAT', {
-                message: 'A username is required to complete onboarding.',
+        if (callerError) return mapDbError(res, callerError);
+        if (!caller) {
+            return sendError(res, 404, 'NOT_FOUND', {
+                message: 'No profile exists for this account.',
             });
+        }
+
+        // 🎭 DEMO (Phase 7 V-C, runbook §1.11). A demo account was named at
+        // demo-login (demo.sunny.otter). Its onboarding screen shows a fixed
+        // "demo." with the rest editable (decided 11 Nov), so it may send a
+        // name of its own, which must start with demo. — the clients add the
+        // prefix; this doesn't. A chosen name is checked like anyone's, and
+        // a plain one answers USERNAME_RESERVED from the database's rule.
+        // Sending none, or the name it already holds, keeps that name.
+        const isDemo = caller.university?.is_demo === true;
+        const requested = typeof rawUsername === 'string' ? rawUsername.trim().toLowerCase() : '';
+
+        let username;
+        let checkUsername = !isDemo;
+        if (isDemo) {
+            if (requested && requested !== caller.username) {
+                username = requested;
+                checkUsername = true;
+            } else {
+                // A demo account made before V-C was deployed has no name
+                // yet. Name it now, BEFORE the password step: the profile
+                // can't be marked complete without a username
+                // (users_username_required_when_complete), and failing that
+                // after the password change would leave the student with a
+                // revoked session (see step 2).
+                username = caller.username ?? (await assignDemoUsername(userId)).username;
+            }
+        } else {
+            // Fold first, exactly as is_username_available() does internally, so a
+            // caps-lock student asking about RAHUL is answered about rahul.
+            username = typeof rawUsername === 'string' ? rawUsername.trim().toLowerCase() : '';
+
+            if (!username) {
+                return sendError(res, 400, 'INVALID_FORMAT', {
+                    message: 'A username is required to complete onboarding.',
+                });
+            }
         }
 
         // Password. Username and password are both compulsory at onboarding
@@ -683,6 +769,7 @@ export const completeOnboarding = async (req, res) => {
             });
         }
 
+        // For a demo account this compares with the name it holds.
         if (password.toLowerCase() === username) {
             return sendError(res, 400, 'WEAK_PASSWORD', {
                 message: 'Your password cannot be the same as your username.',
@@ -691,17 +778,20 @@ export const completeOnboarding = async (req, res) => {
 
         // The database owns every username rule: charset, length, the reserved
         // list, and the 30-day cooling-off window. Do not re-derive any of them
-        // here — see classifyUnavailableUsername above.
-        const { data: isAvailable, error: rpcError } = await supabase.rpc('is_username_available', {
-            p_username: username,
-            p_user_id:  userId,
-        });
+        // here — see classifyUnavailableUsername above. A demo account that
+        // keeps its generated name has nothing to ask.
+        if (checkUsername) {
+            const { data: isAvailable, error: rpcError } = await supabase.rpc('is_username_available', {
+                p_username: username,
+                p_user_id:  userId,
+            });
 
-        if (rpcError) return mapDbError(res, rpcError);
+            if (rpcError) return mapDbError(res, rpcError);
 
-        if (isAvailable !== true) {
-            const code = await classifyUnavailableUsername(username, userId);
-            return sendError(res, 400, code);
+            if (isAvailable !== true) {
+                const code = await classifyUnavailableUsername(username, userId, caller.university_id);
+                return sendError(res, 400, code);
+            }
         }
 
         // ── 1b. The two foreign keys, checked HERE and not by the UPDATE. ──
@@ -793,11 +883,12 @@ export const completeOnboarding = async (req, res) => {
         }
 
         // ── 3. Only now: the profile row, complete, with the handle. ──
+        // A demo account keeping its generated name leaves it out, so it stays.
         const { data: updatedUser, error: updateError } = await supabase
             .from('users')
             .update({
                 full_name,
-                username,
+                ...(checkUsername ? { username } : {}),
                 avatar_url:          avatar_url || null,
                 qualification,       // Frontend string (e.g., 'Graduation')
                 course_id,           // UUID from the database
@@ -913,7 +1004,7 @@ export const demoLogin = async (req, res) => {
         // demo login mints a brand-new auth user, so on_auth_user_created has
         // ALWAYS created this row by the time we get here, and a plain insert
         // hit 23505 on the primary key and returned 500 for every call.
-        const { data: inserted, error: insertError } = await supabase
+        const { error: insertError } = await supabase
             .from('users')
             .upsert([{
                 id: signInData.user.id,
@@ -925,18 +1016,13 @@ export const demoLogin = async (req, res) => {
 
         if (insertError) throw insertError;
 
-        // DO NOTHING returns zero rows, which is the normal path now that the
-        // trigger exists. Read back the row it created.
-        let newUser = inserted;
-        if (!newUser) {
-            const { data: existing, error: refetchError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', signInData.user.id)
-                .single();
-            if (refetchError) throw refetchError;
-            newUser = existing;
-        }
+        // 5b. The demo. username (Phase 7 V-C, runbook §1.11): the database
+        // picks one, such as demo.sunny.otter, and the demo skips the username
+        // step. NOT in the upsert above: it is DO NOTHING, and
+        // on_auth_user_created has always made the row by then, so a username
+        // there would be thrown away in silence. The row is read back AFTER
+        // this update, so userProfile.username is set.
+        const newUser = await assignDemoUsername(signInData.user.id);
 
         // 6. Return the exact same payload structure as verifyOtp
         res.status(200).json({

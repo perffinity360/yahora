@@ -367,6 +367,23 @@
 /* --- USERNAME + PASSWORD (N-Block B) --- */
 
 /* The handle rendered as the URL it becomes — makes the concept concrete. */
+/* Demo accounts: the fixed "demo." in front of the username (Phase 7, 11 Nov).
+   It sits where the typed text would start, and the input's text starts after
+   it, so it reads as one handle that can't be deleted. */
+.handlePrefix {
+  position: absolute;
+  left: 2.8rem;
+  font-family: "Inter", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--purple-dark);
+  pointer-events: none;
+}
+
+.inputWithIcon > input.withPrefix {
+  padding-left: calc(2.8rem + 5ch);
+}
+
 .handlePreview {
   margin: 0;
   font-size: 0.8rem;

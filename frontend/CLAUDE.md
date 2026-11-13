@@ -19,7 +19,7 @@ This is the **web** app. There is a separate `mobile/` (React Native) app and a 
 1. **Read the real source before assuming anything.** Before wiring an endpoint, open the matching backend controller in `../backend/src/modules/<module>/`. Before touching data shapes, check `../database/schema.md`. Do not guess column names, response shapes, or field formats. (Example of why: the OTP is **6 digits**, delivered via Supabase — it was 8 until Phase 3, and docs that still say 8 are stale. Assumptions like this have caused bugs.)
 2. **Respect campus isolation.** Any request that reads or writes campus-scoped data must carry the correct `university_id`. Interaction endpoints must never operate across campuses.
 3. **Match existing patterns.** This codebase has established conventions (raw `fetch`, CSS Modules, `AuthContext`, lucide icons). Follow them — do not introduce axios, styled-components, Redux, TanStack Query, or new state libraries on the web without being asked.
-4. **Verification is the user's job.** Do not claim something works in the browser. Commit after each logical unit of work and let Vishwajeet verify in the browser.
+4. **Test only when it is quick and reliable (owner, 13 Nov; root `CLAUDE.md`, "How we work").** Test yourself only when it can be done quickly, reliably and without unnecessary token or resource use, and only once the expected outcome is clear and matches what the owner wants. If anything is ambiguous, ask first, or hand the check to the humans with exactly what to look at and how. Never test on an assumption that could check the wrong thing. Never claim something works in the browser unless you actually checked it; say what you checked and what you didn't. Commit after each logical unit of work.
 5. **Keep it minimal.** Prefer small, surgical diffs over large rewrites. Do not refactor unrelated code.
 
 ---
@@ -248,7 +248,7 @@ as Sold …). The list below is only the routes the first pages used.
 - **`VITE_API_BASE_URL` is empty by default** (dev), so `API_BASE_URL` resolves to a **relative** `/api` that the Vite dev proxy (`vite.config.js`) forwards to the backend. `urls.js` preserves that empty value deliberately. Because it's relative, **never build request URLs with `new URL(...)`** — that constructor requires an absolute URL and throws `Failed to construct 'URL': Invalid URL`. Use plain string concatenation with `fetch` (and `URLSearchParams` for query strings), like the rest of the codebase. This exact bug hid the Marketplace feed once.
 - **Marketplace mobile filter drawer reuses the desktop `SidebarContent`** (`Marketplace.jsx`), so the campus switcher and all filter sections render in both. Toggle drawer-only visibility via `.mobileDrawer .<class>` overrides in `Marketplace.module.css` — don't duplicate the markup.
 - **Demo users** get a persistent orange banner (`App.jsx`) and are auto-cleaned nightly by the backend cron — don't treat demo data as real.
-- **The Community is `/community`** (`pages/community/`, Phase 7). The old `/feed` and `/hot` stubs now just redirect there. Until Block N-D part 2 it runs on `pages/community/sampleData.js`, not the API; part 2 deletes that file.
+- **The Community is `/community`** (`pages/community/`, Phase 7). The old `/feed` and `/hot` stubs now just redirect there. It talks to the posts API through `pages/community/api.js` (raw fetch with the token; cursors are echoed back, never parsed). A post's own page is `/post/:id` (`pages/post/PostDetail.jsx`). The ⋯ menu's Report and Delete live in `pages/community/PostActions.jsx`, which every screen showing posts wraps around them.
 - **Realtime chat** relies on the Supabase client, not the Express backend — keep both in sync when touching messaging.
 - **Scroll position is restored app-wide by `src/hooks/useScrollRestoration.js`** (called once
   in `App.jsx`). Forward navigation starts at the top. Back/Forward waits until the page is back
@@ -274,7 +274,7 @@ as Sold …). The list below is only the routes the first pages used.
 - Do not hardcode brand colors — use the CSS variables.
 - Do not bypass `university_id` scoping or enable cross-campus interaction.
 - Do not rename existing folders/files or do broad refactors unless explicitly requested.
-- Do not claim browser behavior is verified — commit and hand off to Vishwajeet for verification.
+- Do not claim browser behaviour is verified unless you checked it (see §2.4); otherwise hand over exactly what to check.
 - Do not edit `mobile/` or `backend/` from a frontend task unless explicitly asked (this brief covers `frontend/` only).
 
 ---
@@ -313,8 +313,7 @@ Before ANY UI work, read DESIGN.md fully. Its tokens are canonical — never har
 - GSAP + ScrollTrigger + Lenis: public landing/marketing pages ONLY. App surfaces use native scroll.
 - Every interactive element: hover + press + focus-visible. Every async surface: skeleton, empty, error, success.
 - Animate transform/opacity only. Respect prefers-reduced-motion.
-- After building a screen: don't verify it with screenshots (§2 rule 4, §14). Check it builds
-  (`npm run build`), then list what Vishwajeet should check in the browser at 1440 px and 390 px.
+- After building a screen: when a quick, reliable check is possible (§2.4), screenshot via Playwright MCP at 1440px and 390px, self-critique, fix, re-verify. Otherwise hand the humans a checklist of what to look at, at which widths.
 
 ---
 

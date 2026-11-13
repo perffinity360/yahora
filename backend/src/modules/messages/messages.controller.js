@@ -5,6 +5,7 @@
 // ══════════════════════════════════════════════
 import { supabase } from '../../config/supabase.js';
 import { sendError, sendPage, mapDbError } from '../../utils/respond.js';
+import { isSingleEmoji } from '../../utils/emoji.js';
 
 /**
  * Canonical 8-4-4-4-12 hex UUID.
@@ -24,6 +25,41 @@ const isUuid = (value) => typeof value === 'string' && UUID_RE.test(value);
 
 /** The composer's limit (MESSAGES_SPEC §2; mobile MAX_MESSAGE_LENGTH). */
 const MESSAGE_MAX_LENGTH = 2000;
+
+/**
+ * Characters as a person counts them: code points, not UTF-16 units, so an
+ * emoji is one character and not two (runbook §1.12). Postgres's char_length()
+ * counts the same way.
+ */
+const countCharacters = (text) => [...text].length;
+
+const HTTPS_URL_RE = /^https:\/\/\S+$/i;
+const isHttpsUrl = (value) => typeof value === 'string' && HTTPS_URL_RE.test(value);
+const isPositiveInt = (value) => Number.isInteger(value) && value > 0;
+
+/**
+ * A GIF in a message (Phase 7 V-C): the same rule as a GIF in a post
+ * (parseGif in posts.controller.js, which is on loan to Neeraj, so the rule is
+ * repeated here rather than imported from it). Provider 'klipy', a non-empty
+ * string id, an https url, an optional https preview_url, positive integer
+ * width and height. Only those keys are kept, so nothing else a client sends
+ * is ever stored. Returns null for anything else (→ 400 INVALID_GIF).
+ *
+ * The body is JSON, so the GIF arrives as an object; a string is refused
+ * rather than parsed (posts parse one only because they arrive as multipart).
+ */
+function parseMessageGif(gif) {
+    if (!gif || typeof gif !== 'object' || Array.isArray(gif)) return null;
+
+    const { provider, id, url, preview_url, width, height } = gif;
+    if (provider !== 'klipy') return null;
+    if (typeof id !== 'string' || id.length === 0) return null;
+    if (!isHttpsUrl(url)) return null;
+    if (preview_url !== undefined && preview_url !== null && !isHttpsUrl(preview_url)) return null;
+    if (!isPositiveInt(width) || !isPositiveInt(height)) return null;
+
+    return { provider, id, url, ...(preview_url ? { preview_url } : {}), width, height };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PAGINATION — Phase 4 Block N-C (Neeraj, in Vishwajeet's module by agreement;
@@ -321,13 +357,39 @@ export const sendMessage = async (req, res) => {
         // The sender is the token holder. A `sender_id` in the body is ignored
         // in silence; both clients still send one today.
         const sender_id = req.user.id;
-        const { receiver_id, product_id, content, reply_to_id } = req.body;
+        const { receiver_id, product_id, reply_to_id } = req.body;
+        let { content } = req.body;
+
+        // 🎞️ GIF (Phase 7 V-C). Optional; absent or null means no GIF, exactly
+        // as before. Checked first, because whether `content` may be empty
+        // depends on it.
+        let gif = null;
+        if (req.body.gif !== undefined && req.body.gif !== null) {
+            gif = parseMessageGif(req.body.gif);
+            if (!gif) {
+                return sendError(res, 400, 'INVALID_GIF', {
+                    message: 'gif must be a KLIPY GIF: provider, id, an https url and its width and height.',
+                });
+            }
+        }
 
         // ✏️ VALIDATION (Phase 6B V-C) — before the campus lookup, so a bad body
         // costs no database round trip. Both clients already refuse an empty
         // message; this makes the server refuse it too. `content` is stored
         // exactly as sent: the trim is only the emptiness test.
-        if (typeof content !== 'string' || content.trim().length === 0) {
+        //
+        // With a GIF the text is optional (Phase 7 V-C): a missing content is
+        // stored as '', and the messages_has_content CHECK is satisfied by the
+        // GIF. Without one, the empty-message rule is unchanged.
+        if (gif && (content === undefined || content === null)) content = '';
+
+        if (gif && typeof content !== 'string') {
+            return sendError(res, 400, 'INVALID_FORMAT', {
+                message: 'content must be a string.',
+            });
+        }
+
+        if (!gif && (typeof content !== 'string' || content.trim().length === 0)) {
             return sendError(res, 400, 'MISSING_FIELDS', {
                 message: 'A message cannot be empty.',
             });
@@ -352,8 +414,10 @@ export const sendMessage = async (req, res) => {
             });
         }
 
-        // The composer's limit (MESSAGES_SPEC §2).
-        if (content.length > MESSAGE_MAX_LENGTH) {
+        // The composer's limit (MESSAGES_SPEC §2), in characters as a person
+        // counts them (runbook §1.12): `content.length` counted every emoji
+        // twice, so a message the composer allowed could be refused here.
+        if (countCharacters(content) > MESSAGE_MAX_LENGTH) {
             return sendError(res, 400, 'INVALID_FORMAT', {
                 message: `A message can be at most ${MESSAGE_MAX_LENGTH} characters.`,
             });
@@ -430,6 +494,7 @@ export const sendMessage = async (req, res) => {
                 product_id,
                 university_id: user.university_id,
                 content,
+                gif,
                 is_read: false,
                 reply_to_id: reply_to_id ?? null
             }])
@@ -455,6 +520,8 @@ export const sendMessage = async (req, res) => {
         res.status(201).json({ message });
 
         /* HE DEMO AUTO-RESPONDER BOT */
+        // It never reads `content`, so a GIF-only message gets a reply exactly
+        // like a text one (Phase 7 V-C). The reply itself is always text.
         try {
             // Check if this interaction is happening in the Demo Campus
             const { data: uni } = await supabase
@@ -668,3 +735,58 @@ export const deleteMessageForMe = async (req, res) => {
         });
     }
 };
+
+// 7. React to a message, or remove your reaction (Phase 7 V-C)
+//
+// Every rule lives in react_to_message() (migration message_reactions_gifs):
+// only the sender or the receiver gets past MESSAGE_NOT_FOUND, a tombstone
+// answers MESSAGE_DELETED, and one UPDATE of the row sets or removes the
+// caller's key in `reactions`, so Realtime delivers it to both people once.
+// The actor is the token holder, never a body field.
+async function setMessageReaction(req, res, emoji) {
+    try {
+        const { id } = req.params;
+        if (!isUuid(id)) {
+            return sendError(res, 400, 'INVALID_FORMAT', {
+                message: 'id must be a valid UUID.',
+            });
+        }
+
+        const { data, error } = await supabase.rpc('react_to_message', {
+            p_message_id: id,
+            p_user_id: req.user.id,
+            p_emoji: emoji,
+        });
+
+        if (error) return mapDbError(res, error);
+
+        return res.status(200).json({ message: data });
+    } catch (error) {
+        console.error('Message Reaction Error:', error);
+        return sendError(res, 500, 'INTERNAL_ERROR', {
+            message: 'Failed to update the reaction.',
+        });
+    }
+}
+
+// PUT /:id/reaction — body { emoji }: exactly one emoji (runbook §1.4). A new
+// emoji replaces the caller's reaction.
+export const reactToMessage = async (req, res) => {
+    // The id first, as on every route here: a bad id is a 400 whatever the body.
+    if (!isUuid(req.params.id)) {
+        return sendError(res, 400, 'INVALID_FORMAT', {
+            message: 'id must be a valid UUID.',
+        });
+    }
+
+    const emoji = req.body?.emoji;
+    if (!isSingleEmoji(emoji)) {
+        return sendError(res, 400, 'INVALID_EMOJI', {
+            message: 'emoji must be exactly one emoji.',
+        });
+    }
+    return setMessageReaction(req, res, emoji);
+};
+
+// DELETE /:id/reaction — removes the caller's reaction. No body.
+export const removeMessageReaction = (req, res) => setMessageReaction(req, res, null);
