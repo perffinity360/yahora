@@ -15,6 +15,11 @@
 //   renderText     optional (text) → node, for plain runs: the chat uses it to
 //                  draw emoji larger. Not used inside code, which stays as is.
 //   linkClassName  the caller's look for a link (colours differ per surface)
+//
+// Every line carries data-fmt ("text" | "bullet" | "number" | "quote"), a
+// numbered one also data-marker ("2."), and the drawn bullet or number
+// data-fmt="marker", so a copy from here pastes back with its lines
+// (utils/pasteFormat.js; TEXT_FORMAT_SPEC.md §3, §4).
 
 import React, { Fragment, useMemo } from "react";
 import { parseFormatted } from "../../utils/textFormat";
@@ -75,14 +80,21 @@ export default function FormattedText({ content, renderText = asIs, linkClassNam
     );
     if (line.kind === "bullet" || line.kind === "number") {
       return (
-        <span key={i} className={`${styles.line} ${styles.item}`}>
-          <span className={styles.marker}>{line.kind === "bullet" ? "•" : line.marker}</span>
+        <span
+          key={i}
+          className={`${styles.line} ${styles.item}`}
+          data-fmt={line.kind}
+          data-marker={line.kind === "number" ? line.marker : undefined}
+        >
+          <span className={styles.marker} data-fmt="marker">
+            {line.kind === "bullet" ? "•" : line.marker}
+          </span>
           <span className={styles.itemText}>{body}</span>
         </span>
       );
     }
     return (
-      <span key={i} className={`${styles.line} ${line.kind === "quote" ? styles.quote : ""}`}>
+      <span key={i} className={`${styles.line} ${line.kind === "quote" ? styles.quote : ""}`} data-fmt={line.kind}>
         {body}
       </span>
     );

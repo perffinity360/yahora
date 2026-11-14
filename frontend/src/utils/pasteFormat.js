@@ -8,6 +8,7 @@
      bold → *bold*   italic → _italic_   strikethrough → ~gone~
      inline code → `code`   a code block → ```block```
      list items → "- " or "1. "   a blockquote → "> "
+     Yahora's own lines (FormattedText's data-fmt) → "- ", "2. ", "> "
 
    Website only: a phone's text box is never handed the rich copy, so the app
    pastes plain text (and WhatsApp's own symbols, which are plain text, work
@@ -41,6 +42,7 @@ const BLOCK_TAGS = new Set([
   "FIGURE", "FOOTER", "FORM", "H1", "H2", "H3", "H4", "H5", "H6", "HEADER", "HR", "LI", "MAIN", "NAV",
   "OL", "P", "SECTION", "TABLE", "TR", "UL",
 ]);
+const FMT_LINES = new Set(["text", "bullet", "number", "quote"]);
 const SKIP_TAGS = new Set([
   "AUDIO", "BUTTON", "CANVAS", "HEAD", "IFRAME", "IMG", "INPUT", "META", "NOSCRIPT", "OBJECT",
   "SCRIPT", "SELECT", "STYLE", "SVG", "TEMPLATE", "TEXTAREA", "TITLE", "VIDEO",
@@ -256,14 +258,25 @@ function walk(node, state, w) {
       w.endLine(true);
       continue;
     }
-    if (tag === "PRE" || /^pre/u.test(child.style?.whiteSpace ?? "")) {
+    // Only <pre> is a code block: Google Docs puts white-space: pre-wrap on
+    // every span, so white-space alone means nothing.
+    if (tag === "PRE") {
       w.mono(child.textContent ?? "");
       continue;
     }
 
-    const block = BLOCK_TAGS.has(tag);
+    // A line drawn by FormattedText (a copy from Yahora): its drawn bullet or
+    // number is left out, and the line says what it was.
+    const fmt = child.getAttribute("data-fmt");
+    if (fmt === "marker") continue;
+    const yahoraLine = FMT_LINES.has(fmt);
+    const quote = tag === "BLOCKQUOTE" || fmt === "quote";
+
+    const block = BLOCK_TAGS.has(tag) || yahoraLine;
     if (block) w.endLine(false);
-    if (tag === "BLOCKQUOTE") w.quoteDepth += 1;
+    if (quote) w.quoteDepth += 1;
+    if (fmt === "bullet") w.prefix("- ");
+    if (fmt === "number") w.prefix(`${child.getAttribute("data-marker") ?? "1."} `);
 
     let list = state.list;
     if (tag === "UL" || tag === "OL") {
@@ -283,7 +296,7 @@ function walk(node, state, w) {
     // A table row comes in as one line, its cells a space apart.
     if (tag === "TD" || tag === "TH") w.text(" ");
 
-    if (tag === "BLOCKQUOTE") w.quoteDepth -= 1;
+    if (quote) w.quoteDepth -= 1;
     if (block) w.endLine(false);
   }
 }
