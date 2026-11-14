@@ -532,6 +532,11 @@ order: emoji button (§9), input, send.
 - **Input pill:** min-height 40, grows to 5 lines (max height 120), radius 20, background
   `#F3F0EF` (inputBg), no border, padding 10 vertical / 14 horizontal, Inter 400 14 / 20
   `#1A1A1A`, placeholder `Message` in `#BBB6C8` (mutedPlaceholder), up to 2000 characters.
+- **Length:** the box never cuts text (no `maxLength`), so a long paste arrives whole. Characters are
+  counted as code points (one emoji is one). A ring counter sits between the box and Send: its
+  colour runs purple → blue → teal → green → yellow → orange as it fills, with the number inside from
+  100 left, and it turns red with the number beside it at 0 and below. Send is disabled above 2,000. It is the same counter as the post composer's, one shared component on the
+  website; the design is TEXT_FORMAT_SPEC §5.6.
 - **Send button:** 40 circle, 135° gradient `#800080 → #EB487F` (icon only — white on its
   pink end is 3.64:1, above the 3.0 needed for an icon), send icon 17 white. Disabled (empty
   draft): opacity 0.4. Pressed: scale 0.94.

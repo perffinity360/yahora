@@ -345,8 +345,11 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
   On a 390 px phone that happens when the composer comes into use.
 - **Text:** up to **1,000 characters**, counted the way runbook §1.12 explains (one emoji
   is one character).
-  - The counter appears only when 100 or fewer are left. It turns errorText at 0, and Post
-    is disabled above 1,000.
+  - A ring counter after the tools (it opens with them): its colour runs purple → blue → teal →
+    green → yellow → orange as it fills, with the number inside from 100 left, and it turns red
+    with the number beside it at 0 and below. Post is disabled above 1,000.
+    The reply box uses the same one, and so does the chat box: one shared counter on the website,
+    designed in TEXT_FORMAT_SPEC §5.6.
 - **Where the post goes** always matches the feed you're in, and can't be changed inside the composer. On a
   laptop the badge on your avatar shows it (§1.1); on a narrow window the grey text and the switcher say it,
   and there's no chip in the composer (owner, 8 Nov: the cap or flag beside the tools is gone).
@@ -490,8 +493,11 @@ into the replies when there are any.
     if you haven't reacted (§5).
   - **💬 count:** where you can reply, it opens the composer in reply mode (§4). In a view-only feed
     it loads more replies.
-  - **⋯ menu:** Report (§7); Delete for your own posts, with confirm text
-    `Delete this post? It will be removed for everyone.`
+  - **⋯ menu, on posts and replies, in this order:** **Copy text** (only when the post or reply has
+    text; the text as typed, with its symbols), **Copy link** (`https://<website>/post/<id>`; a reply
+    copies its parent post's link), then Report (§7), or Delete for your own posts, with confirm text
+    `Delete this post? It will be removed for everyone.` Toasts: `Text copied`, `Link copied`,
+    `Couldn't copy` (TEXT_FORMAT_SPEC §6).
 - **Counts:** `999`, `1.2K`, `12K`, `1.2M`.
 - **Entrance:** posts fade and rise 4 px over 320 ms, staggered by 28 ms, stopping after the sixth.
 
@@ -964,6 +970,7 @@ A **Posts** tab sits next to the existing tabs:
 | `communityFloatShadow` | `--community-float-shadow` | `0 4px 16px rgba(42,8,42,0.12)` | anything floating over the feed |
 | `communityNewPosts` | `--community-new-posts` | `rgba(128,0,128,0.86)` | the "new posts" pill (§8): the brand purple, frosted |
 | `communityNewPostsHover` | `--community-new-posts-hover` | `rgba(150,16,150,0.92)` | that pill on hover, a little brighter |
+| `counterRainbow` | — (`CharCounter.jsx`, `RAINBOW`: computed per fill, not a CSS variable) | stops `#800080` 0% · `#2563EB` 20% · `#0D9488` 40% · `#16A34A` 60% · `#CA8A04` 80% · `#EA580C` 95% | the character counter's ring until it goes over (TEXT_FORMAT_SPEC §5.6), interpolated in HSL; never red |
 | `communityEase` | `--community-ease` | `cubic-bezier(0.2,0.8,0.2,1)` | movement and fades |
 | `communitySpring` | `--community-spring` | `cubic-bezier(0.34,1.56,0.64,1)` | small things that pop (the app uses a real spring) |
 
