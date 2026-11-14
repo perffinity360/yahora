@@ -13,6 +13,7 @@
  * the symbols, and an older client simply shows them.
  *
  *   *bold*   _italic_   ~strikethrough~   `inline code`      within one line
+ *   **bold** __italic__ ~~strikethrough~~  (a pair is one symbol)
  *   ```monospace```                                          may span lines
  *   - item   * item   1. item   > quote                      at a line's start
  *
@@ -26,6 +27,11 @@
  *
  * plainText(text) is the same text without the symbols, for one-line previews
  * (the inbox, a reply's quote).
+ *
+ * formatSpans(text) is the whole text, in order, for drawing it while it's
+ * typed (spec §5): the spans' texts joined are the text. symbol marks the
+ * formatting symbols themselves (and carries the look they open); line
+ * markers are plain text here.
  */
 
 export type FormatNode =
@@ -40,6 +46,19 @@ export interface FormatLine {
   marker: string | null;
   nodes: FormatNode[];
 }
+
+export interface FormatSpan {
+  text: string;
+  symbol: boolean;
+  bold: boolean;
+  italic: boolean;
+  strike: boolean;
+  code: boolean;
+  mono: boolean;
+  link: boolean;
+}
+
+type FormatLook = Omit<FormatSpan, 'text'>;
 
 interface Range {
   start: number;
@@ -163,18 +182,42 @@ function protectedRanges(text: string): Range[] {
   return ranges.sort((a, b) => a.start - b.start);
 }
 
-/* Where the symbol at i (bold, italic or strike) closes, before `to`, or -1.
-   Protected parts are skipped whole; the content can't be empty. */
-function findClose(text: string, i: number, to: number, startsAt: Map<number, Range>): number {
-  for (let j = i + 1; j < to; j += 1) {
+/* Where the symbol of `size` characters at i (bold, italic or strike; a
+   single symbol or a pair) closes, before `to`, or -1. Protected parts are
+   skipped whole, and so, for a single symbol, is a pair that formats, so
+   "*a **b** c*" nests. A single symbol closes on the first of a pair only
+   where the pair could have closed, not before a letter or digit ("~~a~~b"
+   stays as typed). The content can't be empty. */
+function findClose(text: string, i: number, size: number, to: number, startsAt: Map<number, Range>): number {
+  for (let j = i + size; j < to; j += 1) {
     const range = startsAt.get(j);
     if (range) {
       j = range.end - 1;
       continue;
     }
-    if (j > i + 1 && text[j] === text[i] && canClose(text, j, 1)) return j;
+    const pair = size === 1 ? pairClose(text, j, to, startsAt) : -1;
+    if (pair !== -1) {
+      j = pair + 1;
+      continue;
+    }
+    if (
+      j > i + size &&
+      j + size <= to &&
+      text[j] === text[i] &&
+      (size === 1 ? text[j + 1] !== text[i] || !isWord(text[j + 2]) : text[j + 1] === text[i]) &&
+      canClose(text, j, size)
+    ) {
+      return j;
+    }
   }
   return -1;
+}
+
+/* Where a pair (**, __ or ~~) at j closes, or -1 if there's no pair there or
+   it doesn't format. */
+function pairClose(text: string, j: number, to: number, startsAt: Map<number, Range>): number {
+  if (!INLINE[text[j]] || j + 1 >= to || text[j + 1] !== text[j] || !canOpen(text, j, 2)) return -1;
+  return findClose(text, j, 2, to, startsAt);
 }
 
 function parseInline(text: string, from: number, to: number, startsAt: Map<number, Range>): FormatNode[] {
@@ -193,8 +236,28 @@ function parseInline(text: string, from: number, to: number, startsAt: Map<numbe
       continue;
     }
     const type = INLINE[text[i]];
+    if (type && i + 1 < to && text[i + 1] === text[i]) {
+      // A pair (**bold**) is one symbol, with the same word-edge rule.
+      const close = pairClose(text, i, to, startsAt);
+      if (close !== -1) {
+        flush();
+        nodes.push({ type, children: parseInline(text, i + 2, close, startsAt) });
+        i = close + 2;
+        continue;
+      }
+      // A pair that doesn't close: its first symbol is plain, and the second
+      // may open on its own only where the pair could have, not after a letter
+      // or digit ("**a*" is a star and a bold a; "2**3*" stays as typed).
+      plain += text[i];
+      i += 1;
+      if (isWord(text[i - 2])) {
+        plain += text[i];
+        i += 1;
+      }
+      continue;
+    }
     if (type && canOpen(text, i, 1)) {
-      const close = findClose(text, i, to, startsAt);
+      const close = findClose(text, i, 1, to, startsAt);
       if (close !== -1) {
         flush();
         nodes.push({ type, children: parseInline(text, i + 1, close, startsAt) });
@@ -270,4 +333,56 @@ export function plainText(text: string | null | undefined): string {
       return lead + flatten(line.nodes);
     })
     .join('\n');
+}
+
+const NO_LOOK: FormatLook = { symbol: false, bold: false, italic: false, strike: false, code: false, mono: false, link: false };
+const LOOKS = Object.keys(NO_LOOK) as (keyof FormatLook)[];
+
+export function formatSpans(text: string | null | undefined): FormatSpan[] {
+  const source = text ?? '';
+  const spans: FormatSpan[] = [];
+  let at = 0;
+  // The next `length` characters of the text, in this look. Neighbours with
+  // the same look join.
+  const take = (length: number, look: FormatLook) => {
+    if (length <= 0) return;
+    const piece = source.slice(at, at + length);
+    at += length;
+    const last = spans[spans.length - 1];
+    if (last && LOOKS.every((key) => last[key] === look[key])) last.text += piece;
+    else spans.push({ text: piece, ...look });
+  };
+  const walk = (nodes: FormatNode[], look: FormatLook) => {
+    for (const node of nodes) {
+      if (node.type === 'text') {
+        take(node.text.length, look);
+      } else if (node.type === 'link') {
+        take(node.text.length, { ...look, link: true });
+      } else if ('children' in node) {
+        // A single symbol never opens where the same one follows it, so two
+        // alike here are a pair.
+        const size = source[at + 1] === source[at] ? 2 : 1;
+        const inner = { ...look, [node.type]: true };
+        take(size, { ...inner, symbol: true });
+        walk(node.children, inner);
+        take(size, { ...inner, symbol: true });
+      } else {
+        // Monospace or inline code.
+        const inner = { ...look, [node.type]: true };
+        const size = node.type === 'mono' ? 3 : 1;
+        take(size, { ...inner, symbol: true });
+        take(node.text.length, inner);
+        take(size, { ...inner, symbol: true });
+      }
+    }
+  };
+  parseFormatted(source).forEach((line, k) => {
+    if (k > 0) take(1, NO_LOOK);
+    const lead = line.kind === 'number' ? (line.marker ?? '').length + 1 : line.kind === 'text' ? 0 : 2;
+    take(lead, NO_LOOK);
+    walk(line.nodes, NO_LOOK);
+  });
+  // The line break at the very end, which parseFormatted leaves out.
+  take(source.length - at, NO_LOOK);
+  return spans;
 }

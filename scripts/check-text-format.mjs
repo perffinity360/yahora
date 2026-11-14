@@ -15,6 +15,11 @@
 // at a glance: <b> bold, <i> italic, <s> strike, <mono> and <code>, <a> a link
 // (with its href only where it differs from the text), and one line per "|",
 // a bullet as [•], a numbered item as [1.], a quote as [>].
+//
+// formatSpans() (what the box draws while typing, spec §5) is checked against
+// every case too: its spans must join back into the input exactly, and its
+// characters that aren't symbols must be the ones parseFormatted shows, with
+// the same bold, italic, strike, code, monospace and link.
 
 // mobile/package.json has no "type" (Expo doesn't want one), so Node notes
 // that it read the .ts file as a module. That's expected; keep the output clean.
@@ -103,6 +108,27 @@ const CASES = [
   ["-1 degrees", "-1 degrees"],
   ["1.5 is a number", "1.5 is a number"],
   ["text\n- item\nmore", "text|[•]item|more"],
+
+  // Double symbols: a pair is one symbol, with the same word-edge rule.
+  ["**bold**", "<b>bold</b>"],
+  ["__italic__", "<i>italic</i>"],
+  ["~~gone~~", "<s>gone</s>"],
+  ["This is **very** important", "This is <b>very</b> important"],
+  ["**bold** and *also*", "<b>bold</b> and <b>also</b>"],
+  ["** a**", "** a**"],
+  ["2**3**4", "2**3**4"],
+  ["snake__case__name", "snake__case__name"],
+  ["~~a~~b", "~~a~~b"],
+  ["`**not bold**`", "<code>**not bold**</code>"],
+  ["https://x.com/__a__", "<a>https://x.com/__a__</a>"],
+  ["**https://x.com**", "<b><a>https://x.com</a></b>"],
+  ["**_both_**", "<b><i>both</i></b>"],
+  ["__*both*__", "<i><b>both</b></i>"],
+  ["*a **b** c*", "<b>a <b>b</b> c</b>"],
+  ["**a** b**", "<b>a</b> b**"],
+  ["**a*", "*<b>a</b>"],
+  ["*a**", "<b>a</b>*"],
+  ["- **item**\n> __quote__", "[•]<b>item</b>|[>]<i>quote</i>"],
 ];
 
 const PLAIN = [
@@ -114,6 +140,19 @@ const PLAIN = [
   ["see https://x.com/_a_", "see https://x.com/_a_"],
   ["no symbols here", "no symbols here"],
   ["*unclosed", "*unclosed"],
+  ["**Exam** today", "Exam today"],
+  ["__a__ ~~b~~", "a b"],
+];
+
+// More inputs for formatSpans only, beside every case above.
+const SPANS_ONLY = [
+  "",
+  "\n",
+  "a\n\n",
+  "1. *one*\n2. `two`\n",
+  "```a\n*b*```\n- c",
+  "*see https://x.com/_a_ now*",
+  "12. ~~x~~ and ```y```",
 ];
 
 function markup(nodes) {
@@ -171,7 +210,51 @@ for (const [input, expected] of PLAIN) {
   }
 }
 
-const total = CASES.length + PLAIN.length;
+const LOOKS = ["bold", "italic", "strike", "code", "mono", "link"];
+const lookOf = (look) => LOOKS.filter((key) => look[key]).join("+");
+
+// What parseFormatted shows, character by character, with each character's
+// look. A line's marker is drawn, not typed, so it stands as "?" there.
+function shown(lines, input) {
+  const out = [];
+  const walk = (nodes, look) => {
+    for (const n of nodes) {
+      if (n.children) walk(n.children, { ...look, [n.type]: true });
+      else for (const ch of n.text) out.push([ch, lookOf({ ...look, [n.type]: true })]);
+    }
+  };
+  lines.forEach((line, k) => {
+    if (k > 0) out.push(["\n", ""]);
+    const lead = line.kind === "number" ? line.marker.length + 1 : line.kind === "text" ? 0 : 2;
+    for (let i = 0; i < lead; i += 1) out.push(["?", ""]);
+    walk(line.nodes, {});
+  });
+  if (input.endsWith("\n")) out.push(["\n", ""]);
+  return out;
+}
+
+function checkSpans(input) {
+  const spans = web.formatSpans(input);
+  const problems = [];
+  if (JSON.stringify(spans) !== JSON.stringify(app.formatSpans(input))) problems.push("the website and the app differ");
+  if (spans.map((s) => s.text).join("") !== input) problems.push("the spans don't join back into the input");
+  if (spans.some((s) => s.symbol && /[^*_~`]/u.test(s.text))) problems.push("a symbol span holds something else");
+  const fromSpans = spans.filter((s) => !s.symbol).flatMap((s) => [...s.text].map((ch) => [ch, lookOf(s)]));
+  const fromParse = shown(web.parseFormatted(input), input);
+  const same =
+    fromSpans.length === fromParse.length &&
+    fromSpans.every(([ch, look], i) => (fromParse[i][0] === "?" || fromParse[i][0] === ch) && fromParse[i][1] === look);
+  if (!same) problems.push("the shown characters or their looks differ from parseFormatted");
+  if (problems.length) {
+    failures += 1;
+    console.log(`✗ formatSpans ${show(input)}: ${problems.join("; ")}\n    ${show(spans)}`);
+  }
+}
+
+const spanInputs = [...CASES.map(([input]) => input), ...PLAIN.map(([input]) => input), ...SPANS_ONLY];
+for (const input of spanInputs) checkSpans(input);
+
+const total = CASES.length + PLAIN.length + spanInputs.length;
 if (failures) {
   console.log(`\n${failures} of ${total} cases failed.`);
   process.exit(1);
