@@ -156,8 +156,10 @@ function Chevron({ side, onPress }: { side: 'left' | 'right'; onPress: () => voi
 /* ───────────────────────────── GIF ───────────────────────────── */
 
 /**
- * COMMUNITY_SPEC.md §3 "GIF": at most `maxWidth` wide (280 on a post, 180 on a
- * reply), with a small GIF badge. It plays while on screen and pauses when it
+ * COMMUNITY_SPEC.md §3 "GIF": at most `maxWidth` wide and `maxHeight` tall
+ * (240 × 300 on a post, 160 × 200 on a reply: a size down on 15 Nov, the
+ * reply's still smaller at every shape, so the thread keeps its order), with a
+ * quiet GIF tag that doesn't pull the eye off the GIF (owner, 15 Nov). It plays while on screen and pauses when it
  * scrolls away: the feed tells it with `playing`, from FlashList's viewability.
  *
  * The frame takes the shape of the GIF as it actually loads and has no ground
@@ -165,14 +167,20 @@ function Chevron({ side, onPress }: { side: 'left' | 'right'; onPress: () => voi
  * KLIPY's width × height is only the first guess: some renditions come back a
  * few pixels off it, and the old tint showed as a strip in the gap.
  */
+/** A post's GIF and a reply's, at most (width × height). */
+export const GIF_POST = { width: 240, height: 300 } as const;
+export const GIF_REPLY = { width: 160, height: 200 } as const;
+
 export const PostGif = memo(function PostGif({
   gif,
   playing,
-  maxWidth = 280,
+  maxWidth = GIF_POST.width,
+  maxHeight = GIF_POST.height,
 }: {
   gif: GifRef;
   playing: boolean;
   maxWidth?: number;
+  maxHeight?: number;
 }) {
   const imageRef = useRef<Image>(null);
   const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
@@ -184,7 +192,7 @@ export const PostGif = memo(function PostGif({
   }, [playing]);
 
   return (
-    <View style={[styles.gif, { maxWidth, aspectRatio: ratio }]}>
+    <View style={[styles.gif, { maxWidth: Math.min(maxWidth, maxHeight * ratio), aspectRatio: ratio }]}>
       <Image
         ref={imageRef}
         source={{ uri: gif.url }}
@@ -253,12 +261,13 @@ const styles = StyleSheet.create({
     bottom: 6,
     paddingHorizontal: 5,
     borderRadius: 4,
-    backgroundColor: colors.toastBg,
+    backgroundColor: colors.gifTagBg,
   },
   gifBadgeText: {
-    fontFamily: font.family.bold,
-    fontSize: font.sizes.micro,
-    lineHeight: 15,
-    color: colors.white,
+    fontFamily: font.family.semibold,
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 0.3,
+    color: colors.gifTagText,
   },
 });

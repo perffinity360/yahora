@@ -139,12 +139,22 @@ export const PostCard = memo(function PostCard({
       entering={animateIn && index < STAGGER_MAX ? entrance(index) : undefined}
       style={styles.cardWrap}
     >
-      {/* Long-pressing the post opens the quick bar too (spec §5.1). */}
+      {/* A tap on the post opens its page, as the time does (owner, 15 Nov; X and
+          Threads do the same); what's inside it that has its own job (the
+          avatar, name, photos, links, Show more, the pills, ⋯) keeps it.
+          Long-pressing opens the quick bar (spec §5.1). */}
       <Pressable
+        onPress={onPage ? undefined : () => onOpenPost(post.id)}
         onLongPress={() => reactRef.current?.open({ held: true })}
         delayLongPress={REACTION_LONG_PRESS_MS}
-        style={[styles.card, { borderLeftColor: accent }]}
+        unstable_pressDelay={90}
+        style={({ pressed }) => [
+          styles.card,
+          { borderLeftColor: accent },
+          pressed && !onPage && styles.cardPressed,
+        ]}
         accessibilityLabel={`Post by @${post.author_username}`}
+        accessibilityHint={onPage ? undefined : 'Opens the post'}
       >
         <View style={styles.postRow}>
           {/* Every card has its trunk: from under the avatar to the end of the
@@ -335,6 +345,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.communityCard,
     boxShadow: shadows.communityCard,
   },
+  // Pressed: the card's ground a shade deeper, as X's rows do.
+  cardPressed: { backgroundColor: colors.communityCardPressed },
   postRow: { flexDirection: 'row' },
   // 3 beyond the card above and below: half of the 6 between cards, so two held
   // posts would never overlap.

@@ -37,6 +37,11 @@
   animation-delay: calc(var(--post-i, 0) * 28ms);
 }
 
+/* A click on a post in a feed opens its page (PostCard's openPost). */
+.post:not(.postLarge) {
+  cursor: pointer;
+}
+
 .post:hover {
   border-top-color: var(--community-card-border-hover);
   border-right-color: var(--community-card-border-hover);
@@ -587,9 +592,9 @@ a.time:hover {
   bottom: 6px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--toast-bg);
-  color: var(--white);
-  font: 700 9px/13px "Inter", sans-serif;
+  background: var(--gif-tag-bg);
+  color: var(--gif-tag-text);
+  font: 600 9px/13px "Inter", sans-serif;
   letter-spacing: 0.04em;
 }
 

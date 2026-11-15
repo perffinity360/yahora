@@ -199,8 +199,10 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
 - **Holding something lights it up while what the hold opened is showing** (owner, 15 Nov, as WhatsApp does
   for a held message): a post held to react gets a band in its zone's tint, edge to edge, until the quick
   bar closes. A tap that opens the same bar doesn't.
+- **A tap on an item in a feed opens it** (owner, 15 Nov, as X and Threads do): the whole post card, not
+  only its time, with a slightly deeper ground while pressed. Anything inside with its own job keeps it.
 - **Emoji while writing take the keyboard's place** (owner, 15 Nov, as in WhatsApp): a panel at the
-  keyboard's height, so the toolbar doesn't move, with no scrim, so the text stays bright. The emoji key
+  keyboard's height (never fewer than four rows of emoji), so the toolbar doesn't move, with no scrim, so the text stays bright. The emoji key
   turns into a keyboard key; tapping the text (or the empty space under it) brings the keyboard back, and
   the panel goes only once the keyboard is up. Back closes the panel first. A sheet over a scrim is for a
   one-off choice, like a reaction's ⊕.

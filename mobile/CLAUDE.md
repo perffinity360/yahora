@@ -147,6 +147,7 @@ mobile/
       community.ts                  COMMUNITY_SPEC §13 constants (same names as the web's utils/community.js),
                                     formatCount, flagEmoji, formatPostTime, the optimistic reaction math
       klipy.ts                      THE only file that calls KLIPY (GIFs); reads EXPO_PUBLIC_KLIPY_API_KEY
+      emojiPicker.ts                the emoji picker's data: categories, search, skin tones, Frequently used
       motion.ts                     POPOVER_ENTER / DIALOG_ENTER / SHEET_RISE: smooth, non-bouncing entrances (DESIGN.md "Motion")
     contexts/AuthContext.tsx        session, profile, demo flag, onboardingSkipped
     hooks/                          useUniversities · useDashboard(+Actions) · usePublicProfile ·
@@ -167,7 +168,8 @@ mobile/
                                     PostFab (the feed's floating ✏️ Post), ComposerDock (the post page's
                                     reply bar), GifPicker, SupportCard, StatusBarGround, PostActions (the ⋯ menu,
                                     report, delete, ⊕ and the breakdown, once per screen), ReportSheet,
-                                    ReactionBreakdownSheet, EmojiPickerSheet (rn-emoji-keyboard: the reaction sheet, and EmojiPanel, compose's ☺ in the keyboard's place),
+                                    ReactionBreakdownSheet, EmojiGrid (our emoji picker: one scrolling list), EmojiPickerSheet
+                                    (the reaction sheet, and EmojiPanel, compose's ☺ in the keyboard's place),
                                     UserPostsList)
     types/index.ts                  University, UserProfile, Product, MarketplaceProduct, …
 ```
@@ -186,13 +188,12 @@ mobile/
   was placed under its shorter neighbour and overlapped it (27 Oct). Unfixed upstream as of
   2.3.3. **When upgrading flash-list, re-check `processAndReturnTallestItemInRow` in
   `GridLayoutManager` and regenerate or drop the patch** (`npx patch-package @shopify/flash-list`).
-- **rn-emoji-keyboard is patched too** (`patches/rn-emoji-keyboard+1.7.0.patch`), in `src/` and both `lib/`
-  builds (Metro reads `src/`). Two fixes, 12 Nov: (1) `EmojiCategory` called
-  `InteractionManager.runAfterInteractions`, and **opening ⊕ crashed the app**; it now defers with a
-  `setTimeout` in an effect. (2) `ModalWithBackdrop` opened on a default `Animated.spring`, which bounced;
-  it now eases (280 ms out, 200 ms in). It still uses React Native's deprecated `SafeAreaView` (the
-  "SafeAreaView has been deprecated" warning in the log); when RN removes it, the picker breaks again.
-  Re-check all three when upgrading the library.
+- **The emoji picker is ours, not a library** (`EmojiGrid`, `src/lib/emojiPicker.ts`, data in
+  `src/assets/emojis.json`; 15 Nov). `rn-emoji-keyboard` was removed with its patch: it crashed on
+  `InteractionManager` (12 Nov), bounced, used the deprecated `SafeAreaView`, and kept each category on a
+  page of its own where the owner wanted the website's one scrolling list. Every row is a fixed height, so
+  `getItemLayout` and the lit tab need no measuring; keep it that way. **`src/lib/emoji.ts` is a different
+  file** (emoji sizes in text and chat bubbles); don't mix the two.
 - **React Native 0.88 removed `InteractionManager`: touching it throws** ("has been removed from
   react-native core"). A library that still uses it passes `tsc` and `expo export` and crashes only when
   that code runs, which is how ⊕ shipped broken. **After adding or upgrading a library, and before

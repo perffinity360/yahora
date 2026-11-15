@@ -26,6 +26,7 @@ import { Avatar } from '../src/components/Avatar';
 import { ConfirmDialog } from '../src/components/ConfirmDialog';
 import { dismissKeyboard, KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { EmojiPanel } from '../src/components/community/EmojiPickerSheet';
+import { emojiGridHeight } from '../src/components/community/EmojiGrid';
 import { GifPicker } from '../src/components/community/GifPicker';
 import { SupportCard } from '../src/components/community/SupportCard';
 import { WorldGlyph } from '../src/components/community/CommunitySwitcher';
@@ -114,9 +115,11 @@ export default function ComposeScreen() {
     });
     return () => sub.remove();
   }, [emojiOpen]);
-  // Android counts the keyboard from above the navigation bar; iOS from the screen's bottom.
+  // The keyboard's height, but never fewer than four rows of emoji (owner, 15 Nov: a
+  // POCO keyboard left room for two). Android counts the keyboard from above the
+  // navigation bar; iOS from the screen's bottom.
   const panelHeight =
-    (keyboardHeight.current || Math.round(windowHeight * 0.36)) +
+    Math.max(keyboardHeight.current || Math.round(windowHeight * 0.36), emojiGridHeight(4) + 6) +
     (Platform.OS === 'android' ? restingInset.current : 0);
   const onEmojiPress = () => {
     swapToKeyboard.current = false;
@@ -289,7 +292,17 @@ export default function ComposeScreen() {
             <AppText style={styles.inline} accessibilityLiveRegion="polite">
               {inline}
             </AppText>
-          ) : null}
+          ) : (
+            /* A quiet word on how to post, where the eye already is, above the
+               tools (owner, 15 Nov; Instagram puts its own over the comment
+               box). A message about this post takes its place. */
+            <Reanimated.View entering={FadeIn.delay(250).duration(400)} style={styles.kind}>
+              <MaterialCommunityIcons name="hand-heart-outline" size={14} color={accent} />
+              <AppText style={styles.kindText}>
+                Be kind and respectful. Real students read every {parentId ? 'reply' : 'post'}.
+              </AppText>
+            </Reanimated.View>
+          )}
 
           <View style={[styles.toolbar, { paddingBottom: emojiOpen ? 8 : Math.max(insets.bottom, 8) }]}>
             {!parentId ? (
@@ -347,7 +360,7 @@ export default function ComposeScreen() {
             ? {
                 title: 'Post this?',
                 message:
-                  'Some of this might come across as hurtful to other students. You can edit it, or post it as it is.',
+                  'Some of this might come across as hurtful to other students. Consider editing it to keep things respectful.',
                 confirmLabel: 'Edit',
                 cancelLabel: 'Post anyway',
                 icon: 'edit-3',
@@ -527,6 +540,20 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.body,
     lineHeight: 18,
     color: colors.errorText,
+  },
+  kind: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+  },
+  kindText: {
+    flexShrink: 1,
+    fontFamily: font.family.regular,
+    fontSize: font.sizes.caption,
+    lineHeight: 16,
+    color: colors.communityMuted,
   },
   toolbar: {
     flexDirection: 'row',

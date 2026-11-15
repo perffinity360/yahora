@@ -96,6 +96,10 @@ export const colors = {
   // nine other sheets and modals. Renaming keeps them as they are.
   chatScrim: 'rgba(11,11,11,0.32)', // spec value; unused since the sheet became an in-thread menu (§10.2)
   toastBg: 'rgba(26,26,26,0.88)', // "Copied" and other toasts
+  // The GIF tag on a post's or reply's GIF: there, but quiet, so the GIF holds the eye (owner, 15 Nov).
+  // Web: --gif-tag-bg / --gif-tag-text.
+  gifTagBg: 'rgba(26,26,26,0.38)',
+  gifTagText: 'rgba(255,255,255,0.86)',
   // Shadow colour of the message menu and the delete dialog; the web menu's
   // rgba(42,8,42,0.16) is this at shadowOpacity 0.16.
   chatMenuShadow: '#2A082A',
@@ -136,6 +140,7 @@ export const colors = {
   communityCollegeBg: '#FAF0F9', // a post's college pill
   communityCollegeText: '#6E2270',
   communityCard: 'rgba(255,255,255,0.94)', // the frosted post card
+  communityCardPressed: 'rgba(250,242,249,0.97)', // the card while a tap opens its page (app only)
   communityCardBorder: 'rgba(128,0,128,0.11)',
   communityGlobeLand: '#2E9E5E',
   communityGlobeShade: 'rgba(5,40,90,0.38)',

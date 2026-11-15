@@ -435,7 +435,7 @@ export default function Composer({
         // anyway re-sends with confirm=true.
         <ConfirmDialog
           title="Post this?"
-          message="Some of this might come across as hurtful to other students. You can edit it, or post it as it is."
+          message="Some of this might come across as hurtful to other students. Consider editing it to keep things respectful."
           confirmLabel="Post anyway"
           cancelLabel="Edit"
           primary="cancel"
