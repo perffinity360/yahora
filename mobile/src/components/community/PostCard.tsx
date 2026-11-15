@@ -179,7 +179,11 @@ export const PostCard = memo(function PostCard({
                   {time}
                 </AppText>
               ) : null}
-              {status ? <AppText style={styles.status}>{status}</AppText> : null}
+              {status ? (
+                <AppText style={[styles.status, post.moderation_status === 'pending' && styles.statusPending]}>
+                  {status}
+                </AppText>
+              ) : null}
               <View style={styles.headerSpacer} />
               {/* ⋯ — Report, or Delete on your own (PostActionsProvider). */}
               <MoreButton post={post} style={styles.more} />
@@ -356,6 +360,8 @@ const styles = StyleSheet.create({
     color: colors.communityMuted,
     backgroundColor: colors.inputBg,
   },
+  // Being checked: blue, a check in progress (owner, 13 Nov). Under review stays grey.
+  statusPending: { color: colors.statusPendingText, backgroundColor: colors.statusPendingBg },
   headerSpacer: { flexGrow: 1, flexShrink: 0, minWidth: 4 },
   more: { height: AVATAR, justifyContent: 'center', paddingLeft: 4 },
   support: { marginTop: 10 },

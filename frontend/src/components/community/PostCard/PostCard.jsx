@@ -120,7 +120,11 @@ function PostCard({
               </Link>
             )}
             {STATUS_LABELS[post.moderation_status] && (
-              <span className={styles.statusLabel}>{STATUS_LABELS[post.moderation_status]}</span>
+              <span
+                className={`${styles.statusLabel} ${post.moderation_status === "pending" ? styles.statusPending : ""}`}
+              >
+                {STATUS_LABELS[post.moderation_status]}
+              </span>
             )}
             <PostMenu post={post} className={styles.moreBtn} size={15} />
           </header>

@@ -17,6 +17,13 @@ export const JUMP_HIGHLIGHT_HOLD_MS = 1200;
 export const JUMP_HIGHLIGHT_FADE_MS = 400;
 export const JUMP_MAX_EXTRA_PAGES = 5;
 export const COPY_TOAST_MS = 1500;
+/** How long a toast stays: "Copied" keeps COPY_TOAST_MS, and longer text gets
+ *  time to be read in one go (owner, 13 Nov: the "being checked" toast went
+ *  before it could be read): a second plus 70 ms a character, at most 8 s. */
+export const TOAST_MS_PER_CHAR = 70;
+export const TOAST_MAX_MS = 8000;
+export const toastDuration = (text) =>
+  Math.min(TOAST_MAX_MS, Math.max(COPY_TOAST_MS, 1000 + text.length * TOAST_MS_PER_CHAR));
 // The database enforces this; the apps only use it to decide what to show.
 export const DELETE_FOR_EVERYONE_MINUTES = 60;
 

@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-list';
 import { useIsFocused, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { AppState, Pressable, RefreshControl, StyleSheet, View, type ViewInstance } from 'react-native';
 import Reanimated, { Easing, FadeOut, Keyframe } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import { AppToast, useToast } from '../../src/components/AppToast';
 import { CommunitySwitcher, SWITCHER_HEIGHT, worldLabel } from '../../src/components/community/CommunitySwitcher';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
 import { StatusBarGround } from '../../src/components/community/StatusBarGround';
-import { ComposerDock, DOCK_HEIGHT } from '../../src/components/community/ComposerDock';
+import { FAB_CLEARANCE, PostFab } from '../../src/components/community/PostFab';
 import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -24,6 +24,7 @@ import {
   useShowNewCampusPosts,
 } from '../../src/hooks/useCommunity';
 import { COMPOSER_TEXT, draftFor } from '../../src/hooks/useComposer';
+import { ReplyRevealContext, useRevealReply } from '../../src/hooks/useRevealReply';
 import { useUniversities } from '../../src/hooks/useUniversities';
 import { GLOBAL, type FeedKind, type FeedSort, type WorldFeed } from '../../src/lib/community';
 import { hrefWithFrom } from '../../src/lib/nav';
@@ -34,15 +35,18 @@ import type { Country, PostItem } from '../../src/types';
  * The Community tab — COMMUNITY_SPEC.md §1.2 (a phone), §3, §8, §9. Phase 7
  * V-D (CC-V4a–c): the switcher, the three feeds, the post card with its
  * reactions and ⋯ menu (PostActionsProvider: report, delete, the full picker,
- * the breakdown), the closed composer in its dock, which opens the compose
+ * the breakdown), the floating Post button (PostFab), which opens the compose
  * screen (app/compose.tsx), and the "new posts" pill on the campus feed.
  *
  *   · one feed at a time: your campus (newest first), or a country / Global
  *     (Hot or New). Each feed shows only its own posts (runbook §1.1);
- *   · the composer's dock at the bottom where you can post (your campus, your
- *     country, Global); a view-only line takes its place in another country's
- *     feed (`can_post: false`, spec §1.4). A new post lands at the top of its
- *     feed and the list goes there; a held one shows the toast (spec §2.3);
+ *   · the floating Post button where you can post (your campus, your country,
+ *     Global; owner, 13 Nov: it replaced the composer dock, and the posts
+ *     scroll on under it); a view-only line in a dock takes its place in
+ *     another country's feed (`can_post: false`, spec §1.4). A new post lands
+ *     at the top of its feed and the list goes there; a reply you send goes
+ *     first under its post and the list brings it into view
+ *     (useRevealReply); a held one shows the toast (spec §2.3);
  *   · pull to refresh, more pages at the end, skeletons, the spec's empty texts.
  *
  * The chosen country and sort are kept while the app is open (module memory),
@@ -55,6 +59,15 @@ const memory: { side: 'campus' | 'world'; world: WorldFeed | null; sort: FeedSor
 };
 
 const VIEWABILITY = { itemVisiblePercentThreshold: 25 };
+
+/** Long enough for a post put on top to render and be measured, and for
+ *  FlashList's position correction to land, before the list goes to the top. */
+const INSERT_SETTLE_MS = 250;
+
+/** The Post button stays open within this of the top… */
+const FAB_OPEN_NEAR_TOP = 24;
+/** …and changes only after this much travel between two scroll events. */
+const FAB_FOLD_TRAVEL = 4;
 
 /* Not in the spec: it has no words for this. The website's text. */
 const NEW_POSTS_FAILED = "Couldn't load new posts. Try again.";
@@ -74,6 +87,28 @@ export default function CommunityScreen() {
   const { profile } = useAuth();
   const { toast, showToast } = useToast();
   const listRef = useRef<FlashListRef<PostItem>>(null);
+  const frameRef = useRef<ViewInstance>(null);
+  const scrollY = useRef(0);
+
+  /* The Post button folds to its pencil while you scroll down and opens out
+     again when you scroll up or come back near the top (PostFab). A few
+     points of travel either way before it changes, so a finger resting on
+     the screen doesn't make it flicker. */
+  const [fabFolded, setFabFolded] = useState(false);
+  const fabFoldedRef = useRef(false);
+  const onScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - scrollY.current;
+    scrollY.current = y;
+    let fold = fabFoldedRef.current;
+    if (y < FAB_OPEN_NEAR_TOP) fold = false;
+    else if (dy > FAB_FOLD_TRAVEL) fold = true;
+    else if (dy < -FAB_FOLD_TRAVEL) fold = false;
+    if (fold !== fabFoldedRef.current) {
+      fabFoldedRef.current = fold;
+      setFabFolded(fold);
+    }
+  }, []);
 
   const [side, setSideState] = useState(memory.side);
   const [chosenWorld, setChosenWorld] = useState(memory.world);
@@ -133,15 +168,48 @@ export default function CommunityScreen() {
     [openCompose],
   );
 
+  /* Going to the top once posts were put above the ones on screen (your new
+     post, or the "new posts" pill's). FlashList keeps what's on screen still
+     when items arrive above it (maintainVisibleContentPosition), so a scroll
+     sent before the new post had rendered was undone, and the post was left
+     hidden above the switcher with only its bottom showing (owner, 13 Nov).
+     So it waits until the post has rendered and the list has corrected. */
+  const topTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollToTopAfterInsert = useCallback(() => {
+    if (topTimer.current) clearTimeout(topTimer.current);
+    topTimer.current = setTimeout(() => {
+      topTimer.current = null;
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    }, INSERT_SETTLE_MS);
+  }, []);
+  useEffect(() => () => {
+    if (topTimer.current) clearTimeout(topTimer.current);
+  }, []);
+
   // What the compose screen did, once it has closed (spec §2.3).
   useEffect(
     () =>
       onComposeResult((result) => {
         if (result.kind === 'held') showToast(COMPOSER_TEXT.held);
-        else if (!result.post.parent_post_id) listRef.current?.scrollToOffset({ offset: 0, animated: true });
+        else if (!result.post.parent_post_id) scrollToTopAfterInsert();
       }),
-    [showToast],
+    [showToast, scrollToTopAfterInsert],
   );
+
+  // A reply you send from this feed: first under its post, and brought on
+  // screen clear of the switcher and the Post button.
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
+  const revealer = useRevealReply({
+    accepts: useCallback((parentId: string) => postsRef.current.some((p) => p.id === parentId), []),
+    frameRef,
+    insetTop: insets.top + SWITCHER_HEIGHT,
+    insetBottom: viewOnly ? VIEW_ONLY_HEIGHT : FAB_CLEARANCE,
+    scrollBy: useCallback(
+      (dy: number) => listRef.current?.scrollToOffset({ offset: Math.max(0, scrollY.current + dy), animated: true }),
+      [],
+    ),
+  });
 
   const openProfile = useCallback(
     (userId: string) => router.push(hrefWithFrom(`/profile/${userId}`, '/(tabs)/community') as never),
@@ -201,7 +269,9 @@ export default function CommunityScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
     const ok = await showNewPosts();
     if (!ok) showToast(NEW_POSTS_FAILED);
-  }, [since, showNewPosts, showToast]);
+    // The new ones went in above what's on screen: up again, to show them.
+    else scrollToTopAfterInsert();
+  }, [since, showNewPosts, showToast, scrollToTopAfterInsert]);
   const pillCount = kind === 'campus' && pillTakenFor !== since ? newCount : 0;
 
   const onEndReached = useCallback(() => {
@@ -260,7 +330,9 @@ export default function CommunityScreen() {
 
   const topPad = insets.top + SWITCHER_HEIGHT;
   const ground = zone === 'campus' ? colors.communityPanelCampus : colors.communityPanelWorld;
-  const dockHeight = viewOnly ? VIEW_ONLY_HEIGHT : showComposer ? DOCK_HEIGHT : 0;
+  // What covers the bottom of the feed: the view-only dock, or the floating
+  // Post button, which the last post can scroll clear of.
+  const dockHeight = viewOnly ? VIEW_ONLY_HEIGHT : showComposer ? FAB_CLEARANCE : 0;
   const hint =
     kind === 'campus'
       ? "What's happening on campus?"
@@ -271,89 +343,93 @@ export default function CommunityScreen() {
 
   return (
     <PostActionsProvider toastBottom={dockHeight + 16}>
-      <View style={styles.screen}>
-        <CommunityWallpaper ground={ground} />
+      <ReplyRevealContext.Provider value={revealer}>
+        <View ref={frameRef} collapsable={false} style={styles.screen}>
+          <CommunityWallpaper ground={ground} />
 
-        <FlashList
-          // A new list per feed: each starts at its own top, and the cards'
-          // entrance plays for the new feed.
-          key={feedKeyString}
-          ref={listRef}
-          data={posts}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          extraData={visible}
-          contentContainerStyle={{ paddingTop: topPad, paddingBottom: dockHeight + 16 }}
-          scrollIndicatorInsets={{ top: topPad, bottom: dockHeight }}
-          ListEmptyComponent={listEmpty}
-          ListFooterComponent={
-            feed.isFetchingNextPage ? <PostCardSkeleton zone={zone} /> : null
-          }
-          onEndReached={onEndReached}
-          onEndReachedThreshold={0.6}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={VIEWABILITY}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              progressViewOffset={topPad}
-              tintColor={colors.purple}
-              colors={[colors.purple]}
-            />
-          }
-        />
-
-        <StatusBarGround color={ground} />
-
-        <CommunitySwitcher
-          side={side}
-          world={world}
-          countries={countries}
-          sort={sort}
-          onSide={setSide}
-          onWorld={setWorld}
-          onSort={setSort}
-        />
-
-        {viewOnly ? (
-          <ViewOnlyLine country={label} />
-        ) : showComposer ? (
-          <ComposerDock
-            zone={zone}
-            hint={hint}
-            // Re-read when the tab comes back into view, after the compose screen.
-            draft={isFocused ? draftFor(scope) : null}
-            avatarName={profile?.full_name}
-            avatarUri={profile?.avatar_url}
-            onOpen={() => openCompose()}
-            onPhotos={() => openCompose({ pick: 'photos' })}
+          <FlashList
+            // A new list per feed: each starts at its own top, and the cards'
+            // entrance plays for the new feed.
+            key={feedKeyString}
+            ref={listRef}
+            data={posts}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            extraData={visible}
+            contentContainerStyle={{ paddingTop: topPad, paddingBottom: dockHeight + 16 }}
+            scrollIndicatorInsets={{ top: topPad, bottom: dockHeight }}
+            ListEmptyComponent={listEmpty}
+            ListFooterComponent={
+              feed.isFetchingNextPage ? <PostCardSkeleton zone={zone} /> : null
+            }
+            onEndReached={onEndReached}
+            onEndReachedThreshold={0.6}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={VIEWABILITY}
+            onScroll={onScroll}
+            scrollEventThrottle={32}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                progressViewOffset={topPad}
+                tintColor={colors.purple}
+                colors={[colors.purple]}
+              />
+            }
           />
-        ) : null}
 
-        {pillCount > 0 ? (
-          <Reanimated.View
-            entering={PILL_IN}
-            exiting={FadeOut.duration(200)}
-            style={[styles.pillWrap, { top: topPad + 8 }]}
-            pointerEvents="box-none"
-          >
-            <Pressable
-              onPress={() => void onNewPostsPress()}
-              accessibilityRole="button"
-              accessibilityLiveRegion="polite"
-              style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
+          <StatusBarGround color={ground} />
+
+          <CommunitySwitcher
+            side={side}
+            world={world}
+            countries={countries}
+            sort={sort}
+            onSide={setSide}
+            onWorld={setWorld}
+            onSort={setSort}
+          />
+
+          {viewOnly ? (
+            <ViewOnlyLine country={label} />
+          ) : showComposer ? (
+            <PostFab
+              // A new one per side, so it changes colour with the feed's fade.
+              key={zone}
+              zone={zone}
+              hint={hint}
+              // Re-read when the tab comes back into view, after the compose screen.
+              hasDraft={isFocused && !!draftFor(scope)}
+              folded={fabFolded}
+              onPress={() => openCompose()}
+            />
+          ) : null}
+
+          {pillCount > 0 ? (
+            <Reanimated.View
+              entering={PILL_IN}
+              exiting={FadeOut.duration(200)}
+              style={[styles.pillWrap, { top: topPad + 8 }]}
+              pointerEvents="box-none"
             >
-              <Feather name="arrow-up" size={16} color={colors.white} />
-              <AppText style={styles.pillText}>
-                {pillCount === 1 ? '1 new post' : `${pillCount} new posts`}
-              </AppText>
-            </Pressable>
-          </Reanimated.View>
-        ) : null}
+              <Pressable
+                onPress={() => void onNewPostsPress()}
+                accessibilityRole="button"
+                accessibilityLiveRegion="polite"
+                style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
+              >
+                <Feather name="arrow-up" size={16} color={colors.white} />
+                <AppText style={styles.pillText}>
+                  {pillCount === 1 ? '1 new post' : `${pillCount} new posts`}
+                </AppText>
+              </Pressable>
+            </Reanimated.View>
+          ) : null}
 
-        <AppToast message={toast} bottom={dockHeight + 16} />
-      </View>
+          <AppToast message={toast} bottom={dockHeight + 16} />
+        </View>
+      </ReplyRevealContext.Provider>
     </PostActionsProvider>
   );
 }

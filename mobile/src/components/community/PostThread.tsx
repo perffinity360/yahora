@@ -1,8 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 
 import { AppText } from '../AppText';
 import { Avatar } from '../Avatar';
@@ -10,6 +10,7 @@ import { MoreButton } from './PostActions';
 import { PostGif } from './PostMedia';
 import { PostText } from './PostText';
 import { usePostPageReplies, useThreadReplies } from '../../hooks/useCommunity';
+import { ReplyRevealContext } from '../../hooks/useRevealReply';
 import {
   DEFAULT_REACTION,
   distinctById,
@@ -123,6 +124,16 @@ const ReplyRow = memo(function ReplyRow({
 }) {
   const top = ROW_TOP + (first ? THREAD_LEAD : 0);
   const mine = !!reply.viewer_reaction;
+
+  // The reply you just sent: the screen brings it into view (useRevealReply).
+  const rowRef = useRef<ViewInstance>(null);
+  const revealer = useContext(ReplyRevealContext);
+  const isNew = revealer?.id === reply.id;
+  useEffect(() => {
+    if (isNew) revealer?.reveal(rowRef.current);
+    // Only when it becomes the reply to show.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew]);
   const time = formatPostTime(reply.created_at);
   const total = reply.reactions_total;
 
@@ -132,7 +143,7 @@ const ReplyRow = memo(function ReplyRow({
   };
 
   return (
-    <View style={[styles.reply, { paddingTop: top }]}>
+    <View ref={rowRef} collapsable={false} style={[styles.reply, { paddingTop: top }]}>
       <Rail zone={zone} top={top} last={last} />
       <Pressable
         onPress={() => onOpenProfile(reply.author_id)}
@@ -414,8 +425,8 @@ const styles = StyleSheet.create({
 /**
  * A post's own page (spec §4): every reply, in the API's order, a page at a
  * time behind "Load more replies" (a button, not infinite scroll). The first
- * page loads by itself. A reply you just wrote goes at the end of what has
- * loaded (useCreatePost); a later page that brings it again keeps it once.
+ * page loads by itself. A reply you just wrote goes first, above the Hot ones
+ * (useCreatePost; owner, 13 Nov); a later page that brings it again keeps it once.
  */
 export const PostPageThread = memo(function PostPageThread({
   post,

@@ -1,6 +1,19 @@
 # Community — design spec (Phase 7)
 
-**Version 3.10 · 10 November 2026 · for the website and the app**
+**Version 3.11 · 13 November 2026 · for the website and the app**
+
+> **Changed in version 3.11 (owner, 13 Nov):** **the app's feeds post from a floating `✏️ Post` button**
+> in the bottom right corner instead of the composer dock; the posts scroll on under it (§1.2, §2.1). The
+> post page keeps its reply bar, and the website keeps its dock. **Your own new post or reply is shown
+> first and you're taken to it,** on the website and the app: a post at the top of its feed, a reply first
+> under its post, above the Hot ones, scrolled into view. Only the author sees this order (§4). **A GIF's
+> frame is the GIF's own loaded shape, with no tint behind it,** so no strip shows at its edges (§3).
+> Second round, same day: the Post button is 44 tall, **folds to its pencil while you scroll down**, and
+> marks a draft with a blue badge (§2.1). **The posting limit says when to try again**, from the API's new
+> `next_allowed_at` (§2.3). **Toasts stay long enough to read and wrap instead of being cut** (§2.3).
+> **`Being checked` is blue** (§10). The app's `Post this?` dialog is a size smaller (§2.3). **The app's
+> compose screen has ☺ (emoji) after GIF,** as the website's composer does: the full picker as a sheet,
+> staying open to add several, each put in at the cursor.
 
 > **Changed in version 3.10 (owner, 10 Nov):** **on a phone the composer sits in a solid dock, as on a
 > laptop,** instead of floating: posts showed through the gap under it. The page's background is the dock's colour
@@ -236,7 +249,12 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 │ ──────────────────────────────── │
 │ post                             │
 │▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔│
-│ ( (me) What's happening…?      ) │   ← the composer's dock, solid
+│ ( (me) What's happening…?      ) │   ← website: the composer's dock, solid
+└──────────────────────────────────┘
+
+┌──────────────────────────────────┐
+│ post                             │
+│ post            ( (✏️) Post )    │   ← app: the floating Post button (owner, 13 Nov)
 └──────────────────────────────────┘
 ```
 
@@ -302,6 +320,18 @@ The composer is **always at the bottom of the feed**, separately for each panel:
 `communityDock` with a 1.5 px `communityRail` top line, holding a white one-line field 33 px tall, 2 px
 under the line and 2 px above the bottom (the same room either side, owner 8 Nov; was 2.5 and 1.5), with a 1.5 px `communityRail` outline and Inter 400 14/20 text.
 **At the end of the line:** the photo icon, faded to 65%, and the `Post` pill.
+
+**The app's feeds have no dock (owner, 13 Nov).** A phone has little room, and the dock only opened the
+compose screen anyway. A floating pill takes its place, 16 from the screen's right edge and 16 above the
+tab bar: 44 tall, in the zone's strong colour (`purpleDark` on campus, `communityWorldStrong` elsewhere),
+a white circle with a pencil, then `Post` in Inter 600 15, white, with a white hairline ring and a deep
+soft shadow. The posts scroll on under it, and the list ends 76 above the bottom so the last post clears
+it. **While you scroll down it folds to the round pencil** (220 ms, ease-out, the word fading as it goes),
+and opens out again when you scroll up or come within 24 of the top, like Gmail's compose button. A
+half-written post puts a small `blue` badge, ringed in white, on its top right corner (it was a pink dot
+in the circle, which clashed with the world's pink pill). It rises in over 220 ms without overshoot.
+Tapping it opens the compose screen. The view-only line (§1.4) keeps its dock. The post page keeps its reply bar,
+as under a post in WhatsApp or X. **The website is unchanged:** the text below describes its dock.
 
 On a laptop each field ends 13 px from the divider's centre, tucked in under the shared avatar (§1.1). Its
 corners are radius 20 on the outer side and 18 on the side by the avatar, and its padding keeps the text and
@@ -388,10 +418,10 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
 | Result | What the student sees |
 |---|---|
 | Posted | The composer clears and closes. The new post appears at the top of the feed. |
-| **Nudge** (API `MODERATION_NUDGE`) | A dialog: title `Post this?` · body `Some of this might come across as hurtful to other students. You can edit it, or post it as it is.` · buttons **Edit** (primary, keeps the text) and **Post anyway**. |
-| **Held for review** | Toast: `Thanks — your post is being checked and will appear once it's approved.` The composer clears. The post shows only on the author's own Posts tab, labelled `Being checked`. |
+| **Nudge** (API `MODERATION_NUDGE`) | A dialog: title `Post this?` · body `Some of this might come across as hurtful to other students. You can edit it, or post it as it is.` · buttons **Edit** (primary, keeps the text) and **Post anyway**. In the app it's the `ConfirmDialog` a size down (`compact`: at most 304 wide, a 48 medallion, title 19, text 13, 42 buttons; owner, 13 Nov). |
+| **Held for review** | Toast: `Thanks — your post is being checked and will appear once it's approved.` The composer clears. The post shows only on the author's own Posts tab, labelled `Being checked`. **Every toast stays long enough to read** (owner, 13 Nov): 1 s plus 70 ms a character, at least 1.5 s ("Copied") and at most 8 s, so this one stays about 6 s. Long text wraps, centred, 16 clear of each side, instead of running off the screen or being cut with `…`. |
 | **Held, and self-harm was detected** | Instead of the toast, a calm card (§2.4). |
-| Rate limit (`RATE_LIMIT_POSTS` / `RATE_LIMIT_REPLIES`) | Inline, above Post: `You've reached the posting limit for now. Please try again in a little while.` The text is kept. |
+| Rate limit (`RATE_LIMIT_POSTS` / `RATE_LIMIT_REPLIES`) | Inline, above Post, **with when to try again** (owner, 13 Nov), from the answer's `next_allowed_at`: `You've reached the posting limit for now. Try again at 6:19 pm, in 26 minutes.` (`reply limit` for replies; `Try again in a minute.` under two minutes). Without `next_allowed_at`: `…Please try again in a little while.` The text is kept. |
 | `NOT_ALLOWED_HERE` | `You can't post in this feed.` (This should never happen, because the UI hides the composer.) |
 | Too long / bad file | The messages in §2.2. The text is kept. |
 | Network or server error | Toast: `Couldn't post. Check your connection and try again.` The text is kept. |
@@ -470,9 +500,11 @@ into the replies when there are any.
     touch (44 px to tap). ← → work once it has focus. Dots sit at the bottom, 5 px, on a `toastBg` pill;
     the current one is white, the others at 45%.
   - **Pressing a photo** opens the existing image viewer at that photo, with its zoom.
-- **GIF:** at most 280 px wide, on a see-through `reactionPillBorder` tint (the doodles show through a GIF's
-  transparent parts; the owner preferred that to a solid backing, 6 Nov). Plays muted and on a loop while on
-  screen, and pauses when it scrolls away. It carries a small `GIF` badge in the corner.
+- **GIF:** at most 280 px wide and 360 tall (180 wide on a reply), radius 8, **in its own loaded shape with
+  nothing behind it** (owner, 13 Nov; it was on a `reactionPillBorder` tint, which showed as a strip when
+  KLIPY's stated size was a few pixels off the real one). The frame starts from KLIPY's width × height and
+  takes the image's real shape once it loads. Plays muted and on a loop while on screen, and pauses when it
+  scrolls away. It carries a small `GIF` badge in the corner.
 - **Emoji inside the text are a size up,** 1.28 em (the chat's 18 on 14), line height 1: the emoji font
   draws many of them smaller than the letters around them.
 - **Links in a post say their own hover colour** (website): the name and the @username turn `purple`, with
@@ -494,7 +526,7 @@ into the replies when there are any.
 
 | State | Who sees what |
 |---|---|
-| `Being checked` (held) | Only the author, on their Posts tab, with a grey label. If it was held for self-harm, the support card (§2.4) sits under it. |
+| `Being checked` (held) | Only the author, on their Posts tab, with a **blue** label (owner, 13 Nov; was grey): `#0B6E9E` on `rgba(43,183,255,0.14)`, no border (`statusPendingText` / `statusPendingBg`). If it was held for self-harm, the support card (§2.4) sits under it. |
 | **Under review** (reported) | It's taken out of every feed and off the author's profile for everyone else. A direct link shows only `This post was reported and is being reviewed.` — no text, no photos, no button to view it. A covered reply disappears from its thread. The author still sees the post, labelled `Under review`. |
 | Deleted | It disappears everywhere. A direct link shows `This post was deleted.` |
 | Removed by Yahora (Phase 9) | A direct link shows `This post was removed for breaking the Community Guidelines.` |
@@ -528,7 +560,7 @@ Replies now show **under each post in the feed,** as well as on the post's page.
     loads them too (at most 3 pages a press).
 - **`Hide replies`** (chevron up, `communityMuted`, purple on hover) appears beside `Show more replies` once
   that has been pressed, and stays alone at the end of the thread when everything is loaded. It folds the
-  thread back to the preview (plus anything you just replied); the loaded replies are kept, so
+  thread back to the preview (with anything you just replied first); the loaded replies are kept, so
   `Show more replies` unfolds them again at once, without loading. If folding leaves the end of the thread
   above the screen, the feed scrolls back to it, as little as needed.
 - **The thread:** one unbroken 1.5 px line in the zone's colour (`communityRailCampus` on the left,
@@ -599,6 +631,13 @@ Replies now show **under each post in the feed,** as well as on the post's page.
   `DEFAULT_REACTION`, ❤️. No quick bar and no picker. Filled in `communityLike` when it's yours. The ⋯
   menu sits next to it, shown on hover with a mouse and always on touch.
 - There are **no replies to replies**: one level only.
+- **Your own new reply goes first, and you're taken to it** (owner, 13 Nov): at the top of its post's
+  thread, in a feed and on the post's page, above the Hot ones (newest first if you send several), and the
+  screen scrolls just enough to show it, clear of the floating bars. A new post likewise goes on top of
+  its feed and the feed goes to the top. **Only the author sees this.** It also **lasts after a reload**
+  (owner, 13 Nov, "as X does"; migration `own_replies_first`): the API puts the viewer's own replies first,
+  newest first, in the thread and in `top_replies`, then everyone else's by Hot. Nobody else sees your
+  replies moved. Feed posts are not pinned: a feed keeps its own order after a reload.
 - **Writing a reply:** the post's 💬 pill switches that panel's docked composer to reply mode, with the
   cursor in it: grey text `Reply to @username…`, up to 1,000 characters, a GIF button, and a
   `Replying to @username ✕` chip. A half-written post is kept and comes back afterwards. An empty

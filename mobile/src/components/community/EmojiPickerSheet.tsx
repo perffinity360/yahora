@@ -49,12 +49,16 @@ export function EmojiPickerSheet({
   current,
   onPick,
   onClose,
+  multiple = false,
 }: {
   open: boolean;
   /** Your current reaction, marked in the grid. */
   current: string | null;
   onPick: (emoji: string) => void;
   onClose: () => void;
+  /** Stays open after a pick, to add several: the compose screen's ☺ (owner,
+   *  13 Nov), like the website's composer. A reaction closes on its one pick. */
+  multiple?: boolean;
 }) {
   useRecentPicksPersistence({
     initialization: async () => {
@@ -79,6 +83,7 @@ export function EmojiPickerSheet({
       enableRecentlyUsed
       categoryPosition="top"
       categoryOrder={['recently_used', 'smileys_emotion', 'people_body', 'animals_nature', 'food_drink', 'travel_places', 'activities', 'objects', 'symbols', 'flags']}
+      allowMultipleSelections={multiple}
       selectedEmojis={current ? [current] : false}
       theme={THEME}
       styles={STYLES}

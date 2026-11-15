@@ -340,8 +340,11 @@ export default function CommunityFeed({
       }));
       setReplyTo(null);
     } else {
+      // Your new post goes on top and you're taken to it, on a laptop's panel
+      // and on a phone's page alike (owner, 13 Nov).
       setItems((prev) => [post, ...prev]);
       if (inPanel) scroller?.scrollTo({ top: 0, behavior: "smooth" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [inPanel, scroller]);
 

@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { AppText } from './AppText';
-import { COPY_TOAST_MS } from '../lib/messageActions';
+import { toastDuration } from '../lib/messageActions';
 import { colors, font } from '../theme';
 
 /** One toast on screen. `id` changes per call, so the same text twice in a row fades in again. */
@@ -28,7 +28,7 @@ export function useToast() {
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       setToast(null);
-    }, COPY_TOAST_MS);
+    }, toastDuration(text));
   }, []);
 
   useEffect(
@@ -42,7 +42,9 @@ export function useToast() {
 }
 
 /**
- * A pill, centred, `bottom` above the bottom of its parent. Absolutely
+ * A pill, centred, `bottom` above the bottom of its parent, 16 in from each
+ * side at most: long text wraps onto a second line instead of running off the
+ * screen (owner, 13 Nov). Absolutely
  * positioned, so the parent must be the area it floats over. Never takes a
  * touch: whatever is under it stays tappable.
  */
@@ -70,19 +72,23 @@ export default AppToast;
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 16,
+    right: 16,
     alignItems: 'center',
   },
+  // Round at one line (16 is half its height); a soft rectangle at two.
   pill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
+    maxWidth: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 16,
     backgroundColor: colors.toastBg,
   },
   text: {
+    textAlign: 'center',
     fontFamily: font.family.semibold,
     fontSize: font.sizes.caption,
+    lineHeight: 16,
     color: colors.white,
   },
 });

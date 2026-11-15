@@ -35,6 +35,7 @@ import {
   POST_MAX_PHOTOS,
   POST_PHOTO_MAX_BYTES,
   codePointLength,
+  rateLimitText,
 } from "../utils/community";
 
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -198,6 +199,7 @@ export default function useComposer({ scope = "campus", parentId = null } = {}) 
           next = "nudge";
         } else if (status === 429 && (code === "RATE_LIMIT_POSTS" || code === "RATE_LIMIT_REPLIES")) {
           next = "rate-limited";
+          setMessage(rateLimitText(code, body?.next_allowed_at));
         } else if (status === 403 && code === "NOT_ALLOWED_HERE") {
           next = "not-allowed";
         } else if (status === 400 && INVALID_MESSAGES[code]) {

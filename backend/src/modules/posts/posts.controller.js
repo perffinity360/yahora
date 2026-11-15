@@ -489,9 +489,10 @@ export const createPost = async (req, res) => {
     if (insertError) {
       await removePhotos(uploaded);
       uploaded = [];
-      // Only code and message: a check violation's `details` holds the failing
-      // row, post text included, and mapDbError logs what it can't map.
-      return mapDbError(res, { code: insertError.code, message: insertError.message });
+      // Never `details`: a check violation's holds the failing row, post text
+      // included, and mapDbError logs what it can't map. The hint is ours: the
+      // rate limits' "try again at" time (migration post_rate_limit_retry_at).
+      return mapDbError(res, { code: insertError.code, message: insertError.message, hint: insertError.hint });
     }
     uploaded = []; // the row points at them now
 

@@ -111,8 +111,8 @@ Every list endpoint is **cursor-paginated**. `sendPage()` in `respond.js` produc
 | `NESTED_REPLY_NOT_ALLOWED` | 400 | Phase 7 — the `posts` insert trigger: replying to a reply | — |
 | `ACCOUNT_SUSPENDED` | **403 or 400 — see below** | Not raised in Phase 7: the `posts` insert trigger has no suspension check | — |
 | `POSTING_RESTRICTED` | **403 or 400 — see below** | Not raised in Phase 7, for the same reason | `until` |
-| `RATE_LIMIT_POSTS` | 429 | Phase 7 — the `posts` insert trigger: 15 campus, 8 country or 8 Global posts in any 60 minutes, each counted on its own | — |
-| `RATE_LIMIT_REPLIES` | 429 | Phase 7 — the `posts` insert trigger: 45 replies in any 60 minutes | — |
+| `RATE_LIMIT_POSTS` | 429 | Phase 7 — the `posts` insert trigger: 15 campus, 8 country or 8 Global posts in any 60 minutes, each counted on its own | `next_allowed_at` (13 Nov, migration `post_rate_limit_retry_at`) |
+| `RATE_LIMIT_REPLIES` | 429 | Phase 7 — the `posts` insert trigger: 45 replies in any 60 minutes | `next_allowed_at` (the same) |
 | `POST_NOT_FOUND` | 404 | Phase 7 — the database: no such post, or you're not allowed to see it | — |
 | `NOT_ALLOWED_HERE` | 403 | Phase 7 — the database: posting or replying in a feed you can only view | — |
 | `CANNOT_REPORT_OWN` | 400 | Phase 7 — `create_report()`: reporting your own post | — |
@@ -3187,7 +3187,7 @@ Flat: there is no nested `author` object.
   else. The database works this out; the controller just passes it through.
 - `top_replies` (Phase 7 V-C, migrations `feed_top_replies` and `reply_hot_order_hide_reported`,
   11 Nov): up to **2** reply PostItems (`REPLY_PREVIEW_COUNT`): the first 2 of
-  `GET /api/posts/:id/replies`, in its Hot order. So exactly the replies it would show you: active
+  `GET /api/posts/:id/replies`, in its order (your own first, then Hot). So exactly the replies it would show you: active
   ones, plus your own held or covered ones, never a deleted one or one you reported. `[]` when there are none, and **always `[]` on a reply** (one level
   only). Every list carries it: the three feeds, `GET /:id`, `/:id/replies` and `/by-user/:userId`.
   The nested items come from the database without `hot_score`; the controller passes the field on
@@ -3297,9 +3297,14 @@ and `can_reply_to_post()`. `can_reply` is false for pending and under-review pos
 **Query:**
   - limit: int, optional, default 20, **at most 50**
   - cursor: opaque string, optional
-**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — **Hot order**
-(`hot_score`, then `id`, both descending), like the Hot feeds. Changed 11 Nov (Phase 7 V-C,
-migration `reply_hot_order_hide_reported`); it was oldest first. A reply's score is
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — **the caller's own replies
+first, newest first, then everyone else's in Hot order** (`hot_score`, then `id`, both descending),
+like the Hot feeds. Own replies first since 13 Nov (migration `own_replies_first`; owner: "as X
+does"), so a reply you wrote stays on top of the thread for you after a reload; nobody else sees
+your replies moved. Hot order since 11 Nov (Phase 7 V-C, migration `reply_hot_order_hide_reported`);
+it was oldest first. The cursor is unchanged in form: the database sorts your own replies by a key
+above any Hot score and hands that key back as the row's `hot_score`, which the controller encodes
+and strips. A reply's score is
 `(likes + 1) ÷ (hours + 2)^1.5`, refreshed every 5 minutes, so a reply can move between pages;
 de-duplicate by `id`. The first 2 of this order are the post's `top_replies`.
 **400:** `{ "error": "INVALID_FORMAT" }` — not a uuid, or a bad cursor (a cursor from before the
@@ -3363,7 +3368,12 @@ isn't a single text field, or a file sent under a field other than `images`
 **422:** `{ "error": "MODERATION_NUDGE", "categories": ["harassment"] }` — **nothing was saved or
 uploaded.** Ask `Post this?` with **Edit** and **Post anyway**; Post anyway re-sends with
 `confirm=true`
-**429:** `{ "error": "RATE_LIMIT_POSTS" }` / `{ "error": "RATE_LIMIT_REPLIES" }`
+**429:** `{ "error": "RATE_LIMIT_POSTS", "next_allowed_at": "2026-11-13T12:49:35.539Z" }` /
+`{ "error": "RATE_LIMIT_REPLIES", "next_allowed_at": "…" }`. `next_allowed_at` (ISO 8601, UTC) is when the
+60-minute window has room again: an hour after the post or reply whose leaving it brings the count under
+the limit (13 Nov, migration `post_rate_limit_retry_at`; `prepare_post()` raises it as the exception's
+HINT and `mapDbError()` passes it on). Show it to the student ("Try again at 6:19 pm, in 26 minutes").
+It is left out if the database predates that migration, so a client must still cope without it.
 **Enforced by:** the `posts` BEFORE INSERT trigger fills `university_id`, `country_code` and
 `is_demo`, ignoring whatever the caller sent. It also enforces the reply rules and the rate limits:
 per person, in any 60 minutes, **15 campus posts, 8 country posts, 8 Global posts and 45 replies**,

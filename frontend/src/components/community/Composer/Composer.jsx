@@ -212,7 +212,7 @@ export default function Composer({
 
   const inlineMessage =
     c.result === "rate-limited"
-      ? COMPOSER_TEXT.rateLimited
+      ? (c.message ?? COMPOSER_TEXT.rateLimited)
       : c.result === "not-allowed"
         ? COMPOSER_TEXT.notAllowed
         : c.result === "invalid"

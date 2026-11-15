@@ -36,6 +36,9 @@ export interface ConfirmDialogContent {
   imageUri?: string | null;
   /** 'danger' paints the badge and the confirm button red, for what can't be undone. */
   tone?: 'brand' | 'danger';
+  /** A size down all round, for a question asked in the middle of writing: the
+   *  community's `Post this?` (owner, 13 Nov: "slightly smaller"). */
+  compact?: boolean;
 }
 
 const GRADIENTS = {
@@ -79,6 +82,7 @@ export function ConfirmDialog({
   const shown = shownRef.current;
   const photo = resolveMediaUrl(shown?.imageUri);
   const gradient = GRADIENTS[shown?.tone ?? 'brand'];
+  const c = shown?.compact ? compact : null;
 
   const confirm = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -99,7 +103,7 @@ export function ConfirmDialog({
         {shown ? (
           <Reanimated.View
             entering={CARD_ENTER}
-            style={styles.card}
+            style={[styles.card, c?.card]}
             accessibilityViewIsModal
             accessibilityRole="alert"
           >
@@ -120,27 +124,27 @@ export function ConfirmDialog({
                 colors={gradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.medallion}
+                style={[styles.medallion, c?.medallion]}
               >
-                <Feather name={shown.icon} size={24} color={colors.white} />
+                <Feather name={shown.icon} size={c ? 20 : 24} color={colors.white} />
               </LinearGradient>
             )}
 
-            <AppText style={styles.title}>{shown.title}</AppText>
-            <AppText style={styles.message}>{shown.message}</AppText>
+            <AppText style={[styles.title, c?.title]}>{shown.title}</AppText>
+            <AppText style={[styles.message, c?.message]}>{shown.message}</AppText>
 
-            <View style={styles.actions}>
+            <View style={[styles.actions, c?.actions]}>
               <Pressable
                 onPress={onCancel}
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.button, styles.cancel, pressed && styles.cancelPressed]}
+                style={({ pressed }) => [styles.button, c?.button, styles.cancel, pressed && styles.cancelPressed]}
               >
-                <AppText style={styles.cancelText}>{shown.cancelLabel ?? 'Cancel'}</AppText>
+                <AppText style={[styles.cancelText, c?.buttonText]}>{shown.cancelLabel ?? 'Cancel'}</AppText>
               </Pressable>
               <Pressable
                 onPress={confirm}
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.button, pressed && styles.confirmPressed]}
+                style={({ pressed }) => [styles.button, c?.button, pressed && styles.confirmPressed]}
               >
                 <LinearGradient
                   colors={gradient}
@@ -148,7 +152,7 @@ export function ConfirmDialog({
                   end={{ x: 1, y: 1 }}
                   style={styles.confirmFill}
                 >
-                  <AppText style={styles.confirmText}>{shown.confirmLabel}</AppText>
+                  <AppText style={[styles.confirmText, c?.buttonText]}>{shown.confirmLabel}</AppText>
                 </LinearGradient>
               </Pressable>
             </View>
@@ -282,4 +286,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.white,
   },
+});
+
+const COMPACT_BUTTON = 42;
+
+/** `compact`: about a tenth smaller everywhere, the proportions kept. */
+const compact = StyleSheet.create({
+  card: { maxWidth: 304, paddingTop: 20, paddingHorizontal: 18, paddingBottom: 16, borderRadius: 24 },
+  medallion: { width: 48, height: 48, borderRadius: 24, marginBottom: 12 },
+  title: { fontSize: 19, lineHeight: 24 },
+  message: { marginTop: 6, fontSize: 13, lineHeight: 19 },
+  actions: { marginTop: 18 },
+  button: { height: COMPACT_BUTTON, borderRadius: COMPACT_BUTTON / 2 },
+  buttonText: { fontSize: 14 },
 });

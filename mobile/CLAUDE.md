@@ -155,7 +155,8 @@ mobile/
                                     useProduct · useAcademics · useAvatarActions ·
                                     useCommunity (feeds, threads, the post page, profiles' Posts,
                                     reactions, posting, delete, report, the new-posts count — and the
-                                    cache helpers that keep every list in step) · useComposer · useGifs
+                                    cache helpers that keep every list in step) · useComposer · useGifs ·
+                                    useRevealReply (scrolls your new reply into view)
     components/                     AnchoredModal (menus that hang off a button) · ModalSafeArea (insets inside
                                     a Modal) · ProductCard · Skeleton ·
                                     ExpandableBio · AvatarSheet ·
@@ -163,7 +164,8 @@ mobile/
                                     FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
                                     community/ (PostCard, PostThread, PostText, PostMedia, ReactionBar,
                                     ReactionSummary, CommunitySwitcher, CommunityWallpaper, GlobeIcon,
-                                    ComposerDock, GifPicker, SupportCard, StatusBarGround, PostActions (the ⋯ menu,
+                                    PostFab (the feed's floating ✏️ Post), ComposerDock (the post page's
+                                    reply bar), GifPicker, SupportCard, StatusBarGround, PostActions (the ⋯ menu,
                                     report, delete, ⊕ and the breakdown, once per screen), ReportSheet,
                                     ReactionBreakdownSheet, EmojiPickerSheet (rn-emoji-keyboard),
                                     UserPostsList)
