@@ -17,10 +17,9 @@ import { AppText } from '../../src/components/AppText';
 import { BackButton } from '../../src/components/CircleButton';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
 import { StatusBarGround } from '../../src/components/community/StatusBarGround';
-import { ComposerDock, DOCK_HEIGHT } from '../../src/components/community/ComposerDock';
+import { FAB_CLEARANCE, PostFab, useFabFold } from '../../src/components/community/PostFab';
 import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
-import { useAuth } from '../../src/contexts/AuthContext';
 import { goneCode, useCountries, usePost, useReact, type PostGone } from '../../src/hooks/useCommunity';
 import { draftFor } from '../../src/hooks/useComposer';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
@@ -33,8 +32,9 @@ import { colors, font } from '../../src/theme';
 /**
  * A post's own page — COMMUNITY_SPEC.md §4 and §3.1. The post (text 15/22, never
  * folded), then every reply, a page at a time behind "Load more replies", and
- * the reply bar pinned at the bottom, which opens the compose screen as a
- * reply. The reply you send goes first, above the Hot ones, and the page
+ * the feed's floating button, here `✏️ Reply` (owner, 15 Nov; it was a reply
+ * bar), which opens the compose screen as a reply and folds while you scroll
+ * down. The reply you send goes first, above the Hot ones, and the page
  * scrolls just enough to show it (useRevealReply; owner, 13 Nov). Where you can only view (another country's post), a quiet line says
  * who can reply instead.
  *
@@ -67,7 +67,6 @@ export default function PostScreen() {
   const floatingTop = useFloatingTopInset();
   const leaveOnce = useLeaveOnce();
   const isFocused = useIsFocused();
-  const { profile } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const postId = typeof id === 'string' ? id : undefined;
 
@@ -122,7 +121,8 @@ export default function PostScreen() {
   // take replies yet.
   const showReplyBar = !!post && !gone && canReply;
   const showViewOnly = !!post && !gone && !canReply && post.scope === 'country' && post.moderation_status === 'active';
-  const dockHeight = showReplyBar ? DOCK_HEIGHT + insets.bottom : showViewOnly ? VIEW_ONLY_HEIGHT + insets.bottom : 0;
+  const dockHeight = showReplyBar ? FAB_CLEARANCE + insets.bottom : showViewOnly ? VIEW_ONLY_HEIGHT + insets.bottom : 0;
+  const fab = useFabFold();
 
   const frameRef = useRef<ViewInstance>(null);
   const scrollRef = useRef<ScrollViewInstance>(null);
@@ -194,6 +194,7 @@ export default function PostScreen() {
             ref={scrollRef}
             onScroll={(e) => {
               scrollY.current = e.nativeEvent.contentOffset.y;
+              fab.onScroll(scrollY.current);
             }}
             scrollEventThrottle={32}
             contentContainerStyle={{ paddingTop: floatingTop + 50, paddingBottom: dockHeight + 16 }}
@@ -214,14 +215,13 @@ export default function PostScreen() {
           <BackButton onPress={goBack} style={[styles.back, { top: floatingTop }]} />
 
           {showReplyBar && post ? (
-            <ComposerDock
+            <PostFab
               zone={zone}
               reply
-              hint={`Reply to @${post.author_username}…`}
-              draft={isFocused ? draftFor(post.scope, post.id) : null}
-              avatarName={profile?.full_name}
-              avatarUri={profile?.avatar_url}
-              onOpen={openReply}
+              hint={`Reply to @${post.author_username}`}
+              hasDraft={isFocused && !!draftFor(post.scope, post.id)}
+              folded={fab.folded}
+              onPress={openReply}
               bottomInset={insets.bottom}
             />
           ) : null}

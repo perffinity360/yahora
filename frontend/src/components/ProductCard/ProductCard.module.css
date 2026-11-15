@@ -163,6 +163,26 @@
   z-index: 4;
 }
 
+/* With a mouse, the heart on the photo shows only while the card is pointed
+   at (owner, 16 Nov), or while it has keyboard focus. Liked or not: the heart
+   and count under the photo still say whether you've liked it. It fades in
+   and out with the card. A touch screen has no hover, so it keeps the heart
+   in view there. */
+@media (hover: hover) and (pointer: fine) {
+  .overlayHeart {
+    opacity: 0;
+    transition:
+      opacity 0.18s ease,
+      background 0.22s ease,
+      transform 0.18s ease;
+  }
+
+  .card:hover .overlayHeart,
+  .overlayHeart:focus-visible {
+    opacity: 1;
+  }
+}
+
 /* Hover only with a real mouse: on a touch screen :hover sticks to the
    tapped button, so an unliked heart stayed pink until the next tap
    elsewhere. Touch gets the liked/unliked colour straight away instead. */

@@ -9,7 +9,7 @@ title: "Posting limit says when; toasts readable; Being checked in blue; new pos
 
 # Posting limit says when; toasts readable; Being checked in blue; new post no longer hidden (app)
 
-The owner's second round on the app (13 Nov), on branch `v-text-formatting`. The owner said to fix the
+The owner's second round on the app (13 Nov), on branch `v-d-app-community`. The owner said to fix the
 website **only where the same problem exists there**. Three did, and I fixed those on the website too.
 `COMMUNITY_SPEC.md` v3.11's change note lists them all. `npx vite build` and the app's `tsc` pass. Nothing
 was checked in a browser.
@@ -80,7 +80,7 @@ None.
 
 - Don't expect `next_allowed_at` on production until my "pushed" entry; until then you'll see the old
   sentence there.
-- Not merged yet: on `v-text-formatting`.
+- Not merged yet: on `v-d-app-community`.
 
 ## The app, same round (nothing for you to do)
 

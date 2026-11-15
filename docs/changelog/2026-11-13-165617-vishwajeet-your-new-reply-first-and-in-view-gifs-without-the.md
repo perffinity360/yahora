@@ -9,7 +9,7 @@ title: "Your new reply first and in view; GIFs without the strip; the app's floa
 
 # Your new reply first and in view; GIFs without the strip; the app's floating Post button
 
-Three owner requests (13 Nov), on branch `v-text-formatting`. `COMMUNITY_SPEC.md` is now **v3.11**, and
+Three owner requests (13 Nov), on branch `v-d-app-community`. `COMMUNITY_SPEC.md` is now **v3.11**, and
 its change note at the top lists all three. `npx vite build` and the app's `tsc` pass. Nothing was checked
 in a browser or on the phone.
 
@@ -73,7 +73,7 @@ None.
 
 ## What NOT to do yet
 
-- Not merged yet: on `v-text-formatting`.
+- Not merged yet: on `v-d-app-community`.
 
 ## What to check in the browser (1440 and 390 wide)
 

@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View, type ViewInstance } fro
 import { AppText } from '../AppText';
 import { Avatar } from '../Avatar';
 import { MoreButton } from './PostActions';
-import { PostGif } from './PostMedia';
+import { GIF_REPLY, PostGif } from './PostMedia';
 import { PostText } from './PostText';
 import { usePostPageReplies, useThreadReplies } from '../../hooks/useCommunity';
 import { ReplyRevealContext } from '../../hooks/useRevealReply';
@@ -207,7 +207,7 @@ const ReplyRow = memo(function ReplyRow({
             <PostText key={reply.id} content={reply.content} variant="reply" />
           </View>
         ) : null}
-        {reply.gif ? <PostGif gif={reply.gif} playing={playing} maxWidth={180} /> : null}
+        {reply.gif ? <PostGif gif={reply.gif} playing={playing} maxWidth={GIF_REPLY.width} maxHeight={GIF_REPLY.height} /> : null}
       </View>
     </View>
   );

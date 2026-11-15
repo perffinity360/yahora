@@ -1,9 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
+import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   Pressable,
   StyleSheet,
@@ -39,6 +39,13 @@ import type { GifRef } from '../../types';
  */
 const GAP = 4;
 const PAD = 12;
+/** Heights of the loading tiles, as fractions of their width, so they read as a masonry too. */
+const SKELETON_SHAPES = [0.75, 1.1, 0.6, 0.9];
+
+/** A GIF's width ÷ height, from KLIPY's numbers; square when they're missing. */
+function gifRatio(g: GifRef) {
+  return g.width > 0 && g.height > 0 ? g.width / g.height : 1;
+}
 
 export function GifPicker({
   visible,
@@ -72,7 +79,10 @@ function Sheet({ onPick, onClose }: { onPick: (gif: GifRef) => void; onClose: ()
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const gifs = useGifs();
-  const tile = Math.floor((Math.min(width, 560) - PAD * 2 - GAP) / 2);
+  // Two columns, each tile in its GIF's own shape (owner, 15 Nov: nothing cropped,
+  // anywhere), laid as a masonry like KLIPY's and GIPHY's own pickers.
+  const column = (Math.min(width, 560) - PAD * 2 + GAP) / 2;
+  const tile = Math.floor(column - GAP);
   const sheetHeight = Math.round(height * 0.72);
 
   // Starts a whole sheet below the edge, so it is never seen before it moves.
@@ -85,14 +95,21 @@ function Sheet({ onPick, onClose }: { onPick: (gif: GifRef) => void; onClose: ()
 
   const renderItem = useCallback(
     ({ item }: { item: GifRef }) => (
-      <Pressable
-        onPress={() => onPick(item)}
-        accessibilityRole="imagebutton"
-        accessibilityLabel="Choose this GIF"
-        style={({ pressed }) => [styles.tile, { width: tile, height: tile * 0.75 }, pressed && styles.tilePressed]}
-      >
-        <Image source={{ uri: item.preview_url ?? item.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
-      </Pressable>
+      <View style={styles.cell}>
+        <Pressable
+          onPress={() => onPick(item)}
+          accessibilityRole="imagebutton"
+          accessibilityLabel="Choose this GIF"
+          style={({ pressed }) => [
+            styles.tile,
+            { width: tile, height: tile / gifRatio(item) },
+            pressed && styles.tilePressed,
+          ]}
+        >
+          {/* The box is the GIF's shape, so cover crops nothing. */}
+          <Image source={{ uri: item.preview_url ?? item.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        </Pressable>
+      </View>
     ),
     [onPick, tile],
   );
@@ -140,7 +157,10 @@ function Sheet({ onPick, onClose }: { onPick: (gif: GifRef) => void; onClose: ()
         ) : gifs.loading ? (
           <View style={styles.grid}>
             {Array.from({ length: 8 }, (_, i) => (
-              <View key={i} style={[styles.tile, styles.tileSkeleton, { width: tile, height: tile * 0.75 }]} />
+              <View
+                key={i}
+                style={[styles.tile, styles.tileSkeleton, { width: tile, height: tile * SKELETON_SHAPES[i % 4] }]}
+              />
             ))}
           </View>
         ) : gifs.items.length === 0 ? (
@@ -148,12 +168,12 @@ function Sheet({ onPick, onClose }: { onPick: (gif: GifRef) => void; onClose: ()
             <AppText style={styles.messageText}>{gifs.isSearch ? 'No GIFs found.' : ''}</AppText>
           </View>
         ) : (
-          <FlatList
+          <FlashList
             data={gifs.items}
             keyExtractor={(g) => g.id}
             renderItem={renderItem}
             numColumns={2}
-            columnWrapperStyle={{ gap: GAP }}
+            masonry
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -211,7 +231,8 @@ const styles = StyleSheet.create({
     color: colors.blackSoft,
   },
   close: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  list: { paddingHorizontal: PAD, gap: GAP, paddingBottom: 8 },
+  list: { paddingHorizontal: PAD - GAP / 2, paddingBottom: 8 },
+  cell: { padding: GAP / 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, paddingHorizontal: PAD },
   tile: { borderRadius: 8, overflow: 'hidden', backgroundColor: colors.reactionMineBg },
   tileSkeleton: { opacity: 0.7 },

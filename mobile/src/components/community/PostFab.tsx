@@ -1,6 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import * as Haptics from 'expo-haptics';
-import { memo, useEffect } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Reanimated, {
   FadeOut,
@@ -31,6 +31,33 @@ import { colors, font, shadows } from '../../theme';
  * zones' pills; the ring keeps it clear over the pill and the card behind.
  */
 export const FAB_HEIGHT = 44;
+
+/** The button stays open within this of the top, and folds or opens only after
+ *  this much travel between two scroll events, so a resting finger doesn't
+ *  make it flicker. */
+const OPEN_NEAR_TOP = 24;
+const FOLD_TRAVEL = 4;
+
+/** Folded while scrolling down, open on the way up or near the top: hand
+ *  `onScroll` to the list and `folded` to PostFab. */
+export function useFabFold() {
+  const [folded, setFolded] = useState(false);
+  const foldedRef = useRef(false);
+  const lastY = useRef(0);
+  const onScroll = useCallback((y: number) => {
+    const dy = y - lastY.current;
+    lastY.current = y;
+    let fold = foldedRef.current;
+    if (y < OPEN_NEAR_TOP) fold = false;
+    else if (dy > FOLD_TRAVEL) fold = true;
+    else if (dy < -FOLD_TRAVEL) fold = false;
+    if (fold !== foldedRef.current) {
+      foldedRef.current = fold;
+      setFolded(fold);
+    }
+  }, []);
+  return { folded, onScroll };
+}
 /** Its distance from the screen's right edge and from the tab bar. */
 export const FAB_MARGIN = 16;
 /** How much of the screen's bottom the button covers, for the list's padding,
@@ -58,8 +85,15 @@ export const PostFab = memo(function PostFab({
   hasDraft,
   folded,
   onPress,
+  reply = false,
+  bottomInset = 0,
 }: {
   zone: 'campus' | 'world';
+  /** On a post's own page it opens a reply, and says so (owner, 15 Nov: the
+   *  feed's button there too, in place of the reply bar). */
+  reply?: boolean;
+  /** Where nothing sits under it (the post page has no tab bar): the phone's own bar. */
+  bottomInset?: number;
   /** Where the post will go, read out by a screen reader. */
   hint: string;
   hasDraft: boolean;
@@ -82,14 +116,27 @@ export const PostFab = memo(function PostFab({
   }));
 
   return (
-    <Reanimated.View entering={FAB_IN} exiting={FadeOut.duration(160)} style={styles.wrap} pointerEvents="box-none">
+    <Reanimated.View
+      entering={FAB_IN}
+      exiting={FadeOut.duration(160)}
+      style={[styles.wrap, bottomInset ? { bottom: FAB_MARGIN + bottomInset } : null]}
+      pointerEvents="box-none"
+    >
       <Pressable
         onPress={() => {
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onPress();
         }}
         accessibilityRole="button"
-        accessibilityLabel={hasDraft ? `Continue your post. ${hint}` : `Write a post. ${hint}`}
+        accessibilityLabel={
+          reply
+            ? hasDraft
+              ? `Continue your reply. ${hint}`
+              : `Write a reply. ${hint}`
+            : hasDraft
+              ? `Continue your post. ${hint}`
+              : `Write a post. ${hint}`
+        }
         hitSlop={6}
       >
         {({ pressed }) => (
@@ -105,7 +152,7 @@ export const PostFab = memo(function PostFab({
                 }}
                 style={styles.label}
               >
-                Post
+                {reply ? 'Reply' : 'Post'}
               </AppText>
             </Reanimated.View>
             {hasDraft ? <View style={styles.draft} /> : null}

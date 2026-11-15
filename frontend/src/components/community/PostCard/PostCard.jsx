@@ -20,7 +20,7 @@
 
 import React, { memo, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { GraduationCap, MessageCircle } from "lucide-react";
 import AvatarImg from "../../AvatarImg/AvatarImg";
 import ImageLightbox from "../../ImageLightbox/ImageLightbox";
@@ -40,6 +40,8 @@ const STAGGER_MAX = 6;
 
 /* Spec §3.1: only the author ever receives these. */
 const STATUS_LABELS = { pending: "Being checked", under_review: "Under review" };
+/* Each label's colour says its state (owner, 15 Nov): amber waiting, orange reported. */
+const STATUS_CLASSES = { pending: styles.statusPending, under_review: styles.statusReview };
 
 function PostCard({
   post,
@@ -69,6 +71,23 @@ function PostCard({
   };
 
   const react = useCallback((emoji) => onReact(post.id, emoji), [onReact, post.id]);
+  const [held, setHeld] = useState(false);
+  const navigate = useNavigate();
+
+  // A click on the post opens its page, as the time does (owner, 15 Nov; X does
+  // the same). Not from what has a job of its own (links, buttons, the media),
+  // not from a menu or picker drawn in a portal (its clicks still bubble here
+  // through React), and not when the click ended a text selection. Ctrl or Cmd
+  // opens it in a new tab. The time stays the keyboard's way in.
+  const openPost = (e) => {
+    if (onPage || e.defaultPrevented || e.button !== 0) return;
+    if (!e.currentTarget.contains(e.target)) return;
+    if (e.target.closest("a, button, input, textarea, select, label, video, [role='button'], [role='menu'], [role='dialog']")) return;
+    if (window.getSelection()?.toString()) return;
+    const to = `/post/${post.id}`;
+    if (e.metaKey || e.ctrlKey) window.open(to, "_blank", "noopener");
+    else navigate(to);
+  };
 
   const onReplyPress = () => {
     if (canReply) onReply?.(post);
@@ -80,9 +99,10 @@ function PostCard({
 
   return (
     <article
-      className={`${styles.post} ${onPage ? styles.postLarge : ""} ${arriving !== null ? styles.postArriving : ""}`}
+      className={`${styles.post} ${onPage ? styles.postLarge : ""} ${arriving !== null ? styles.postArriving : ""} ${held ? styles.postHeld : ""}`}
       style={{ "--post-i": Math.min(index, STAGGER_MAX), "--arrive-i": Math.min(arriving ?? 0, STAGGER_MAX) }}
       aria-label={`Post by @${post.author_username}`}
+      onClick={openPost}
     >
       {/* Resting on the avatar opens the profile glimpse too, as on the
           username (owner, 10 Nov). */}
@@ -121,7 +141,7 @@ function PostCard({
             )}
             {STATUS_LABELS[post.moderation_status] && (
               <span
-                className={`${styles.statusLabel} ${post.moderation_status === "pending" ? styles.statusPending : ""}`}
+                className={`${styles.statusLabel} ${STATUS_CLASSES[post.moderation_status] ?? ""}`}
               >
                 {STATUS_LABELS[post.moderation_status]}
               </span>
@@ -147,7 +167,7 @@ function PostCard({
               onReact={react}
             />
           )}
-          <ReactionBar reaction={post.viewer_reaction} onReact={react} />
+          <ReactionBar reaction={post.viewer_reaction} onReact={react} onHeldChange={setHeld} />
           <button
             type="button"
             className={styles.replyPill}

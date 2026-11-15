@@ -136,6 +136,7 @@ export const colors = {
   communityCollegeBg: '#FAF0F9', // a post's college pill
   communityCollegeText: '#6E2270',
   communityCard: 'rgba(255,255,255,0.94)', // the frosted post card
+  communityCardPressed: 'rgba(250,242,249,0.97)', // the card while a tap opens its page (app only)
   communityCardBorder: 'rgba(128,0,128,0.11)',
   communityGlobeLand: '#2E9E5E',
   communityGlobeShade: 'rgba(5,40,90,0.38)',
@@ -148,10 +149,18 @@ export const colors = {
   /** A hairline of white round the floating Post button (PostFab), so its edge stays clear over the
    *  doodles and the white cards. */
   postFabRing: 'rgba(255,255,255,0.22)',
-  /** Your own post's `Being checked` label (owner, 13 Nov: "should have a colour"): the brand blue,
-   *  darkened to 5:1 on its tint so 11 px text reads. Web: --status-pending-text / -bg. */
-  statusPendingText: '#0B6E9E',
-  statusPendingBg: 'rgba(43,183,255,0.14)',
+  /** A post held to react: the band over it while the quick bar is open (owner, 15 Nov), in the
+   *  zone's colour. Campus is chatRowSelected's tint, the chat's held message. App only. */
+  postHeldCampus: 'rgba(128,0,128,0.15)',
+  postHeldWorld: 'rgba(235,72,127,0.18)',
+  /** Your own post's status labels. Each colour says what the state is (owner, 15 Nov):
+   *  `Being checked` is amber, waiting for a check; `Under review` is orange, taken out of the
+   *  feeds while people look at a report. Solid tints, so they read the same on the frosted card;
+   *  text 6.2:1 and 6.4:1 on them. Web: --status-pending-text / -bg, --status-review-text / -bg. */
+  statusPendingText: '#7A5200',
+  statusPendingBg: '#FEF3C7',
+  statusReviewText: '#9A3412',
+  statusReviewBg: '#FFEDD5',
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',

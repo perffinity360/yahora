@@ -57,4 +57,4 @@ None.
 ## What NOT to do yet
 
 - Not on production until my "pushed" entry; until then a reload brings Hot order back there.
-- Not merged yet: on `v-text-formatting`.
+- Not merged yet: on `v-d-app-community`.

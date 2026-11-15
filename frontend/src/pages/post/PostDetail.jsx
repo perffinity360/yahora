@@ -195,7 +195,9 @@ export default function PostDetail() {
       <div className={`${styles.narrow} ${pageStyles.page}`} data-feed={world ? "world" : "campus"}>
         <div className={`${styles.feed} ${pageStyles.feed}`}>{body}</div>
         {dock && (
-          <div className={`${styles.dockFloat} ${world ? styles.dockWorld : styles.dockCampus}`}>{dock}</div>
+          <div className={`${styles.dockFloat} ${pageStyles.dock} ${world ? styles.dockWorld : styles.dockCampus}`}>
+            {dock}
+          </div>
         )}
       </div>
     </PostActionsProvider>

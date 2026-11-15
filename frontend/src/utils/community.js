@@ -143,9 +143,9 @@ export function rateLimitText(code, nextAllowedAt, now = Date.now()) {
   const at = typeof nextAllowedAt === "string" ? Date.parse(nextAllowedAt) : NaN;
   if (Number.isNaN(at)) return `You've reached the ${what} limit for now. Please try again in a little while.`;
   const minutes = Math.ceil((at - now) / 60000);
-  if (minutes <= 1) return `You've reached the ${what} limit for now. Try again in a minute.`;
+  if (minutes <= 1) return `You've reached the ${what} limit for now. Try again after a minute.`;
   const d = new Date(at);
   const h = d.getHours() % 12 || 12;
   const clock = `${h}:${String(d.getMinutes()).padStart(2, "0")} ${d.getHours() < 12 ? "am" : "pm"}`;
-  return `You've reached the ${what} limit for now. Try again at ${clock}, in ${minutes} minutes.`;
+  return `You've reached the ${what} limit for now. Try again after ${clock} (in ${minutes} minutes).`;
 }

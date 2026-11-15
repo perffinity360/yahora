@@ -69,9 +69,19 @@ function quickBar(reaction) {
   return [reaction, ...QUICK_REACTIONS.filter((e) => e !== reaction)].slice(0, QUICK_REACTIONS.length);
 }
 
-export default function ReactionBar({ reaction, onReact }) {
+export default function ReactionBar({ reaction, onReact, onHeldChange }) {
   const [button, setButton] = useState(null);
   const [barOpen, setBarOpen] = useState(false);
+  // Opened by a long press on a touch screen: the post lights up until the bar
+  // closes, as WhatsApp does for a held message (owner, 15 Nov). A tap, a
+  // click or hover doesn't.
+  const [byHold, setByHold] = useState(false);
+  const held = barOpen && byHold;
+  const heldChange = useRef(onHeldChange);
+  heldChange.current = onHeldChange;
+  useEffect(() => {
+    heldChange.current?.(held);
+  }, [held]);
   const [expanded, setExpanded] = useState(null); // null | pickerPlacement()
   const [popKey, setPopKey] = useState(0);
 
@@ -146,6 +156,7 @@ export default function ReactionBar({ reaction, onReact }) {
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
       openedBy.current = "press";
+      setByHold(true);
       setBarOpen(true);
     }, REACTION_LONG_PRESS_MS);
   };
@@ -159,6 +170,7 @@ export default function ReactionBar({ reaction, onReact }) {
       return;
     }
     setExpanded(null);
+    setByHold(false);
     // detail is 0 for a click from the keyboard: the focus goes into the bar.
     const keyboard = e.detail === 0;
     // A mouse that rested on React has already opened the bar by hover; the

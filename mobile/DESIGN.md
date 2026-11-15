@@ -141,15 +141,27 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
 - **Floating chrome.** Switchers float, with content passing underneath. Use `expo-blur` for the glass.
   It feels more spacious than a solid bar. **A screen that only needs a way into the composer gets a
   floating action pill, not a composer** (owner, 13 Nov): the community feed's `✏️ Post` (`PostFab`), bottom
-  right, the posts scrolling on under it, the list padded so its last item clears it. **A real input field
-  at the bottom is a solid dock, edge to edge** (owner, 10 Nov), like the post page's reply bar: floating,
-  a field left a gap below it, and the posts passing through that gap and around its ends looked messy.
+  right, the posts scrolling on under it, the list padded so its last item clears it. A post's page has the
+  same pill, `✏️ Reply` (owner, 15 Nov; it had a reply bar). Both fold to the pencil while you scroll down
+  (`useFabFold`). **A notice fixed at the bottom slides away on the same signal** (the view-only line, owner
+  15 Nov): once you're reading, it has said its piece. **A real input field at the bottom is a solid dock,
+  edge to edge** (owner, 10 Nov): floating, a field left a gap below it, and the posts passing through that
+  gap and around its ends looked messy.
   **The dock's colour runs on behind the home indicator / navigation bar:** pad it by the bottom safe-area
   inset instead of stopping above it, so that strip is never a different colour.
 - **Never put text straight on a pattern.** The website's text halo still read as messy and was removed
   (owner, 7 Nov) in favour of the frosted cards above.
 - Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every overlap
   as a darker patch.
+
+## Colour says the state (owner, 15 Nov)
+
+- A label or badge for a state takes the colour people already read that way: **amber for waiting**
+  (`Being checked`), **orange for something that needs attention** (`Under review`, a reported post),
+  **red for errors and what can't be undone**, **green for done**. Brand purple and pink are for Yahora
+  itself, not for a state. A tint behind dark text of the same hue, at least 4.5:1, never colour alone.
+  Tokens: `statusPending*` and `statusReview*` in `src/theme` (the website's `--status-pending-*`,
+  `--status-review-*`).
 
 ## Icons over words
 
@@ -187,14 +199,32 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   choice (the React button's quick bar), **a tap on the button opens the choice**; it never picks a
   default for you (owner, 10 Nov).
 - Never hide an action behind a second tap on something that looks selected. Give it its own button.
+- **Holding something lights it up while what the hold opened is showing** (owner, 15 Nov, as WhatsApp does
+  for a held message): a post held to react gets a band in its zone's tint, edge to edge, until the quick
+  bar closes. A tap that opens the same bar doesn't.
+- **A tap on an item in a feed opens it** (owner, 15 Nov, as X and Threads do): the whole post card, not
+  only its time, with a slightly deeper ground while pressed. Anything inside with its own job keeps it.
+- **Emoji while writing take the keyboard's place** (owner, 15 Nov, as in WhatsApp): a panel at the
+  keyboard's height (never fewer than four rows of emoji), so the toolbar doesn't move, with no scrim, so the text stays bright. The emoji key
+  turns into a keyboard key; tapping the text (or the empty space under it) brings the keyboard back, and
+  the panel goes only once the keyboard is up. Back closes the panel first. A sheet over a scrim is for a
+  one-off choice, like a reaction's ⊕.
 
 ## Shadows and overlays
 
+- **A GIF keeps its own shape everywhere** (owner, 15 Nov): never cropped to fit a box, in a feed, a
+  preview or a picker. (Photos in a post are still held between 4:5 and 16:9, spec §3.) A grid of differently shaped media is a masonry (FlashList's `masonry`),
+  each tile as tall as its media makes it at the column's width.
 - **Shadows are `boxShadow` strings** from `shadows` in `src/theme` (RN 0.76+), the same values as the
   website's CSS variables, so a card or a menu floats the same on both.
 - **A small choice that hangs off a button** (the quick bar, the country dropdown) opens in a transparent
   `Modal`, placed from the button's `measureInWindow`, so a card or a list never clips it. A press outside
   closes it; it never moves the content under it.
+- **A yes/no question is a `ConfirmDialog`, in one size** (owner, 13 and 15 Nov; the `Post this?` size for
+  all): a 320-wide card, the words 26 in from its edges (268 wide; `messageLines` caps a message's lines,
+  shrinking it a little on a narrow phone), and two buttons only as wide as their words (36 tall, 18 either side, at least 84), centred.
+  Never the phone's own Alert. The chat's delete dialog is the one exception: WhatsApp's layout, text
+  buttons stacked on the right (owner, 24 Oct).
 - **What a row opens lives once per screen, not once per row.** Menus, sheets and pickers that a list item
   opens (the community's ⋯ menu, report form, emoji picker, breakdown) sit in one provider around the
   screen (`PostActionsProvider`), which the rows reach through context. One per row meant dozens of hidden
