@@ -188,11 +188,19 @@
   object-fit: cover;
 }
 
+/* The chosen GIF in its own shape (owner, 15 Nov: never cropped): 88 tall,
+   as wide as the GIF makes it, at most 200. */
 .gifPreview {
-  width: 88px;
+  width: fit-content;
+  max-width: 200px;
   height: 88px;
   margin: 4px 0;
   animation: previewIn 220ms var(--community-spring);
+}
+
+.gifPreview img {
+  width: auto;
+  max-width: 200px;
 }
 
 .gifBadge {

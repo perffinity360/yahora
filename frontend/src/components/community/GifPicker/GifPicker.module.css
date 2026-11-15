@@ -85,11 +85,32 @@
   gap: 3px;
 }
 
+/* The results: three columns, each tile in its GIF's own shape (the
+   aspect-ratio comes from the GIF, inline). */
+.masonry {
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.column {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
 .tile,
 .tileSkeleton {
   aspect-ratio: 1 / 1;
   border-radius: 6px;
   background: var(--input-bg);
+}
+
+.tile {
+  display: block;
+  width: 100%;
 }
 
 .tile {

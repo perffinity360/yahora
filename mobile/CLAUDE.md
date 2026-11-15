@@ -165,8 +165,8 @@ mobile/
                                     FilterSheet · SwipeCard · SwipeDeck · CampusSwitcherModal · DemoCampusAlert ·
                                     community/ (PostCard, PostThread, PostText, PostMedia, ReactionBar,
                                     ReactionSummary, CommunitySwitcher, CommunityWallpaper, GlobeIcon,
-                                    PostFab (the feed's floating ✏️ Post), ComposerDock (the post page's
-                                    reply bar), GifPicker, SupportCard, StatusBarGround, PostActions (the ⋯ menu,
+                                    PostFab (the floating ✏️ Post, and ✏️ Reply on the post page; useFabFold),
+                                    GifPicker (a masonry, each GIF in its own shape), SupportCard, StatusBarGround, PostActions (the ⋯ menu,
                                     report, delete, ⊕ and the breakdown, once per screen), ReportSheet,
                                     ReactionBreakdownSheet, EmojiGrid (our emoji picker: one scrolling list), EmojiPickerSheet
                                     (the reaction sheet, and EmojiPanel, compose's ☺ in the keyboard's place),

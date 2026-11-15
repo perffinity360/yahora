@@ -573,7 +573,8 @@ a.time:hover {
    nothing shows round the GIF but its rounded corners (owner, 13 Nov). */
 .gif {
   position: relative;
-  width: min(100%, 280px, calc(360px * var(--gif-ratio, 1)));
+  /* At most 240 × 300, in its own shape (owner, 15 Nov; the app's numbers). */
+  width: min(100%, 240px, calc(300px * var(--gif-ratio, 1)));
   margin-top: 6px;
   border-radius: 8px;
   overflow: hidden;
@@ -1064,7 +1065,8 @@ a.time:hover {
 }
 
 .replyGif .gif {
-  width: min(100%, 180px, calc(360px * var(--gif-ratio, 1)));
+  /* A reply's: at most 160 × 200, smaller than a post's at every shape. */
+  width: min(100%, 160px, calc(200px * var(--gif-ratio, 1)));
 }
 
 .showMore {

@@ -1,6 +1,17 @@
 # Community — design spec (Phase 7)
 
-**Version 3.13 · 15 November 2026 · for the website and the app**
+**Version 3.14 · 15 November 2026 · for the website and the app**
+
+> **Changed in version 3.14 (owner, 15 Nov, third round):** **every GIF shows in its own shape,
+> nothing cropped:** the pickers are masonries (app 2 columns, website 3) and the website's composer
+> preview is the GIF's shape, 88 tall (§6, §2.2). **The website's GIFs take the app's sizes,** 240 × 300 on a
+> post and 160 × 200 on a reply (§3). **The app's post page has the feed's floating button,** `✏️ Reply`, in
+> place of the reply bar (§2.1, §4). **The website's reply box on a post's page is as wide as the post
+> card** (§4). **The view-only line slides away while you scroll down** in the app's feed (§1.4). New
+> words: `Post this?` says `Consider revising it to keep the content respectful.` in three lines at most
+> (§2.3), and the compose screen's line says `Make this a place where everyone feels welcome. Be kind and
+> respectful.` on one line (§2.2). **After the new-posts pill or your own post, the app's feed really
+> reaches the top** (§8).
 
 > **Changed in version 3.13 (owner, 15 Nov, second round):** **a tap or click on a post opens its page,**
 > not only its time (§3). **The app's emoji picker is one scrolling list,** like the website's: scrolling
@@ -325,7 +336,8 @@ A quiet line takes the composer's place in the dock:
 ```
 
 Inter 400 13/18, communityMuted, with the icon in purple, in the composer's dock (§2.1) on every
-width.
+width. **In the app it slides away (down and out, 220 ms) while you scroll down and comes back when you
+scroll up or reach the top** (owner, 15 Nov), on the same signal that folds the Post button.
 
 ---
 
@@ -347,8 +359,9 @@ it. **While you scroll down it folds to the round pencil** (220 ms, ease-out, th
 and opens out again when you scroll up or come within 24 of the top, like Gmail's compose button. A
 half-written post puts a small `blue` badge, ringed in white, on its top right corner (it was a pink dot
 in the circle, which clashed with the world's pink pill). It rises in over 220 ms without overshoot.
-Tapping it opens the compose screen. The view-only line (§1.4) keeps its dock. The post page keeps its reply bar,
-as under a post in WhatsApp or X. **The website is unchanged:** the text below describes its dock.
+Tapping it opens the compose screen. The view-only line (§1.4) keeps its dock. **The post page has the
+same button, reading `✏️ Reply`** (owner, 15 Nov; it had a reply bar), which opens the compose screen as a
+reply and folds the same way. **The website is unchanged:** the text below describes its dock.
 
 On a laptop each field ends 13 px from the divider's centre, tucked in under the shared avatar (§1.1). Its
 corners are radius 20 on the outer side and 18 on the side by the avatar, and its padding keeps the text and
@@ -431,10 +444,11 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
   keyboard gets a slightly taller panel. Each emoji goes in at the cursor, as many as you like. ☺ becomes a
   keyboard key; that key, a tap on the text or on the empty space under it brings the keyboard back, and
   the panel goes once the keyboard is up, so nothing jumps. Back closes the panel first.
-- **A word on posting (app, owner 15 Nov):** above the compose screen's tools, a quiet line with a
-  hand-and-heart icon in the zone's colour: `Be kind and respectful. Real students read every post.`
-  (`…every reply.` for a reply). Caption size, communityMuted, fading in a moment after the screen opens.
-  An inline message (a limit, an error) takes its place. The website's composer is a dock and has none.
+- **A word on posting (app, owner 15 Nov):** above the compose screen's tools, a quiet centred line:
+  `Make this a place where everyone feels welcome. Be kind and respectful.` **Always one line:** 11.5,
+  communityMuted, shrinking to fit (about 10.5 on a 393-wide phone, at least 75%). It fades in a moment
+  after the screen opens. An inline message (a limit, an error) takes its place. The website's composer
+  is a dock and has none.
 - **Post is enabled** when there is text, a photo or a GIF. It shows a spinner while posting.
 - **Replies** use the same composer with text and a GIF, but no photos (§4). A top line shows only the
   `Replying to @username ✕` chip.
@@ -444,7 +458,7 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
 | Result | What the student sees |
 |---|---|
 | Posted | The composer clears and closes. The new post appears at the top of the feed. |
-| **Nudge** (API `MODERATION_NUDGE`) | A dialog: title `Post this?` · body `Some of this might come across as hurtful to other students. Consider editing it to keep things respectful.` · buttons **Edit** (primary, keeps the text) and **Post anyway**. In the app it's the `ConfirmDialog`, whose size every app dialog now shares (owner, 13 and 15 Nov): at most 304 wide, the words 26 in from its edges so this message runs to three lines, a 48 medallion, title 19, text 13, and buttons only as wide as their words (36 tall, 18 either side, at least 84), centred. |
+| **Nudge** (API `MODERATION_NUDGE`) | A dialog: title `Post this?` · body `Some of this might come across as hurtful to other students. Consider revising it to keep the content respectful.` · buttons **Edit** (primary, keeps the text) and **Post anyway**. **Three lines at most** (owner, 15 Nov). In the app it's the `ConfirmDialog`, whose size every app dialog now shares (owner, 13 and 15 Nov): at most 320 wide, the words 26 in from its edges (268 wide: this message runs to three), shrinking a little to stay in three on a narrower phone (`messageLines: 3`), and on the website the dialog takes more of a phone narrower than 380, 16 from its sides, a 48 medallion, title 19, text 13, and buttons only as wide as their words (36 tall, 18 either side, at least 84), centred. |
 | **Held for review** | Toast: `Thanks — your post is being checked and will appear once it's approved.` The composer clears. The post shows only on the author's own Posts tab, labelled `Being checked`. **Every toast stays long enough to read** (owner, 13 Nov): 1 s plus 70 ms a character, at least 1.5 s ("Copied") and at most 8 s, so this one stays about 6 s. Long text wraps, centred, 16 clear of each side, instead of running off the screen or being cut with `…`. |
 | **Held, and self-harm was detected** | Instead of the toast, a calm card (§2.4). |
 | Rate limit (`RATE_LIMIT_POSTS` / `RATE_LIMIT_REPLIES`) | Inline, above Post, **with when to try again** (owner, 13 Nov; "after", owner 15 Nov), from the answer's `next_allowed_at`: `You've reached the posting limit for now. Try again after 6:19 pm (in 26 minutes).` (`reply limit` for replies; `Try again after a minute.` under two minutes). Without `next_allowed_at`: `…Please try again in a little while.` The text is kept. |
@@ -531,9 +545,9 @@ into the replies when there are any.
     touch (44 px to tap). ← → work once it has focus. Dots sit at the bottom, 5 px, on a `toastBg` pill;
     the current one is white, the others at 45%.
   - **Pressing a photo** opens the existing image viewer at that photo, with its zoom.
-- **GIF:** in the app, at most **240 wide and 300 tall on a post, 160 × 200 on a reply** (owner, 15 Nov:
-  "slightly smaller", a reply's still smaller at every shape). The website keeps 280 × 360 (180 wide on a
-  reply) until Neeraj has looked at it at 390 wide. Radius 8, **in its own loaded shape with
+- **GIF:** at most **240 wide and 300 tall on a post, 160 × 200 on a reply**, on the website and in the
+  app (owner, 15 Nov: "slightly smaller", a reply's still smaller at every shape), **always in its own
+  shape, never cropped**. Radius 8, **in its own loaded shape with
   nothing behind it** (owner, 13 Nov; it was on a `reactionPillBorder` tint, which showed as a strip when
   KLIPY's stated size was a few pixels off the real one). The frame starts from KLIPY's width × height and
   takes the image's real shape once it loads. Plays muted and on a loop while on screen, and pauses when it
@@ -681,7 +695,9 @@ Replies now show **under each post in the feed,** as well as on the post's page.
 - **In a feed where you can only view,** the view-only line stays (§1.4), and the 💬 pill loads more
   replies instead.
 - **A post's page:** website `/post/:id`, app `app/post/[id].tsx` (CC-N4c). The same post and thread
-  with all replies paged, and text at 15/22.
+  with all replies paged, and text at 15/22. Its way to reply (owner, 15 Nov): **app,** the feed's
+  floating button reading `✏️ Reply` (§2.1); **website,** the reply box at the bottom, **exactly as wide as
+  the post card** (10 px in from each side, at most 860, centred), not the whole window.
 
 **`top_replies` (built in Block V-C, migration `feed_top_replies`, 11 Nov).** Each PostItem carries
 `top_replies`: the first `REPLY_PREVIEW_COUNT` (2) replies of the thread, which is in Hot order (migration
@@ -852,13 +868,17 @@ Website: a popover. App: a bottom sheet.
 ┌───────────────────────────────────┐
 │ (search) Search GIFs              │
 │ ┌─────┐┌─────┐┌─────┐             │   trending first, then search results
-│ │ gif ││ gif ││ gif │   …         │   app: 2 columns · website: 3 columns
+│ │ gif ││ gif ││ gif │   …         │   app: 2 columns · website: 3 columns, a masonry
 │ └─────┘└─────┘└─────┘             │
 │                  Powered by KLIPY │   ← required credit
 └───────────────────────────────────┘
 ```
 
 - **Website size:** 320 × 380, radius 12, search field 30 px tall, 3 px between GIFs.
+- **Each GIF in its own shape** (owner, 15 Nov: nothing cropped, anywhere): the tiles are a masonry, like
+  KLIPY's and GIPHY's pickers, each as tall as its GIF makes it at the column's width. Each GIF joins the
+  shortest column, so a page that loads later never moves the ones above. The composer's preview is the
+  GIF's shape too: app 200 × 240 at most, website 88 tall and at most 200 wide.
 
 - **Where it opens:** from the composer's GIF button, the reply box, and the chat composer.
   Website: a popover. App: a bottom sheet.
@@ -944,7 +964,11 @@ API reason values, in the same order: `spam`, `harassment`, `hate_speech`, `sexu
   the list: the posts already shown stay on screen the whole time (no skeletons, no blink), only
   posts not already shown are added, each fading and sliding down into place (about 200 ms,
   slightly staggered; none with reduced motion), and every page loaded below stays. If that fails,
-  the list stays as it is and a toast says so. New posts are **never** inserted while someone is
+  the list stays as it is and a toast says so. **In the app the list must end truly at the top, the new
+  post whole under the switcher** (owner, 15 Nov: it stopped part way). FlashList's own position
+  corrections, while the new posts are measured, could cut the glide short, so after the glide the feed
+  checks and finishes the way with short jumps, up to five times, 200 ms apart; a finger on the list
+  stops it. New posts are **never** inserted while someone is
   reading, only when the pill is tapped.
 
 ## 9. Empty and loading states

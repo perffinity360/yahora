@@ -297,9 +297,10 @@ export default function ComposeScreen() {
                tools (owner, 15 Nov; Instagram puts its own over the comment
                box). A message about this post takes its place. */
             <Reanimated.View entering={FadeIn.delay(250).duration(400)} style={styles.kind}>
-              <MaterialCommunityIcons name="hand-heart-outline" size={14} color={accent} />
-              <AppText style={styles.kindText}>
-                Be kind and respectful. Real students read every {parentId ? 'reply' : 'post'}.
+              {/* One line on every phone (owner, 15 Nov): the text shrinks to fit
+                  rather than wrap, about 10.5 on a 393-wide phone. */}
+              <AppText style={styles.kindText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                Make this a place where everyone feels welcome. Be kind and respectful.
               </AppText>
             </Reanimated.View>
           )}
@@ -360,10 +361,11 @@ export default function ComposeScreen() {
             ? {
                 title: 'Post this?',
                 message:
-                  'Some of this might come across as hurtful to other students. Consider editing it to keep things respectful.',
+                  'Some of this might come across as hurtful to other students. Consider revising it to keep the content respectful.',
                 confirmLabel: 'Edit',
                 cancelLabel: 'Post anyway',
                 icon: 'edit-3',
+                messageLines: 3,
               }
             : null
         }
@@ -394,8 +396,9 @@ export default function ComposeScreen() {
 function ChosenGif({ gif }: { gif: { url: string; width: number; height: number } }) {
   const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
   const ratio = loadedRatio ?? (gif.width > 0 && gif.height > 0 ? gif.width / gif.height : 1);
+  // In its own shape, at most 200 wide and 240 tall.
   return (
-    <View style={[styles.gif, { aspectRatio: ratio }]}>
+    <View style={[styles.gif, { width: Math.min(200, 240 * ratio), aspectRatio: ratio }]}>
       <Image
         source={{ uri: gif.url }}
         style={StyleSheet.absoluteFill}
@@ -519,8 +522,8 @@ const styles = StyleSheet.create({
   },
   previews: { flexDirection: 'row', gap: 8, paddingLeft: 46 },
   photo: { width: 56, height: 56, borderRadius: 8, backgroundColor: colors.inputBg },
-  gifWrap: { marginLeft: 46, alignSelf: 'flex-start', width: 200 },
-  gif: { width: '100%', borderRadius: 8, overflow: 'hidden' },
+  gifWrap: { marginLeft: 46, alignSelf: 'flex-start' },
+  gif: { borderRadius: 8, overflow: 'hidden' },
   remove: {
     position: 'absolute',
     top: 4,
@@ -541,17 +544,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.errorText,
   },
-  kind: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingBottom: 8,
-  },
+  kind: { paddingHorizontal: 12, paddingBottom: 8 },
   kindText: {
-    flexShrink: 1,
+    textAlign: 'center',
     fontFamily: font.family.regular,
-    fontSize: font.sizes.caption,
+    fontSize: 11.5,
     lineHeight: 16,
     color: colors.communityMuted,
   },

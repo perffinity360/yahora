@@ -3,7 +3,14 @@ import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-lis
 import { useIsFocused, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Pressable, RefreshControl, StyleSheet, View, type ViewInstance } from 'react-native';
-import Reanimated, { Easing, FadeOut, Keyframe } from 'react-native-reanimated';
+import Reanimated, {
+  Easing,
+  FadeOut,
+  Keyframe,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../../src/components/AppText';
@@ -63,6 +70,10 @@ const VIEWABILITY = { itemVisiblePercentThreshold: 25 };
 /** Long enough for a post put on top to render and be measured, and for
  *  FlashList's position correction to land, before the list goes to the top. */
 const INSERT_SETTLE_MS = 250;
+/** The glide to the top, then the checks after it. */
+const TOP_GLIDE_MS = 450;
+const TOP_RETRY_MS = 200;
+const TOP_SETTLE_TRIES = 5;
 
 /** The Post button stays open within this of the top… */
 const FAB_OPEN_NEAR_TOP = 24;
@@ -174,14 +185,31 @@ export default function CommunityScreen() {
      sent before the new post had rendered was undone, and the post was left
      hidden above the switcher with only its bottom showing (owner, 13 Nov).
      So it waits until the post has rendered and the list has corrected. */
+  /* It still stopped short (owner, 15 Nov, after the pill: the new post's top
+     under the switcher). While the new posts are measured, FlashList's own
+     corrections nudge the offset, and a nudge cuts the animated scroll off
+     part way. So once the glide has had time to land, it checks, and finishes
+     the way with a short jump, until the list is really at the top: up to
+     TOP_SETTLE_TRIES times. A finger on the list stops it at once. */
   const topTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollToTopAfterInsert = useCallback(() => {
+  const dragging = useRef(false);
+  const cancelTopScroll = useCallback(() => {
     if (topTimer.current) clearTimeout(topTimer.current);
-    topTimer.current = setTimeout(() => {
-      topTimer.current = null;
-      listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    }, INSERT_SETTLE_MS);
+    topTimer.current = null;
   }, []);
+  const scrollToTopAfterInsert = useCallback(() => {
+    cancelTopScroll();
+    let tries = 0;
+    const step = () => {
+      topTimer.current = null;
+      if (dragging.current) return;
+      if (tries > 0 && scrollY.current <= 1) return;
+      listRef.current?.scrollToOffset({ offset: 0, animated: tries === 0 });
+      tries += 1;
+      if (tries < TOP_SETTLE_TRIES) topTimer.current = setTimeout(step, tries === 1 ? TOP_GLIDE_MS : TOP_RETRY_MS);
+    };
+    topTimer.current = setTimeout(step, INSERT_SETTLE_MS);
+  }, [cancelTopScroll]);
   useEffect(() => () => {
     if (topTimer.current) clearTimeout(topTimer.current);
   }, []);
@@ -367,6 +395,13 @@ export default function CommunityScreen() {
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={VIEWABILITY}
             onScroll={onScroll}
+            onScrollBeginDrag={() => {
+              dragging.current = true;
+              cancelTopScroll();
+            }}
+            onScrollEndDrag={() => {
+              dragging.current = false;
+            }}
             scrollEventThrottle={32}
             refreshControl={
               <RefreshControl
@@ -392,7 +427,7 @@ export default function CommunityScreen() {
           />
 
           {viewOnly ? (
-            <ViewOnlyLine country={label} />
+            <ViewOnlyLine country={label} hidden={fabFolded} />
           ) : showComposer ? (
             <PostFab
               // A new one per side, so it changes colour with the feed's fade.
@@ -437,17 +472,34 @@ export default function CommunityScreen() {
 /**
  * Another country's feed (spec §1.4): a quiet line in the composer's dock.
  * It sits above the tab bar, which already pads for the phone's own bar.
+ *
+ * It slides away while you scroll down and comes back when you scroll up or
+ * reach the top (owner, 15 Nov), on the same signal that folds the Post button:
+ * it has said its piece once you're reading.
  */
 const VIEW_ONLY_HEIGHT = 58;
+const VIEW_ONLY_SLIDE = { duration: 220, easing: Easing.bezier(0.2, 0.8, 0.2, 1) };
 
-function ViewOnlyLine({ country }: { country: string }) {
+function ViewOnlyLine({ country, hidden }: { country: string; hidden: boolean }) {
+  const away = useSharedValue(hidden ? 1 : 0);
+  useEffect(() => {
+    away.value = withTiming(hidden ? 1 : 0, VIEW_ONLY_SLIDE);
+  }, [hidden, away]);
+  const slide = useAnimatedStyle(() => ({
+    opacity: 1 - away.value,
+    transform: [{ translateY: away.value * (VIEW_ONLY_HEIGHT + 8) }],
+  }));
   return (
-    <View style={styles.dock} accessibilityRole="text">
+    <Reanimated.View
+      style={[styles.dock, slide]}
+      accessibilityRole="text"
+      pointerEvents={hidden ? 'none' : 'auto'}
+    >
       <Feather name="eye" size={16} color={colors.purple} style={styles.dockIcon} />
       <AppText style={styles.dockText}>
         Only students in {country} can post and reply here. You can still react and report.
       </AppText>
-    </View>
+    </Reanimated.View>
   );
 }
 

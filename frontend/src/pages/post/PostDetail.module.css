@@ -13,3 +13,14 @@
 .feed {
   flex: 1 0 auto;
 }
+
+/* The reply box is exactly as wide as the post card above it (owner, 15 Nov;
+   it took the whole window): 10 px in from each side, like the list, and at
+   most the card's 860 px, centred. */
+.dock {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: calc(860px + 20px);
+  margin-inline: auto;
+  padding-inline: 10px;
+}

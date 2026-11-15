@@ -38,6 +38,9 @@ export interface ConfirmDialogContent {
   imageUri?: string | null;
   /** 'danger' paints the badge and the confirm button red, for what can't be undone. */
   tone?: 'brand' | 'danger';
+  /** Never more lines than this: the text shrinks a little on a phone too narrow for it
+   *  (the community's `Post this?`: three, owner 15 Nov). */
+  messageLines?: number;
 }
 
 const GRADIENTS = {
@@ -134,7 +137,14 @@ export function ConfirmDialog({
             )}
 
             <AppText style={styles.title}>{shown.title}</AppText>
-            <AppText style={styles.message}>{shown.message}</AppText>
+            <AppText
+              style={styles.message}
+              numberOfLines={shown.messageLines}
+              adjustsFontSizeToFit={!!shown.messageLines}
+              minimumFontScale={0.8}
+            >
+              {shown.message}
+            </AppText>
 
             <View style={styles.actions}>
               <Pressable
@@ -190,11 +200,11 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 304,
+    // 320, so the text is 268 wide: `Post this?`'s message in three lines (owner, 15 Nov).
+    maxWidth: 320,
     alignItems: 'center',
     paddingTop: 20,
-    // 26 a side: the message keeps clear of the card's edges and a two-sentence one
-    // wraps to about three lines (owner, 15 Nov).
+    // 26 a side: the message keeps clear of the card's edges (owner, 15 Nov).
     paddingHorizontal: 26,
     paddingBottom: 18,
     borderRadius: 24,
