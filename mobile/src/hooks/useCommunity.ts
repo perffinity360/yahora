@@ -297,9 +297,9 @@ function insertNewPost(client: ReturnType<typeof useQueryClient>, post: PostItem
 /** A new reply goes FIRST: at the front of its post's preview in every feed
  *  and of any thread already loaded, above the Hot ones, and counts one more
  *  reply (owner, 13 Nov: the author sees what they just wrote on top, and the
- *  screen takes them to it, useRevealReply). Only their own cache is changed,
- *  so everyone else keeps the API's Hot order; a refresh brings it back here
- *  too. */
+ *  screen takes them to it, useRevealReply). The API keeps it there after a
+ *  refresh: it puts the viewer's own replies first (migration
+ *  own_replies_first), so the cache and the server agree. */
 function insertNewReply(client: ReturnType<typeof useQueryClient>, reply: PostItem) {
   const parentId = reply.parent_post_id;
   if (!parentId) return;

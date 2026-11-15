@@ -634,8 +634,10 @@ Replies now show **under each post in the feed,** as well as on the post's page.
 - **Your own new reply goes first, and you're taken to it** (owner, 13 Nov): at the top of its post's
   thread, in a feed and on the post's page, above the Hot ones (newest first if you send several), and the
   screen scrolls just enough to show it, clear of the floating bars. A new post likewise goes on top of
-  its feed and the feed goes to the top. **Only the author sees this:** it's their own screen's copy, so
-  everyone else, and the author after a reload, gets the API's Hot order.
+  its feed and the feed goes to the top. **Only the author sees this.** It also **lasts after a reload**
+  (owner, 13 Nov, "as X does"; migration `own_replies_first`): the API puts the viewer's own replies first,
+  newest first, in the thread and in `top_replies`, then everyone else's by Hot. Nobody else sees your
+  replies moved. Feed posts are not pinned: a feed keeps its own order after a reload.
 - **Writing a reply:** the post's 💬 pill switches that panel's docked composer to reply mode, with the
   cursor in it: grey text `Reply to @username…`, up to 1,000 characters, a GIF button, and a
   `Replying to @username ✕` chip. A half-written post is kept and comes back afterwards. An empty

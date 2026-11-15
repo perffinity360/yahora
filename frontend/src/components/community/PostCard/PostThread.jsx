@@ -28,8 +28,10 @@
 //
 // What you just replied (`addedReplies`) goes FIRST, newest on top, on both,
 // and the newest one is scrolled into view (owner, 13 Nov: "for the author,
-// show the reply at the top and take them to it"). Only the author sees this
-// order: it's their own screen's copy; everyone else gets the API's Hot order.
+// show the reply at the top and take them to it"). The API keeps it there after
+// a reload: it puts the viewer's own replies first, newest first, then the Hot
+// ones (migration own_replies_first), so this order and the server's agree.
+// Nobody else sees your replies moved.
 
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";

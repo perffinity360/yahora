@@ -3187,7 +3187,7 @@ Flat: there is no nested `author` object.
   else. The database works this out; the controller just passes it through.
 - `top_replies` (Phase 7 V-C, migrations `feed_top_replies` and `reply_hot_order_hide_reported`,
   11 Nov): up to **2** reply PostItems (`REPLY_PREVIEW_COUNT`): the first 2 of
-  `GET /api/posts/:id/replies`, in its Hot order. So exactly the replies it would show you: active
+  `GET /api/posts/:id/replies`, in its order (your own first, then Hot). So exactly the replies it would show you: active
   ones, plus your own held or covered ones, never a deleted one or one you reported. `[]` when there are none, and **always `[]` on a reply** (one level
   only). Every list carries it: the three feeds, `GET /:id`, `/:id/replies` and `/by-user/:userId`.
   The nested items come from the database without `hot_score`; the controller passes the field on
@@ -3297,9 +3297,14 @@ and `can_reply_to_post()`. `can_reply` is false for pending and under-review pos
 **Query:**
   - limit: int, optional, default 20, **at most 50**
   - cursor: opaque string, optional
-**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — **Hot order**
-(`hot_score`, then `id`, both descending), like the Hot feeds. Changed 11 Nov (Phase 7 V-C,
-migration `reply_hot_order_hide_reported`); it was oldest first. A reply's score is
+**200:** `{ "items": [ PostItem ], "next_cursor": "opaque or null" }` — **the caller's own replies
+first, newest first, then everyone else's in Hot order** (`hot_score`, then `id`, both descending),
+like the Hot feeds. Own replies first since 13 Nov (migration `own_replies_first`; owner: "as X
+does"), so a reply you wrote stays on top of the thread for you after a reload; nobody else sees
+your replies moved. Hot order since 11 Nov (Phase 7 V-C, migration `reply_hot_order_hide_reported`);
+it was oldest first. The cursor is unchanged in form: the database sorts your own replies by a key
+above any Hot score and hands that key back as the row's `hot_score`, which the controller encodes
+and strips. A reply's score is
 `(likes + 1) ÷ (hours + 2)^1.5`, refreshed every 5 minutes, so a reply can move between pages;
 de-duplicate by `id`. The first 2 of this order are the post's `top_replies`.
 **400:** `{ "error": "INVALID_FORMAT" }` — not a uuid, or a bad cursor (a cursor from before the

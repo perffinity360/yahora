@@ -35,9 +35,9 @@ in a browser or on the phone.
      GIFs out of shape. A reply's is the same with 180px.
    - The composer's GIF preview is a cropped 88 px square, so it can't show a strip. I left it alone.
 
-**Only the author sees the new order.** It's their own page's copy, so everyone else keeps the API's Hot
-order, and so does the author after a reload. Making it last across reloads, as X does for your own
-replies, would need `get_post_replies()` to put the viewer's replies first. That's my side, but not built.
+**Only the author sees the new order.** Later the same day it was made to **last after a reload** too,
+from the database (migration `own_replies_first`): see the entry "Your own replies stay first after a
+reload".
 
 ## The app, same round (nothing for you to do)
 
