@@ -74,6 +74,8 @@ const INSERT_SETTLE_MS = 250;
 const TOP_GLIDE_MS = 450;
 const TOP_RETRY_MS = 200;
 const TOP_SETTLE_TRIES = 5;
+/** "At the top", for posts arriving above the first one: within this of it. */
+const NEW_ON_TOP_NEAR = 48;
 
 /** The Post button stays open within this of the top… */
 const FAB_OPEN_NEAR_TOP = 24;
@@ -213,6 +215,25 @@ export default function CommunityScreen() {
   useEffect(() => () => {
     if (topTimer.current) clearTimeout(topTimer.current);
   }, []);
+
+  /* Posts that arrive above the top one while you're at the top (a pull to
+     refresh, or a refetch the app made on its own) are shown whole: FlashList
+     keeps the old first post where it was, which left the new one half under
+     the switcher (owner, 15–16 Nov). Read during render, before FlashList
+     corrects the offset; acted on once the new post is on screen. While
+     you're further down reading, nothing moves (spec §8). */
+  const firstId = posts[0]?.id;
+  const firstSeen = useRef(firstId);
+  const newOnTop = useRef(false);
+  if (firstSeen.current !== firstId) {
+    if (firstSeen.current && firstId && scrollY.current < NEW_ON_TOP_NEAR) newOnTop.current = true;
+    firstSeen.current = firstId;
+  }
+  useEffect(() => {
+    if (!newOnTop.current) return;
+    newOnTop.current = false;
+    scrollToTopAfterInsert();
+  }, [firstId, scrollToTopAfterInsert]);
 
   // What the compose screen did, once it has closed (spec §2.3).
   useEffect(
@@ -477,17 +498,20 @@ export default function CommunityScreen() {
  * reach the top (owner, 15 Nov), on the same signal that folds the Post button:
  * it has said its piece once you're reading.
  */
-const VIEW_ONLY_HEIGHT = 58;
-const VIEW_ONLY_SLIDE = { duration: 220, easing: Easing.bezier(0.2, 0.8, 0.2, 1) };
+const VIEW_ONLY_HEIGHT = 40;
+/** A slow, soft fade with a short drift, so it leaves without catching the eye
+ *  (owner, 16 Nov: "hide smoothly"). */
+const VIEW_ONLY_FADE = { duration: 320, easing: Easing.bezier(0.33, 0, 0.2, 1) };
+const VIEW_ONLY_DRIFT = 10;
 
 function ViewOnlyLine({ country, hidden }: { country: string; hidden: boolean }) {
   const away = useSharedValue(hidden ? 1 : 0);
   useEffect(() => {
-    away.value = withTiming(hidden ? 1 : 0, VIEW_ONLY_SLIDE);
+    away.value = withTiming(hidden ? 1 : 0, VIEW_ONLY_FADE);
   }, [hidden, away]);
   const slide = useAnimatedStyle(() => ({
     opacity: 1 - away.value,
-    transform: [{ translateY: away.value * (VIEW_ONLY_HEIGHT + 8) }],
+    transform: [{ translateY: away.value * VIEW_ONLY_DRIFT }],
   }));
   return (
     <Reanimated.View
@@ -495,9 +519,9 @@ function ViewOnlyLine({ country, hidden }: { country: string; hidden: boolean })
       accessibilityRole="text"
       pointerEvents={hidden ? 'none' : 'auto'}
     >
-      <Feather name="eye" size={16} color={colors.purple} style={styles.dockIcon} />
-      <AppText style={styles.dockText}>
-        Only students in {country} can post and reply here. You can still react and report.
+      <Feather name="eye" size={12} color={colors.communityMuted} style={styles.dockIcon} />
+      <AppText style={styles.dockText} numberOfLines={1}>
+        Only students in {country} can post and reply here.
       </AppText>
     </Reanimated.View>
   );
@@ -554,22 +578,25 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    // Quiet (owner, 16 Nov: "must not catch too much attention"): a slim strip, a
+    // hairline on top, the smallest text size, centred.
     minHeight: VIEW_ONLY_HEIGHT,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: colors.communityDock,
-    borderTopWidth: 1.5,
-    borderTopColor: colors.communityRail,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.communityHairline,
   },
   dockIcon: { flexShrink: 0 },
   dockText: {
-    flex: 1,
+    flexShrink: 1,
     fontFamily: font.family.regular,
-    fontSize: font.sizes.body,
-    lineHeight: 18,
+    fontSize: font.sizes.micro,
+    lineHeight: 15,
     color: colors.communityMuted,
   },
 });

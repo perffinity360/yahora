@@ -76,10 +76,6 @@
   --chat-tombstone-mine: rgba(255,255,255,0.90);
   --scrim: rgba(11,11,11,0.32);
   --toast-bg: rgba(26,26,26,0.88);
-  /* The GIF tag on a posted GIF: there, but quiet, so the GIF holds the eye
-     (owner, 15 Nov). The app's gifTagBg / gifTagText. */
-  --gif-tag-bg: rgba(26, 26, 26, 0.38);
-  --gif-tag-text: rgba(255, 255, 255, 0.86);
 
   /* Reactions — docs/design/COMMUNITY_SPEC.md §12, twins of mobile's
      reactionPillBg … quickBarShadow. */

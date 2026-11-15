@@ -587,18 +587,6 @@ a.time:hover {
   object-fit: cover;
 }
 
-.gifBadge {
-  position: absolute;
-  left: 6px;
-  bottom: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--gif-tag-bg);
-  color: var(--gif-tag-text);
-  font: 600 9px/13px "Inter", sans-serif;
-  letter-spacing: 0.04em;
-}
-
 /* ── Actions: pills side by side, icons instead of words ───────────────── */
 
 .actions {
@@ -1067,6 +1055,18 @@ a.time:hover {
 .replyGif .gif {
   /* A reply's: at most 160 × 200, smaller than a post's at every shape. */
   width: min(100%, 160px, calc(200px * var(--gif-ratio, 1)));
+}
+
+/* On a laptop a size up, a fifth bigger (owner, 16 Nov): a post's at most
+   288 × 360 and a reply's 192 × 240, the reply's still the smaller. */
+@media (min-width: 1024px) {
+  .gif {
+    width: min(100%, 288px, calc(360px * var(--gif-ratio, 1)));
+  }
+
+  .replyGif .gif {
+    width: min(100%, 192px, calc(240px * var(--gif-ratio, 1)));
+  }
 }
 
 .showMore {

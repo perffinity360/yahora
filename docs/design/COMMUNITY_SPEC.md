@@ -1,6 +1,15 @@
 # Community — design spec (Phase 7)
 
-**Version 3.14 · 15 November 2026 · for the website and the app**
+**Version 3.15 · 16 November 2026 · for the website and the app**
+
+> **Changed in version 3.15 (owner, 16 Nov):** **no `GIF` tag on GIFs** (§3). **On a laptop the website's
+> GIFs are a fifth bigger** (288 × 360 on a post, 192 × 240 on a reply; §3). **The website's composer
+> placeholders are shorter and never wrap:** `Post to your campus`, `Post to India`, `Post to everyone`
+> (§2.1). **The view-only line is quieter**: the smallest text size, no `You can still react and report.`,
+> and it fades away softly while you scroll (§1.4). The app's compose line has its hand-and-heart back
+> (§2.2). **The app's feed goes to the top whenever posts arrive above the first one while you're at the
+> top**, so a new post is never left half under the switcher (§8). Outside the community: the heart on a
+> product card's photo shows only while the card is pointed at, with a mouse (MARK_SOLD / marketplace).
 
 > **Changed in version 3.14 (owner, 15 Nov, third round):** **every GIF shows in its own shape,
 > nothing cropped:** the pickers are masonries (app 2 columns, website 3) and the website's composer
@@ -332,12 +341,15 @@ Colours and fonts come from the tokens you already have (`mobile/src/theme/index
 A quiet line takes the composer's place in the dock:
 
 ```
-(eye icon)  Only students in Germany can post and reply here. You can still react and report.
+(eye icon)  Only students in Germany can post and reply here.
 ```
 
-Inter 400 13/18, communityMuted, with the icon in purple, in the composer's dock (§2.1) on every
-width. **In the app it slides away (down and out, 220 ms) while you scroll down and comes back when you
-scroll up or reach the top** (owner, 15 Nov), on the same signal that folds the Post button.
+Website: Inter 400 13/18, communityMuted, with the icon in purple, in the composer's dock (§2.1) on every
+width. **App (owner, 16 Nov: "must not catch too much attention"):** the smallest text size, `micro` 11/15,
+communityMuted, centred on one line, a 12 eye in communityMuted, on a slim dock (8 above and below) with a
+hairline on top. **It fades away softly while you scroll down** (320 ms, drifting 10 down) **and comes back
+when you scroll up or reach the top** (owner, 15–16 Nov), on the same signal that folds the Post button.
+`You can still react and report.` was dropped on both (owner, 16 Nov).
 
 ---
 
@@ -377,9 +389,14 @@ people. The field is 8 px in from each side, radius 20, with your avatar (26, or
 
 | Feed | Grey text |
 |---|---|
-| Campus | `What's happening on campus?` |
-| Your country | `Share with students in India` |
-| Global | `Share with students everywhere` |
+| Campus | website `Post to your campus` · app `What's happening on campus?` |
+| Your country | website `Post to India` · app `Share with students in India` |
+| Global | website `Post to everyone` · app `Share with students everywhere` |
+
+**The website's are short so they fit one line on a phone** (owner, 16 Nov): the long ones wrapped to two
+lines once the emoji button showed, and the field jumped. An empty field also keeps its placeholder on one
+line, ending in `…` if a long country or username doesn't fit. The app's full-screen compose screen has room
+for the longer words.
 
 **Clicking it highlights it, and it stays one line.** The outline turns to the feed's accent with a 3 px soft
 tint around it: `purpleDark` on the campus feed, `pinkDark` on a country or Global feed. Both layouts do this.
@@ -444,9 +461,10 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
   keyboard gets a slightly taller panel. Each emoji goes in at the cursor, as many as you like. ☺ becomes a
   keyboard key; that key, a tap on the text or on the empty space under it brings the keyboard back, and
   the panel goes once the keyboard is up, so nothing jumps. Back closes the panel first.
-- **A word on posting (app, owner 15 Nov):** above the compose screen's tools, a quiet centred line:
-  `Make this a place where everyone feels welcome. Be kind and respectful.` **Always one line:** 11.5,
-  communityMuted, shrinking to fit (about 10.5 on a 393-wide phone, at least 75%). It fades in a moment
+- **A word on posting (app, owner 15 Nov):** above the compose screen's tools, a quiet centred line, the
+  hand-and-heart (MaterialCommunityIcons `hand-heart-outline`, 14, in the zone's colour; owner, 16 Nov: keep
+  it) then `Make this a place where everyone feels welcome. Be kind and respectful.` **Always one line:**
+  11.5, communityMuted, shrinking to fit (about 10 on a 393-wide phone, at least 70%). It fades in a moment
   after the screen opens. An inline message (a limit, an error) takes its place. The website's composer
   is a dock and has none.
 - **Post is enabled** when there is text, a photo or a GIF. It shows a spinner while posting.
@@ -547,13 +565,13 @@ into the replies when there are any.
   - **Pressing a photo** opens the existing image viewer at that photo, with its zoom.
 - **GIF:** at most **240 wide and 300 tall on a post, 160 × 200 on a reply**, on the website and in the
   app (owner, 15 Nov: "slightly smaller", a reply's still smaller at every shape), **always in its own
-  shape, never cropped**. Radius 8, **in its own loaded shape with
+  shape, never cropped**. **On the website at 1024 px and wider, a fifth bigger:** 288 × 360 on a post,
+  192 × 240 on a reply (owner, 16 Nov). Radius 8, **in its own loaded shape with
   nothing behind it** (owner, 13 Nov; it was on a `reactionPillBorder` tint, which showed as a strip when
   KLIPY's stated size was a few pixels off the real one). The frame starts from KLIPY's width × height and
   takes the image's real shape once it loads. Plays muted and on a loop while on screen, and pauses when it
-  scrolls away. It carries a small, **quiet** `GIF` tag in the corner (owner, 15 Nov: it shouldn't pull the
-  eye off the GIF): `rgba(26,26,26,0.38)` behind `rgba(255,255,255,0.86)` semibold text (`gifTagBg` /
-  `gifTagText`, web `--gif-tag-bg` / `--gif-tag-text`).
+  scrolls away. **No `GIF` tag on it** (owner, 16 Nov; it had a quiet one on 15 Nov, and a dark one
+  before), nor on the composer's preview.
 - **Emoji inside the text are a size up,** 1.28 em (the chat's 18 on 14), line height 1: the emoji font
   draws many of them smaller than the letters around them.
 - **Links in a post say their own hover colour** (website): the name and the @username turn `purple`, with
@@ -968,7 +986,9 @@ API reason values, in the same order: `spam`, `harassment`, `hate_speech`, `sexu
   post whole under the switcher** (owner, 15 Nov: it stopped part way). FlashList's own position
   corrections, while the new posts are measured, could cut the glide short, so after the glide the feed
   checks and finishes the way with short jumps, up to five times, 200 ms apart; a finger on the list
-  stops it. New posts are **never** inserted while someone is
+  stops it. **The same happens whenever posts arrive above the first one while you're within 48 of the
+  top** (owner, 16 Nov), from a pull to refresh or a refetch the app made itself: FlashList kept the old
+  first post in place, which left the new one half under the switcher. Further down, nothing moves. New posts are **never** inserted while someone is
   reading, only when the pill is tapped.
 
 ## 9. Empty and loading states

@@ -151,6 +151,15 @@
   opacity: 1;
 }
 
+/* An empty box keeps its placeholder on one line, ending in "…" if a long
+   country or username doesn't fit, so the field never grows to two lines
+   before anything is typed. Typed text wraps as usual. */
+.textarea:placeholder-shown {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .previews {
   display: flex;
   gap: 6px;
@@ -201,17 +210,6 @@
 .gifPreview img {
   width: auto;
   max-width: 200px;
-}
-
-.gifBadge {
-  position: absolute;
-  left: 4px;
-  bottom: 4px;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: var(--toast-bg);
-  color: var(--white);
-  font: 700 9px/13px "Inter", sans-serif;
 }
 
 .remove {

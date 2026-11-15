@@ -298,8 +298,10 @@ export default function ComposeScreen() {
                box). A message about this post takes its place. */
             <Reanimated.View entering={FadeIn.delay(250).duration(400)} style={styles.kind}>
               {/* One line on every phone (owner, 15 Nov): the text shrinks to fit
-                  rather than wrap, about 10.5 on a 393-wide phone. */}
-              <AppText style={styles.kindText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                  rather than wrap, about 10 on a 393-wide phone, beside the
+                  hand-and-heart in the zone's colour (owner, 16 Nov: keep it). */}
+              <MaterialCommunityIcons name="hand-heart-outline" size={14} color={accent} />
+              <AppText style={styles.kindText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 Make this a place where everyone feels welcome. Be kind and respectful.
               </AppText>
             </Reanimated.View>
@@ -544,9 +546,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: colors.errorText,
   },
-  kind: { paddingHorizontal: 12, paddingBottom: 8 },
+  kind: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
   kindText: {
-    textAlign: 'center',
+    flexShrink: 1,
     fontFamily: font.family.regular,
     fontSize: 11.5,
     lineHeight: 16,

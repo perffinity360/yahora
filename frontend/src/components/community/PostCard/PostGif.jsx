@@ -1,7 +1,7 @@
 // frontend/src/components/community/PostCard/PostGif.jsx
 //
 // Spec §3 "GIF": plays muted and on a loop while on screen, pauses when it
-// scrolls away, and carries a small GIF badge.
+// scrolls away. No GIF tag on it (owner, 16 Nov).
 //
 // A GifRef's `url` is the provider's small animated rendition. A video
 // rendition (.mp4 / .webm) is paused for real. An animated image can't be
@@ -76,9 +76,6 @@ export default function PostGif({ gif }) {
           onLoad={(e) => takeShape(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
         />
       )}
-      <span className={styles.gifBadge} aria-hidden="true">
-        GIF
-      </span>
     </div>
   );
 }

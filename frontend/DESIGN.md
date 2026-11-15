@@ -148,6 +148,13 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   header saying what the area is (`CAMPUS`, `ALL CAMPUSES`).
 - Keep one left edge for everything in a row.
 
+## Hover-only controls (owner, 16 Nov)
+
+- A control that sits on a photo and has a twin elsewhere on the card (the product card's heart, whose
+  like and count are also under the photo) shows only while the card is pointed at, with a mouse, or has
+  keyboard focus. It fades in and out with the card. **Touch screens keep it in view:** they can't hover.
+  Scope it with `@media (hover: hover) and (pointer: fine)`.
+
 ## Colour says the state (owner, 15 Nov)
 
 - A label or badge for a state takes the colour people already read that way: **amber for waiting**

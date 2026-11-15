@@ -158,8 +158,8 @@ function Chevron({ side, onPress }: { side: 'left' | 'right'; onPress: () => voi
 /**
  * COMMUNITY_SPEC.md §3 "GIF": at most `maxWidth` wide and `maxHeight` tall
  * (240 × 300 on a post, 160 × 200 on a reply: a size down on 15 Nov, the
- * reply's still smaller at every shape, so the thread keeps its order), with a
- * quiet GIF tag that doesn't pull the eye off the GIF (owner, 15 Nov). It plays while on screen and pauses when it
+ * reply's still smaller at every shape, so the thread keeps its order). No GIF
+ * tag on it (owner, 16 Nov): the GIF speaks for itself. It plays while on screen and pauses when it
  * scrolls away: the feed tells it with `playing`, from FlashList's viewability.
  *
  * The frame takes the shape of the GIF as it actually loads and has no ground
@@ -209,9 +209,6 @@ export const PostGif = memo(function PostGif({
         }}
         accessibilityLabel="GIF"
       />
-      <View style={styles.gifBadge} pointerEvents="none">
-        <AppText style={styles.gifBadgeText}>GIF</AppText>
-      </View>
     </View>
   );
 });
@@ -254,20 +251,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 8,
     overflow: 'hidden',
-  },
-  gifBadge: {
-    position: 'absolute',
-    left: 6,
-    bottom: 6,
-    paddingHorizontal: 5,
-    borderRadius: 4,
-    backgroundColor: colors.gifTagBg,
-  },
-  gifBadgeText: {
-    fontFamily: font.family.semibold,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 0.3,
-    color: colors.gifTagText,
   },
 });
