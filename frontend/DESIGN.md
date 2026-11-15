@@ -148,6 +148,15 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   header saying what the area is (`CAMPUS`, `ALL CAMPUSES`).
 - Keep one left edge for everything in a row.
 
+## Colour says the state (owner, 15 Nov)
+
+- A label or badge for a state takes the colour people already read that way: **amber for waiting**
+  (`Being checked`), **orange for something that needs attention** (`Under review`, a reported post),
+  **red for errors and what can't be undone**, **green for done**. Brand purple and pink are for Yahora
+  itself, not for a state. A tint behind dark text of the same hue, at least 4.5:1, never colour alone.
+  Tokens: `--status-pending-*` and `--status-review-*` here, `statusPending*` and `statusReview*` in the
+  app.
+
 ## Icons over words
 
 - Our students know these icons. Use an icon for an obvious action (react, reply, sort, send), with an

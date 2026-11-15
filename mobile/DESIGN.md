@@ -151,6 +151,15 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
 - Lines that must join, like a reply thread: use an opaque colour and rows that touch. Alpha shows every overlap
   as a darker patch.
 
+## Colour says the state (owner, 15 Nov)
+
+- A label or badge for a state takes the colour people already read that way: **amber for waiting**
+  (`Being checked`), **orange for something that needs attention** (`Under review`, a reported post),
+  **red for errors and what can't be undone**, **green for done**. Brand purple and pink are for Yahora
+  itself, not for a state. A tint behind dark text of the same hue, at least 4.5:1, never colour alone.
+  Tokens: `statusPending*` and `statusReview*` in `src/theme` (the website's `--status-pending-*`,
+  `--status-review-*`).
+
 ## Icons over words
 
 - Our students know these icons. Use an icon for an obvious action (react, reply, sort, send), with an
@@ -187,6 +196,14 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   choice (the React button's quick bar), **a tap on the button opens the choice**; it never picks a
   default for you (owner, 10 Nov).
 - Never hide an action behind a second tap on something that looks selected. Give it its own button.
+- **Holding something lights it up while what the hold opened is showing** (owner, 15 Nov, as WhatsApp does
+  for a held message): a post held to react gets a band in its zone's tint, edge to edge, until the quick
+  bar closes. A tap that opens the same bar doesn't.
+- **Emoji while writing take the keyboard's place** (owner, 15 Nov, as in WhatsApp): a panel at the
+  keyboard's height, so the toolbar doesn't move, with no scrim, so the text stays bright. The emoji key
+  turns into a keyboard key; tapping the text (or the empty space under it) brings the keyboard back, and
+  the panel goes only once the keyboard is up. Back closes the panel first. A sheet over a scrim is for a
+  one-off choice, like a reaction's ⊕.
 
 ## Shadows and overlays
 
@@ -195,6 +212,11 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
 - **A small choice that hangs off a button** (the quick bar, the country dropdown) opens in a transparent
   `Modal`, placed from the button's `measureInWindow`, so a card or a list never clips it. A press outside
   closes it; it never moves the content under it.
+- **A yes/no question is a `ConfirmDialog`, in one size** (owner, 13 and 15 Nov; the `Post this?` size for
+  all): a 304-wide card, the words 26 in from its edges so a two-sentence message runs to about three
+  lines, and two buttons only as wide as their words (36 tall, 18 either side, at least 84), centred.
+  Never the phone's own Alert. The chat's delete dialog is the one exception: WhatsApp's layout, text
+  buttons stacked on the right (owner, 24 Oct).
 - **What a row opens lives once per screen, not once per row.** Menus, sheets and pickers that a list item
   opens (the community's ⋯ menu, report form, emoji picker, breakdown) sit in one provider around the
   screen (`PostActionsProvider`), which the rows reach through context. One per row meant dozens of hidden

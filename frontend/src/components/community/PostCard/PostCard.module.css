@@ -43,6 +43,16 @@
   border-bottom-color: var(--community-card-border-hover);
 }
 
+/* Held to react on a touch screen: the whole post lights up in its zone's
+   colour while the quick bar is open, as WhatsApp does for a held message
+   (owner, 15 Nov). An inset shadow, so it tints over the card's ground and
+   under its content without positioning anything. */
+.postHeld {
+  box-shadow:
+    var(--community-card-shadow),
+    inset 0 0 0 100vmax color-mix(in srgb, var(--zone-accent, var(--purple)) 14%, transparent);
+}
+
 @keyframes postIn {
   from {
     opacity: 0;
@@ -233,11 +243,18 @@ a.time:hover {
   white-space: nowrap;
 }
 
-/* Being checked: blue, a check in progress (owner, 13 Nov). Under review stays grey. */
+/* The colour says the state (owner, 15 Nov): amber is waiting for a check,
+   orange is a report being looked at. */
 .statusPending {
   border-color: transparent;
   background: var(--status-pending-bg);
   color: var(--status-pending-text);
+}
+
+.statusReview {
+  border-color: transparent;
+  background: var(--status-review-bg);
+  color: var(--status-review-text);
 }
 
 /* ── A reply's campus on a line of its own, in a narrow feed ───────────── */

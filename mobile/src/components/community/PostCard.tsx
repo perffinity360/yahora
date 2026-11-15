@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { memo, useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Reanimated, { Easing, Keyframe } from 'react-native-reanimated';
+import Reanimated, { Easing, Keyframe, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { AppText } from '../AppText';
 import { Avatar } from '../Avatar';
@@ -111,6 +111,18 @@ export const PostCard = memo(function PostCard({
   const rail = zone === 'campus' ? colors.communityRailCampus : colors.communityRailWorld;
 
   const react = useCallback((emoji: string | null) => onReact(post, emoji), [onReact, post]);
+
+  /* Held to react: the whole post lights up in the zone's tint while the quick
+     bar is open, as WhatsApp does for a held message (owner, 15 Nov). An
+     opacity on the UI thread, so a recycled cell never replays it. */
+  const heldTint = useSharedValue(0);
+  const heldStyle = useAnimatedStyle(() => ({ opacity: heldTint.value }));
+  const onHeldChange = useCallback(
+    (held: boolean) => {
+      heldTint.value = withTiming(held ? 1 : 0, { duration: held ? 140 : 200, easing: Easing.out(Easing.cubic) });
+    },
+    [heldTint],
+  );
   const openProfile = () => onOpenProfile(post.author_id);
 
   const onReplyPress = () => {
@@ -129,7 +141,7 @@ export const PostCard = memo(function PostCard({
     >
       {/* Long-pressing the post opens the quick bar too (spec §5.1). */}
       <Pressable
-        onLongPress={() => reactRef.current?.open()}
+        onLongPress={() => reactRef.current?.open({ held: true })}
         delayLongPress={REACTION_LONG_PRESS_MS}
         style={[styles.card, { borderLeftColor: accent }]}
         accessibilityLabel={`Post by @${post.author_username}`}
@@ -180,7 +192,13 @@ export const PostCard = memo(function PostCard({
                 </AppText>
               ) : null}
               {status ? (
-                <AppText style={[styles.status, post.moderation_status === 'pending' && styles.statusPending]}>
+                <AppText
+                  style={[
+                    styles.status,
+                    post.moderation_status === 'pending' && styles.statusPending,
+                    post.moderation_status === 'under_review' && styles.statusReview,
+                  ]}
+                >
                   {status}
                 </AppText>
               ) : null}
@@ -208,7 +226,12 @@ export const PostCard = memo(function PostCard({
 
             <View style={styles.actions}>
               <ReactionSummary post={post} onReact={react} />
-              <ReactButton ref={reactRef} reaction={post.viewer_reaction} onReact={react} />
+              <ReactButton
+                ref={reactRef}
+                reaction={post.viewer_reaction}
+                onReact={react}
+                onHeldChange={onHeldChange}
+              />
               <Pressable
                 onPress={onReplyPress}
                 hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
@@ -250,6 +273,16 @@ export const PostCard = memo(function PostCard({
           </View>
         ) : null}
       </Pressable>
+
+      {/* Over the card, edge to edge across the screen like WhatsApp's band. */}
+      <Reanimated.View
+        pointerEvents="none"
+        style={[
+          styles.held,
+          { backgroundColor: zone === 'campus' ? colors.postHeldCampus : colors.postHeldWorld },
+          heldStyle,
+        ]}
+      />
 
       {viewerAt !== null ? (
         <ZoomableImageViewer
@@ -303,6 +336,9 @@ const styles = StyleSheet.create({
     boxShadow: shadows.communityCard,
   },
   postRow: { flexDirection: 'row' },
+  // 3 beyond the card above and below: half of the 6 between cards, so two held
+  // posts would never overlap.
+  held: { position: 'absolute', left: 0, right: 0, top: -3, bottom: 3 },
   trunk: {
     position: 'absolute',
     left: LINE_X - LINE_W / 2,
@@ -360,8 +396,9 @@ const styles = StyleSheet.create({
     color: colors.communityMuted,
     backgroundColor: colors.inputBg,
   },
-  // Being checked: blue, a check in progress (owner, 13 Nov). Under review stays grey.
+  // The colour says the state (owner, 15 Nov): amber is waiting, orange is a report being looked at.
   statusPending: { color: colors.statusPendingText, backgroundColor: colors.statusPendingBg },
+  statusReview: { color: colors.statusReviewText, backgroundColor: colors.statusReviewBg },
   headerSpacer: { flexGrow: 1, flexShrink: 0, minWidth: 4 },
   more: { height: AVATAR, justifyContent: 'center', paddingLeft: 4 },
   support: { marginTop: 10 },

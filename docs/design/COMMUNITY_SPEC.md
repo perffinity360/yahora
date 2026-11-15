@@ -1,6 +1,15 @@
 # Community — design spec (Phase 7)
 
-**Version 3.11 · 13 November 2026 · for the website and the app**
+**Version 3.12 · 15 November 2026 · for the website and the app**
+
+> **Changed in version 3.12 (owner, 15 Nov):** **holding a post to react lights the whole post up** in its
+> zone's tint until the quick bar closes, as WhatsApp does: the app's long-press on the post or on React,
+> and the website's long-press on React on a touch screen (§5.1). **The app's ☺ while writing opens an
+> emoji panel in the keyboard's place,** not a sheet over a dimmed screen: the text stays bright, and a tap
+> on it brings the keyboard back (§2.2). **Every app dialog takes the `Post this?` size,** and that one's
+> words sit further from its edges, about three lines, with buttons only as wide as their words (§2.3).
+> **Status labels say their state by colour:** `Being checked` amber, `Under review` orange (§10). The
+> posting limit says **`Try again after 6:19 pm (in 26 minutes)`** (§2.3).
 
 > **Changed in version 3.11 (owner, 13 Nov):** **the app's feeds post from a floating `✏️ Post` button**
 > in the bottom right corner instead of the composer dock; the posts scroll on under it (§1.2, §2.1). The
@@ -407,8 +416,12 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
   - A post has **either** photos **or** a GIF. While one is attached, the other button is
     disabled and its tooltip (web) or press hint (app) says
     `Remove the photos to add a GIF` (or the other way round).
-- **Emoji:** on the website, the smile button opens the full emoji picker (§5.2). The app relies
-  on the phone keyboard's emoji.
+- **Emoji:** on the website, the smile button opens the full emoji picker (§5.2). **The app's compose
+  screen has ☺ after GIF** (owner, 13 Nov), which opens the same picker **as a panel in the keyboard's
+  place**, as WhatsApp does (owner, 15 Nov): the keyboard's height, so the toolbar stays where it was; no
+  scrim, so the text stays bright. Each emoji goes in at the cursor, as many as you like. ☺ becomes a
+  keyboard key; that key, a tap on the text or on the empty space under it brings the keyboard back, and
+  the panel goes once the keyboard is up, so nothing jumps. Back closes the panel first.
 - **Post is enabled** when there is text, a photo or a GIF. It shows a spinner while posting.
 - **Replies** use the same composer with text and a GIF, but no photos (§4). A top line shows only the
   `Replying to @username ✕` chip.
@@ -418,10 +431,10 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
 | Result | What the student sees |
 |---|---|
 | Posted | The composer clears and closes. The new post appears at the top of the feed. |
-| **Nudge** (API `MODERATION_NUDGE`) | A dialog: title `Post this?` · body `Some of this might come across as hurtful to other students. You can edit it, or post it as it is.` · buttons **Edit** (primary, keeps the text) and **Post anyway**. In the app it's the `ConfirmDialog` a size down (`compact`: at most 304 wide, a 48 medallion, title 19, text 13, 42 buttons; owner, 13 Nov). |
+| **Nudge** (API `MODERATION_NUDGE`) | A dialog: title `Post this?` · body `Some of this might come across as hurtful to other students. You can edit it, or post it as it is.` · buttons **Edit** (primary, keeps the text) and **Post anyway**. In the app it's the `ConfirmDialog`, whose size every app dialog now shares (owner, 13 and 15 Nov): at most 304 wide, the words 26 in from its edges so this message runs to three lines, a 48 medallion, title 19, text 13, and buttons only as wide as their words (36 tall, 18 either side, at least 84), centred. |
 | **Held for review** | Toast: `Thanks — your post is being checked and will appear once it's approved.` The composer clears. The post shows only on the author's own Posts tab, labelled `Being checked`. **Every toast stays long enough to read** (owner, 13 Nov): 1 s plus 70 ms a character, at least 1.5 s ("Copied") and at most 8 s, so this one stays about 6 s. Long text wraps, centred, 16 clear of each side, instead of running off the screen or being cut with `…`. |
 | **Held, and self-harm was detected** | Instead of the toast, a calm card (§2.4). |
-| Rate limit (`RATE_LIMIT_POSTS` / `RATE_LIMIT_REPLIES`) | Inline, above Post, **with when to try again** (owner, 13 Nov), from the answer's `next_allowed_at`: `You've reached the posting limit for now. Try again at 6:19 pm, in 26 minutes.` (`reply limit` for replies; `Try again in a minute.` under two minutes). Without `next_allowed_at`: `…Please try again in a little while.` The text is kept. |
+| Rate limit (`RATE_LIMIT_POSTS` / `RATE_LIMIT_REPLIES`) | Inline, above Post, **with when to try again** (owner, 13 Nov; "after", owner 15 Nov), from the answer's `next_allowed_at`: `You've reached the posting limit for now. Try again after 6:19 pm (in 26 minutes).` (`reply limit` for replies; `Try again after a minute.` under two minutes). Without `next_allowed_at`: `…Please try again in a little while.` The text is kept. |
 | `NOT_ALLOWED_HERE` | `You can't post in this feed.` (This should never happen, because the UI hides the composer.) |
 | Too long / bad file | The messages in §2.2. The text is kept. |
 | Network or server error | Toast: `Couldn't post. Check your connection and try again.` The text is kept. |
@@ -526,8 +539,8 @@ into the replies when there are any.
 
 | State | Who sees what |
 |---|---|
-| `Being checked` (held) | Only the author, on their Posts tab, with a **blue** label (owner, 13 Nov; was grey): `#0B6E9E` on `rgba(43,183,255,0.14)`, no border (`statusPendingText` / `statusPendingBg`). If it was held for self-harm, the support card (§2.4) sits under it. |
-| **Under review** (reported) | It's taken out of every feed and off the author's profile for everyone else. A direct link shows only `This post was reported and is being reviewed.` — no text, no photos, no button to view it. A covered reply disappears from its thread. The author still sees the post, labelled `Under review`. |
+| `Being checked` (held) | Only the author, on their Posts tab, with an **amber** label, the colour of waiting (owner, 15 Nov; blue on 13 Nov, grey before): `#7A5200` on `#FEF3C7`, no border (`statusPendingText` / `statusPendingBg`, web `--status-pending-*`). If it was held for self-harm, the support card (§2.4) sits under it. |
+| **Under review** (reported) | It's taken out of every feed and off the author's profile for everyone else. A direct link shows only `This post was reported and is being reviewed.` — no text, no photos, no button to view it. A covered reply disappears from its thread. The author still sees the post, labelled `Under review` in **orange**, the colour of something that needs attention (owner, 15 Nov; was grey): `#9A3412` on `#FFEDD5`, no border (`statusReviewText` / `statusReviewBg`, web `--status-review-*`). |
 | Deleted | It disappears everywhere. A direct link shows `This post was deleted.` |
 | Removed by Yahora (Phase 9) | A direct link shows `This post was removed for breaking the Community Guidelines.` |
 
@@ -720,7 +733,10 @@ reaction; picking your current one again removes it. Replies have only a like (�
   It was 8 (owner, 13 Nov: closer).
 - **How to open it:**
   - **App:** tap React = the quick bar; tapping React again closes it. Long-press React (or long-press
-    the post) opens it too.
+    the post) opens it too, and **a hold lights the whole post up** while the bar is open (owner, 15 Nov,
+    as WhatsApp does for a held message): a band in the zone's tint over the card, edge to edge across
+    the screen (`postHeldCampus` / `postHeldWorld`), fading in over 140 ms and out over 200 ms. A tap
+    doesn't light it.
   - **Website, with a mouse:** click React = the quick bar; a second click closes it. Opened by a click,
     it **stays open when the pointer moves away**, until you choose an emoji, click React again, click
     outside or press Esc (owner, 13 Nov). Hovering React for **300 ms** still opens it as well, and that
@@ -728,7 +744,8 @@ reaction; picking your current one again removes it. Replies have only a like (�
   - **Website, from the keyboard:** Enter, Space or ↑ on React opens it with the focus on its first
     emoji; ← → move along it and Esc closes it.
   - **Website, on a touch screen:** tap React = the quick bar; tapping React again closes it. A
-    long-press for **450 ms** (`REACTION_LONG_PRESS_MS`) opens it too.
+    long-press for **450 ms** (`REACTION_LONG_PRESS_MS`) opens it too, and lights the post up while the
+    bar is open, as in the app: the card tinted 14% in its zone's accent (`.postHeld`).
   - **Everywhere,** your current reaction sits on its `reactionMineBg` circle: choosing it again removes
     it, choosing another replaces it. `DEFAULT_REACTION` (❤️) is now only a reply's like (§4).
   - **Website and app:** your current reaction also moves to the **first place** in the bar. If it isn't

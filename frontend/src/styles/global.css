@@ -166,10 +166,14 @@
   --community-world-strong: #C92C66;
   --community-world-tint: rgba(235,72,127,0.16);
   --community-muted: #5C5969;
-  /* Your own post's "Being checked" label (owner, 13 Nov): the brand blue,
-     darkened to 5:1 on its tint. The app's statusPendingText / -Bg. */
-  --status-pending-text: #0B6E9E;
-  --status-pending-bg: rgba(43, 183, 255, 0.14);
+  /* Your own post's status labels; each colour says the state (owner, 15 Nov).
+     "Being checked" is amber, waiting for a check; "Under review" is orange, out
+     of the feeds while a report is looked at. Text 6.2:1 and 6.4:1 on the tints.
+     The app's statusPendingText / -Bg and statusReviewText / -Bg. */
+  --status-pending-text: #7a5200;
+  --status-pending-bg: #fef3c7;
+  --status-review-text: #9a3412;
+  --status-review-bg: #ffedd5;
   --community-like: #D81E5B;
   --community-float-shadow: 0 4px 16px rgba(42,8,42,0.12);
   /* The "new posts" pill (COMMUNITY_SPEC §8): the brand purple, frosted. */

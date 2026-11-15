@@ -3372,7 +3372,7 @@ uploaded.** Ask `Post this?` with **Edit** and **Post anyway**; Post anyway re-s
 `{ "error": "RATE_LIMIT_REPLIES", "next_allowed_at": "…" }`. `next_allowed_at` (ISO 8601, UTC) is when the
 60-minute window has room again: an hour after the post or reply whose leaving it brings the count under
 the limit (13 Nov, migration `post_rate_limit_retry_at`; `prepare_post()` raises it as the exception's
-HINT and `mapDbError()` passes it on). Show it to the student ("Try again at 6:19 pm, in 26 minutes").
+HINT and `mapDbError()` passes it on). Show it to the student ("Try again after 6:19 pm (in 26 minutes)").
 It is left out if the database predates that migration, so a client must still cope without it.
 **Enforced by:** the `posts` BEFORE INSERT trigger fills `university_id`, `country_code` and
 `is_demo`, ignoring whatever the caller sent. It also enforces the reply rules and the rate limits:

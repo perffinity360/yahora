@@ -1,9 +1,21 @@
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,8 +24,8 @@ import { AppTextInput } from '../src/components/AppTextInput';
 import { AppToast, useToast } from '../src/components/AppToast';
 import { Avatar } from '../src/components/Avatar';
 import { ConfirmDialog } from '../src/components/ConfirmDialog';
-import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
-import { EmojiPickerSheet } from '../src/components/community/EmojiPickerSheet';
+import { dismissKeyboard, KeyboardAvoider } from '../src/components/KeyboardAvoider';
+import { EmojiPanel } from '../src/components/community/EmojiPickerSheet';
 import { GifPicker } from '../src/components/community/GifPicker';
 import { SupportCard } from '../src/components/community/SupportCard';
 import { WorldGlyph } from '../src/components/community/CommunitySwitcher';
@@ -59,17 +71,72 @@ export default function ComposeScreen() {
   const c = useComposer({ scope, parentId });
   const [gifOpen, setGifOpen] = useState(false);
 
-  /* ☺ — emoji, as on the website's composer (owner, 13 Nov). The picker is
-     its own sheet and stays open to add several; each goes in where the
-     cursor was, and closing it puts the cursor back after the last one. */
+  /* ☺ — emoji, behaving as WhatsApp's does (owner, 15 Nov). The panel takes
+     the keyboard's place at the keyboard's height, so the toolbar doesn't move
+     and the screen stays bright (it was a sheet over a dimmed screen). Each
+     emoji goes in where the cursor was; several can be added. ☺ turns into a
+     keyboard key. Tapping the text, the empty space under it or that key brings
+     the keyboard back: the panel stays until the keyboard is up, then goes, so
+     nothing jumps. Back closes the panel first. */
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
   const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const selection = useRef({ start: 0, end: 0 });
   const textNow = useRef(c.text);
   textNow.current = c.text;
+  /** The last keyboard's height, and the navigation bar's (latched while the
+   *  keyboard is down: it reads 0 while the keyboard is up). */
+  const keyboardHeight = useRef(0);
+  const restingInset = useRef(insets.bottom);
+  if (insets.bottom > 0) restingInset.current = insets.bottom;
+  /** The keyboard was asked for while the panel was open: close it once it's up. */
+  const swapToKeyboard = useRef(false);
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', (e) => {
+      keyboardHeight.current = e.endCoordinates.height;
+      if (swapToKeyboard.current) {
+        swapToKeyboard.current = false;
+        if (swapTimer.current) clearTimeout(swapTimer.current);
+        setEmojiOpen(false);
+      }
+    });
+    return () => {
+      sub.remove();
+      if (swapTimer.current) clearTimeout(swapTimer.current);
+    };
+  }, []);
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setEmojiOpen(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [emojiOpen]);
+  // Android counts the keyboard from above the navigation bar; iOS from the screen's bottom.
+  const panelHeight =
+    (keyboardHeight.current || Math.round(windowHeight * 0.36)) +
+    (Platform.OS === 'android' ? restingInset.current : 0);
   const onEmojiPress = () => {
-    Keyboard.dismiss();
+    swapToKeyboard.current = false;
     setEmojiOpen(true);
+    dismissKeyboard();
+  };
+  /** The text box got focus: if the panel is open, the keyboard is on its way. */
+  const onInputFocus = () => {
+    if (!emojiOpen) return;
+    swapToKeyboard.current = true;
+    if (swapTimer.current) clearTimeout(swapTimer.current);
+    // If no keyboard comes (a hardware one), don't leave the panel up.
+    swapTimer.current = setTimeout(() => {
+      if (!swapToKeyboard.current) return;
+      swapToKeyboard.current = false;
+      setEmojiOpen(false);
+    }, 700);
+  };
+  const focusInput = () => {
+    inputRef.current?.focus();
   };
   const insertEmoji = (emoji: string) => {
     const t = textNow.current;
@@ -80,13 +147,6 @@ export default function ComposeScreen() {
     textNow.current = next;
     selection.current = { start: caret, end: caret };
     c.setText(next);
-  };
-  const closeEmoji = () => {
-    setEmojiOpen(false);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.setSelection(selection.current.start, selection.current.end);
-    });
   };
   const world = scope === 'country' ? (params.country ?? '').toUpperCase() : scope === 'global' ? GLOBAL : null;
   const accent = scope === 'campus' ? colors.purpleDark : colors.communityWorldStrong;
@@ -191,6 +251,7 @@ export default function ComposeScreen() {
                 onSelectionChange={(e) => {
                   selection.current = e.nativeEvent.selection;
                 }}
+                onFocus={onInputFocus}
                 placeholder={placeholder}
                 placeholderTextColor={colors.mutedLabel}
                 multiline
@@ -219,6 +280,9 @@ export default function ComposeScreen() {
                 <RemoveButton label="Remove the GIF" onPress={c.removeGif} />
               </Reanimated.View>
             ) : null}
+
+            {/* The rest of the writing area: a tap here is a tap on the text. */}
+            <Pressable style={styles.writeSpace} onPress={focusInput} accessible={false} />
           </ScrollView>
 
           {inline ? (
@@ -227,7 +291,7 @@ export default function ComposeScreen() {
             </AppText>
           ) : null}
 
-          <View style={[styles.toolbar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View style={[styles.toolbar, { paddingBottom: emojiOpen ? 8 : Math.max(insets.bottom, 8) }]}>
             {!parentId ? (
               <ToolButton
                 icon="image"
@@ -238,7 +302,11 @@ export default function ComposeScreen() {
               />
             ) : null}
             <ToolButton gif label="Add a GIF" blocked={!!c.gifBlocked} color={accent} onPress={onGifPress} />
-            <ToolButton icon="smile" label="Add an emoji" blocked={false} color={accent} onPress={onEmojiPress} />
+            {emojiOpen ? (
+              <ToolButton keyboard label="Show the keyboard" blocked={false} color={accent} onPress={focusInput} />
+            ) : (
+              <ToolButton icon="smile" label="Add an emoji" blocked={false} color={accent} onPress={onEmojiPress} />
+            )}
             <View style={styles.flex} />
             {c.showCounter ? (
               <AppText style={[styles.counter, c.remaining <= 0 && styles.counterOver]}>{c.remaining}</AppText>
@@ -263,6 +331,10 @@ export default function ComposeScreen() {
               )}
             </Pressable>
           </View>
+
+          {emojiOpen ? (
+            <EmojiPanel height={panelHeight} bottomInset={restingInset.current} onPick={insertEmoji} />
+          ) : null}
         </KeyboardAvoider>
       )}
 
@@ -279,7 +351,6 @@ export default function ComposeScreen() {
                 confirmLabel: 'Edit',
                 cancelLabel: 'Post anyway',
                 icon: 'edit-3',
-                compact: true,
               }
             : null
         }
@@ -290,8 +361,6 @@ export default function ComposeScreen() {
           void send(true);
         }}
       />
-
-      <EmojiPickerSheet open={emojiOpen} current={null} multiple onPick={insertEmoji} onClose={closeEmoji} />
 
       <GifPicker
         visible={gifOpen}
@@ -350,6 +419,7 @@ function RemoveButton({ label, onPress }: { label: string; onPress: () => void }
 function ToolButton({
   icon,
   gif,
+  keyboard,
   label,
   blocked,
   color,
@@ -357,6 +427,8 @@ function ToolButton({
 }: {
   icon?: keyof typeof Feather.glyphMap;
   gif?: boolean;
+  /** The keyboard key that stands in for ☺ while the emoji panel is open. */
+  keyboard?: boolean;
   label: string;
   blocked: boolean;
   color: string;
@@ -376,6 +448,8 @@ function ToolButton({
         <View style={[styles.gifGlyph, { borderColor: color }]}>
           <AppText style={[styles.gifGlyphText, { color }]}>GIF</AppText>
         </View>
+      ) : keyboard ? (
+        <MaterialCommunityIcons name="keyboard-outline" size={22} color={color} />
       ) : (
         <Feather name={icon!} size={20} color={color} />
       )}
@@ -416,7 +490,8 @@ const styles = StyleSheet.create({
     color: colors.purple,
   },
 
-  body: { padding: 14, gap: 12 },
+  body: { flexGrow: 1, padding: 14, gap: 12 },
+  writeSpace: { flexGrow: 1, minHeight: 48 },
   writeRow: { flexDirection: 'row', gap: 10 },
   input: {
     flex: 1,

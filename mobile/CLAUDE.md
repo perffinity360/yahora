@@ -167,7 +167,7 @@ mobile/
                                     PostFab (the feed's floating ✏️ Post), ComposerDock (the post page's
                                     reply bar), GifPicker, SupportCard, StatusBarGround, PostActions (the ⋯ menu,
                                     report, delete, ⊕ and the breakdown, once per screen), ReportSheet,
-                                    ReactionBreakdownSheet, EmojiPickerSheet (rn-emoji-keyboard),
+                                    ReactionBreakdownSheet, EmojiPickerSheet (rn-emoji-keyboard: the reaction sheet, and EmojiPanel, compose's ☺ in the keyboard's place),
                                     UserPostsList)
     types/index.ts                  University, UserProfile, Product, MarketplaceProduct, …
 ```
