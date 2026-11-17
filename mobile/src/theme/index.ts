@@ -145,6 +145,7 @@ export const colors = {
   communityCollegeBg: '#FAF0F9', // a post's college pill
   communityCollegeText: '#6E2270',
   communityCard: 'rgba(255,255,255,0.94)', // the frosted post card
+  communityCardPressed: 'rgba(250,242,249,0.97)', // the card while a tap opens its page (app only)
   communityCardBorder: 'rgba(128,0,128,0.11)',
   communityGlobeLand: '#2E9E5E',
   communityGlobeShade: 'rgba(5,40,90,0.38)',
@@ -154,6 +155,21 @@ export const colors = {
   communityMuted: '#5C5969', // secondary text on the wallpaper (5.58:1 on chatCanvas)
   communityLike: '#D81E5B', // a liked reply; the ring when a reaction pops
   communityNewPosts: 'rgba(128,0,128,0.86)',
+  /** A hairline of white round the floating Post button (PostFab), so its edge stays clear over the
+   *  doodles and the white cards. */
+  postFabRing: 'rgba(255,255,255,0.22)',
+  /** A post held to react: the band over it while the quick bar is open (owner, 15 Nov), in the
+   *  zone's colour. Campus is chatRowSelected's tint, the chat's held message. App only. */
+  postHeldCampus: 'rgba(128,0,128,0.15)',
+  postHeldWorld: 'rgba(235,72,127,0.18)',
+  /** Your own post's status labels. Each colour says what the state is (owner, 15 Nov):
+   *  `Being checked` is amber, waiting for a check; `Under review` is orange, taken out of the
+   *  feeds while people look at a report. Solid tints, so they read the same on the frosted card;
+   *  text 6.2:1 and 6.4:1 on them. Web: --status-pending-text / -bg, --status-review-text / -bg. */
+  statusPendingText: '#7A5200',
+  statusPendingBg: '#FEF3C7',
+  statusReviewText: '#9A3412',
+  statusReviewBg: '#FFEDD5',
 
   appBgTop: '#FFF0F7',
   appBgMid: '#FBE9F8',
@@ -395,6 +411,8 @@ export const shadows = {
     '0px 0px 0px 1px rgba(128,0,128,0.16), 0px 1px 3px rgba(42,8,42,0.14), 0px 10px 28px rgba(42,8,42,0.22)',
   communityCard: '0px 2px 10px rgba(79,1,79,0.04)',
   communityFloat: '0px 4px 16px rgba(42,8,42,0.12)',
+  /** The community's floating Post button (PostFab): close and soft, then a deep lift. */
+  postFab: '0px 2px 4px rgba(42,8,42,0.18), 0px 10px 24px rgba(42,8,42,0.28)',
 } as const;
 
 /**

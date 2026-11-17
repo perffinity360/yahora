@@ -156,22 +156,35 @@ function Chevron({ side, onPress }: { side: 'left' | 'right'; onPress: () => voi
 /* ───────────────────────────── GIF ───────────────────────────── */
 
 /**
- * COMMUNITY_SPEC.md §3 "GIF": at most `maxWidth` wide (280 on a post, 180 on a
- * reply), on a see-through tint, with a small GIF badge. It plays while on
- * screen and pauses when it scrolls away: the feed tells it with `playing`,
- * from FlashList's viewability.
+ * COMMUNITY_SPEC.md §3 "GIF": at most `maxWidth` wide and `maxHeight` tall
+ * (240 × 300 on a post, 160 × 200 on a reply: a size down on 15 Nov, the
+ * reply's still smaller at every shape, so the thread keeps its order). No GIF
+ * tag on it (owner, 16 Nov): the GIF speaks for itself. It plays while on screen and pauses when it
+ * scrolls away: the feed tells it with `playing`, from FlashList's viewability.
+ *
+ * The frame takes the shape of the GIF as it actually loads and has no ground
+ * of its own, so nothing shows round it but its rounded corners (owner, 13 Nov).
+ * KLIPY's width × height is only the first guess: some renditions come back a
+ * few pixels off it, and the old tint showed as a strip in the gap.
  */
+/** A post's GIF and a reply's, at most (width × height). */
+export const GIF_POST = { width: 240, height: 300 } as const;
+export const GIF_REPLY = { width: 160, height: 200 } as const;
+
 export const PostGif = memo(function PostGif({
   gif,
   playing,
-  maxWidth = 280,
+  maxWidth = GIF_POST.width,
+  maxHeight = GIF_POST.height,
 }: {
   gif: GifRef;
   playing: boolean;
   maxWidth?: number;
+  maxHeight?: number;
 }) {
   const imageRef = useRef<Image>(null);
-  const ratio = gif.width > 0 && gif.height > 0 ? gif.width / gif.height : 1;
+  const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
+  const ratio = loadedRatio ?? (gif.width > 0 && gif.height > 0 ? gif.width / gif.height : 1);
 
   useEffect(() => {
     if (playing) void imageRef.current?.startAnimating();
@@ -179,22 +192,23 @@ export const PostGif = memo(function PostGif({
   }, [playing]);
 
   return (
-    <View style={[styles.gif, { maxWidth, aspectRatio: ratio }]}>
+    <View style={[styles.gif, { maxWidth: Math.min(maxWidth, maxHeight * ratio), aspectRatio: ratio }]}>
       <Image
         ref={imageRef}
         source={{ uri: gif.url }}
         placeholder={gif.preview_url ? { uri: gif.preview_url } : undefined}
         style={StyleSheet.absoluteFill}
-        contentFit="contain"
+        // The frame is the image's own shape once loaded, so cover crops
+        // nothing; before that it hides a guess that's a pixel or two off.
+        contentFit="cover"
         autoplay={playing}
-        onLoad={() => {
+        onLoad={(e) => {
+          const { width: w, height: h } = e.source;
+          if (w > 0 && h > 0) setLoadedRatio(w / h);
           if (!playing) void imageRef.current?.stopAnimating();
         }}
         accessibilityLabel="GIF"
       />
-      <View style={styles.gifBadge} pointerEvents="none">
-        <AppText style={styles.gifBadgeText}>GIF</AppText>
-      </View>
     </View>
   );
 });
@@ -237,20 +251,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: colors.reactionPillBorder,
-  },
-  gifBadge: {
-    position: 'absolute',
-    left: 6,
-    bottom: 6,
-    paddingHorizontal: 5,
-    borderRadius: 4,
-    backgroundColor: colors.toastBg,
-  },
-  gifBadgeText: {
-    fontFamily: font.family.bold,
-    fontSize: font.sizes.micro,
-    lineHeight: 15,
-    color: colors.white,
   },
 });

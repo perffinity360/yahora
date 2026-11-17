@@ -37,10 +37,25 @@
   animation-delay: calc(var(--post-i, 0) * 28ms);
 }
 
+/* A click on a post in a feed opens its page (PostCard's openPost). */
+.post:not(.postLarge) {
+  cursor: pointer;
+}
+
 .post:hover {
   border-top-color: var(--community-card-border-hover);
   border-right-color: var(--community-card-border-hover);
   border-bottom-color: var(--community-card-border-hover);
+}
+
+/* Held to react on a touch screen: the whole post lights up in its zone's
+   colour while the quick bar is open, as WhatsApp does for a held message
+   (owner, 15 Nov). An inset shadow, so it tints over the card's ground and
+   under its content without positioning anything. */
+.postHeld {
+  box-shadow:
+    var(--community-card-shadow),
+    inset 0 0 0 100vmax color-mix(in srgb, var(--zone-accent, var(--purple)) 14%, transparent);
 }
 
 @keyframes postIn {
@@ -231,6 +246,20 @@ a.time:hover {
   font: 600 11px/16px "Inter", sans-serif;
   color: var(--community-muted);
   white-space: nowrap;
+}
+
+/* The colour says the state (owner, 15 Nov): amber is waiting for a check,
+   orange is a report being looked at. */
+.statusPending {
+  border-color: transparent;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
+}
+
+.statusReview {
+  border-color: transparent;
+  background: var(--status-review-bg);
+  color: var(--status-review-text);
 }
 
 /* ── A reply's campus on a line of its own, in a narrow feed ───────────── */
@@ -539,14 +568,16 @@ a.time:hover {
 
 /* ── GIF ───────────────────────────────────────────────────────────────── */
 
+/* The frame is the GIF's own shape (PostGif.jsx sets --gif-ratio from the
+   loaded image), at most 280 wide and 360 tall, and has no ground of its own:
+   nothing shows round the GIF but its rounded corners (owner, 13 Nov). */
 .gif {
   position: relative;
-  width: min(100%, 280px);
-  max-height: 360px;
+  /* At most 240 × 300, in its own shape (owner, 15 Nov; the app's numbers). */
+  width: min(100%, 240px, calc(300px * var(--gif-ratio, 1)));
   margin-top: 6px;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--reaction-pill-border);
 }
 
 .gifMedia {
@@ -554,18 +585,6 @@ a.time:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.gifBadge {
-  position: absolute;
-  left: 6px;
-  bottom: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--toast-bg);
-  color: var(--white);
-  font: 700 9px/13px "Inter", sans-serif;
-  letter-spacing: 0.04em;
 }
 
 /* ── Actions: pills side by side, icons instead of words ───────────────── */
@@ -691,6 +710,12 @@ a.time:hover {
   column-gap: 8px;
   padding: 4px 0 2px;
   animation: replyIn 260ms var(--community-ease) backwards;
+}
+
+/* The reply you just wrote, scrolled into view (PostThread.jsx): it stops
+   clear of the sticky header above and the composer docked below. */
+.replyReveal {
+  scroll-margin: 88px 0 120px;
 }
 
 /* The first row takes --thread-lead on top. Its piece of the line spans the
@@ -1028,7 +1053,20 @@ a.time:hover {
 }
 
 .replyGif .gif {
-  width: min(100%, 180px);
+  /* A reply's: at most 160 × 200, smaller than a post's at every shape. */
+  width: min(100%, 160px, calc(200px * var(--gif-ratio, 1)));
+}
+
+/* On a laptop a size up, a fifth bigger (owner, 16 Nov): a post's at most
+   288 × 360 and a reply's 192 × 240, the reply's still the smaller. */
+@media (min-width: 1024px) {
+  .gif {
+    width: min(100%, 288px, calc(360px * var(--gif-ratio, 1)));
+  }
+
+  .replyGif .gif {
+    width: min(100%, 192px, calc(240px * var(--gif-ratio, 1)));
+  }
 }
 
 .showMore {

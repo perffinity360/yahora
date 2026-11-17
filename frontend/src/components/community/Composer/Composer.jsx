@@ -50,12 +50,14 @@ import { POST_MAX_CHARS } from "../../../utils/community";
 import { handleFormatKey } from "../../../utils/formatSelection";
 import styles from "./Composer.module.css";
 
-/* Spec §2.1 (and §4 for a reply). */
+/* Spec §2.1 (and §4 for a reply). Short enough for one line on a phone with
+   the emoji button showing (owner, 16 Nov: "What's happening on campus?"
+   wrapped to two lines there and the field jumped). */
 function placeholderFor(feed, countryName, isReply, replyToUsername) {
   if (isReply) return `Reply to @${replyToUsername ?? ""}…`;
-  if (feed === "country") return `Share with students in ${countryName}`;
-  if (feed === "global") return "Share with students everywhere";
-  return "What's happening on campus?";
+  if (feed === "country") return `Post to ${countryName}`;
+  if (feed === "global") return "Post to everyone";
+  return "Post to your campus";
 }
 
 /* Spec §2.2: Enter posts and Shift+Enter starts a new line, as in the chat
@@ -238,7 +240,7 @@ export default function Composer({
 
   const inlineMessage =
     c.result === "rate-limited"
-      ? COMPOSER_TEXT.rateLimited
+      ? (c.message ?? COMPOSER_TEXT.rateLimited)
       : c.result === "not-allowed"
         ? COMPOSER_TEXT.notAllowed
         : c.result === "invalid"
@@ -303,7 +305,6 @@ export default function Composer({
         {c.gif && (
           <div className={styles.gifPreview}>
             <img src={c.gif.preview_url} alt="Chosen GIF" />
-            <span className={styles.gifBadge} aria-hidden="true">GIF</span>
             <button
               type="button"
               className={styles.remove}
@@ -461,7 +462,7 @@ export default function Composer({
         // anyway re-sends with confirm=true.
         <ConfirmDialog
           title="Post this?"
-          message="Some of this might come across as hurtful to other students. You can edit it, or post it as it is."
+          message="Some of this might come across as hurtful to other students. Consider revising it to keep the content respectful."
           confirmLabel="Post anyway"
           cancelLabel="Edit"
           primary="cancel"

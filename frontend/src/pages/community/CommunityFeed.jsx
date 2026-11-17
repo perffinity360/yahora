@@ -340,8 +340,11 @@ export default function CommunityFeed({
       }));
       setReplyTo(null);
     } else {
+      // Your new post goes on top and you're taken to it, on a laptop's panel
+      // and on a phone's page alike (owner, 13 Nov).
       setItems((prev) => [post, ...prev]);
       if (inPanel) scroller?.scrollTo({ top: 0, behavior: "smooth" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [inPanel, scroller]);
 
@@ -369,7 +372,7 @@ export default function CommunityFeed({
       <p className={styles.viewOnly} role="note">
         <Eye size={14} aria-hidden="true" className={styles.viewOnlyIcon} />
         <span>
-          Only students in {viewOnlyName} can post and reply here. You can still react and report.
+          Only students in {viewOnlyName} can post and reply here.
         </span>
       </p>
     ) : canPost === true ? (

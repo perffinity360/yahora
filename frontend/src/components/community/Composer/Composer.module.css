@@ -156,6 +156,15 @@
   opacity: 1;
 }
 
+/* An empty box keeps its placeholder on one line, ending in "…" if a long
+   country or username doesn't fit, so the field never grows to two lines
+   before anything is typed. Typed text wraps as usual. */
+.textarea:placeholder-shown {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .previews {
   display: flex;
   gap: 6px;
@@ -193,22 +202,19 @@
   object-fit: cover;
 }
 
+/* The chosen GIF in its own shape (owner, 15 Nov: never cropped): 88 tall,
+   as wide as the GIF makes it, at most 200. */
 .gifPreview {
-  width: 88px;
+  width: fit-content;
+  max-width: 200px;
   height: 88px;
   margin: 4px 0;
   animation: previewIn 220ms var(--community-spring);
 }
 
-.gifBadge {
-  position: absolute;
-  left: 4px;
-  bottom: 4px;
-  padding: 0 4px;
-  border-radius: 3px;
-  background: var(--toast-bg);
-  color: var(--white);
-  font: 700 9px/13px "Inter", sans-serif;
+.gifPreview img {
+  width: auto;
+  max-width: 200px;
 }
 
 .remove {

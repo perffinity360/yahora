@@ -155,6 +155,22 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   from `utils/textFormat.js`. A composer for them takes `onPaste={pasteFormatted}`
   (`utils/pasteFormat.js`). See `docs/design/TEXT_FORMAT_SPEC.md`.
 
+## Hover-only controls (owner, 16 Nov)
+
+- A control that sits on a photo and has a twin elsewhere on the card (the product card's heart, whose
+  like and count are also under the photo) shows only while the card is pointed at, with a mouse, or has
+  keyboard focus. It fades in and out with the card. **Touch screens keep it in view:** they can't hover.
+  Scope it with `@media (hover: hover) and (pointer: fine)`.
+
+## Colour says the state (owner, 15 Nov)
+
+- A label or badge for a state takes the colour people already read that way: **amber for waiting**
+  (`Being checked`), **orange for something that needs attention** (`Under review`, a reported post),
+  **red for errors and what can't be undone**, **green for done**. Brand purple and pink are for Yahora
+  itself, not for a state. A tint behind dark text of the same hue, at least 4.5:1, never colour alone.
+  Tokens: `--status-pending-*` and `--status-review-*` here, `statusPending*` and `statusReview*` in the
+  app.
+
 ## Icons over words
 
 - Our students know these icons. Use an icon for an obvious action (react, reply, sort, send), with an

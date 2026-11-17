@@ -1,4 +1,10 @@
-# Current state — rewritten 15 Sep 2026, corrected 13 Oct, 7 Nov and 8 Nov 2026
+# Current state — rewritten 15 Sep 2026, corrected 13 Oct, 8 Nov and 15 Nov 2026
+
+> **15 Nov 2026 update, at commit `7e9f48c` plus the owner's 15 Nov round (Phase 7, branch
+> `v-d-app-community`).** Brought forward over Phase 7 since 8 Nov: the migration list (26 → 30 files; all
+> 30 on production, the owner's word, 15 Nov), "Phase 7 so far" (V-P, V-C and N-D merged, the website's
+> community live since 12 Nov, the app's on its branch), and what production runs today. The RLS table is
+> unchanged: none of the four new files creates a table, enables RLS or adds a policy (re-checked 15 Nov).
 
 > **8 Nov 2026 update (Phase 7, written on `v-p-web-community-redesign` at `aec41ca`, merged with the
 > 7 Nov pass below on 8 Nov).** Adds what each of the eight new migrations does, open issue 4 re-checked
@@ -44,7 +50,7 @@ PROD_DB_URL_FILE=/path/outside/the/repo node backend/scripts/schema-drift.mjs
 
 ---
 
-## Migrations — 26 files in `supabase/migrations/`
+## Migrations — 30 files in `supabase/migrations/`
 
 Applied state is `[not re-verified]` for every row: the filenames are verifiable from the
 repo, the ledger is not.
@@ -77,8 +83,15 @@ repo, the ledger is not.
 | — | `20261103053143_reactions_and_reports` | Phase 7 (V-B, 2 of 4) |
 | — | `20261103053144_message_reactions_gifs` | Phase 7 (V-B, 3 of 4) |
 | — | `20261103053145_demo_usernames` | Phase 7 (V-B, 4 of 4) |
+| — | `20261111092200_feed_top_replies` | Phase 7 (V-C) |
+| — | `20261111095654_reply_hot_order_hide_reported` | Phase 7 (V-C) |
+| — | `20261113122231_post_rate_limit_retry_at` | Phase 7 (owner's 13 Nov round) |
+| — | `20261113125126_own_replies_first` | Phase 7 (owner's 13 Nov round) |
 
-The eight since 13 Oct carry no conversational number in their headers, so the table shows `—`. Their
+**All 30 are on production** (the owner pushed the last two on 15 Nov; the V-C pair went on 12 Nov). That is
+from the owner and the changelog, not from a check in this session.
+
+The twelve since 13 Oct carry no conversational number in their headers, so the table shows `—`. Their
 timestamps decide the order, as always.
 
 - **`message_actions`** — reply (a frozen quote filled by a trigger), delete for everyone (the row is
@@ -98,6 +111,15 @@ timestamps decide the order, as always.
   `last_message_has_gif` in the inbox.
 - **`demo_usernames`** — every demo account's username starts `demo.`; no real one starts `demo.`,
   `demo-` or `demo_`. Enforced both ways by a trigger.
+- **`feed_top_replies`** — `top_replies` on every PostItem: the first two replies, shown under a post in a
+  feed.
+- **`reply_hot_order_hide_reported`** — replies have a Hot score and come in Hot order; what you reported
+  stays hidden from you everywhere (feeds, `/by-user`, threads, `top_replies`, the new-posts count).
+- **`post_rate_limit_retry_at`** — `RATE_LIMIT_POSTS` / `RATE_LIMIT_REPLIES` carry the time the window has
+  room again as their `HINT`; the API passes it on as `next_allowed_at` (backend change unmerged, see
+  "Phase 7 so far").
+- **`own_replies_first`** — in a thread, the viewer's own replies come first, newest first, then everyone
+  else's by Hot; `top_replies` follows the same order. No API change.
 
 **Applied to production:** all four Phase 7 migrations on 3 Nov (changelog entry "Phase 7 migrations
 pushed to production"). The earlier ones `[not re-verified]` from this session.
@@ -156,9 +178,8 @@ image. Do not regenerate it.
 
 ### Row Level Security — what the migrations declare
 
-Counted from `alter table ... enable row level security` across all 26 files: **22 public
-tables**. The 25 Aug file reported 16; `public.otp_requests` arrived with 008, and Phases 6B and 7
-added five more (below). `community_posts` re-enables it on `posts`, which 003 already covered.
+Counted from `alter table ... enable row level security` across all 30 files: **22 public
+tables**. 015–018 add none; 6B adds two and Phase 7 three (`posts` already had it from 003).
 
 | Migration | Tables it enables RLS on |
 |---|---|
@@ -182,7 +203,7 @@ policy-less table denies every row to `anon` and `authenticated`.
 | `public.visitor_metrics` | `visitor_metrics_select_all` (from 003) | footer counter |
 
 No migration after 004 adds a policy to any table (re-checked 8 Nov: none of the eight new files has a
-`create policy`). Every table added since 13 Oct also has `revoke all ... from anon, authenticated`, and
+`create policy`; re-checked 15 Nov for the four since). Every table added since 13 Oct also has `revoke all ... from anon, authenticated`, and
 every new function is revoked from `public, anon, authenticated`; the backend's service-role key is the
 only caller. Storage carries seven policies, all from
 002 and 003/004: product uploads/viewing/delete, post uploads/viewing/delete, and
@@ -421,36 +442,38 @@ From `docs/changelog/releases/phase-6B.md` (27 entries) and the four 6B migratio
 - **Smaller fixes:** you can't message yourself; photo and avatar file names no longer contain user ids;
   visitor mode hides like and save on another campus.
 
-## Phase 7 so far (as of 8 Nov) — the community
+## Phase 7 so far (as of 15 Nov) — the community
 
 Plan: `docs/runbooks/PHASE_7_RUNBOOK.md`. Contract: `backend/API.md`, "posts module (Phase 7)" and
-"reports module (Phase 7)".
+"reports module (Phase 7)". Day by day: `docs/changelog/`.
 
-| Block | What | State on 8 Nov |
+| Block | What | State on 15 Nov |
 |---|---|---|
 | V-A | Moderation (`utils/moderation.js`, OpenAI), emoji and pagination helpers; the API contract | Done |
 | V-B | The four migrations | On production since 3 Nov |
-| N-S | Composer, GIF picker (KLIPY), report form, `/dev/community` test page (website) | Merged, PR #94 |
-| N-B | `/api/posts`: 8 reading routes, posting, deleting, reacting | Merged, PR #96 |
-| N-C | `POST /api/reports` | Merged, PR #98 |
-| T1 | Posts and reports API on production | Passed 6 Nov (country view-only check skipped: every live campus is in India) |
-| V-P | Website community redesign, on `sampleData.js` | Merged 8 Nov, PR #100 |
-| V-C | Message reactions and GIFs, demo usernames at login, campus countries | Not started. `API.md` marks its routes "not built yet" |
-| V-D – V-G, N-D part 2 … | The app community, the website on the real API, sign-off | Not started |
+| N-S, N-B, N-C | Composer pieces, `/api/posts`, `POST /api/reports` | Merged (PRs #94, #96, #98) |
+| T1 | Posts and reports API on production | Passed 6 Nov |
+| V-P | Website community redesign | Merged (PRs #100, #101) |
+| V-C | Message reactions and GIFs, demo usernames at login, campus countries, `top_replies`, replies by Hot, the moderation re-check and purge jobs | Merged (PR #103); its migrations on production 12 Nov; backend deployed on Render 13 Nov |
+| N-D parts 2–3 | The website community on the real API | Merged (PRs #102, #104, #105). **M1: live on yahora.netlify.app since 12 Nov** |
+| V-D | The app community | Built; on `main` up to PR #107. The owner's review rounds since (13 and 15 Nov) are on `v-d-app-community`, **not merged** |
+| V-E, N-E (messages part), V-G | Reactions and GIFs in the app's and the website's messages; fixes and sign-off | No changelog entry yet. V-F and N-E's demo onboarding were done in V-C (11 Nov entry) |
 
 **What's true on production right now:**
 
-- The posts and reports APIs are live; the website's `/community` still runs on sample data until N-D
-  part 2, and the app has no Community tab yet.
-- Every post with text or photos goes through OpenAI moderation. If a check can't run, the post is
-  held (`pending`). There is **no re-check job yet** (it's in V-C), so a held post stays held.
-- `refresh-hot-scores` runs every 5 minutes (`cron.schedule` in `community_posts`).
-- Until V-C, `backend/scripts/seedDemo.js` fails with `USERNAME_RESERVED`, and a new demo account gets
-  no username at login (**Skip for now** still works).
+- The website's `/community` runs on the real API (M1). The app's community exists in builds from `main`
+  and the branch; nothing in the repo records a store release.
+- Every post with text or photos goes through OpenAI moderation. A post whose check couldn't run is held
+  (`pending`) and **re-checked every 10 minutes** (V-C); after 6 failures it waits for review.
+- `refresh-hot-scores` runs every 5 minutes; a daily job purges posts deleted more than 90 days ago.
+- **Your own replies come first in a thread, after a reload too** (`own_replies_first`, live since the
+  owner's push on 15 Nov). It needs no backend change.
+- **The posting limit's retry time is in the database but not yet in the API's answer:** the deployed
+  backend predates the `mapDbError()` change that turns the hint into `next_allowed_at` (`7e9f48c`, on
+  `v-d-app-community`). Until that merges and Render redeploys, both clients show the old sentence
+  ("Please try again in a little while").
 - Post photos are in a public bucket under random names; a held post's photos are reachable by URL
   (accepted for Phase 7, private storage is on the Phase 9 list).
-
----
 
 ## Facts established by audit
 
@@ -508,10 +531,10 @@ Vishwajeet at the 6B sign-off on 29 Oct (`docs/changelog/releases/phase-6B.md`, 
   Vishwajeet's; the database stays Vishwajeet's.
 - **The website's community files — ended 8 Nov.** `frontend/src/pages/community/*`,
   `frontend/src/components/community/*`, `frontend/src/utils/community.js`, the community variables in
-  `frontend/src/styles/global.css`, `pages/dev/CommunitySandbox.jsx` and `docs/design/COMMUNITY_SPEC.md`
-  were lent to **Vishwajeet** for the redesign (Block V-P, changelog entry of 3 Nov) until
-  `v-p-web-community-redesign` merged, which it did in PR #100. They are Neeraj's again. V-P also
-  changed `frontend/src/App.jsx` (the navbar is hidden on `/community`), which was outside the loan.
+  `frontend/src/styles/global.css`, `pages/dev/CommunitySandbox.jsx` and `docs/design/COMMUNITY_SPEC.md`.
+  V-P also changed `frontend/src/App.jsx` (the navbar is hidden on `/community`), which is outside
+  the loan. **That loan ended when V-P merged (PRs #100, #101).** Since then Vishwajeet has edited
+  `frontend/` only at the owner's request, each time named with ⚠ at the top of his changelog entry.
 
 ---
 

@@ -112,3 +112,22 @@ export function formatPostTime(iso) {
 
 /* Spec §3 "Text": links are tappable, with no previews. They are found by
    src/utils/textFormat.js, with the rest of the formatting. */
+
+/**
+ * The posting limit's message (owner, 13 Nov: it should say when to try
+ * again). `nextAllowedAt` is the API's `next_allowed_at` on RATE_LIMIT_POSTS
+ * and RATE_LIMIT_REPLIES (backend/API.md); without it, the old sentence.
+ * The clock time is written out by hand (6:19 pm) so it reads the same on
+ * every engine. Twin of the app's src/lib/community.ts.
+ */
+export function rateLimitText(code, nextAllowedAt, now = Date.now()) {
+  const what = code === "RATE_LIMIT_REPLIES" ? "reply" : "posting";
+  const at = typeof nextAllowedAt === "string" ? Date.parse(nextAllowedAt) : NaN;
+  if (Number.isNaN(at)) return `You've reached the ${what} limit for now. Please try again in a little while.`;
+  const minutes = Math.ceil((at - now) / 60000);
+  if (minutes <= 1) return `You've reached the ${what} limit for now. Try again after a minute.`;
+  const d = new Date(at);
+  const h = d.getHours() % 12 || 12;
+  const clock = `${h}:${String(d.getMinutes()).padStart(2, "0")} ${d.getHours() < 12 ? "am" : "pm"}`;
+  return `You've reached the ${what} limit for now. Try again after ${clock} (in ${minutes} minutes).`;
+}

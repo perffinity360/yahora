@@ -1,9 +1,21 @@
 import Feather from '@expo/vector-icons/Feather';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,7 +24,9 @@ import { AppTextInput } from '../src/components/AppTextInput';
 import { AppToast, useToast } from '../src/components/AppToast';
 import { Avatar } from '../src/components/Avatar';
 import { ConfirmDialog } from '../src/components/ConfirmDialog';
-import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
+import { dismissKeyboard, KeyboardAvoider } from '../src/components/KeyboardAvoider';
+import { EmojiPanel } from '../src/components/community/EmojiPickerSheet';
+import { emojiGridHeight } from '../src/components/community/EmojiGrid';
 import { GifPicker } from '../src/components/community/GifPicker';
 import { SupportCard } from '../src/components/community/SupportCard';
 import { WorldGlyph } from '../src/components/community/CommunitySwitcher';
@@ -57,6 +71,86 @@ export default function ComposeScreen() {
 
   const c = useComposer({ scope, parentId });
   const [gifOpen, setGifOpen] = useState(false);
+
+  /* ☺ — emoji, behaving as WhatsApp's does (owner, 15 Nov). The panel takes
+     the keyboard's place at the keyboard's height, so the toolbar doesn't move
+     and the screen stays bright (it was a sheet over a dimmed screen). Each
+     emoji goes in where the cursor was; several can be added. ☺ turns into a
+     keyboard key. Tapping the text, the empty space under it or that key brings
+     the keyboard back: the panel stays until the keyboard is up, then goes, so
+     nothing jumps. Back closes the panel first. */
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
+  const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const selection = useRef({ start: 0, end: 0 });
+  const textNow = useRef(c.text);
+  textNow.current = c.text;
+  /** The last keyboard's height, and the navigation bar's (latched while the
+   *  keyboard is down: it reads 0 while the keyboard is up). */
+  const keyboardHeight = useRef(0);
+  const restingInset = useRef(insets.bottom);
+  if (insets.bottom > 0) restingInset.current = insets.bottom;
+  /** The keyboard was asked for while the panel was open: close it once it's up. */
+  const swapToKeyboard = useRef(false);
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', (e) => {
+      keyboardHeight.current = e.endCoordinates.height;
+      if (swapToKeyboard.current) {
+        swapToKeyboard.current = false;
+        if (swapTimer.current) clearTimeout(swapTimer.current);
+        setEmojiOpen(false);
+      }
+    });
+    return () => {
+      sub.remove();
+      if (swapTimer.current) clearTimeout(swapTimer.current);
+    };
+  }, []);
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setEmojiOpen(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [emojiOpen]);
+  // The keyboard's height, but never fewer than four rows of emoji (owner, 15 Nov: a
+  // POCO keyboard left room for two). Android counts the keyboard from above the
+  // navigation bar; iOS from the screen's bottom.
+  const panelHeight =
+    Math.max(keyboardHeight.current || Math.round(windowHeight * 0.36), emojiGridHeight(4) + 6) +
+    (Platform.OS === 'android' ? restingInset.current : 0);
+  const onEmojiPress = () => {
+    swapToKeyboard.current = false;
+    setEmojiOpen(true);
+    dismissKeyboard();
+  };
+  /** The text box got focus: if the panel is open, the keyboard is on its way. */
+  const onInputFocus = () => {
+    if (!emojiOpen) return;
+    swapToKeyboard.current = true;
+    if (swapTimer.current) clearTimeout(swapTimer.current);
+    // If no keyboard comes (a hardware one), don't leave the panel up.
+    swapTimer.current = setTimeout(() => {
+      if (!swapToKeyboard.current) return;
+      swapToKeyboard.current = false;
+      setEmojiOpen(false);
+    }, 700);
+  };
+  const focusInput = () => {
+    inputRef.current?.focus();
+  };
+  const insertEmoji = (emoji: string) => {
+    const t = textNow.current;
+    const start = Math.min(selection.current.start, t.length);
+    const end = Math.min(selection.current.end, t.length);
+    const next = t.slice(0, start) + emoji + t.slice(end);
+    const caret = start + emoji.length;
+    textNow.current = next;
+    selection.current = { start: caret, end: caret };
+    c.setText(next);
+  };
   const world = scope === 'country' ? (params.country ?? '').toUpperCase() : scope === 'global' ? GLOBAL : null;
   const accent = scope === 'campus' ? colors.purpleDark : colors.communityWorldStrong;
 
@@ -98,7 +192,7 @@ export default function ComposeScreen() {
 
   const inline =
     c.result === 'rate-limited'
-      ? COMPOSER_TEXT.rateLimited
+      ? (c.message ?? COMPOSER_TEXT.rateLimited)
       : c.result === 'not-allowed'
         ? COMPOSER_TEXT.notAllowed
         : c.result === 'invalid'
@@ -154,8 +248,13 @@ export default function ComposeScreen() {
             <View style={styles.writeRow}>
               <Avatar name={profile?.full_name} uri={profile?.avatar_url} size={36} />
               <AppTextInput
+                ref={inputRef}
                 value={c.text}
                 onChangeText={c.setText}
+                onSelectionChange={(e) => {
+                  selection.current = e.nativeEvent.selection;
+                }}
+                onFocus={onInputFocus}
                 placeholder={placeholder}
                 placeholderTextColor={colors.mutedLabel}
                 multiline
@@ -180,21 +279,35 @@ export default function ComposeScreen() {
 
             {c.gif ? (
               <Reanimated.View entering={FadeIn.duration(180)} style={styles.gifWrap}>
-                <View style={[styles.gif, { aspectRatio: c.gif.width / c.gif.height || 1 }]}>
-                  <Image source={{ uri: c.gif.url }} style={StyleSheet.absoluteFill} contentFit="contain" />
-                </View>
+                <ChosenGif gif={c.gif} />
                 <RemoveButton label="Remove the GIF" onPress={c.removeGif} />
               </Reanimated.View>
             ) : null}
+
+            {/* The rest of the writing area: a tap here is a tap on the text. */}
+            <Pressable style={styles.writeSpace} onPress={focusInput} accessible={false} />
           </ScrollView>
 
           {inline ? (
             <AppText style={styles.inline} accessibilityLiveRegion="polite">
               {inline}
             </AppText>
-          ) : null}
+          ) : (
+            /* A quiet word on how to post, where the eye already is, above the
+               tools (owner, 15 Nov; Instagram puts its own over the comment
+               box). A message about this post takes its place. */
+            <Reanimated.View entering={FadeIn.delay(250).duration(400)} style={styles.kind}>
+              {/* One line on every phone (owner, 15 Nov): the text shrinks to fit
+                  rather than wrap, about 10 on a 393-wide phone, beside the
+                  hand-and-heart in the zone's colour (owner, 16 Nov: keep it). */}
+              <MaterialCommunityIcons name="hand-heart-outline" size={14} color={accent} />
+              <AppText style={styles.kindText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                Make this a place where everyone feels welcome. Be kind and respectful.
+              </AppText>
+            </Reanimated.View>
+          )}
 
-          <View style={[styles.toolbar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View style={[styles.toolbar, { paddingBottom: emojiOpen ? 8 : Math.max(insets.bottom, 8) }]}>
             {!parentId ? (
               <ToolButton
                 icon="image"
@@ -205,6 +318,11 @@ export default function ComposeScreen() {
               />
             ) : null}
             <ToolButton gif label="Add a GIF" blocked={!!c.gifBlocked} color={accent} onPress={onGifPress} />
+            {emojiOpen ? (
+              <ToolButton keyboard label="Show the keyboard" blocked={false} color={accent} onPress={focusInput} />
+            ) : (
+              <ToolButton icon="smile" label="Add an emoji" blocked={false} color={accent} onPress={onEmojiPress} />
+            )}
             <View style={styles.flex} />
             {c.showCounter ? (
               <AppText style={[styles.counter, c.remaining <= 0 && styles.counterOver]}>{c.remaining}</AppText>
@@ -229,6 +347,10 @@ export default function ComposeScreen() {
               )}
             </Pressable>
           </View>
+
+          {emojiOpen ? (
+            <EmojiPanel height={panelHeight} bottomInset={restingInset.current} onPick={insertEmoji} />
+          ) : null}
         </KeyboardAvoider>
       )}
 
@@ -241,10 +363,11 @@ export default function ComposeScreen() {
             ? {
                 title: 'Post this?',
                 message:
-                  'Some of this might come across as hurtful to other students. You can edit it, or post it as it is.',
+                  'Some of this might come across as hurtful to other students. Consider revising it to keep the content respectful.',
                 confirmLabel: 'Edit',
                 cancelLabel: 'Post anyway',
                 icon: 'edit-3',
+                messageLines: 3,
               }
             : null
         }
@@ -266,6 +389,27 @@ export default function ComposeScreen() {
       />
 
       <AppToast message={toast} bottom={insets.bottom + 72} />
+    </View>
+  );
+}
+
+/** The chosen GIF, in its own loaded shape with no ground behind it, so no
+ *  strip shows at its edges (owner, 13 Nov; the same as PostGif). */
+function ChosenGif({ gif }: { gif: { url: string; width: number; height: number } }) {
+  const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
+  const ratio = loadedRatio ?? (gif.width > 0 && gif.height > 0 ? gif.width / gif.height : 1);
+  // In its own shape, at most 200 wide and 240 tall.
+  return (
+    <View style={[styles.gif, { width: Math.min(200, 240 * ratio), aspectRatio: ratio }]}>
+      <Image
+        source={{ uri: gif.url }}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        onLoad={(e) => {
+          const { width: w, height: h } = e.source;
+          if (w > 0 && h > 0) setLoadedRatio(w / h);
+        }}
+      />
     </View>
   );
 }
@@ -293,6 +437,7 @@ function RemoveButton({ label, onPress }: { label: string; onPress: () => void }
 function ToolButton({
   icon,
   gif,
+  keyboard,
   label,
   blocked,
   color,
@@ -300,6 +445,8 @@ function ToolButton({
 }: {
   icon?: keyof typeof Feather.glyphMap;
   gif?: boolean;
+  /** The keyboard key that stands in for ☺ while the emoji panel is open. */
+  keyboard?: boolean;
   label: string;
   blocked: boolean;
   color: string;
@@ -319,6 +466,8 @@ function ToolButton({
         <View style={[styles.gifGlyph, { borderColor: color }]}>
           <AppText style={[styles.gifGlyphText, { color }]}>GIF</AppText>
         </View>
+      ) : keyboard ? (
+        <MaterialCommunityIcons name="keyboard-outline" size={22} color={color} />
       ) : (
         <Feather name={icon!} size={20} color={color} />
       )}
@@ -359,7 +508,8 @@ const styles = StyleSheet.create({
     color: colors.purple,
   },
 
-  body: { padding: 14, gap: 12 },
+  body: { flexGrow: 1, padding: 14, gap: 12 },
+  writeSpace: { flexGrow: 1, minHeight: 48 },
   writeRow: { flexDirection: 'row', gap: 10 },
   input: {
     flex: 1,
@@ -374,8 +524,8 @@ const styles = StyleSheet.create({
   },
   previews: { flexDirection: 'row', gap: 8, paddingLeft: 46 },
   photo: { width: 56, height: 56, borderRadius: 8, backgroundColor: colors.inputBg },
-  gifWrap: { marginLeft: 46, alignSelf: 'flex-start', width: 200 },
-  gif: { width: '100%', borderRadius: 8, overflow: 'hidden', backgroundColor: colors.reactionPillBorder },
+  gifWrap: { marginLeft: 46, alignSelf: 'flex-start' },
+  gif: { borderRadius: 8, overflow: 'hidden' },
   remove: {
     position: 'absolute',
     top: 4,
@@ -395,6 +545,21 @@ const styles = StyleSheet.create({
     fontSize: font.sizes.body,
     lineHeight: 18,
     color: colors.errorText,
+  },
+  kind: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  kindText: {
+    flexShrink: 1,
+    fontFamily: font.family.regular,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: colors.communityMuted,
   },
   toolbar: {
     flexDirection: 'row',

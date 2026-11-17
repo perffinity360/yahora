@@ -19,9 +19,11 @@ const CARD_ENTER = new Keyframe({
   },
 }).duration(240);
 
-const THUMB = 72;
-const BADGE = 28;
-const BUTTON_HEIGHT = 46;
+const THUMB = 60;
+const BADGE = 24;
+/** Buttons hug their words (owner, 15 Nov: "reduce the space around the text"), so they are
+ *  36 tall with 18 either side, never stretched across the card. */
+const BUTTON_HEIGHT = 36;
 
 export interface ConfirmDialogContent {
   title: string;
@@ -36,6 +38,9 @@ export interface ConfirmDialogContent {
   imageUri?: string | null;
   /** 'danger' paints the badge and the confirm button red, for what can't be undone. */
   tone?: 'brand' | 'danger';
+  /** Never more lines than this: the text shrinks a little on a phone too narrow for it
+   *  (the community's `Post this?`: three, owner 15 Nov). */
+  messageLines?: number;
 }
 
 const GRADIENTS = {
@@ -53,6 +58,11 @@ const GRADIENTS = {
  * badge, the title in Bree Serif, the explanation under it, then Cancel and
  * the confirm button side by side, the confirm one in the brand gradient (or
  * red, for `tone: 'danger'`).
+ *
+ * One size for every dialog, the one the community's `Post this?` was given
+ * (owner, 13 and 15 Nov): a size smaller than the first version, the words well
+ * in from the card's edges (about three lines for a two-sentence message), and
+ * buttons only as wide as their words, centred.
  *
  * `content` may go null as the dialog closes (the screen clears what it was
  * for); the words it opened with stay on screen while it fades out.
@@ -112,7 +122,7 @@ export function ConfirmDialog({
                   end={{ x: 1, y: 1 }}
                   style={styles.badge}
                 >
-                  <Feather name={shown.icon} size={14} color={colors.white} />
+                  <Feather name={shown.icon} size={12} color={colors.white} />
                 </LinearGradient>
               </View>
             ) : (
@@ -122,12 +132,19 @@ export function ConfirmDialog({
                 end={{ x: 1, y: 1 }}
                 style={styles.medallion}
               >
-                <Feather name={shown.icon} size={24} color={colors.white} />
+                <Feather name={shown.icon} size={20} color={colors.white} />
               </LinearGradient>
             )}
 
             <AppText style={styles.title}>{shown.title}</AppText>
-            <AppText style={styles.message}>{shown.message}</AppText>
+            <AppText
+              style={styles.message}
+              numberOfLines={shown.messageLines}
+              adjustsFontSizeToFit={!!shown.messageLines}
+              minimumFontScale={0.8}
+            >
+              {shown.message}
+            </AppText>
 
             <View style={styles.actions}>
               <Pressable
@@ -183,12 +200,14 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 340,
+    // 320, so the text is 268 wide: `Post this?`'s message in three lines (owner, 15 Nov).
+    maxWidth: 320,
     alignItems: 'center',
-    paddingTop: 26,
-    paddingHorizontal: 22,
-    paddingBottom: 20,
-    borderRadius: 28,
+    paddingTop: 20,
+    // 26 a side: the message keeps clear of the card's edges (owner, 15 Nov).
+    paddingHorizontal: 26,
+    paddingBottom: 18,
+    borderRadius: 24,
     backgroundColor: colors.white,
     shadowColor: colors.chatMenuShadow,
     shadowOpacity: 0.22,
@@ -199,12 +218,12 @@ const styles = StyleSheet.create({
   thumbWrap: {
     width: THUMB,
     height: THUMB,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   thumb: {
     width: THUMB,
     height: THUMB,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: colors.inputBg,
     borderWidth: 1,
     borderColor: colors.hairline,
@@ -212,37 +231,37 @@ const styles = StyleSheet.create({
   // Sits on the photo's corner, ringed in white so it reads on any photo.
   badge: {
     position: 'absolute',
-    right: -8,
-    bottom: -8,
+    right: -7,
+    bottom: -7,
     width: BADGE,
     height: BADGE,
     borderRadius: BADGE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: colors.white,
   },
   medallion: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   title: {
     textAlign: 'center',
     fontFamily: font.family.serif,
-    fontSize: 21,
-    lineHeight: 27,
+    fontSize: 19,
+    lineHeight: 24,
     color: colors.blackSoft,
   },
   message: {
-    marginTop: 8,
+    marginTop: 6,
     textAlign: 'center',
     fontFamily: font.family.regular,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.mutedText,
   },
   strong: {
@@ -250,13 +269,13 @@ const styles = StyleSheet.create({
     color: colors.blackSoft,
   },
   actions: {
-    alignSelf: 'stretch',
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 10,
-    marginTop: 22,
+    marginTop: 18,
   },
   button: {
-    flex: 1,
+    minWidth: 84,
     height: BUTTON_HEIGHT,
     borderRadius: BUTTON_HEIGHT / 2,
     overflow: 'hidden',
@@ -264,6 +283,7 @@ const styles = StyleSheet.create({
   cancel: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 18,
     backgroundColor: colors.inputBg,
   },
   cancelPressed: {
@@ -272,14 +292,14 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontFamily: font.family.semibold,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.blackSoft,
   },
   confirmPressed: { transform: [{ scale: 0.97 }] },
-  confirmFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  confirmFill: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   confirmText: {
     fontFamily: font.family.bold,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.white,
   },
 });

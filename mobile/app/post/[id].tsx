@@ -1,7 +1,15 @@
 import Feather from '@expo/vector-icons/Feather';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+  type ScrollViewInstance,
+  type ViewInstance,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -9,14 +17,14 @@ import { AppText } from '../../src/components/AppText';
 import { BackButton } from '../../src/components/CircleButton';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
 import { StatusBarGround } from '../../src/components/community/StatusBarGround';
-import { ComposerDock, DOCK_HEIGHT } from '../../src/components/community/ComposerDock';
+import { FAB_CLEARANCE, PostFab, useFabFold } from '../../src/components/community/PostFab';
 import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
-import { useAuth } from '../../src/contexts/AuthContext';
 import { goneCode, useCountries, usePost, useReact, type PostGone } from '../../src/hooks/useCommunity';
 import { draftFor } from '../../src/hooks/useComposer';
 import { useFloatingTopInset } from '../../src/hooks/useFloatingTopInset';
 import { useLeaveOnce } from '../../src/hooks/useLeaveOnce';
+import { ReplyRevealContext, useRevealReply } from '../../src/hooks/useRevealReply';
 import { countryName } from '../../src/lib/community';
 import { hrefWithFrom } from '../../src/lib/nav';
 import { colors, font } from '../../src/theme';
@@ -24,8 +32,10 @@ import { colors, font } from '../../src/theme';
 /**
  * A post's own page — COMMUNITY_SPEC.md §4 and §3.1. The post (text 15/22, never
  * folded), then every reply, a page at a time behind "Load more replies", and
- * the reply bar pinned at the bottom, which opens the compose screen as a
- * reply. Where you can only view (another country's post), a quiet line says
+ * the feed's floating button, here `✏️ Reply` (owner, 15 Nov; it was a reply
+ * bar), which opens the compose screen as a reply and folds while you scroll
+ * down. The reply you send goes first, above the Hot ones, and the page
+ * scrolls just enough to show it (useRevealReply; owner, 13 Nov). Where you can only view (another country's post), a quiet line says
  * who can reply instead.
  *
  * It wears the community's look: the zone's wallpaper and card colours,
@@ -57,7 +67,6 @@ export default function PostScreen() {
   const floatingTop = useFloatingTopInset();
   const leaveOnce = useLeaveOnce();
   const isFocused = useIsFocused();
-  const { profile } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const postId = typeof id === 'string' ? id : undefined;
 
@@ -112,7 +121,22 @@ export default function PostScreen() {
   // take replies yet.
   const showReplyBar = !!post && !gone && canReply;
   const showViewOnly = !!post && !gone && !canReply && post.scope === 'country' && post.moderation_status === 'active';
-  const dockHeight = showReplyBar ? DOCK_HEIGHT + insets.bottom : showViewOnly ? VIEW_ONLY_HEIGHT + insets.bottom : 0;
+  const dockHeight = showReplyBar ? FAB_CLEARANCE + insets.bottom : showViewOnly ? VIEW_ONLY_HEIGHT + insets.bottom : 0;
+  const fab = useFabFold();
+
+  const frameRef = useRef<ViewInstance>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollY = useRef(0);
+  const revealer = useRevealReply({
+    accepts: useCallback((parentId: string) => parentId === postId, [postId]),
+    frameRef,
+    insetTop: floatingTop + 50,
+    insetBottom: dockHeight,
+    scrollBy: useCallback(
+      (dy: number) => scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current + dy), animated: true }),
+      [],
+    ),
+  });
 
   let body;
   if (gone) {
@@ -163,47 +187,54 @@ export default function PostScreen() {
         if (why === 'deleted' && removed.id === postId) setDeletedHere(true);
       }}
     >
-      <View style={styles.screen}>
-        <CommunityWallpaper ground={ground} />
-        <ScrollView
-          contentContainerStyle={{ paddingTop: floatingTop + 50, paddingBottom: dockHeight + 16 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              progressViewOffset={floatingTop + 50}
-              tintColor={colors.purple}
-              colors={[colors.purple]}
+      <ReplyRevealContext.Provider value={revealer}>
+        <View ref={frameRef} collapsable={false} style={styles.screen}>
+          <CommunityWallpaper ground={ground} />
+          <ScrollView
+            ref={scrollRef}
+            onScroll={(e) => {
+              scrollY.current = e.nativeEvent.contentOffset.y;
+              fab.onScroll(scrollY.current);
+            }}
+            scrollEventThrottle={32}
+            contentContainerStyle={{ paddingTop: floatingTop + 50, paddingBottom: dockHeight + 16 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                progressViewOffset={floatingTop + 50}
+                tintColor={colors.purple}
+                colors={[colors.purple]}
+              />
+            }
+          >
+            {body}
+          </ScrollView>
+
+          <StatusBarGround color={ground} />
+          <BackButton onPress={goBack} style={[styles.back, { top: floatingTop }]} />
+
+          {showReplyBar && post ? (
+            <PostFab
+              zone={zone}
+              reply
+              hint={`Reply to @${post.author_username}`}
+              hasDraft={isFocused && !!draftFor(post.scope, post.id)}
+              folded={fab.folded}
+              onPress={openReply}
+              bottomInset={insets.bottom}
             />
-          }
-        >
-          {body}
-        </ScrollView>
-
-        <StatusBarGround color={ground} />
-        <BackButton onPress={goBack} style={[styles.back, { top: floatingTop }]} />
-
-        {showReplyBar && post ? (
-          <ComposerDock
-            zone={zone}
-            reply
-            hint={`Reply to @${post.author_username}…`}
-            draft={isFocused ? draftFor(post.scope, post.id) : null}
-            avatarName={profile?.full_name}
-            avatarUri={profile?.avatar_url}
-            onOpen={openReply}
-            bottomInset={insets.bottom}
-          />
-        ) : null}
-        {showViewOnly && post ? (
-          <View style={[styles.viewOnly, { paddingBottom: insets.bottom + 12 }]}>
-            <Feather name="eye" size={16} color={colors.purple} />
-            <AppText style={styles.viewOnlyText}>
-              Only students in {countryName(post.country_code ?? '', countries)} can reply.
-            </AppText>
-          </View>
-        ) : null}
-      </View>
+          ) : null}
+          {showViewOnly && post ? (
+            <View style={[styles.viewOnly, { paddingBottom: insets.bottom + 12 }]}>
+              <Feather name="eye" size={16} color={colors.purple} />
+              <AppText style={styles.viewOnlyText}>
+                Only students in {countryName(post.country_code ?? '', countries)} can reply.
+              </AppText>
+            </View>
+          ) : null}
+        </View>
+      </ReplyRevealContext.Provider>
     </PostActionsProvider>
   );
 }

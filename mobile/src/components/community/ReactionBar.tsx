@@ -1,6 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import * as Haptics from 'expo-haptics';
-import { memo, useCallback, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { memo, useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Pressable, StyleSheet, View, type ViewInstance } from 'react-native';
 import Reanimated, {
   Easing,
@@ -43,6 +43,11 @@ import { colors, shadows } from '../../theme';
  * Popover (and Facebook's and LinkedIn's bars), its left end lines up with the
  * button's and it sits 4 above it; below it only when there's no room above.
  * It reports only the choice, through onReact(emoji | null).
+ *
+ * A bar opened by a hold (on the card or on React) is reported through
+ * `onHeldChange(true)` until it closes, so the card can light up the whole post
+ * meanwhile, as WhatsApp does for a held message (owner, 15 Nov). A tap on
+ * React doesn't light it.
  */
 
 /** Quick-bar emoji: 24 in a 40 × 40 button (owner, 13 Nov: a touch smaller than spec §5.1's 26 in 44;
@@ -62,20 +67,30 @@ function quickBar(reaction: string | null): readonly string[] {
   return [reaction, ...QUICK_REACTIONS.filter((e) => e !== reaction)].slice(0, QUICK_REACTIONS.length);
 }
 
-export type ReactButtonHandle = { open: () => void };
+export type ReactButtonHandle = { open: (opts?: { held?: boolean }) => void };
 
 
 export const ReactButton = memo(function ReactButton({
   reaction,
   onReact,
+  onHeldChange,
   ref,
 }: {
   reaction: string | null;
   onReact: (emoji: string | null) => void;
+  /** True while a bar opened by a hold is showing. */
+  onHeldChange?: (held: boolean) => void;
   ref?: Ref<ReactButtonHandle>;
 }) {
   const buttonRef = useRef<ViewInstance>(null);
   const [anchor, setAnchor] = useState<WindowRect | null>(null);
+  const [byHold, setByHold] = useState(false);
+  const held = byHold && !!anchor;
+  const heldChange = useRef(onHeldChange);
+  heldChange.current = onHeldChange;
+  useEffect(() => {
+    heldChange.current?.(held);
+  }, [held]);
   const reduceMotion = useReducedMotion();
   const actions = usePostActions();
 
@@ -87,8 +102,13 @@ export const ReactButton = memo(function ReactButton({
     transform: [{ scale: 0.6 + ring.value }],
   }));
 
-  const open = useCallback(() => {
-    buttonRef.current?.measureInWindow((x, y, width, height) => setAnchor({ x, y, width, height }));
+  const open = useCallback((opts?: { held?: boolean }) => {
+    const hold = !!opts?.held;
+    if (hold) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    buttonRef.current?.measureInWindow((x, y, width, height) => {
+      setByHold(hold);
+      setAnchor({ x, y, width, height });
+    });
   }, []);
   useImperativeHandle(ref, () => ({ open }), [open]);
 
@@ -133,7 +153,7 @@ export const ReactButton = memo(function ReactButton({
       <Pressable
         ref={buttonRef}
         onPress={() => (anchor ? close() : open())}
-        onLongPress={open}
+        onLongPress={() => open({ held: true })}
         delayLongPress={REACTION_LONG_PRESS_MS}
         hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
         accessibilityRole="button"

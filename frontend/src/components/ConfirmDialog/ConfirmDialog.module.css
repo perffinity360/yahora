@@ -26,6 +26,15 @@
   animation: scrimIn 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* On a narrow phone the card takes more of the width, so a two-sentence
+   message (the community's "Post this?") stays within three lines at 360 px
+   (owner, 15 Nov). */
+@media (max-width: 379px) {
+  .scrim {
+    padding-inline: 16px;
+  }
+}
+
 .card {
   width: 100%;
   max-width: 340px;
