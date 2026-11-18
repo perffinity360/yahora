@@ -17,7 +17,7 @@ import { AppText } from '../../src/components/AppText';
 import { BackButton } from '../../src/components/CircleButton';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
 import { StatusBarGround } from '../../src/components/community/StatusBarGround';
-import { FAB_CLEARANCE, PostFab, useFabFold } from '../../src/components/community/PostFab';
+import { FAB_CLEARANCE, LIST_END_GAP, PostFab, useFabFold } from '../../src/components/community/PostFab';
 import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
 import { goneCode, useCountries, usePost, useReact, type PostGone } from '../../src/hooks/useCommunity';
@@ -197,7 +197,7 @@ export default function PostScreen() {
               fab.onScroll(scrollY.current);
             }}
             scrollEventThrottle={32}
-            contentContainerStyle={{ paddingTop: floatingTop + 50, paddingBottom: dockHeight + 16 }}
+            contentContainerStyle={{ paddingTop: floatingTop + 50, paddingBottom: dockHeight + LIST_END_GAP }}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

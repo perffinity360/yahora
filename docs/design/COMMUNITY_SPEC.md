@@ -1,6 +1,11 @@
 # Community — design spec (Phase 7)
 
-**Version 3.15 · 16 November 2026 · for the website and the app**
+**Version 3.16 · 18 November 2026 · for the website and the app**
+
+> **Changed in version 3.16 (owner, 18 Nov), the app only:** **tapping `N new posts` no longer flickers**:
+> the feed glides to the top first and the new posts appear there, fading in, with nothing held still or
+> corrected after (§8). **The view-only line's strip is 28 tall** (was 40); the text is unchanged (§1.4).
+> **The last post ends 10 above the Post button** (was 22), and above the Reply button on a post's page (§2.1).
 
 > **Changed in version 3.15 (owner, 16 Nov):** **no `GIF` tag on GIFs** (§3). **On a laptop the website's
 > GIFs are a fifth bigger** (288 × 360 on a post, 192 × 240 on a reply; §3). **The website's composer
@@ -346,8 +351,8 @@ A quiet line takes the composer's place in the dock:
 
 Website: Inter 400 13/18, communityMuted, with the icon in purple, in the composer's dock (§2.1) on every
 width. **App (owner, 16 Nov: "must not catch too much attention"):** the smallest text size, `micro` 11/15,
-communityMuted, centred on one line, a 12 eye in communityMuted, on a slim dock (8 above and below) with a
-hairline on top. **It fades away softly while you scroll down** (320 ms, drifting 10 down) **and comes back
+communityMuted, centred on one line, a 12 eye in communityMuted, on a slim dock 28 tall (6 above and below;
+owner, 18 Nov: it was 40) with a hairline on top. **It fades away softly while you scroll down** (320 ms, drifting 10 down) **and comes back
 when you scroll up or reach the top** (owner, 15–16 Nov), on the same signal that folds the Post button.
 `You can still react and report.` was dropped on both (owner, 16 Nov).
 
@@ -366,8 +371,8 @@ under the line and 2 px above the bottom (the same room either side, owner 8 Nov
 compose screen anyway. A floating pill takes its place, 16 from the screen's right edge and 16 above the
 tab bar: 44 tall, in the zone's strong colour (`purpleDark` on campus, `communityWorldStrong` elsewhere),
 a white circle with a pencil, then `Post` in Inter 600 15, white, with a white hairline ring and a deep
-soft shadow. The posts scroll on under it, and the list ends 76 above the bottom so the last post clears
-it. **While you scroll down it folds to the round pencil** (220 ms, ease-out, the word fading as it goes),
+soft shadow. The posts scroll on under it, and the list ends 64 above the bottom, so the last post ends 10 above
+it, near the 6 between posts (owner, 18 Nov: 22 felt too large). The post page's Reply button, the same. **While you scroll down it folds to the round pencil** (220 ms, ease-out, the word fading as it goes),
 and opens out again when you scroll up or come within 24 of the top, like Gmail's compose button. A
 half-written post puts a small `blue` badge, ringed in white, on its top right corner (it was a pink dot
 in the circle, which clashed with the world's pink pill). It rises in over 220 ms without overshoot.
@@ -982,13 +987,15 @@ API reason values, in the same order: `spam`, `harassment`, `hate_speech`, `sexu
   the list: the posts already shown stay on screen the whole time (no skeletons, no blink), only
   posts not already shown are added, each fading and sliding down into place (about 200 ms,
   slightly staggered; none with reduced motion), and every page loaded below stays. If that fails,
-  the list stays as it is and a toast says so. **In the app the list must end truly at the top, the new
-  post whole under the switcher** (owner, 15 Nov: it stopped part way). FlashList's own position
-  corrections, while the new posts are measured, could cut the glide short, so after the glide the feed
-  checks and finishes the way with short jumps, up to five times, 200 ms apart; a finger on the list
-  stops it. **The same happens whenever posts arrive above the first one while you're within 48 of the
-  top** (owner, 16 Nov), from a pull to refresh or a refetch the app made itself: FlashList kept the old
-  first post in place, which left the new one half under the switcher. Further down, nothing moves. New posts are **never** inserted while someone is
+  the list stays as it is and a toast says so. **In the app it glides to the top first, and the new
+  posts go in only once it's there** (owner, 18 Nov: it came with a flicker). They appear at the top,
+  fading in, and the rest move down under them, as on X; nothing jumps afterwards. That works because
+  **within 48 of the top the feed doesn't hold the old first post still** (FlashList's
+  `maintainVisibleContentPosition` is off there; it drew the new post off screen and corrected a frame
+  late, which was the flicker). The same is true whenever posts arrive above the first one near the top
+  (a pull to refresh, or a refetch the app made itself, owner 16 Nov): they're simply there, whole.
+  A finger on the list during the glide ends the wait, and the posts go in all the same. Further down,
+  nothing moves. New posts are **never** inserted while someone is
   reading, only when the pill is tapped.
 
 ## 9. Empty and loading states
