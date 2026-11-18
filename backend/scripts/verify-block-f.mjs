@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 // Environment
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API     = 'http://localhost:5000';
+const API     = 'http://localhost:5001';
 const DB_URL  = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 const MAILPIT = 'http://127.0.0.1:54324';
 

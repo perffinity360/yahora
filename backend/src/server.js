@@ -14,7 +14,7 @@ dotenv.config();
 const PORT = process.env.PORT || 5001;
 
 // Bind all interfaces explicitly so phones and other laptops on the LAN can
-// reach port 5000. Node already defaults to the unspecified address when host
+// reach port 5001. Node already defaults to the unspecified address when host
 // is omitted, but it prefers :: (IPv6); pinning 0.0.0.0 keeps the listener on
 // IPv4, which is what the LAN clients and --dns-result-order=ipv4first assume.
 const HOST = process.env.HOST || '0.0.0.0';

@@ -10,8 +10,8 @@
 
    So in development, and only there, a URL that points at the dev machine is
    re-pointed at whatever host actually served this page. A page opened from
-   http://10.37.66.42:3000 turns http://localhost:5000 into
-   http://10.37.66.42:5000 by itself, with no file to edit when the IP changes.
+   http://10.37.66.42:3000 turns http://localhost:5001 into
+   http://10.37.66.42:5001 by itself, with no file to edit when the IP changes.
 
    Production is never rewritten: the guard is import.meta.env.DEV, and hosted
    URLs (*.supabase.co, the Render backend) fail the private-host test anyway. */
@@ -56,7 +56,7 @@ function resolveDevHost(configured) {
   if (!isDevMachineHost(url.hostname)) return value;
 
   // Hostname only. Protocol, port and path are the developer's choice and are
-  // preserved: http://localhost:5000 -> http://<serving-host>:5000.
+  // preserved: http://localhost:5001 -> http://<serving-host>:5001.
   url.hostname = window.location.hostname;
   return url.toString().replace(/\/+$/, '');
 }

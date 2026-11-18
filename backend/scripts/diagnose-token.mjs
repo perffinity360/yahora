@@ -13,7 +13,7 @@
 //   worked moments earlier.
 //
 // THE CENTRAL QUESTION, asked on every single step:
-//   A) our backend   GET http://localhost:5000/api/auth/password-status
+//   A) our backend   GET http://localhost:5001/api/auth/password-status
 //   B) GoTrue direct GET http://127.0.0.1:54321/auth/v1/user
 //
 //   A fails + B succeeds  -> the token is VALID; our middleware or our shared
@@ -57,7 +57,7 @@ import { fileURLToPath } from 'node:url';
 // Environment
 // ─────────────────────────────────────────────────────────────────────────────
 
-const API     = 'http://localhost:5000';
+const API     = 'http://localhost:5001';
 const GOTRUE  = 'http://127.0.0.1:54321';
 const DB_URL  = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 const MAILPIT = 'http://127.0.0.1:54324';
@@ -352,7 +352,7 @@ const errorCode = (r) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Which process is answering on :5000?
+// Which process is answering on :5001?
 //
 // This matters for S9 and nothing else. The demotion this script is hunting for
 // lives in memory on ONE process and survives until that process restarts — and
@@ -365,7 +365,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function backendPid() {
     try {
-        const out = execFileSync('lsof', ['-nP', '-iTCP:5000', '-sTCP:LISTEN', '-t'],
+        const out = execFileSync('lsof', ['-nP', '-iTCP:5001', '-sTCP:LISTEN', '-t'],
             { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
         return out.trim().split('\n').filter(Boolean).join(',') || null;
     } catch {

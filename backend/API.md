@@ -258,7 +258,7 @@ environments. `X-Device-Id` is not a CORS-safelisted header, so without it every
 **Pagination does not exist.** No route accepts `limit`, `offset`, or `cursor`. Feeds, chat
 histories, and comment lists return every matching row.
 
-**Base URL** is the server root; `PORT` defaults to `5000` and the server binds `0.0.0.0`
+**Base URL** is the server root; `PORT` defaults to `5001` (never 5000: macOS AirPlay holds it) and the server binds `0.0.0.0`
 (override with `HOST`), so it is reachable over the LAN as well as on loopback. Routers mount at `/api/auth`,
 `/api/academic`, `/api/universities`, `/api/user`, `/api/products`, `/api/messages`.
 
