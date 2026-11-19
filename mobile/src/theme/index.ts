@@ -100,6 +100,9 @@ export const colors = {
   formatCodeTheirs: 'rgba(26,26,26,0.12)',
   formatQuoteBarMine: 'rgba(255,255,255,0.45)',
   formatQuoteBarTheirs: 'rgba(26,26,26,0.45)',
+  // The symbols themselves (* _ ~ `) while typing in a text box (spec §5.4):
+  // the box's text colour, blackSoft, at 45%.
+  formatSymbolInput: 'rgba(26,26,26,0.45)',
   sheetHandle: 'rgba(128,0,128,0.15)',
   // The spec calls this one `scrim`, but `scrim` below (0.55) already backs
   // nine other sheets and modals. Renaming keeps them as they are.

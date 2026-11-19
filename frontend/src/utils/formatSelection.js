@@ -8,6 +8,10 @@
 
    - Wraps the selection; if it is already wrapped (the symbols inside its
      edges, or just outside them), takes them off instead.
+   - Code and monospace are protected: bold, italic and strike go around them
+     (~`exam`~), never inside; code and monospace switch markers (` ↔ ```)
+     instead of nesting. The rules are in planFormat (pure, shared with the
+     app line for line and tested by scripts/check-format-selection.mjs).
    - Spaces at the edges of the selection stay outside the symbols, and so does
      a line's marker ("- ", "1. ", "> "), which would stop being one.
    - With nothing selected, a pair goes in with the cursor between.
@@ -16,6 +20,8 @@
    - The edit goes in through the browser's own insert, as one step, so Undo
      restores the text exactly; afterwards the same words are selected, so the
      same keys take the symbols off again. */
+
+import { formatSpans } from "./textFormat.js";
 
 const SYMBOL = { bold: "*", italic: "_", strike: "~", code: "`", mono: "```" };
 /* How many symbols in a row count as this kind already being there: a single
@@ -83,60 +89,140 @@ function replace(el, from, to, text) {
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-export function applyFormat(el, kind) {
-  const symbol = SYMBOL[kind];
-  if (!el || !symbol) return;
-  const value = el.value;
-  const { selectionStart: start, selectionEnd: end } = el;
-
-  if (start === end) {
-    replace(el, start, end, symbol + symbol);
-    el.setSelectionRange(start + symbol.length, start + symbol.length);
-    return;
-  }
-
-  const segs = segmentsOf(value, start, end, kind).map((seg) => ({ ...seg, wrap: wrapping(value, seg, kind) }));
-  if (!segs.length) return;
-  const unwrap = segs.every((seg) => seg.wrap);
-
-  const first = segs[0];
-  const from = unwrap && first.wrap.at === "outside" ? first.s - first.wrap.n : first.s;
-  let cursor = from;
-  let out = "";
-  let selStart = null;
-  let selEnd = null;
-  for (const seg of segs) {
-    const { s, e, wrap } = seg;
-    if (unwrap) {
-      const n = wrap.n;
-      const [outerS, outerE, innerS, innerE] =
-        wrap.at === "inside" ? [s, e, s + n, e - n] : [s - n, e + n, s, e];
-      out += value.slice(cursor, outerS);
-      selStart ??= from + out.length;
-      out += value.slice(innerS, innerE);
-      selEnd = from + out.length;
-      cursor = outerE;
-    } else if (wrap) {
-      // Mixed: this line is wrapped already, the others get wrapped.
-      const n = wrap.n;
-      const [innerS, innerE] = wrap.at === "inside" ? [s + n, e - n] : [s, e];
-      out += value.slice(cursor, innerS);
-      selStart ??= from + out.length;
-      out += value.slice(innerS, innerE);
-      selEnd = from + out.length;
-      cursor = innerE;
-    } else {
-      out += value.slice(cursor, s) + symbol;
-      selStart ??= from + out.length;
-      out += value.slice(s, e);
-      selEnd = from + out.length;
-      out += symbol;
-      cursor = e;
+/* Code and monospace in the text, exactly as the parser reads them
+   (formatSpans): [{ start, end, size, kind }], `end` past the closing marker.
+   Nothing inside them is formatted (TEXT_FORMAT_SPEC §2), so the tools work
+   around them. Two markers can share a span ("`a``b`"), so they're counted
+   one by one. */
+function protectedRanges(value) {
+  const ranges = [];
+  let at = 0;
+  let open = null;
+  for (const span of formatSpans(value)) {
+    const kind = span.mono ? "mono" : span.code ? "code" : null;
+    if (span.symbol && kind) {
+      const size = SYMBOL[kind].length;
+      for (let k = 0; k + size <= span.text.length; k += size) {
+        if (open && open.kind === kind) {
+          ranges.push({ start: open.start, end: at + k + size, size, kind });
+          open = null;
+        } else {
+          open = { start: at + k, kind };
+        }
+      }
     }
+    at += span.text.length;
+  }
+  return ranges;
+}
+
+/* A selection edge inside code or monospace moves out to its marker, so the
+   whole of it is taken: bold goes around the backticks, never inside. */
+function around(ranges, s, e) {
+  for (const r of ranges) {
+    if (s > r.start && s < r.end) s = r.start;
+    if (e > r.start && e < r.end) e = r.end;
+  }
+  return { s, e };
+}
+
+/* [s, e) without the markers of the code and monospace inside it. */
+function stripMarkers(value, ranges, s, e) {
+  let text = "";
+  let cursor = s;
+  for (const r of ranges) {
+    if (r.start < s || r.end > e) continue;
+    text += value.slice(cursor, r.start) + value.slice(r.start + r.size, r.end - r.size);
+    cursor = r.end;
+  }
+  return text + value.slice(cursor, e);
+}
+
+/* What formatting [start, end) as `kind` does to `value`, as a plan: replace
+   [from, to) with `text`, then select [selStart, selEnd). null when there is
+   nothing to do. Twin of the app's mobile/src/components/FormatToolbar.tsx.
+   - Bold, italic, strike: wrap; if already wrapped, unwrap. Inside code or
+     monospace they go around it (~`exam`~), never inside, and never across
+     a line.
+   - Code and monospace: wrap; the same one again removes it; the other one
+     switches the markers (` ↔ ```) instead of nesting them. Wrapping text
+     that has code inside drops those inner markers.
+   - Afterwards the same words are selected, so the same button undoes it. */
+export function planFormat(value, start, end, kind) {
+  const symbol = SYMBOL[kind];
+  if (!symbol) return null;
+  if (start === end) {
+    const at = start + symbol.length;
+    return { from: start, to: end, text: symbol + symbol, selStart: at, selEnd: at };
   }
 
-  replace(el, from, cursor, out);
-  el.setSelectionRange(selStart, selEnd);
+  const ranges = protectedRanges(value);
+  const marks = kind === "code" || kind === "mono";
+  const segs = [];
+  for (const seg of segmentsOf(value, start, end, kind)) {
+    const { s, e } = around(ranges, seg.s, seg.e);
+    // Only monospace may cross a line.
+    if (kind !== "mono" && value.slice(s, e).includes("\n")) continue;
+    const box = ranges.find((r) => r.start === s && r.end === e) ?? null;
+    const wrap = marks ? null : wrapping(value, { s, e }, kind);
+    segs.push({ s, e, os: seg.s, oe: seg.e, box, wrap, done: marks ? box?.kind === kind : !!wrap });
+  }
+  if (!segs.length) return null;
+  const unwrap = segs.every((seg) => seg.done);
+
+  /* Each piece: replace [rs, re) with before + content + after, where content
+     is [innerS, innerE) (exact) or that with inner markers dropped. */
+  const pieces = segs.map(({ s, e, os, oe, box, wrap, done }) => {
+    if (marks && box) {
+      const innerS = box.start + box.size;
+      const innerE = box.end - box.size;
+      if (done && !unwrap) return { rs: innerS, re: innerE, innerS, innerE, os, oe, before: "", after: "" };
+      if (done) return { rs: box.start, re: box.end, innerS, innerE, os, oe, before: "", after: "" };
+      // The other one: switch the markers.
+      return { rs: box.start, re: box.end, innerS, innerE, os, oe, before: symbol, after: symbol };
+    }
+    if (marks) {
+      const content = stripMarkers(value, ranges, s, e);
+      const exact = content.length === e - s;
+      return { rs: s, re: e, innerS: s, innerE: e, os, oe, before: symbol, after: symbol, content, exact };
+    }
+    if (wrap) {
+      const n = wrap.n;
+      const [rs, re, innerS, innerE] = wrap.at === "inside" ? [s, e, s + n, e - n] : [s - n, e + n, s, e];
+      if (!unwrap) return { rs: innerS, re: innerE, innerS, innerE, os, oe, before: "", after: "" };
+      return { rs, re, innerS, innerE, os, oe, before: "", after: "" };
+    }
+    return { rs: s, re: e, innerS: s, innerE: e, os, oe, before: symbol, after: symbol };
+  });
+
+  const from = pieces[0].rs;
+  let cursor = from;
+  let text = "";
+  let selStart = null;
+  let selEnd = from;
+  for (const piece of pieces) {
+    const content = piece.content ?? value.slice(piece.innerS, piece.innerE);
+    const exact = piece.content == null || piece.exact;
+    text += value.slice(cursor, piece.rs) + piece.before;
+    const at = from + text.length;
+    // The words that were selected, wherever they are now.
+    const lead = exact ? Math.min(Math.max(piece.os - piece.innerS, 0), content.length) : 0;
+    const trail = exact ? Math.min(Math.max(piece.innerE - piece.oe, 0), content.length - lead) : 0;
+    selStart ??= at + lead;
+    text += content;
+    selEnd = from + text.length - trail;
+    text += piece.after;
+    cursor = piece.re;
+  }
+  return { from, to: cursor, text, selStart, selEnd };
+}
+
+export function applyFormat(el, kind) {
+  if (!el || !SYMBOL[kind]) return;
+  const plan = planFormat(el.value, el.selectionStart, el.selectionEnd, kind);
+  if (!plan) return;
+  replace(el, plan.from, plan.to, plan.text);
+  el.setSelectionRange(plan.selStart, plan.selEnd);
 }
 
 /* Ctrl/Cmd + B, I, Shift+X, Shift+M (TEXT_FORMAT_SPEC §5.2). The letter is

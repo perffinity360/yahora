@@ -174,6 +174,17 @@ of §3.
 - Spaces at the edges of the selection stay outside the symbols.
 - With no selection, a pair is inserted with the cursor between.
 - A selection over several lines is wrapped line by line.
+- **Code and monospace are protected** (nothing inside them is formatted, §2), so the tools work
+  around them (17 Nov):
+  - Bold, italic or strike on text inside code or monospace wraps **outside** the backticks:
+    `` `exam` `` + strike → `` ~`exam`~ ``, and strike again takes it off. Where that would cross a line
+    (inside multi-line monospace), they do nothing.
+  - Code on monospace, or monospace on code, **switches the markers** (`` ` `` ↔ ` ``` `) instead of
+    nesting them; the active one again removes it.
+  - Code or monospace over text that has code inside drops those inner markers first.
+  - The rules are `planFormat` in `frontend/src/utils/formatSelection.js`, kept line for line with the
+    app's `mobile/src/components/FormatToolbar.tsx`, and checked on both by
+    `scripts/check-format-selection.mjs`.
 - Undo restores the text exactly.
 
 ### 5.3 Website: the selection bar
@@ -191,9 +202,62 @@ Real formatting inside the text box (styled text children of the `TextInput`): `
 If a platform proves unreliable (the cursor jumps, keyboard suggestions break), live formatting is off
 on that platform only, and this section says so.
 
-### 5.5 App: selection tools
+Built in TF-7 as `mobile/src/components/FormattedInput.tsx`, used by the chat box. Sizes never change
+(code and monospace keep the box's size, unlike a sent message's 0.9), so a line never grows while
+typing. The symbols use `formatSymbolInput` (`blackSoft` at 45%), code `formatCodeTheirs`.
+**Live formatting is on on both iOS and Android.** It has not yet been checked on a phone; if it
+proves unreliable on one, `LIVE_FORMAT` in that file turns it off there, and this line says so.
 
-To be decided while building (TF-7).
+### 5.5 App: selection tools and the chat limit
+
+**An Aa button, then a Yahora bar just below the chat box** (the owner's choice, 17 Nov). While text
+is selected in the box (and it has focus and the keyboard is up), the ☺ button beside the box turns
+into an **Aa** button: purple on `demoCardPurpleBg`. Tapping it opens **B · I · S · code · monospace**,
+a small white pill just below the box, and fills Aa purple with white letters; tapping Aa again closes
+it. The bar closes, and ☺ comes back, when the box loses focus, the keyboard closes, the user types or
+taps in the text. The pill is centred in 56 px of room (`FORMAT_ROOM`): the composer grows by that much
+over the bottom of the message list, which keeps its size (the thread reaches under the composer), so no
+message moves; the jump-to-latest button and the toast rise with it.
+
+**Why a button first.** The phone's own Cut / Copy / Paste menu floats above **or** below the box
+(Android chooses, and an app can't move it), so it covered a bar placed there right away. It never sits
+on the box's own line, where Aa is, and it closes the moment anything of ours is tapped, so the bar opens
+with nothing over it.
+
+**The phone's own menu and handles stay.** Selecting works as everywhere else on the phone: long-press
+a word, drag the handles to any range, and the phone's own Cut / Copy / Paste / Share menu, which
+Android places next to the selection (usually above the box).
+
+**What was tried before (TF-7, 17 Nov).** A row just above the box was covered by the phone's menu. Under
+the header nothing covered it, but it was far from the text (the owner moved it back below the box).
+Hiding the phone's menu in the chat box (`contextMenuHidden`), with Cut · Copy · Paste in our bar, took
+away Android's drag handles too (Android shows them only with its menu, and drops the selection when the
+menu is refused), so only one word could be selected. A bar shown straight away below the box was
+covered when Android put its menu below the selection.
+
+- **Formatting:** the website's wrap / unwrap rules (§5.2), including protected code and monospace,
+  ported line for line to `applyFormat` in `mobile/src/components/FormatToolbar.tsx`. Afterwards the
+  same words are selected, so a second tap takes the symbols off. There is no Undo for this; tapping
+  again is the undo.
+- **The selection the buttons act on.** Touching the bar closes the phone's menu, and Android drops
+  the box's selection with it, before the button runs. So the chat keeps the last non-empty selection
+  itself and every button uses that one. A collapsed selection never ends it; typing, a tap in the box,
+  the box losing focus or the keyboard closing do. Buttons act on finger-down. After a change the box
+  is held to the new selection until it reports it back. After a tap on the bar the words stay
+  selected, but Android may not show its handles and menu again until the next long-press.
+
+The pill is 48 px tall (`FORMAT_ROW_HEIGHT`), white, radius 14, with the community quick bar's raised
+shadow (`shadows.quickBarRaised`: a hairline ring and a soft lift), like the website's selection bar.
+Each button is a 44 × 44 touch target with no fill: an icon from the app's set (MaterialCommunityIcons,
+`blackSoft`, 20) and an accessibility label; pressed, it turns `pinkBg` with a `purple` icon. A thin
+divider separates the text looks (B · I · S) from the code looks (code · monospace). It fades in (150 ms) and out
+(120 ms), and each tap gives a light haptic.
+
+**The chat limit (MESSAGES_SPEC §2):** the box never cuts text (no `maxLength`); the length is counted
+in code points (`[...text].length`), as the server counts. From 100 left, the number left shows above
+Send (Inter 600 12, `mutedText`), red (`errorText`) at 0 and below, with a plain minus ("-12"). Send is
+disabled above 2,000. The emoji picker refuses an emoji that would go over, counted the same way.
+The app's counter is this plain number, not the website's ring (§5.6).
 
 ### 5.6 Website: the character counter
 
