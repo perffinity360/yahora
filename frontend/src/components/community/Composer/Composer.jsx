@@ -43,6 +43,11 @@ import GifPicker from "../GifPicker/GifPicker";
 import SupportCard from "./SupportCard";
 import useComposer, { COMPOSER_TEXT } from "../../../hooks/useComposer";
 import useMediaQuery from "../../../hooks/useMediaQuery";
+import { pasteFormatted } from "../../../utils/pasteFormat";
+import FormattedTextarea from "../../FormattedTextarea/FormattedTextarea";
+import CharCounter from "../../CharCounter/CharCounter";
+import { POST_MAX_CHARS } from "../../../utils/community";
+import { handleFormatKey } from "../../../utils/formatSelection";
 import styles from "./Composer.module.css";
 
 /* Spec §2.1 (and §4 for a reply). Short enough for one line on a phone with
@@ -97,6 +102,23 @@ export default function Composer({
   const coarsePointer = useMediaQuery("(pointer: coarse)");
   const placeholder = placeholderFor(feed, countryName, isReply, replyToUsername);
   const isEmpty = c.text.trim() === "" && c.photos.length === 0 && !c.gif;
+
+  // Image files on the clipboard (a screenshot) are attached like chosen
+  // photos, with the same rules and messages; a reply ignores them. Text on
+  // the same clipboard is still pasted (TEXT_FORMAT_SPEC.md §4).
+  const onTextPaste = (e) => {
+    const images = isReply
+      ? []
+      : [...(e.clipboardData?.files ?? [])].filter((file) => file.type.startsWith("image/"));
+    if (images.length) {
+      c.addPhotos(images);
+      if (!e.clipboardData.getData("text/plain") && !e.clipboardData.getData("text/html")) {
+        e.preventDefault();
+        return;
+      }
+    }
+    pasteFormatted(e);
+  };
 
   // The textarea grows with the text (spec §2.2).
   useLayoutEffect(() => {
@@ -161,6 +183,8 @@ export default function Composer({
     if (!active || picker || c.result) return undefined;
     const onDown = (e) => {
       if (rootRef.current?.contains(e.target)) return;
+      // The selection bar floats outside the composer but belongs to it.
+      if (e.target.closest?.("[data-format-bar]")) return;
       if (isEmpty) leave();
       else setActive(false);
     };
@@ -203,6 +227,8 @@ export default function Composer({
   const post = () => c.submit(onSubmit);
 
   const onTextKeyDown = (e) => {
+    // Ctrl/Cmd + B, I, Shift+X, Shift+M (TEXT_FORMAT_SPEC.md §5.2).
+    if (handleFormatKey(e)) return;
     if (isSendKey(e)) {
       e.preventDefault();
       if (c.canPost) post();
@@ -305,7 +331,10 @@ export default function Composer({
               className={styles.avatar}
             />
           )}
-          <textarea
+          {/* Shows the formatting while you type (TEXT_FORMAT_SPEC.md §5.1). */}
+          <FormattedTextarea
+            wrapperClassName={styles.textareaWrap}
+            formatBar
             ref={textareaRef}
             className={styles.textarea}
             value={c.text}
@@ -318,6 +347,9 @@ export default function Composer({
               rememberSelection();
             }}
             onKeyDown={onTextKeyDown}
+            // Copied bold, italic, lists … arrive as *bold*, _italic_, "- " …,
+            // and a screenshot becomes a photo (TEXT_FORMAT_SPEC.md §4).
+            onPaste={onTextPaste}
             onSelect={rememberSelection}
             onKeyUp={rememberSelection}
             onClick={rememberSelection}
@@ -381,18 +413,12 @@ export default function Composer({
                 >
                   <Smile size={16} aria-hidden="true" />
                 </button>
+                {/* Opens with the tools, so a closed composer shows no ring. */}
+                <span className={styles.counterSlot}>
+                  <CharCounter length={c.length} max={POST_MAX_CHARS} />
+                </span>
               </div>
             </div>
-
-            {c.showCounter && (
-              <span
-                className={`${styles.counter} ${c.remaining <= 0 ? styles.counterOver : ""}`}
-                aria-live="polite"
-                aria-label={`${c.remaining} characters left`}
-              >
-                {c.remaining}
-              </span>
-            )}
 
             <button
               type="button"

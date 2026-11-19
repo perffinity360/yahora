@@ -1,0 +1,71 @@
+/* FormatBar — TEXT_FORMAT_SPEC.md §5.3. A small white pill floating just above
+   the selection (top is the selection's top; the bar hangs above it). */
+
+.bar {
+  position: fixed;
+  z-index: 1300;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--white);
+  box-shadow: var(--quick-bar-ring, 0 0 0 0 transparent), var(--quick-bar-shadow);
+  transform: translateY(-100%);
+  animation: rise 160ms var(--community-ease) both;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--black-soft);
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--community-ease),
+    color 150ms var(--community-ease),
+    transform 150ms var(--community-ease);
+}
+
+.button:hover {
+  background: var(--pink-bg);
+  color: var(--purple);
+}
+
+.button:active {
+  transform: scale(0.94);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: -2px;
+}
+
+@media (pointer: coarse) {
+  .button {
+    width: 38px;
+    height: 36px;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% + 4px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+  }
+}

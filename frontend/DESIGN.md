@@ -148,6 +148,13 @@ The full text is in the root `CLAUDE.md`, "How we work", and applies to everyone
   header saying what the area is (`CAMPUS`, `ALL CAMPUSES`).
 - Keep one left edge for everything in a row.
 
+## Text people write
+
+- **Messages and posts are drawn with WhatsApp's formatting** (`*bold*`, `_italic_`, lists, quotes, links)
+  through `components/FormattedText`, and stored exactly as typed. Previews on one line use `plainText()`
+  from `utils/textFormat.js`. A composer for them takes `onPaste={pasteFormatted}`
+  (`utils/pasteFormat.js`). See `docs/design/TEXT_FORMAT_SPEC.md`.
+
 ## Hover-only controls (owner, 16 Nov)
 
 - A control that sits on a photo and has a twin elsewhere on the card (the product card's heart, whose

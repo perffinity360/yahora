@@ -1,0 +1,133 @@
+/* CharCounter — TEXT_FORMAT_SPEC.md §5.6. A ring that fills as you type, its
+   colour running purple → blue → teal → green → yellow → orange with the fill
+   (CharCounter.jsx sets --ring-colour), the number inside from 100 left, then
+   red with the number beside it. */
+
+.counter {
+  --ring-colour: var(--purple);
+  /* The ring's box, then a 4 px gap and room for the widest number. */
+  flex: 0 0 auto;
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: calc(26px + 4px + var(--counter-digits, 5) * 1ch);
+  height: 26px;
+  font: 600 12px/1 "Inter", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.over {
+  --ring-colour: var(--error-text);
+}
+
+.body {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* The number beside the ring, over the limit. Placed to the ring's left
+   without taking room, so the ring never moves; the width above holds it. */
+.outside {
+  position: absolute;
+  right: calc(100% + 4px);
+  white-space: nowrap;
+  font: 600 12px/1 "Inter", sans-serif;
+  color: var(--error-text);
+}
+
+.ringBox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+}
+
+/* 20 px while there's plenty left: the 26 px drawing scaled down, its
+   stroke thickened to match (3.25 × 20 / 26 = 2.5). */
+.ring {
+  display: block;
+  transform: scale(0.7692) rotate(-90deg); /* 20 / 26 */
+  transition: transform 150ms var(--community-ease);
+}
+
+.warn .ring,
+.over .ring {
+  transform: scale(1) rotate(-90deg);
+}
+
+.track,
+.progress {
+  fill: none;
+  stroke-width: 3.25;
+  transition:
+    stroke 150ms var(--community-ease),
+    stroke-width 150ms var(--community-ease),
+    stroke-dasharray 150ms var(--community-ease);
+}
+
+.warn .track,
+.warn .progress,
+.over .track,
+.over .progress {
+  stroke-width: 2.5;
+}
+
+.track {
+  stroke: var(--community-hairline);
+}
+
+.progress {
+  stroke: var(--ring-colour);
+  stroke-linecap: round;
+}
+
+/* The number left, inside the amber ring. */
+.inside {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 11px/1 "Inter", sans-serif;
+  letter-spacing: -0.02em;
+  /* The text colour, readable whatever colour the ring has reached. */
+  color: var(--black-soft);
+}
+
+.shake {
+  animation: shake 250ms var(--community-ease);
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring,
+  .track,
+  .progress {
+    transition: none;
+  }
+
+  .shake {
+    animation: none;
+  }
+}

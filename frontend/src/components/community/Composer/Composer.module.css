@@ -131,8 +131,13 @@
   object-fit: cover;
 }
 
-.textarea {
+/* FormattedTextarea's wrapper holds the textarea's place in the row. */
+.textareaWrap {
   flex: 1 1 140px;
+  min-width: 0;
+}
+
+.textarea {
   min-width: 0;
   display: block;
   max-height: min(240px, 35vh);
@@ -322,14 +327,11 @@
   letter-spacing: 0.02em;
 }
 
-.counter {
-  font: 500 12px/18px "Inter", sans-serif;
-  color: var(--community-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.counterOver {
-  color: var(--error-text);
+/* The shared ring counter (CharCounter), after the tools; 4 px of room on
+   its right for its shake, which the tools' clipping box would cut. */
+.counterSlot {
+  display: flex;
+  margin: 0 4px 0 6px;
 }
 
 .post {

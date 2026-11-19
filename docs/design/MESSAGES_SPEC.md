@@ -6,6 +6,10 @@ conversation screens on BOTH platforms.**
 **v3 adds §10, message actions — Reply, Copy and Delete — and the inbox-preview changes that
 come with them (Phase 6B). §0.2 lists every change from v2. Everything else is v2, unchanged.**
 
+**7 Nov 2026: WhatsApp-style formatting** (`*bold*`, `_italic_`, lists, quotes …) in bubbles on both
+platforms, with plain previews, links and line breaks now shown on the website too — §2
+"Formatting", and the rules in `TEXT_FORMAT_SPEC.md`.
+
 v2 records what the mobile app actually ships at the end of Phase 6A. Every value below was
 read out of `mobile/src/theme/index.ts`, `mobile/src/lib/{emoji,stickers,messages}.ts`,
 `mobile/app/(tabs)/messages.tsx` and `mobile/app/chat/[contactId].tsx`. Where a value is
@@ -374,6 +378,25 @@ trying it on the device. It fails the 3.0 icon minimum on the bubble's pink end,
 Web only: mine `0 1px 2px rgba(128,0,128,0.16), 0 6px 18px rgba(128,0,128,0.14)`; theirs
 `0 2px 10px rgba(42,8,42,0.05)`. Mobile: none (see §5).
 
+### Formatting
+
+A message is drawn with WhatsApp's formatting: `*bold*`, `_italic_`, `~strikethrough~`,
+`` `code` ``, ` ```monospace``` `, `- ` bullets, `1. ` numbered items and `> ` quotes, plus its
+links. It is stored exactly as typed. The rules, the look and the paste behaviour are in
+`TEXT_FORMAT_SPEC.md`; in short:
+
+- **Bubbles** draw it (web `FormattedText`, app `src/components/FormattedText.tsx`). Inline code sits on
+  the text's colour at 12%, a quote's bar is that colour at 45%: white on a sent bubble, near-black on a
+  received one.
+- **The inbox preview, the quote at the top of a reply and the reply bar** show the text without its
+  symbols (`plainText()`).
+- **Links** take this section's link colours on both platforms. (The website didn't draw links in
+  bubbles before; it does now.)
+- **Line breaks** show on the website too (they used to run together on one line there).
+- **Copy** copies the symbols, so pasting into WhatsApp keeps the formatting.
+- **Pasting rich text into the website's composer** brings its bold, italic, lists … in as the
+  symbols (TEXT_FORMAT_SPEC §4). The app's text box only gets plain text.
+
 ### Emoji in messages
 
 Size only: the emoji artwork is the device's own emoji font.
@@ -509,6 +532,11 @@ order: emoji button (§9), input, send.
 - **Input pill:** min-height 40, grows to 5 lines (max height 120), radius 20, background
   `#F3F0EF` (inputBg), no border, padding 10 vertical / 14 horizontal, Inter 400 14 / 20
   `#1A1A1A`, placeholder `Message` in `#BBB6C8` (mutedPlaceholder), up to 2000 characters.
+- **Length:** the box never cuts text (no `maxLength`), so a long paste arrives whole. Characters are
+  counted as code points (one emoji is one). A ring counter sits between the box and Send: its
+  colour runs purple → blue → teal → green → yellow → orange as it fills, with the number inside from
+  100 left, and it turns red with the number beside it at 0 and below. Send is disabled above 2,000. It is the same counter as the post composer's, one shared component on the
+  website; the design is TEXT_FORMAT_SPEC §5.6.
 - **Send button:** 40 circle, 135° gradient `#800080 → #EB487F` (icon only — white on its
   pink end is 3.64:1, above the 3.0 needed for an icon), send icon 17 white. Disabled (empty
   draft): opacity 0.4. Pressed: scale 0.94.

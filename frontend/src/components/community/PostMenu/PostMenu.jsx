@@ -1,6 +1,7 @@
 // frontend/src/components/community/PostMenu/PostMenu.jsx
 //
-// The ⋯ menu on a post or a reply (spec §3, §4): Report for everyone but the
+// The ⋯ menu on a post or a reply (spec §3, §4): Copy text (only when there is
+// text), Copy link (a reply's is its post's), then Report for everyone but the
 // author (§7), Delete for the author only. The menu is only the list; what
 // each item does lives in PostActionsProvider (pages/community/PostActions.jsx),
 // which the screen wraps around its posts and reaches here through
@@ -9,11 +10,12 @@
 // `className` is the button's own look (the post's or the reply's ⋯).
 
 import React, { createContext, useContext, useState } from "react";
-import { Ellipsis, Flag, Trash2 } from "lucide-react";
+import { Copy, Ellipsis, Flag, Link, Trash2 } from "lucide-react";
 import Popover from "../Popover/Popover";
 import styles from "./PostMenu.module.css";
 
-/** { hidden: Set<postId>, openReport(post), openDelete(post), showToast(text) } */
+/** { hidden: Set<postId>, openReport(post), openDelete(post), copyText(post),
+      copyLink(post), showToast(text) } */
 export const PostActionsContext = createContext(null);
 
 export function usePostActions() {
@@ -24,6 +26,7 @@ export default function PostMenu({ post, className = "", size = 15 }) {
   const actions = usePostActions();
   const [anchor, setAnchor] = useState(null);
   const [open, setOpen] = useState(false);
+  const hasText = Boolean(post.content?.trim());
 
   const pick = (fn) => {
     setOpen(false);
@@ -55,11 +58,32 @@ export default function PostMenu({ post, className = "", size = 15 }) {
           role="presentation"
         >
           <div role="menu" className={styles.menu}>
-            {post.is_mine ? (
+            {hasText && (
               <button
                 type="button"
                 role="menuitem"
                 autoFocus
+                className={styles.item}
+                onClick={() => pick(actions.copyText)}
+              >
+                <Copy size={14} aria-hidden="true" />
+                Copy text
+              </button>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              autoFocus={!hasText}
+              className={styles.item}
+              onClick={() => pick(actions.copyLink)}
+            >
+              <Link size={14} aria-hidden="true" />
+              Copy link
+            </button>
+            {post.is_mine ? (
+              <button
+                type="button"
+                role="menuitem"
                 className={`${styles.item} ${styles.danger}`}
                 onClick={() => pick(actions.openDelete)}
               >
@@ -70,7 +94,6 @@ export default function PostMenu({ post, className = "", size = 15 }) {
               <button
                 type="button"
                 role="menuitem"
-                autoFocus
                 className={styles.item}
                 onClick={() => pick(actions.openReport)}
               >

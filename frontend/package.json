@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:paste": "node scripts/check-paste-format.mjs"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.4",
+    "jsdom": "^29.1.1",
     "vite": "^7.3.1"
   }
 }
