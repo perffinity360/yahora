@@ -1,6 +1,9 @@
 # Community — design spec (Phase 7)
 
-**Version 3.16 · 18 November 2026 · for the website and the app**
+**Version 3.17 · 20 November 2026 · for the website and the app**
+
+> **Changed in version 3.17 (owner, 20 Nov), the website only:** **the composer's ring counter comes first
+> among the tools**, to the left of Add photos (and of GIF in a reply); it still opens with them (§2.2).
 
 > **Changed in version 3.16 (owner, 18 Nov), the app only:** **tapping `N new posts` no longer flickers**:
 > the feed glides to the top first and the new posts appear there, fading in, with nothing held still or
@@ -427,7 +430,7 @@ full-screen compose page (`app/compose.tsx`, opened as a modal).
   On a 390 px phone that happens when the composer comes into use.
 - **Text:** up to **1,000 characters**, counted the way runbook §1.12 explains (one emoji
   is one character).
-  - A ring counter after the tools (it opens with them): its colour runs purple → blue → teal →
+  - A ring counter first among the tools, left of Add photos (it opens with them): its colour runs purple → blue → teal →
     green → yellow → orange as it fills, with the number inside from 100 left, and it turns red
     with the number beside it at 0 and below. Post is disabled above 1,000.
     The reply box uses the same one, and so does the chat box: one shared counter on the website,

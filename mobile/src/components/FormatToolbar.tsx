@@ -10,15 +10,11 @@ import { colors, radius, shadows } from '../theme';
 /**
  * ── FORMAT TOOLBAR (spec §5.5) ──
  *
- * The app's selection tools: a bar of B · I · S · code · monospace that the
- * chat shows at the top of the conversation, just under the header, while
- * text is selected in the box, doing what the website's selection bar and
- * shortcuts do. The screen shows it (it knows the selection, from
- * onSelectionChange) and applies the result of applyFormat.
- *
- * Not near the box: the phone's own Cut / Copy / Paste menu floats next to the
- * selection and covered the bar there. Hiding that menu took away Android's
- * selection handles too (one word only), so the menu stays and the bar moved.
+ * The app's selection tools: a bar of B · I · S · code · monospace, doing what
+ * the website's selection bar and shortcuts do. The chat shows it just above
+ * the box when Aa is tapped, in place of the phone's own Cut / Copy / Paste
+ * menu, which it closes first (owner, 20 Nov). The screen knows the selection
+ * (from onSelectionChange) and applies the result of applyFormat.
  *
  * Its buttons act on finger-down (onPressIn) and never take the focus from the
  * box or put the keyboard away (Pressables don't take focus). The screen keeps
@@ -335,7 +331,7 @@ export function FormatToolbar({ onFormat }: Props) {
   );
 }
 
-/* A small white pill floating under the header, like the website's selection
+/* A small white pill floating just above the box, like the website's selection
    bar (FormatBar) and the community's quick bar: the quick bar's raised shadow
    (a hairline ring and a soft lift), plain icons that tint on a press. */
 const styles = StyleSheet.create({

@@ -192,8 +192,11 @@ const THREAD_PAD = 12;
 const BUBBLE_MAX = 520;
 const MESSAGES_HREF = '/(tabs)/messages';
 const MAX_MESSAGE_LENGTH = 2000;
-/** The formatting bar's room under the box: the pill and 4 px above and below. */
+/** The formatting bar's room just above the box, over the thread: the pill and
+ *  4 px above and below. The jump button and the toast rise by this much. */
 const FORMAT_ROOM = FORMAT_ROW_HEIGHT + 8;
+/** Aa: how long after collapsing the selection it is selected again (a few frames). */
+const RESELECT_AFTER_MS = 60;
 /** The counter shows from this many characters left (TEXT_FORMAT_SPEC §5.5, MESSAGES_SPEC §2). */
 const COUNTER_FROM = 100;
 /** Length as the server counts it: code points, so one emoji is one. */
@@ -1258,13 +1261,12 @@ export default function ChatScreen() {
   const canSend = !!draft.trim() && !!contactId && !!productId && draftLength <= MAX_MESSAGE_LENGTH;
 
   /* ── SELECTION TOOLS (TEXT_FORMAT_SPEC §5.5) ── A pill of B · I · S · code ·
-     mono just BELOW the box (the owner's choice, 17 Nov), while text is
-     selected in it and the keyboard is up. Nothing selected, no bar. The
-     phone's own Cut / Copy / Paste menu and handles stay (hiding the menu took
-     the handles away on Android: one word only).
-     The bar makes the composer FORMAT_ROOM taller; the thread reaches the same
-     amount under it (a negative margin), so the list keeps its size and no
-     message moves.
+     mono, opened by Aa while text is selected in the box and the keyboard is
+     up. Nothing selected, no bar. Selecting works as everywhere on the phone:
+     its own handles and its Cut / Copy / Paste menu. Aa swaps that menu for our
+     bar, in the menu's place just above the box, over the newest messages
+     (owner, 20 Nov; it was below the box, which grew the composer by 56).
+     Nothing moves: the bar floats over the thread.
 
      Why it keeps its own copy of the selection (17 Nov, found with logs:
      tapping B did nothing). Android collapses the box's selection (4–8 → 8–8)
@@ -1321,6 +1323,11 @@ export default function ChatScreen() {
     if (forcedTimerRef.current) clearTimeout(forcedTimerRef.current);
   }, []);
 
+  /** A finger went down in the box while text was kept. If what follows is a
+   *  collapsed selection, it was a tap, and the kept selection ends. A long-press
+   *  inside the selection reports nothing (Android keeps it and brings its own
+   *  menu back), so the kept selection, and Aa, stay. */
+  const touchedBoxRef = useRef(false);
   const handleSelectionChange = (next: Selection) => {
     setSelection(next);
     const held = forcedRef.current;
@@ -1329,9 +1336,13 @@ export default function ChatScreen() {
       if (next.start !== held.start || next.end !== held.end) return;
       release();
     }
-    // A new non-empty selection replaces the kept one; a collapsed one never
-    // clears it (Android collapses it when the bar is touched).
+    const touched = touchedBoxRef.current;
+    touchedBoxRef.current = false;
+    // A new non-empty selection replaces the kept one. A collapsed one clears
+    // it only after a touch in the box (a tap); our own collapse, which closes
+    // the phone's menu (openFormat), never does.
     if (next.start !== next.end) keep(next);
+    else if (touched) keep(null);
   };
   // The selection ends with the focus or the keyboard.
   useEffect(() => {
@@ -1345,11 +1356,20 @@ export default function ChatScreen() {
   };
 
   const hasSelection = !!kept && Math.max(kept.start, kept.end) <= draft.length;
-  /* While text is selected, the ☺ button beside the box is an Aa button; a
-     tap on it opens the bar. Not straight away: the phone's own Cut / Copy
-     menu floats above OR below the box (Android chooses) and covered the bar
-     either way. It never sits on the box's own line, where Aa is, and it
-     closes the moment Aa is tapped, so the bar opens with nothing over it. */
+  /* While text is selected, the ☺ button beside the box is an Aa button. The
+     phone's own Cut / Copy / Paste menu stays for those (owner, 20 Nov); Aa
+     swaps it for our bar, in the menu's place just above the box:
+       - the phone's menu is closed by collapsing the selection for a moment
+         (Android ends its menu when nothing is selected) and then selecting the
+         same characters again, which brings the highlight back but not the menu
+         (Android reopens it only on a long-press or a handle drag);
+       - the box keeps its focus, so the keyboard and the caret stay put;
+       - the buttons act on `kept`, taken before any of this, so they format
+         exactly the characters that were selected;
+       - `contextMenuHidden` keeps the phone's menu shut while our bar is open.
+     Back to the phone's menu: tap Aa again, or long-press the text (that also
+     closes our bar). Expo Go can't call Android's own "hide the menu" or "show
+     the menu", which need a native module and a development build. */
   const selectionTools = inputFocused && keyboardUp && hasSelection;
   const [formatOpen, setFormatOpen] = useState(false);
   useEffect(() => {
@@ -1357,6 +1377,32 @@ export default function ChatScreen() {
   }, [selectionTools]);
   const showFormatBar = selectionTools && formatOpen;
   const formatRoom = showFormatBar ? FORMAT_ROOM : 0;
+
+  const reselectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelReselect = () => {
+    if (reselectTimerRef.current) clearTimeout(reselectTimerRef.current);
+    reselectTimerRef.current = null;
+  };
+  useEffect(() => cancelReselect, []);
+  const toggleFormat = () => {
+    cancelReselect();
+    if (formatOpen) {
+      setFormatOpen(false);
+      return;
+    }
+    const sel = keptRef.current;
+    if (!sel) return;
+    touchedBoxRef.current = false;
+    setFormatOpen(true);
+    // Collapse, then the same selection again a few frames later. Android
+    // refreshes its menu on a frame, so the two must not land on the same one.
+    const end = Math.max(sel.start, sel.end);
+    force({ start: end, end });
+    reselectTimerRef.current = setTimeout(() => {
+      reselectTimerRef.current = null;
+      if (keptRef.current === sel) force(sel);
+    }, RESELECT_AFTER_MS);
+  };
 
   /** What a button acts on: always the kept selection, ordered start ≤ end. */
   const pressedSelection = (): Selection | null => {
@@ -1367,6 +1413,7 @@ export default function ChatScreen() {
   const handleFormat = (kind: FormatKind) => {
     const target = pressedSelection();
     if (!target) return;
+    cancelReselect();
     const result = applyFormat(draft, target, kind);
     // The same words stay selected, so the same button takes it off again.
     keep(result.selection);
@@ -1589,7 +1636,7 @@ export default function ChatScreen() {
           </WholePixelHeight>
 
           {/* ── Thread ── */}
-          <View style={[styles.thread, formatRoom ? { marginBottom: -formatRoom } : null]} ref={threadBoxRef}>
+          <View style={styles.thread} ref={threadBoxRef}>
             {/* OUTSIDE the inverted FlatList on purpose: inside, it would be
                 flipped and would scroll with the messages. */}
             <ChatWallpaper />
@@ -1748,6 +1795,15 @@ export default function ChatScreen() {
               </Reanimated.View>
             ) : null}
 
+            {/* Our formatting bar, in the phone's menu's place just above the box,
+                over the newest messages (spec §5.5). The bottom of the thread is
+                the top of the composer, so nothing is added below the box. */}
+            {showFormatBar ? (
+              <View style={styles.formatBar} pointerEvents="box-none">
+                <FormatToolbar onFormat={handleFormat} />
+              </View>
+            ) : null}
+
             {/* Bottom of the thread = top of the composer (or the emoji tray). */}
             <AppToast message={toast} bottom={TOAST_ABOVE_COMPOSER + formatRoom} />
           </View>
@@ -1808,7 +1864,7 @@ export default function ChatScreen() {
                   // selection is what the bar acts on).
                   onPressIn={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setFormatOpen((open) => !open);
+                    toggleFormat();
                   }}
                   hitSlop={8}
                   accessibilityRole="button"
@@ -1845,6 +1901,8 @@ export default function ChatScreen() {
                 onChangeText={handleInputChangeText}
                 onSelectionChange={(e) => handleSelectionChange(e.nativeEvent.selection)}
                 selection={forced ?? undefined}
+                // While our bar is open, the phone's menu stays shut (see toggleFormat).
+                contextMenuHidden={showFormatBar}
                 codeBackground={colors.formatCodeTheirs}
                 symbolColor={colors.formatSymbolInput}
                 /* WhatsApp: starting to type ends the selection, one message
@@ -1852,9 +1910,13 @@ export default function ChatScreen() {
                    that already had focus (the keyboard was up during the
                    long-press), where a tap brings no new focus event. */
                 onPressIn={() => {
-                  // A tap in the text ends the kept selection; a long-press on
-                  // a word selects it again (reported by the box).
-                  keep(null);
+                  // A tap in the text ends the kept selection (once the box
+                  // reports the caret: handleSelectionChange). A long-press
+                  // inside it keeps it and brings the phone's menu back, so our
+                  // bar closes now, before Android asks for its menu.
+                  touchedBoxRef.current = true;
+                  cancelReselect();
+                  setFormatOpen(false);
                   release();
                   if (selecting) clearSelection();
                 }}
@@ -1907,12 +1969,6 @@ export default function ChatScreen() {
                 </Pressable>
               </View>
             </View>
-            {/* Just below the box (spec §5.5). */}
-            {showFormatBar ? (
-              <View style={styles.formatBar}>
-                <FormatToolbar onFormat={handleFormat} />
-              </View>
-            ) : null}
           </View>
         </SafeAreaView>
       </KeyboardAvoider>
@@ -3261,9 +3317,13 @@ const styles = StyleSheet.create({
   sendGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   sendBtnPressed: { transform: [{ scale: 0.94 }] },
   sendBtnDisabled: { opacity: 0.4 },
-  /* The formatting bar's place, just below the box (TEXT_FORMAT_SPEC §5.5):
-     the pill centred in FORMAT_ROOM. */
+  /* The formatting bar's place, just above the box, over the thread's bottom
+     edge (TEXT_FORMAT_SPEC §5.5): the pill centred in FORMAT_ROOM. */
   formatBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     height: FORMAT_ROOM,
     alignItems: 'center',
     justifyContent: 'center',
