@@ -6,13 +6,19 @@
 > community live since 12 Nov, the app's on its branch), and what production runs today. The RLS table is
 > unchanged: none of the four new files creates a table, enables RLS or adds a policy (re-checked 15 Nov).
 
-> **8 Nov 2026 update, at commit `aec41ca` (Phase 7, branch `v-p-web-community-redesign`).** Brought
-> forward over Phase 6B (signed off 29 Oct) and Phase 7 so far: the migration list (18 → 26 files), the
-> RLS table (17 → 22 tables), open issue 2 (closed by 6B), open issues 4 and 5 re-checked, the ownership
-> loans, and two new sections, "What Phase 6B shipped" and "Phase 7 so far". Same rule as before: a
-> migration file proves what was *written*. That all four Phase 7 migrations are on production is from
-> Vishwajeet's V-B changelog entry (3 Nov), not from this session.
+> **8 Nov 2026 update (Phase 7, written on `v-p-web-community-redesign` at `aec41ca`, merged with the
+> 7 Nov pass below on 8 Nov).** Adds what each of the eight new migrations does, open issue 4 re-checked
+> (still open), the Realtime and anon-function notes, two sections, "What Phase 6B shipped" and "Phase 7
+> so far", and the loans as they stand after V-P merged (PR #100). Same rule as before: a migration file
+> proves what was *written*. That all four Phase 7 migrations are on production is from Vishwajeet's V-B
+> changelog entry (3 Nov), not from this session.
 
+> **7 Nov 2026 correction pass, at commit `34f5e91` (Phase 7, during Block V-P).** Again only claims the
+> repository contradicts were changed: the migration list (18 → 26 files) and the RLS table count
+> (17 → 22), open issues 2 and 5 (now resolved), the scripts folder, `cache.md` (no longer tracked),
+> and the ownership loans (6B's ended; two Phase 7 loans are running). "What shipped since 15 Sep"
+> is new and only points at the changelog. Production claims are still `[not re-verified]`.
+>
 > **13 Oct 2026 correction pass, at commit `46c8fb0` (Phase 6B, Day 2).** Only claims that the
 > repository now contradicts were changed: the migration list (14 → 18 files), open issue 1
 > (pagination shipped in Phase 4), file:line references that moved, `PRODUCTION_ORIGINS`,
@@ -71,7 +77,7 @@ repo, the ledger is not.
 | 018 | `20261001122844_search_demo_isolation` | Phase 6A (V-A) |
 | — | `20261016061043_message_actions` | Phase 6B (V-B) |
 | — | `20261016061047_product_views` | Phase 6B (V-B) |
-| — | `20261016061050_mark_sold` | Phase 6B (V-B) |
+| — | `20261016061050_mark_sold` | Phase 6B (V-D) |
 | — | `20261027062548_search_users_word_match` | Phase 6B (V-F) |
 | — | `20261103053142_community_posts` | Phase 7 (V-B, 1 of 4) |
 | — | `20261103053143_reactions_and_reports` | Phase 7 (V-B, 2 of 4) |
@@ -114,6 +120,9 @@ timestamps decide the order, as always.
   "Phase 7 so far").
 - **`own_replies_first`** — in a thread, the viewer's own replies come first, newest first, then everyone
   else's by Hot; `top_replies` follows the same order. No API change.
+
+**Applied to production:** all four Phase 7 migrations on 3 Nov (changelog entry "Phase 7 migrations
+pushed to production"). The earlier ones `[not re-verified]` from this session.
 
 **There is no 014.** No migration header carries that number; the labels jump from 013 to 015.
 That is a numbering gap, not a missing file.
@@ -178,8 +187,10 @@ tables**. 015–018 add none; 6B adds two and Phase 7 three (`posts` already had
 | 004 | `users`, `messages` (2) |
 | 005 | `reserved_usernames`, `username_history`, `auth_attempts` (3) |
 | 008 | `otp_requests` (1) |
-| 6B `message_actions`, `product_views` | `message_hides`, `product_views` (2) |
-| 7 `community_posts`, `reactions_and_reports` | `community_settings`, `post_reactions`, `reports` (3) |
+| `message_actions` | `message_hides` (1) |
+| `product_views` | `product_views` (1) |
+| `community_posts` | `community_settings` (1) |
+| `reactions_and_reports` | `post_reactions`, `reports` (2) |
 
 **Three of the 22 carry a policy.** The other 19 have RLS on with no policy, which is
 deliberate — they are backend-only, reached solely through the service-role key, and a
@@ -265,6 +276,8 @@ comment or vote inflating the view count.
 
 ### 3. `avatars` bucket has no SELECT or DELETE policy
 
+*Still open on 7 Nov: no migration after 004 adds a policy of any kind.*
+
 INSERT was narrowed to `authenticated` by 004 (was `anon, authenticated`). Grepping every
 migration for `create policy` confirms `"Avatar uploads"` is the only policy that names the
 bucket, in 003 and again in 004, and both are `with check (bucket_id = 'avatars')` — INSERT.
@@ -272,6 +285,9 @@ There is still no SELECT and no DELETE. Reads work only because the bucket is `p
 and nothing can delete an old avatar through RLS. Partially resolved; the other half is open.
 
 ### 4. `utils/notify.js` writes to a table that does not exist — still open on 8 Nov
+
+*Still open on 7 Nov: no migration creates `notifications`, and `modules/notifications/` is still a
+placeholder with no routes (backend/API.md marks it "not built yet").*
 
 `backend/src/utils/notify.js:61` does `supabase.from('notifications').upsert(...)`. There is
 **no `create table ... notifications`** anywhere under `supabase/` — the only two mentions are
@@ -281,12 +297,13 @@ on 8 Nov:** none of the four Phase 7 migrations creates `notifications`, and the
 doesn't write notifications (`backend/API.md`). The file's own header still says the table arrives in
 "migration 006", which is stale.
 
-### 5. `backend/API.md` is wrong about `increment_page_view()`
+### 5. ✅ Fixed 7 Nov — `backend/API.md` was wrong about `increment_page_view()`
 
-`backend/API.md:3599` still says *"the RPC and table exist; nothing calls it."* (8 Nov; it was line
-3055 on 13 Oct)
+*It now says the website's footer calls the RPC on every page load. The 13 Oct text follows.*
+
+`backend/API.md:3055` still says *"the RPC and table exist; nothing calls it."* (13 Oct)
 `frontend/src/components/footer/footer.jsx:56` calls it on every page load. One-line doc fix.
-The 25 Aug file cited line 2448, the 15 Sep file line 2807; API.md keeps growing. Phase 8
+The 25 Aug file cited line 2448, and the 15 Sep file line 2807; API.md keeps growing. Phase 8
 housekeeping.
 
 ### 6. 👁️ Block G5 browser verification is still outstanding `[not re-verified]`
@@ -399,6 +416,18 @@ handoff entry is in `docs/CHANGELOG.md` (15 Sep, reconstructed).
 
 ---
 
+## What shipped since 15 Sep — where to read it
+
+The full record, in order. Phase 6B and Phase 7 are also summarised in the two sections after this.
+
+- **Phases 4 and 5** — `docs/CHANGELOG.md` (frozen on 27 Sep; open it only to follow a link).
+- **Phase 6A** — `docs/changelog/releases/phase-6A.md`.
+- **Phase 6B** (message actions, product views, Mark as Sold) — `docs/changelog/releases/phase-6B.md`.
+  Signed off 29 Oct.
+- **Phase 7** (the community: posts, reactions, reports, moderation) — the entries in `docs/changelog/`
+  (`node scripts/changelog.mjs recent`). Its migrations reached production on 3 Nov, and the posts and
+  reports API passed T1 there on 6 Nov.
+
 ## What Phase 6B shipped (13–29 Oct)
 
 From `docs/changelog/releases/phase-6B.md` (27 entries) and the four 6B migrations above.
@@ -460,7 +489,7 @@ Plan: `docs/runbooks/PHASE_7_RUNBOOK.md`. Contract: `backend/API.md`, "posts mod
   from `req.user.id`, never from the request body or path. Phase 3 and Phase 4 V-A were both
   applications of exactly this rule.
 - **Zero schema drift between local and production.** `[not re-verified]` — was true on 25 Aug
-  via `schema-drift.mjs`; ten migrations (008–018) have landed since and this session cannot
+  via `schema-drift.mjs`; eighteen migrations (008 onwards) have landed since and this session cannot
   check.
 - Production carries **112 users / 141 messages** `[not re-verified]`, a 25 Aug figure. The
   25 Aug "local seed carries 11 users" is stale. The 6A V-D entry (`docs/changelog/`, 9 Oct)
@@ -471,9 +500,10 @@ Plan: `docs/runbooks/PHASE_7_RUNBOOK.md`. Contract: `backend/API.md`, "posts mod
   still do not exist after a reset; legacy no-id inserts claimed those names first. Do not
   hardcode them. `[not re-verified]`
 - **`backend/scripts/verify-domains.sh` does not exist.** `docs/YAHORA_BUILD_PLAN.md` §"Phase 3"
-  lists it as shipped. `backend/scripts/` contains `diagnose-token.mjs`, `schema-drift.mjs`,
-  `seedDemo.js`, `seedLocal.js`, `verify-block-f.mjs` and nothing else. Either it was never
-  written or it lives somewhere the plan does not say.
+  lists it as shipped. On 7 Nov `backend/scripts/` holds `diagnose-token.mjs`, `moderation-benchmark.mjs`
+  (with `moderation-samples.json`), `schema-drift.mjs`, `seedDemo.js`, `seedLocal.js`,
+  `try-moderation.mjs` and `verify-block-f.mjs`, and nothing else. Either it was never written or it
+  lives somewhere the plan does not say.
 
 ---
 
@@ -491,15 +521,15 @@ carries an `OWNER:` banner.
 **Phase 4 loan — ended.** Neeraj wrote the cursor pagination in the READ handlers of
 `products` and `messages`. The loan ended with Phase 4. Written up in `docs/CHANGELOG.md`, 15 Sep.
 
-**Phase 6B loan — ended.** `products` and `share` were lent to Neeraj from 15 Oct and came back
-with the 6B sign-off entry (29 Oct, `docs/changelog/releases/phase-6B.md`).
+**Phase 6B loan — ended.** `products` and `share` were lent to Neeraj from 15 Oct and came back to
+Vishwajeet at the 6B sign-off on 29 Oct (`docs/changelog/releases/phase-6B.md`, entries 3 and 27).
 
-**Phase 7 loans — current** (`docs/runbooks/PHASE_7_RUNBOOK.md` §2.2):
+**Phase 7 loans:**
 
-- `backend/src/modules/posts/*` is lent to **Neeraj** until Phase 7 sign-off. The `OWNER:` banners
-  stay Vishwajeet's; the database stays Vishwajeet's.
-- The website's community files are lent to **Vishwajeet** for the redesign (Block V-P), from the
-  moment `v-p-web-community-redesign` opened until it merges: `frontend/src/pages/community/*`,
+- **`backend/src/modules/posts/*` — current.** Lent to **Neeraj** until the Phase 7 sign-off (changelog
+  entry "Ownership loan: posts module to Neeraj for Phase 7", 2 Nov). The `OWNER:` banners stay
+  Vishwajeet's; the database stays Vishwajeet's.
+- **The website's community files — ended 8 Nov.** `frontend/src/pages/community/*`,
   `frontend/src/components/community/*`, `frontend/src/utils/community.js`, the community variables in
   `frontend/src/styles/global.css`, `pages/dev/CommunitySandbox.jsx` and `docs/design/COMMUNITY_SPEC.md`.
   V-P also changed `frontend/src/App.jsx` (the navbar is hidden on `/community`), which is outside
@@ -517,11 +547,10 @@ with the 6B sign-off entry (29 Oct, `docs/changelog/releases/phase-6B.md`).
   `if (!origin) return callback(null, true)` is the first check, in both environments, because
   CORS is a browser mechanism. Do not remove that line. That the live deploy accepts the Netlify
   origin is `[not re-verified]`.
-- **`cache.md` is still a tracked file** and still not in `.gitignore`. On 13 Oct it holds only
-  phase start dates. No commit in its history contains a connection string or password. It has
-  held the production connection string in the working tree before, so the advice stands: never
-  put a credential in it. If you want it out of git, use `git rm --cached cache.md` plus a
-  `.gitignore` entry. Whether the database password was rotated is `[not re-verified]`.
+- ✅ **`cache.md` is gone.** Commit `ccce322` ("starting Phase 6B", 13 Oct) deleted it, and it isn't in
+  the working tree or tracked on 7 Nov. It once held the production connection string in the working
+  tree, so if it comes back, keep credentials out of it and add it to `.gitignore`. Whether the
+  database password was rotated is `[not re-verified]`.
 - The production dumps (`prod-backup-data.sql`, `prod-backup-schema.sql` — 112 real emails and
   112 bcrypt hashes) were moved to `~/yahora-backups/`, outside the repo. ✅ Resolved 25 Aug.
   There are no automated backups on this project (free tier), so keep taking them — just not

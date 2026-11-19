@@ -1,0 +1,52 @@
+/* FormattedTextarea — TEXT_FORMAT_SPEC.md §5.1. Nothing here may change a
+   character's width: no font-weight, font-style, padding, letter-spacing or
+   font-size inside the mirror. */
+
+.wrap {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+/* The wrapper took the textarea's place in its parent's layout, so the
+   textarea just fills it. Its glyphs are invisible; its caret keeps the text
+   colour (caret-color defaults to `color`, which is left alone), and its
+   selection highlight still shows. */
+.field {
+  width: 100%;
+  -webkit-text-fill-color: transparent;
+}
+
+/* The placeholder is drawn by the textarea itself, in its own colour. */
+.field::placeholder {
+  -webkit-text-fill-color: currentColor;
+}
+
+.mirror {
+  position: absolute;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-style: solid;
+  border-color: transparent;
+  background: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.symbol {
+  opacity: 0.45;
+}
+
+.bold {
+  -webkit-text-stroke: 0.035em currentColor;
+}
+
+.italic {
+  opacity: 0.7;
+}
+
+.code {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}

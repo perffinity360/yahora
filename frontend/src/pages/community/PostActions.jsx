@@ -19,6 +19,7 @@
 // post page shows "This post was deleted.").
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { copyText } from "../../utils/share";
 import { Trash2 } from "lucide-react";
 import AppToast, { useToast } from "../../components/AppToast/AppToast";
 import ConfirmDialog from "../../components/ConfirmDialog/ConfirmDialog";
@@ -114,9 +115,31 @@ export default function PostActionsProvider({ children, onRemoved }) {
   };
 
   // showToast is shared too, so a list can say something went wrong (spec §8).
+  // Copy text and Copy link (TEXT_FORMAT_SPEC.md §6, COMMUNITY_SPEC.md §3): the
+  // text exactly as typed, symbols and all; a reply links to its post's page.
+  const copyPostText = useCallback(
+    async (post) => showToast((await copyText(post.content ?? "")) ? "Text copied" : "Couldn't copy"),
+    [showToast],
+  );
+  const copyPostLink = useCallback(
+    async (post) => {
+      const id = post.parent_post_id ?? post.id;
+      showToast((await copyText(`${window.location.origin}/post/${id}`)) ? "Link copied" : "Couldn't copy");
+    },
+    [showToast],
+  );
+
   const value = useMemo(
-    () => ({ hidden, openReport: setReporting, openDelete, showToast, subscribeReplyCounts }),
-    [hidden, openDelete, showToast, subscribeReplyCounts],
+    () => ({
+      hidden,
+      openReport: setReporting,
+      openDelete,
+      copyText: copyPostText,
+      copyLink: copyPostLink,
+      showToast,
+      subscribeReplyCounts,
+    }),
+    [hidden, openDelete, copyPostText, copyPostLink, showToast, subscribeReplyCounts],
   );
 
   return (

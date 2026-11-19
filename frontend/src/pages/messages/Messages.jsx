@@ -38,8 +38,15 @@ import {
   SquareCheck,
 } from "lucide-react";
 import { API_BASE_URL } from '../../config/urls';
+import FormattedText from "../../components/FormattedText/FormattedText";
 import { EMOJI_SIZES, jumboEmojiCount, splitEmoji } from "../../utils/emoji";
+import { pasteFormatted } from "../../utils/pasteFormat";
+import FormattedTextarea from "../../components/FormattedTextarea/FormattedTextarea";
+import { handleFormatKey } from "../../utils/formatSelection";
+import { codePointLength } from "../../utils/community";
+import CharCounter from "../../components/CharCounter/CharCounter";
 import { welcomeStickerFor } from "../../utils/stickers";
+import { plainText } from "../../utils/textFormat";
 import {
   canDeleteForEveryone,
   firstName,
@@ -124,9 +131,11 @@ const READ_DEBOUNCE_MS = 300;
    SEEN_BY_ROW / SEEN_BY_THREAD. */
 const READ_VISIBLE_RATIO = 0.5;
 
-/* ✏️ The composer's limit (spec §2 Composer, "up to 2000 characters"). Same
-   value as mobile's MAX_MESSAGE_LENGTH; the server refuses anything longer with
-   400 INVALID_FORMAT (Phase 6B V-C). */
+/* ✏️ The composer's limit (spec §2 Composer, "Length"). Same value as mobile's
+   MAX_MESSAGE_LENGTH; the server refuses anything longer with 400
+   INVALID_FORMAT (Phase 6B V-C). Counted in code points, as the server counts
+   (one emoji is one). The box never cuts text: CharCounter shows from 100
+   left, and Send is off above the limit. */
 const MAX_MESSAGE_LENGTH = 2000;
 
 /* ✉️ Optimistic send (spec §2 "Failed message"; mobile's useSendMessage). A
@@ -396,8 +405,9 @@ function ReplyQuote({ msg, isMine, name, onJump }) {
   const body = (
     <>
       <span className={styles.quoteName}>{name}</span>
+      {/* Without the formatting symbols (TEXT_FORMAT_SPEC.md §3). */}
       <span className={`${styles.quoteText} ${gone ? styles.quoteGone : ""}`}>
-        {gone ? "Original message was deleted" : msg.reply_preview}
+        {gone ? "Original message was deleted" : plainText(msg.reply_preview)}
       </span>
     </>
   );
@@ -417,9 +427,24 @@ function ReplyQuote({ msg, isMine, name, onJump }) {
   );
 }
 
+/* Plain runs of a message, with each emoji at EMOJI_SIZES.inline. */
+function withInlineEmoji(text) {
+  return splitEmoji(text).map((run, i) =>
+    run.emoji ? (
+      <span key={i} className={styles.emojiInline}>
+        {run.text}
+      </span>
+    ) : (
+      <React.Fragment key={i}>{run.text}</React.Fragment>
+    ),
+  );
+}
+
+/* Message body: WhatsApp's formatting and links (TEXT_FORMAT_SPEC.md, through
+   FormattedText), with emoji drawn larger inside text, and a message of only
+   one to three emoji drawn whole at the jumbo size. */
 const MessageText = memo(function MessageText({ content }) {
   const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
-  const runs = useMemo(() => (jumbo ? null : splitEmoji(content)), [content, jumbo]);
 
   if (jumbo) {
     const size = EMOJI_SIZES.jumbo[jumbo];
@@ -434,15 +459,7 @@ const MessageText = memo(function MessageText({ content }) {
   }
   return (
     <p className={styles.messageText}>
-      {runs.map((run, i) =>
-        run.emoji ? (
-          <span key={i} className={styles.emojiInline}>
-            {run.text}
-          </span>
-        ) : (
-          <React.Fragment key={i}>{run.text}</React.Fragment>
-        ),
-      )}
+      <FormattedText content={content} renderText={withInlineEmoji} linkClassName={styles.messageLink} />
     </p>
   );
 });
@@ -464,6 +481,9 @@ export default function Messages() {
      and reloads by itself once the server answers. */
   const [historyError, setHistoryError] = useState(false);
   const [newMessage, setNewMessage] = useState("");
+  // Spec §2 Composer, "Length": counted in code points; nothing is ever cut.
+  const messageLength = codePointLength(newMessage);
+  const canSendMessage = newMessage.trim() !== "" && messageLength <= MAX_MESSAGE_LENGTH;
   const [loading, setLoading] = useState(true);
   const [showInboxOnMobile, setShowInboxOnMobile] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
@@ -1921,7 +1941,8 @@ export default function Messages() {
   /* ── Send Message ── */
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !activeChat) return;
+    // Enter submits the form even while the button is off, so check here too.
+    if (!canSendMessage || !activeChat) return;
 
     const clientTag = newClientTag();
     const draft = {
@@ -2515,10 +2536,9 @@ export default function Messages() {
 
   /* ── Emoji insert ── */
   const handleEmojiClick = (emoji) => {
-    // maxLength only stops typing and pasting; text set from code skips it.
-    // Refuse the whole emoji rather than cut it in half.
+    // Never past the limit by the picker; counted as the counter counts.
     setNewMessage((prev) =>
-      prev.length + emoji.length > MAX_MESSAGE_LENGTH ? prev : prev + emoji,
+      codePointLength(prev) + codePointLength(emoji) > MAX_MESSAGE_LENGTH ? prev : prev + emoji,
     );
     chatInputRef.current?.focus();
   };
@@ -2711,7 +2731,7 @@ export default function Messages() {
                           <span className={styles.inboxPreview}>
                             {chat?.last_message == null
                               ? "Start the conversation ✨"
-                              : `${chat.last_sender_id === currentUserId ? "You: " : ""}${chat.last_message}`}
+                              : `${chat.last_sender_id === currentUserId ? "You: " : ""}${plainText(chat.last_message)}`}
                           </span>
                         )}
                         {unread > 0 && (
@@ -3407,7 +3427,7 @@ export default function Messages() {
                           : firstName(activeChat?.contact_name)}
                       </span>
                       <span className={styles.replyBarPreview}>
-                        {replyTo.content}
+                        {plainText(replyTo.content)}
                       </span>
                     </div>
                     <button
@@ -3471,15 +3491,19 @@ export default function Messages() {
                       autofill bar (passwords, cards, addresses) above the
                       keyboard for text inputs even with autocomplete off. It
                       also lets the box grow to 5 lines (spec §2 Composer). */}
-                  <textarea
+                  <FormattedTextarea
+                    // Shows the formatting while you type (TEXT_FORMAT_SPEC.md §5.1).
+                    wrapperClassName={styles.chatInputWrap}
+                    formatBar
                     ref={chatInputRef}
                     rows={1}
                     autoComplete="off"
                     placeholder="Message"
-                    maxLength={MAX_MESSAGE_LENGTH}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {
+                      // Ctrl/Cmd + B, I, Shift+X, Shift+M (TEXT_FORMAT_SPEC.md §5.2).
+                      if (handleFormatKey(e)) return;
                       // §10.4: Esc closes the reply bar (not while the emoji
                       // picker is open).
                       if (e.key === "Escape" && replyTo && !showEmojiPicker) {
@@ -3500,13 +3524,20 @@ export default function Messages() {
                         e.currentTarget.form?.requestSubmit();
                       }
                     }}
+                    // Copied bold, italic, lists … arrive as *bold*, _italic_,
+                    // "- " … (TEXT_FORMAT_SPEC.md §4).
+                    onPaste={pasteFormatted}
                     className={styles.chatInput}
                     onFocus={() => setShowEmojiPicker(false)}
                   />
+                  {/* The same ring counter as the post composer's. */}
+                  <span className={styles.chatCounter}>
+                    <CharCounter length={messageLength} max={MAX_MESSAGE_LENGTH} />
+                  </span>
                   <button
                     type="submit"
-                    disabled={!newMessage.trim()}
-                    className={`${styles.sendBtn} ${newMessage.trim() ? styles.sendBtnActive : ""}`}
+                    disabled={!canSendMessage}
+                    className={`${styles.sendBtn} ${canSendMessage ? styles.sendBtnActive : ""}`}
                     // Don't take focus from the message box. On a phone that
                     // blur closed the keyboard after every send, dropping the
                     // composer to the bottom of the screen. WhatsApp keeps the

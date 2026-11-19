@@ -70,7 +70,14 @@ import {
   type MenuRect,
   type MessageAction,
 } from '../../src/components/MessageActionMenu';
-import { AppTextInput } from '../../src/components/AppTextInput';
+import { FormattedInput } from '../../src/components/FormattedInput';
+import {
+  applyFormat,
+  FormatToolbar,
+  FORMAT_ROW_HEIGHT,
+  type FormatKind,
+  type Selection,
+} from '../../src/components/FormatToolbar';
 import { Avatar } from '../../src/components/Avatar';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { resolveMediaUrl } from '../../src/lib/config';
@@ -98,7 +105,9 @@ import {
   isGroupedWith,
   isSameDay,
 } from '../../src/lib/messages';
+import { FormattedText } from '../../src/components/FormattedText';
 import { jumboEmojiCount, splitEmoji } from '../../src/lib/emoji';
+import { plainText } from '../../src/lib/textFormat';
 import {
   canDeleteForEveryone,
   firstName,
@@ -183,6 +192,12 @@ const THREAD_PAD = 12;
 const BUBBLE_MAX = 520;
 const MESSAGES_HREF = '/(tabs)/messages';
 const MAX_MESSAGE_LENGTH = 2000;
+/** The formatting bar's room under the box: the pill and 4 px above and below. */
+const FORMAT_ROOM = FORMAT_ROW_HEIGHT + 8;
+/** The counter shows from this many characters left (TEXT_FORMAT_SPEC §5.5, MESSAGES_SPEC §2). */
+const COUNTER_FROM = 100;
+/** Length as the server counts it: code points, so one emoji is one. */
+const codePointLength = (text: string) => [...text].length;
 /** The doodle tile and its size; loaded at app start (ChatWallpaperPreload). */
 const TILE = CHAT_TILE;
 
@@ -391,6 +406,8 @@ export default function ChatScreen() {
   const handleSend = () => {
     const content = draft.trim();
     if (!content || !contactId || !productId) return;
+    // The box never cuts text; a message over the limit just can't go.
+    if (codePointLength(draft) > MAX_MESSAGE_LENGTH) return;
     setDraft('');
     setShowEmoji(false);
     clearUnreadLine();
@@ -1236,7 +1253,126 @@ export default function ChatScreen() {
     setActiveChat(focused && reachable && !away && !scrolledUp ? { contactId, productId } : null);
   }, [focused, reachable, away, scrolledUp, contactId, productId, isSelfChat, setActiveChat]);
 
-  const canSend = !!draft.trim() && !!contactId && !!productId;
+  const draftLength = codePointLength(draft);
+  const charsLeft = MAX_MESSAGE_LENGTH - draftLength;
+  const canSend = !!draft.trim() && !!contactId && !!productId && draftLength <= MAX_MESSAGE_LENGTH;
+
+  /* ── SELECTION TOOLS (TEXT_FORMAT_SPEC §5.5) ── A pill of B · I · S · code ·
+     mono just BELOW the box (the owner's choice, 17 Nov), while text is
+     selected in it and the keyboard is up. Nothing selected, no bar. The
+     phone's own Cut / Copy / Paste menu and handles stay (hiding the menu took
+     the handles away on Android: one word only).
+     The bar makes the composer FORMAT_ROOM taller; the thread reaches the same
+     amount under it (a negative margin), so the list keeps its size and no
+     message moves.
+
+     Why it keeps its own copy of the selection (17 Nov, found with logs:
+     tapping B did nothing). Android collapses the box's selection (4–8 → 8–8)
+     the moment a finger touches the bar (its own menu closes, and takes the
+     selection with it), before the button's handler runs.
+     Now:
+       - `kept` is the last non-empty selection; the buttons ALWAYS use it, and
+         the row shows while it exists;
+       - a collapsed selection never ends it. Only typing, a tap in the box,
+         the box losing focus or the keyboard closing do;
+       - buttons act on finger-down (onPressIn in FormatToolbar);
+       - after a change, the box's `selection` prop holds the new selection
+         until the box reports it back. A one-off setSelection could reach
+         Android before the new text did and be lost; the prop is pushed
+         again until it sticks. */
+  const [inputFocused, setInputFocused] = useState(false);
+  const [keyboardUp, setKeyboardUp] = useState(() => Keyboard.isVisible());
+  /** The box's latest selection, as reported (the caret when nothing is selected). */
+  const [selection, setSelection] = useState<Selection>({ start: 0, end: 0 });
+  /** The last non-empty selection: what the buttons act on. */
+  const [kept, setKept] = useState<Selection | null>(null);
+  const keptRef = useRef<Selection | null>(null);
+  /** The selection the box is held to after a change, until it reports it back. */
+  const [forced, setForced] = useState<Selection | null>(null);
+  const forcedRef = useRef<Selection | null>(null);
+  const forcedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const subs = [
+      Keyboard.addListener('keyboardDidShow', () => setKeyboardUp(true)),
+      Keyboard.addListener('keyboardDidHide', () => setKeyboardUp(false)),
+    ];
+    return () => subs.forEach((sub) => sub.remove());
+  }, []);
+
+  const keep = (next: Selection | null) => {
+    keptRef.current = next;
+    setKept(next);
+  };
+  const release = () => {
+    if (forcedTimerRef.current) clearTimeout(forcedTimerRef.current);
+    forcedTimerRef.current = null;
+    forcedRef.current = null;
+    setForced(null);
+  };
+  /** Holds the box to `next` (once it has the new text); lets go when the box
+   *  reports it, or after 600 ms whatever happens, so the caret is never stuck. */
+  const force = (next: Selection) => {
+    if (forcedTimerRef.current) clearTimeout(forcedTimerRef.current);
+    forcedRef.current = next;
+    setForced(next);
+    forcedTimerRef.current = setTimeout(release, 600);
+  };
+  useEffect(() => () => {
+    if (forcedTimerRef.current) clearTimeout(forcedTimerRef.current);
+  }, []);
+
+  const handleSelectionChange = (next: Selection) => {
+    setSelection(next);
+    const held = forcedRef.current;
+    if (held) {
+      // Reports on the way there (the text being replaced) are passing states.
+      if (next.start !== held.start || next.end !== held.end) return;
+      release();
+    }
+    // A new non-empty selection replaces the kept one; a collapsed one never
+    // clears it (Android collapses it when the bar is touched).
+    if (next.start !== next.end) keep(next);
+  };
+  // The selection ends with the focus or the keyboard.
+  useEffect(() => {
+    if (!inputFocused || !keyboardUp) keep(null);
+  }, [inputFocused, keyboardUp]);
+  /** Typing in the box (not our own changes, which don't come through here)
+   *  ends the kept selection. */
+  const handleInputChangeText = (text: string) => {
+    if (text !== draft) keep(null);
+    handleChangeText(text);
+  };
+
+  const hasSelection = !!kept && Math.max(kept.start, kept.end) <= draft.length;
+  /* While text is selected, the ☺ button beside the box is an Aa button; a
+     tap on it opens the bar. Not straight away: the phone's own Cut / Copy
+     menu floats above OR below the box (Android chooses) and covered the bar
+     either way. It never sits on the box's own line, where Aa is, and it
+     closes the moment Aa is tapped, so the bar opens with nothing over it. */
+  const selectionTools = inputFocused && keyboardUp && hasSelection;
+  const [formatOpen, setFormatOpen] = useState(false);
+  useEffect(() => {
+    if (!selectionTools) setFormatOpen(false);
+  }, [selectionTools]);
+  const showFormatBar = selectionTools && formatOpen;
+  const formatRoom = showFormatBar ? FORMAT_ROOM : 0;
+
+  /** What a button acts on: always the kept selection, ordered start ≤ end. */
+  const pressedSelection = (): Selection | null => {
+    const sel = keptRef.current;
+    return sel ? { start: Math.min(sel.start, sel.end), end: Math.max(sel.start, sel.end) } : null;
+  };
+
+  const handleFormat = (kind: FormatKind) => {
+    const target = pressedSelection();
+    if (!target) return;
+    const result = applyFormat(draft, target, kind);
+    // The same words stay selected, so the same button takes it off again.
+    keep(result.selection);
+    force(result.selection);
+    handleChangeText(result.value);
+  };
 
   /** This conversation's welcome sticker — fixed per chat; see src/lib/stickers.ts. */
   const welcomeSticker = useMemo(
@@ -1453,7 +1589,7 @@ export default function ChatScreen() {
           </WholePixelHeight>
 
           {/* ── Thread ── */}
-          <View style={styles.thread} ref={threadBoxRef}>
+          <View style={[styles.thread, formatRoom ? { marginBottom: -formatRoom } : null]} ref={threadBoxRef}>
             {/* OUTSIDE the inverted FlatList on purpose: inside, it would be
                 flipped and would scroll with the messages. */}
             <ChatWallpaper />
@@ -1583,7 +1719,7 @@ export default function ChatScreen() {
               <Reanimated.View
                 entering={ZoomIn.duration(180)}
                 exiting={ZoomOut.duration(140)}
-                style={styles.jumpWrap}
+                style={[styles.jumpWrap, formatRoom ? { bottom: 12 + formatRoom } : null]}
               >
                 <Pressable
                   onPress={jumpToLatest}
@@ -1613,7 +1749,7 @@ export default function ChatScreen() {
             ) : null}
 
             {/* Bottom of the thread = top of the composer (or the emoji tray). */}
-            <AppToast message={toast} bottom={TOAST_ABOVE_COMPOSER} />
+            <AppToast message={toast} bottom={TOAST_ABOVE_COMPOSER + formatRoom} />
           </View>
 
           {/* ── Emoji tray ── */}
@@ -1638,11 +1774,11 @@ export default function ChatScreen() {
                 {EMOJI_TABS[emojiTab].emojis.map((emoji) => (
                   <Pressable
                     key={emoji}
-                    // maxLength only limits typing; text set from code skips
-                    // it. Refuse the whole emoji rather than split it.
+                    // Counted as the server counts (code points), the same as
+                    // the counter. Refuse the whole emoji rather than split it.
                     onPress={() =>
                       setDraft((prev) =>
-                        prev.length + emoji.length > MAX_MESSAGE_LENGTH ? prev : prev + emoji,
+                        codePointLength(prev) + codePointLength(emoji) > MAX_MESSAGE_LENGTH ? prev : prev + emoji,
                       )
                     }
                     accessibilityRole="button"
@@ -1666,63 +1802,117 @@ export default function ChatScreen() {
               />
             ) : null}
             <View style={styles.composerRow}>
-              <Pressable
-                onPress={() => setShowEmoji((prev) => !prev)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={showEmoji ? 'Hide emoji' : 'Show emoji'}
-                style={({ pressed }) => [
-                  styles.emojiToggle,
-                  showEmoji && styles.emojiToggleActive,
-                  pressed && styles.emojiTogglePressed,
-                ]}
-              >
-                <Feather name="smile" size={20} color={showEmoji ? colors.purple : colors.mutedText} />
-              </Pressable>
+              {selectionTools ? (
+                <Pressable
+                  // On finger-down, like the bar's own buttons (the kept
+                  // selection is what the bar acts on).
+                  onPressIn={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setFormatOpen((open) => !open);
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={formatOpen ? 'Hide formatting' : 'Format the selected text'}
+                  accessibilityState={{ expanded: formatOpen }}
+                  style={({ pressed }) => [
+                    styles.emojiToggle,
+                    styles.formatToggle,
+                    formatOpen && styles.formatToggleOpen,
+                    pressed && styles.emojiTogglePressed,
+                  ]}
+                >
+                  <AppText style={[styles.formatToggleText, formatOpen && styles.formatToggleTextOpen]}>Aa</AppText>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => setShowEmoji((prev) => !prev)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={showEmoji ? 'Hide emoji' : 'Show emoji'}
+                  style={({ pressed }) => [
+                    styles.emojiToggle,
+                    showEmoji && styles.emojiToggleActive,
+                    pressed && styles.emojiTogglePressed,
+                  ]}
+                >
+                  <Feather name="smile" size={20} color={showEmoji ? colors.purple : colors.mutedText} />
+                </Pressable>
+              )}
 
-              <AppTextInput
+              <FormattedInput
                 ref={inputRef}
                 value={draft}
-                onChangeText={handleChangeText}
+                onChangeText={handleInputChangeText}
+                onSelectionChange={(e) => handleSelectionChange(e.nativeEvent.selection)}
+                selection={forced ?? undefined}
+                codeBackground={colors.formatCodeTheirs}
+                symbolColor={colors.formatSymbolInput}
                 /* WhatsApp: starting to type ends the selection, one message
                    or several, and its menu with it. onPressIn covers an input
                    that already had focus (the keyboard was up during the
                    long-press), where a tap brings no new focus event. */
-                onPressIn={selecting ? clearSelection : undefined}
+                onPressIn={() => {
+                  // A tap in the text ends the kept selection; a long-press on
+                  // a word selects it again (reported by the box).
+                  keep(null);
+                  release();
+                  if (selecting) clearSelection();
+                }}
                 onFocus={() => {
+                  setInputFocused(true);
                   setShowEmoji(false);
                   clearSelection();
                 }}
+                onBlur={() => setInputFocused(false)}
                 placeholder="Message"
                 placeholderTextColor={colors.mutedPlaceholder}
                 style={styles.input}
                 multiline
-                maxLength={MAX_MESSAGE_LENGTH}
                 accessibilityLabel="Message"
               />
 
-              <Pressable
-                onPress={handleSend}
-                disabled={!canSend}
-                accessibilityRole="button"
-                accessibilityLabel="Send message"
-                accessibilityState={{ disabled: !canSend }}
-                style={({ pressed }) => [
-                  styles.sendBtn,
-                  !canSend && styles.sendBtnDisabled,
-                  pressed && canSend && styles.sendBtnPressed,
-                ]}
-              >
-                <LinearGradient
-                  colors={BRAND}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.sendGradient}
+              {/* Characters left over Send, from 100 left; red at 0 and below. */}
+              <View style={styles.sendColumn}>
+                {charsLeft <= COUNTER_FROM ? (
+                  <AppText
+                    style={[styles.counter, charsLeft <= 0 && styles.counterOver]}
+                    accessibilityLiveRegion="polite"
+                    accessibilityLabel={
+                      charsLeft < 0 ? `${-charsLeft} characters over the limit` : `${charsLeft} characters left`
+                    }
+                  >
+                    {String(charsLeft)}
+                  </AppText>
+                ) : null}
+                <Pressable
+                  onPress={handleSend}
+                  disabled={!canSend}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send message"
+                  accessibilityState={{ disabled: !canSend }}
+                  style={({ pressed }) => [
+                    styles.sendBtn,
+                    !canSend && styles.sendBtnDisabled,
+                    pressed && canSend && styles.sendBtnPressed,
+                  ]}
                 >
-                  <Feather name="send" size={17} color={colors.white} />
-                </LinearGradient>
-              </Pressable>
+                  <LinearGradient
+                    colors={BRAND}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sendGradient}
+                  >
+                    <Feather name="send" size={17} color={colors.white} />
+                  </LinearGradient>
+                </Pressable>
+              </View>
             </View>
+            {/* Just below the box (spec §5.5). */}
+            {showFormatBar ? (
+              <View style={styles.formatBar}>
+                <FormatToolbar onFormat={handleFormat} />
+              </View>
+            ) : null}
           </View>
         </SafeAreaView>
       </KeyboardAvoider>
@@ -2240,7 +2430,8 @@ function ReplyQuote({
         ]}
         numberOfLines={2}
       >
-        {gone ? 'Original message was deleted' : message.reply_preview}
+        {/* Without the formatting symbols (TEXT_FORMAT_SPEC.md §3). */}
+        {gone ? 'Original message was deleted' : plainText(message.reply_preview)}
       </AppText>
     </>
   );
@@ -2250,7 +2441,7 @@ function ReplyQuote({
     <Pressable
       onPress={() => onJump(target)}
       accessibilityRole="button"
-      accessibilityLabel={`Reply to ${name}: ${message.reply_preview}. Show the original`}
+      accessibilityLabel={`Reply to ${name}: ${plainText(message.reply_preview)}. Show the original`}
       style={({ pressed }) => [look, pressed && styles.quotePressed]}
     >
       {body}
@@ -2267,9 +2458,10 @@ function ReplyBar({ name, text, onClose }: { name: string; text: string; onClose
         <AppText style={styles.replyBarName} numberOfLines={1}>
           Replying to {name}
         </AppText>
-        {/* Plain text: an emoji-only message stays at this size (no jumbo). */}
+        {/* Plain text: an emoji-only message stays at this size (no jumbo), and
+            formatting shows without its symbols (TEXT_FORMAT_SPEC.md §3). */}
         <AppText style={styles.replyBarQuote} numberOfLines={1}>
-          {text}
+          {plainText(text)}
         </AppText>
       </View>
       <Pressable
@@ -2285,10 +2477,24 @@ function ReplyBar({ name, text, onClose }: { name: string; text: string; onClose
   );
 }
 
+/** Plain runs of a message, with each emoji drawn at emoji size (src/lib/emoji.ts). */
+function withInlineEmoji(text: string): ReactNode {
+  return splitEmoji(text).map((run, k) =>
+    run.emoji ? (
+      <AppText key={k} style={styles.emojiInline}>
+        {run.text}
+      </AppText>
+    ) : (
+      <Fragment key={k}>{run.text}</Fragment>
+    ),
+  );
+}
+
 /**
- * Message body: tappable links, and emoji drawn at emoji size (src/lib/emoji.ts).
- * A message of only one to three emoji is drawn jumbo instead, the whole text
- * at that size — WhatsApp's rule.
+ * Message body: WhatsApp's formatting and tappable links (TEXT_FORMAT_SPEC.md,
+ * through FormattedText), with emoji drawn at emoji size. A message of only
+ * one to three emoji is drawn jumbo instead, the whole text at that size —
+ * WhatsApp's rule.
  */
 function MessageText({
   content,
@@ -2300,21 +2506,6 @@ function MessageText({
   onOpenLink: (url: string) => void;
 }) {
   const jumbo = useMemo(() => jumboEmojiCount(content), [content]);
-  const parts = useMemo(
-    () =>
-      jumbo
-        ? []
-        : content.split(/(https?:\/\/\S+|www\.\S+)/gi).map((part) => ({
-            part,
-            url: /^(https?:\/\/|www\.)/i.test(part)
-              ? part.startsWith('www.')
-                ? `https://${part}`
-                : part
-              : null,
-            runs: splitEmoji(part),
-          })),
-    [content, jumbo],
-  );
   const textStyle = [styles.bubbleText, mine ? styles.bubbleTextMine : styles.bubbleTextTheirs];
 
   if (jumbo) {
@@ -2322,29 +2513,15 @@ function MessageText({
   }
 
   return (
-    <AppText style={textStyle}>
-      {parts.map(({ part, url, runs }, i) => {
-        const body = runs.map((run, k) =>
-          run.emoji ? (
-            <AppText key={k} style={styles.emojiInline}>
-              {run.text}
-            </AppText>
-          ) : (
-            run.text
-          ),
-        );
-        if (!url) return <Fragment key={i}>{body}</Fragment>;
-        return (
-          <AppText
-            key={`${part}-${i}`}
-            style={[styles.link, mine ? styles.linkMine : styles.linkTheirs]}
-            onPress={() => onOpenLink(url)}
-          >
-            {body}
-          </AppText>
-        );
-      })}
-    </AppText>
+    <FormattedText
+      content={content}
+      style={textStyle}
+      linkStyle={mine ? styles.linkMine : styles.linkTheirs}
+      onOpenLink={onOpenLink}
+      renderText={withInlineEmoji}
+      codeBackground={mine ? colors.formatCodeMine : colors.formatCodeTheirs}
+      quoteBar={mine ? colors.formatQuoteBarMine : colors.formatQuoteBarTheirs}
+    />
   );
 }
 
@@ -2772,7 +2949,6 @@ const styles = StyleSheet.create({
   },
   tombstoneMine: { color: colors.chatTombstoneMine },
   tombstoneTheirs: { color: colors.mutedText },
-  link: { textDecorationLine: 'underline' },
   linkMine: { color: colors.blueLight },
   linkTheirs: { color: colors.blueDark },
   bubbleMeta: {
@@ -3049,6 +3225,17 @@ const styles = StyleSheet.create({
   },
   emojiToggleActive: { backgroundColor: colors.demoCardPurpleBg },
   emojiTogglePressed: { transform: [{ scale: 0.94 }] },
+  /* ☺ becomes Aa while text is selected (TEXT_FORMAT_SPEC §5.5): the brand's
+     purple on its light tint, filled purple while the bar is open. */
+  formatToggle: { backgroundColor: colors.demoCardPurpleBg },
+  formatToggleOpen: { backgroundColor: colors.purple },
+  formatToggleText: {
+    fontFamily: font.family.bold,
+    fontSize: 15,
+    lineHeight: 18,
+    color: colors.purple,
+  },
+  formatToggleTextOpen: { color: colors.white },
   input: {
     flex: 1,
     minHeight: 40,
@@ -3074,6 +3261,24 @@ const styles = StyleSheet.create({
   sendGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   sendBtnPressed: { transform: [{ scale: 0.94 }] },
   sendBtnDisabled: { opacity: 0.4 },
+  /* The formatting bar's place, just below the box (TEXT_FORMAT_SPEC §5.5):
+     the pill centred in FORMAT_ROOM. */
+  formatBar: {
+    height: FORMAT_ROOM,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  /* Characters left, over Send (TEXT_FORMAT_SPEC §5.5). */
+  sendColumn: { alignItems: 'center' },
+  counter: {
+    marginBottom: 4,
+    fontFamily: font.family.semibold,
+    fontSize: 12,
+    lineHeight: 14,
+    color: colors.mutedText,
+    fontVariant: ['tabular-nums'],
+  },
+  counterOver: { color: colors.errorText },
 
   /* Skeleton + states */
   skeletonWrap: {

@@ -908,7 +908,7 @@ supabase db push                        # apply to production
 | Supabase Studio | `http://127.0.0.1:54323` |
 | Mailpit — catches every outgoing email | `http://127.0.0.1:54324` |
 | Supabase API | `http://127.0.0.1:54321` |
-| Backend | `http://localhost:5000` |
+| Backend | `http://localhost:5001` (never 5000: macOS's AirPlay Receiver holds it) |
 | Website | `http://localhost:5173` |
 
 **Mobile:**

@@ -1,0 +1,85 @@
+/* frontend/src/components/FormattedText/FormattedText.module.css
+   docs/design/TEXT_FORMAT_SPEC.md §3 (how it looks). Everything here takes the
+   caller's font and colour, so the same text reads on a white bubble, a purple
+   one and the community wallpaper alike. */
+
+/* One per line. pre-wrap keeps the spaces as typed, and the line breaks inside
+   ```monospace```. */
+.line {
+  display: block;
+  white-space: pre-wrap;
+}
+
+/* A bullet or a numbered item: the marker hangs in a column of its own, so a
+   wrapped line starts under the text, not under the marker. */
+.item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.45em;
+}
+
+.marker {
+  min-width: 0.7em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.itemText {
+  min-width: 0;
+}
+
+/* A quote: a 3 px bar in the text's own colour at 45%. Quote lines in a row
+   join into one bar. */
+.quote {
+  position: relative;
+  padding-left: 10px;
+}
+
+.quote::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.bold {
+  font-weight: 700;
+}
+
+.italic {
+  font-style: italic;
+}
+
+.strike {
+  text-decoration: line-through;
+}
+
+/* color: inherit, because Bootstrap paints <code> pink. */
+.mono,
+.code {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+/* Inline code sits on a tint of the text's own colour: white at 12% on a sent
+   bubble, near-black at 12% on a received one and on the wallpaper. */
+.code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* The colour is the caller's (linkClassName). The underline is set here because
+   footer.module.css leaks `a { text-decoration: none }` to the whole site. */
+.link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
