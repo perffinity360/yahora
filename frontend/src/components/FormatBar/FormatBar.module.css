@@ -9,7 +9,11 @@
   padding: 3px;
   border-radius: 10px;
   background: var(--white);
-  box-shadow: var(--quick-bar-ring, 0 0 0 0 transparent), var(--quick-bar-shadow);
+  /* White over white cards, so the quick bar's hairline ring and raised two-layer
+     shadow set it apart (owner, 20 Nov). --quick-bar-ring is a colour, not a
+     shadow: used alone it made this whole declaration invalid, so the bar had
+     no shadow at all. */
+  box-shadow: var(--quick-bar-raised-shadow), 0 0 0 1px var(--quick-bar-ring);
   transform: translateY(-100%);
   animation: rise 160ms var(--community-ease) both;
 }

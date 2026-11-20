@@ -259,5 +259,5 @@ actually send. Production auth config is changed in the dashboard, by hand, deli
 - The Block D burst script is a **local-only** test. Against production its four requests land
   inside the 1s gap and return `200, 429, 429, 429`. That is correct behaviour, not a
   regression. Local `max_frequency` is `1ms` precisely so the script tests limits b–d.
-- OTP length (8), expiry (3600s) and the five per-5-minute / per-hour limits all match
+- OTP length (8 when this was checked; 6 since Phase 3, `otp_length = 6` in `supabase/config.toml`), expiry (3600s) and the five per-5-minute / per-hour limits all match
   between local and production. No drift.

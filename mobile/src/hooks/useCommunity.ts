@@ -470,14 +470,20 @@ export function useNewCampusCount(since: string | null, enabled: boolean) {
  * The pill's tap (spec §8): fetch the campus feed's first page and put the
  * posts not already shown at the top. Nothing shown is cleared, every page
  * below stays, and posts already there take their fresh copy in place.
- * Resolves false when it couldn't load.
+ *
+ * It fetches at once but writes the cache only once `ready` resolves (the
+ * list has reached the top), so the posts go in where they can be seen
+ * (owner, 18 Nov: no flicker). Resolves false when it couldn't load.
  */
 export function useShowNewCampusPosts() {
   const client = useQueryClient();
-  return useCallback(async () => {
+  return useCallback(async (ready?: Promise<unknown>) => {
     let page: FeedPage;
     try {
-      page = await api.get<FeedPage>(`/api/posts/feed/campus${query({ limit: FEED_PAGE_SIZE })}`);
+      [page] = await Promise.all([
+        api.get<FeedPage>(`/api/posts/feed/campus${query({ limit: FEED_PAGE_SIZE })}`),
+        ready,
+      ]);
     } catch {
       return false;
     }

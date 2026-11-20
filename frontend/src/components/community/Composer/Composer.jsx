@@ -356,6 +356,15 @@ export default function Composer({
           />
 
           <div className={styles.tools}>
+            {/* The counter comes first among the tools (owner, 20 Nov). It
+                slides in with the other extras, so a closed composer shows no ring. */}
+            <div className={`${styles.extras} ${showExtras ? styles.extrasOpen : ""}`} inert={!showExtras}>
+              <div className={styles.extrasInner}>
+                <span className={styles.counterSlot}>
+                  <CharCounter length={c.length} max={POST_MAX_CHARS} />
+                </span>
+              </div>
+            </div>
             {!isReply && (
               <>
                 <button
@@ -413,10 +422,6 @@ export default function Composer({
                 >
                   <Smile size={16} aria-hidden="true" />
                 </button>
-                {/* Opens with the tools, so a closed composer shows no ring. */}
-                <span className={styles.counterSlot}>
-                  <CharCounter length={c.length} max={POST_MAX_CHARS} />
-                </span>
               </div>
             </div>
 

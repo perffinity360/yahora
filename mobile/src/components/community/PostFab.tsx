@@ -63,6 +63,10 @@ export const FAB_MARGIN = 16;
 /** How much of the screen's bottom the button covers, for the list's padding,
  *  the toast and anything brought into view. */
 export const FAB_CLEARANCE = FAB_HEIGHT + FAB_MARGIN;
+/** Below a list's last post, over whatever sits at the bottom (this button, the
+ *  view-only line, the tab bar). With the card's own 6 under it, the last post
+ *  ends 10 above, near the 6 between posts (owner, 18 Nov: 22 felt too large). */
+export const LIST_END_GAP = 4;
 
 const ICON = 34;
 const PAD = (FAB_HEIGHT - ICON) / 2;

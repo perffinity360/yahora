@@ -327,11 +327,12 @@
   letter-spacing: 0.02em;
 }
 
-/* The shared ring counter (CharCounter), after the tools; 4 px of room on
-   its right for its shake, which the tools' clipping box would cut. */
+/* The shared ring counter (CharCounter), first among the tools (owner, 20 Nov);
+   4 px of room on each side for its shake, which the clipping box would cut,
+   and 6 px before Add photos. */
 .counterSlot {
   display: flex;
-  margin: 0 4px 0 6px;
+  margin: 0 6px 0 4px;
 }
 
 .post {

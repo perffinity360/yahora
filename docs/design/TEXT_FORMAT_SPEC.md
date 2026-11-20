@@ -1,6 +1,11 @@
 # Text formatting — design spec
 
-**Version 2 · 13 November 2026 · for chat messages and community posts, on the website and the app**
+**Version 2.1 · 20 November 2026 · for chat messages and community posts, on the website and the app**
+
+**Changed in 2.1 (owner, 20 Nov):** the website's selection bar has the quick bar's ring and raised shadow,
+so it stands off a white post (§5.3); the app's Aa now closes the phone's Cut / Copy / Paste menu and opens
+our bar in its place, just above the box, with nothing added below the composer (§5.5); the post
+composer's counter comes first among its tools (§5.6).
 
 People copy text between WhatsApp, Telegram and Yahora all day. WhatsApp writes its formatting as
 plain-text symbols (`*bold*`), so a copied message used to arrive here with its asterisks showing.
@@ -194,6 +199,11 @@ With text selected in the box, a small bar sits just above the selection:
 click elsewhere, or an empty selection. On touch screens it sits just above the text box instead,
 because the phone's own copy / paste bubble covers the selection.
 
+It is white, so over a white post it has the community quick bar's **hairline ring and raised two-layer
+shadow** (`0 0 0 1px var(--quick-bar-ring)` with `var(--quick-bar-raised-shadow)`; owner, 20 Nov). Until
+then its `box-shadow` named the ring's colour as if it were a shadow, which made the whole declaration
+invalid, so the bar had no shadow at all.
+
 ### 5.4 App: formatting while typing
 
 Real formatting inside the text box (styled text children of the `TextInput`): `Inter_700Bold`,
@@ -210,41 +220,43 @@ proves unreliable on one, `LIVE_FORMAT` in that file turns it off there, and thi
 
 ### 5.5 App: selection tools and the chat limit
 
-**An Aa button, then a Yahora bar just below the chat box** (the owner's choice, 17 Nov). While text
-is selected in the box (and it has focus and the keyboard is up), the ☺ button beside the box turns
-into an **Aa** button: purple on `demoCardPurpleBg`. Tapping it opens **B · I · S · code · monospace**,
-a small white pill just below the box, and fills Aa purple with white letters; tapping Aa again closes
-it. The bar closes, and ☺ comes back, when the box loses focus, the keyboard closes, the user types or
-taps in the text. The pill is centred in 56 px of room (`FORMAT_ROOM`): the composer grows by that much
-over the bottom of the message list, which keeps its size (the thread reaches under the composer), so no
-message moves; the jump-to-latest button and the toast rise with it.
+**The phone's own menu first; Aa swaps it for ours** (owner, 20 Nov). Selecting works as everywhere
+else on the phone: long-press a word, drag the handles, and the phone's own Cut / Copy / Paste / Share
+menu appears next to the selection. While text is selected in the box (and it has focus and the keyboard
+is up), the ☺ button beside the box turns into an **Aa** button: purple on `demoCardPurpleBg`.
 
-**Why a button first.** The phone's own Cut / Copy / Paste menu floats above **or** below the box
-(Android chooses, and an app can't move it), so it covered a bar placed there right away. It never sits
-on the box's own line, where Aa is, and it closes the moment anything of ours is tapped, so the bar opens
-with nothing over it.
+- **Tapping Aa closes the phone's menu and opens ours in its place:** **B · I · S · code · monospace**, a
+  small white pill just above the box, floating over the newest messages. Aa fills purple with white
+  letters. Nothing is added below the composer and no message moves; the jump-to-latest button and the
+  toast rise by the pill's room (56 px, `FORMAT_ROOM`).
+- **How the phone's menu is closed without losing the selection.** An app in Expo Go can't call
+  Android's "hide the menu", so the chat collapses the selection for a moment (Android ends its menu when
+  nothing is selected) and, 60 ms later (a few frames, `RESELECT_AFTER_MS`), selects exactly the same
+  characters again. That brings the highlight back but not the menu, which Android reopens only on a
+  long-press or a handle drag. The box keeps its focus throughout, so the keyboard stays up and nothing is
+  re-typed. While our bar is open the box sets `contextMenuHidden`, so the phone's menu can't come back
+  over it.
+- **Back to the phone's menu:** tap Aa again (our bar closes), then long-press the selected text; or just
+  long-press the text, which closes our bar too. Android keeps the same selection and shows its menu.
+- **Our bar closes**, and ☺ comes back, when the box loses focus, the keyboard closes, or the user types or
+  taps in the text.
 
-**The phone's own menu and handles stay.** Selecting works as everywhere else on the phone: long-press
-a word, drag the handles to any range, and the phone's own Cut / Copy / Paste / Share menu, which
-Android places next to the selection (usually above the box).
-
-**What was tried before (TF-7, 17 Nov).** A row just above the box was covered by the phone's menu. Under
-the header nothing covered it, but it was far from the text (the owner moved it back below the box).
-Hiding the phone's menu in the chat box (`contextMenuHidden`), with Cut · Copy · Paste in our bar, took
-away Android's drag handles too (Android shows them only with its menu, and drops the selection when the
-menu is refused), so only one word could be selected. A bar shown straight away below the box was
-covered when Android put its menu below the selection.
+**What was tried before.** 17 Nov: our bar opened straight away, above or below the box, and the phone's
+menu (which Android places above or below the selection) covered it. Hiding the phone's menu for good
+(`contextMenuHidden` always on) took away Android's drag handles too (Android shows them only with its
+menu), so only one word could be selected. 17–19 Nov: Aa opened our bar just below the box, but tapping Aa
+left the phone's menu open, so both showed at once, and the composer grew by 56 px to make room.
 
 - **Formatting:** the website's wrap / unwrap rules (§5.2), including protected code and monospace,
   ported line for line to `applyFormat` in `mobile/src/components/FormatToolbar.tsx`. Afterwards the
   same words are selected, so a second tap takes the symbols off. There is no Undo for this; tapping
   again is the undo.
-- **The selection the buttons act on.** Touching the bar closes the phone's menu, and Android drops
-  the box's selection with it, before the button runs. So the chat keeps the last non-empty selection
-  itself and every button uses that one. A collapsed selection never ends it; typing, a tap in the box,
-  the box losing focus or the keyboard closing do. Buttons act on finger-down. After a change the box
-  is held to the new selection until it reports it back. After a tap on the bar the words stay
-  selected, but Android may not show its handles and menu again until the next long-press.
+- **The selection the buttons act on.** The chat keeps the last non-empty selection itself (`kept`),
+  taken before Aa collapses anything, and every button uses that one, so formatting lands on exactly the
+  characters that were selected. A collapsed selection the chat made itself never ends it. Typing, a tap
+  in the text (a touch in the box followed by a caret), the box losing focus or the keyboard closing do.
+  A long-press inside the selection reports no change, so it keeps it. Buttons act on finger-down. After a
+  change the box is held to the new selection until it reports it back.
 
 The pill is 48 px tall (`FORMAT_ROW_HEIGHT`), white, radius 14, with the community quick bar's raised
 shadow (`shadows.quickBarRaised`: a hairline ring and a soft lift), like the website's selection bar.
@@ -288,7 +300,8 @@ past full). Characters are counted in code points (one emoji is one), as the ser
 - **Screen readers:** `role="status"`, `aria-live="polite"`, labelled `40 characters left` or
   `500 characters over the limit`.
 - **Where:** in the chat, between the box and Send, always shown. In the post and reply composer,
-  after the tools, so it opens and closes with them (a closed composer shows no ring).
+  first among the tools, left of Add photos (owner, 20 Nov), and it opens and closes with them (a closed
+  composer shows no ring).
 - The box never cuts text. Send / Post is off above the limit.
 
 ## 6. Copying

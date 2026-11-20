@@ -18,7 +18,7 @@ import { AppToast, useToast } from '../../src/components/AppToast';
 import { CommunitySwitcher, SWITCHER_HEIGHT, worldLabel } from '../../src/components/community/CommunitySwitcher';
 import { CommunityWallpaper } from '../../src/components/community/CommunityWallpaper';
 import { StatusBarGround } from '../../src/components/community/StatusBarGround';
-import { FAB_CLEARANCE, PostFab } from '../../src/components/community/PostFab';
+import { FAB_CLEARANCE, LIST_END_GAP, PostFab } from '../../src/components/community/PostFab';
 import { PostActionsProvider } from '../../src/components/community/PostActions';
 import { PostCard, PostCardSkeleton } from '../../src/components/community/PostCard';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -76,6 +76,11 @@ const TOP_RETRY_MS = 200;
 const TOP_SETTLE_TRIES = 5;
 /** "At the top", for posts arriving above the first one: within this of it. */
 const NEW_ON_TOP_NEAR = 48;
+/** FlashList's "keep what's on screen still" (maintainVisibleContentPosition),
+ *  switched off near the top; see `nearTop` below. */
+const KEEP_POSITION_OFF = { disabled: true } as const;
+/** The pill's tap waits at most this long for the glide to the top. */
+const TOP_WAIT_MAX_MS = 1200;
 
 /** The Post button stays open within this of the top… */
 const FAB_OPEN_NEAR_TOP = 24;
@@ -109,10 +114,27 @@ export default function CommunityScreen() {
      the screen doesn't make it flicker. */
   const [fabFolded, setFabFolded] = useState(false);
   const fabFoldedRef = useRef(false);
+
+  /* Near the top, posts that arrive above the first one should simply appear
+     there, with the rest moving down under them, as on X. FlashList instead
+     keeps the old first post still (maintainVisibleContentPosition), which drew
+     the new post off screen and corrected a frame late, then needed a glide up
+     after it: the pill's flicker (owner, 18 Nov). So it is off while the list is
+     within NEW_ON_TOP_NEAR of the top (nothing is above to keep still), and on
+     further down, where it stops a post arriving above from moving what you're
+     reading. */
+  const [nearTop, setNearTop] = useState(true);
+  const nearTopRef = useRef(true);
+
   const onScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     const y = e.nativeEvent.contentOffset.y;
     const dy = y - scrollY.current;
     scrollY.current = y;
+    const near = y < NEW_ON_TOP_NEAR;
+    if (near !== nearTopRef.current) {
+      nearTopRef.current = near;
+      setNearTop(near);
+    }
     let fold = fabFoldedRef.current;
     if (y < FAB_OPEN_NEAR_TOP) fold = false;
     else if (dy > FAB_FOLD_TRAVEL) fold = true;
@@ -232,7 +254,8 @@ export default function CommunityScreen() {
   useEffect(() => {
     if (!newOnTop.current) return;
     newOnTop.current = false;
-    scrollToTopAfterInsert();
+    // At the very top it's already in view (nothing kept the old post still).
+    if (scrollY.current > 1) scrollToTopAfterInsert();
   }, [firstId, scrollToTopAfterInsert]);
 
   // What the compose screen did, once it has closed (spec §2.3).
@@ -313,14 +336,33 @@ export default function CommunityScreen() {
   const newCount = useNewCampusCount(since, kind === 'campus' && isFocused && appActive).data ?? 0;
   const [pillTakenFor, setPillTakenFor] = useState<string | null>(null);
   const showNewPosts = useShowNewCampusPosts();
+
+  /* The pill's tap: glide to the top first, and put the new posts in only once
+     the list is there, where nothing keeps the old first post still (see
+     `nearTop`). They appear at the top and fade in, and the rest move down
+     under them: no jump, no correction after. A finger on the list during the
+     glide ends the wait; they go in all the same. */
+  const reachTop = useCallback(
+    () =>
+      new Promise<void>((resolve) => {
+        if (scrollY.current <= 1) return resolve();
+        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+        const started = Date.now();
+        const check = () => {
+          if (scrollY.current <= 1 || dragging.current || Date.now() - started > TOP_WAIT_MAX_MS) resolve();
+          else setTimeout(check, 50);
+        };
+        setTimeout(check, 50);
+      }),
+    [],
+  );
   const onNewPostsPress = useCallback(async () => {
+    if (!since) return;
     setPillTakenFor(since);
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    const ok = await showNewPosts();
+    cancelTopScroll();
+    const ok = await showNewPosts(reachTop());
     if (!ok) showToast(NEW_POSTS_FAILED);
-    // The new ones went in above what's on screen: up again, to show them.
-    else scrollToTopAfterInsert();
-  }, [since, showNewPosts, showToast, scrollToTopAfterInsert]);
+  }, [since, cancelTopScroll, showNewPosts, reachTop, showToast]);
   const pillCount = kind === 'campus' && pillTakenFor !== since ? newCount : 0;
 
   const onEndReached = useCallback(() => {
@@ -405,7 +447,7 @@ export default function CommunityScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             extraData={visible}
-            contentContainerStyle={{ paddingTop: topPad, paddingBottom: dockHeight + 16 }}
+            contentContainerStyle={{ paddingTop: topPad, paddingBottom: dockHeight + LIST_END_GAP }}
             scrollIndicatorInsets={{ top: topPad, bottom: dockHeight }}
             ListEmptyComponent={listEmpty}
             ListFooterComponent={
@@ -416,6 +458,7 @@ export default function CommunityScreen() {
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={VIEWABILITY}
             onScroll={onScroll}
+            maintainVisibleContentPosition={nearTop ? KEEP_POSITION_OFF : undefined}
             onScrollBeginDrag={() => {
               dragging.current = true;
               cancelTopScroll();
@@ -498,7 +541,8 @@ export default function CommunityScreen() {
  * reach the top (owner, 15 Nov), on the same signal that folds the Post button:
  * it has said its piece once you're reading.
  */
-const VIEW_ONLY_HEIGHT = 40;
+/** 28 (owner, 18 Nov: "reduce the height", the text size stays). Was 40. */
+const VIEW_ONLY_HEIGHT = 28;
 /** A slow, soft fade with a short drift, so it leaves without catching the eye
  *  (owner, 16 Nov: "hide smoothly"). */
 const VIEW_ONLY_FADE = { duration: 320, easing: Easing.bezier(0.33, 0, 0.2, 1) };
@@ -582,7 +626,7 @@ const styles = StyleSheet.create({
     // hairline on top, the smallest text size, centred.
     minHeight: VIEW_ONLY_HEIGHT,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

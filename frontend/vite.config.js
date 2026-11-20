@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
    the dev server and the backend it proxies to need a per-developer port:
 
      VITE_DEV_PORT  this Vite dev server        (default 3000)
-     VITE_API_PORT  the Express backend /api is forwarded to (default 5000)
+     VITE_API_PORT  the Express backend /api is forwarded to (default 5001)
 
    Both are read here in Node, never by the browser, and neither changes runtime
    URL resolution: src/config/urls.js still rewrites only the hostname, and
@@ -53,7 +53,7 @@ export default defineConfig(({ mode }) => {
       // relative URLs. This lets any device on the LAN reach the backend
       // via the dev server — no machine IP hardcoded anywhere.
       proxy: {
-        '/api': `http://localhost:${resolvePort(env, 'VITE_API_PORT', '5000')}`,
+        '/api': `http://localhost:${resolvePort(env, 'VITE_API_PORT', '5001')}`,
 
         // Same trick for Supabase. The browser talks to Supabase DIRECTLY for
         // realtime, presence and storage, so `VITE_SUPABASE_URL` is evaluated on
