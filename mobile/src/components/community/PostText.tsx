@@ -1,24 +1,35 @@
-import { memo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, View, type TextLayoutEvent } from 'react-native';
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Linking, Pressable, StyleSheet, View, type LayoutChangeEvent, type TextLayoutEvent } from 'react-native';
 
 import { AppText } from '../AppText';
-import { POST_FOLD_LINES, splitLinks } from '../../lib/community';
+import { FormattedText } from '../FormattedText';
+import { POST_FOLD_LINES } from '../../lib/community';
 import { splitEmoji } from '../../lib/emoji';
+import { parseFormatted } from '../../lib/textFormat';
 import { colors, font } from '../../theme';
 
 /**
- * A post's or reply's text — COMMUNITY_SPEC.md §3 "Text".
+ * A post's or reply's text — COMMUNITY_SPEC.md §3 "Text". Every post and reply
+ * text in the app is drawn here (PostCard, PostThread: the feeds, top replies,
+ * the post page, profiles' Posts).
  *
- *   · folds after POST_FOLD_LINES behind `See more`, which expands it in place;
- *   · links are tappable (no previews);
+ *   · drawn with WhatsApp's formatting through FormattedText
+ *     (TEXT_FORMAT_SPEC.md), exactly as in a chat bubble; links tappable, in
+ *     the spec's purple (no previews);
  *   · emoji inside the text are a size up (1.28×): the emoji font draws many of
- *     them smaller than the letters around them.
+ *     them smaller than the letters around them;
+ *   · folds after POST_FOLD_LINES behind `See more`, which expands it in place.
  *
- * Whether it overflows is MEASURED, not guessed from the length: an unclamped
- * twin, invisible, reports its real line count once. React Native's own
- * onTextLayout on a clamped Text reports only the visible lines on Android, so
- * it can't say there's more. The twin is only drawn for text long enough that
- * it might need it, and goes away after one layout.
+ * Folding, two ways, because FormattedText draws two ways:
+ *   · no bullets, numbers or quotes: ONE Text, clamped to POST_FOLD_LINES.
+ *     Whether it overflows is MEASURED, not guessed from the length: an
+ *     unclamped twin, invisible, reports its real line count once. React
+ *     Native's onTextLayout on a clamped Text reports only the visible lines
+ *     on Android, so it can't say there's more. The twin is only drawn for
+ *     text long enough that it might need it, and goes away after one layout.
+ *   · with them: a column of rows, which no Text can clamp. Folded by height
+ *     (line height × POST_FOLD_LINES, overflow hidden); the column's full
+ *     height, measured with onLayout, says whether there's more.
  *
  * A recycled feed cell gets a new `content`; the parent keys this by post id,
  * so the measurement and the expanded state start again for each post.
@@ -38,35 +49,7 @@ function mightFold(text: string) {
   return text.length > MIGHT_FOLD_CHARS || (text.match(/\n/g)?.length ?? 0) >= POST_FOLD_LINES - 1;
 }
 
-function Runs({ text, emojiSize }: { text: string; emojiSize: number }) {
-  return (
-    <>
-      {splitLinks(text).map((run, i) =>
-        run.href ? (
-          <AppText
-            key={i}
-            style={styles.link}
-            onPress={() => void Linking.openURL(run.href!)}
-            accessibilityRole="link"
-            suppressHighlighting
-          >
-            {run.text}
-          </AppText>
-        ) : (
-          splitEmoji(run.text).map((part, j) =>
-            part.emoji ? (
-              <AppText key={`${i}-${j}`} style={{ fontSize: emojiSize }}>
-                {part.text}
-              </AppText>
-            ) : (
-              part.text
-            ),
-          )
-        ),
-      )}
-    </>
-  );
-}
+const openLink = (url: string) => void Linking.openURL(url);
 
 export const PostText = memo(function PostText({
   content,
@@ -76,30 +59,63 @@ export const PostText = memo(function PostText({
   variant?: 'post' | 'page' | 'reply';
 }) {
   const size = SIZES[variant];
+  const oneText = useMemo(() => parseFormatted(content).every((line) => line.kind === 'text'), [content]);
+  const foldHeight = size.lineHeight * POST_FOLD_LINES;
   const [expanded, setExpanded] = useState(variant === 'page');
-  // null: not measured yet. Short text never needs measuring.
+  // null: not measured yet. Short one-Text text never needs measuring; a
+  // column is always measured (its onLayout costs nothing extra).
   const [overflows, setOverflows] = useState<boolean | null>(() =>
-    variant !== 'page' && mightFold(content) ? null : false,
+    variant === 'page' ? false : !oneText || mightFold(content) ? null : false,
   );
 
-  const onMeasure = (e: TextLayoutEvent) => setOverflows(e.nativeEvent.lines.length > POST_FOLD_LINES);
+  const onMeasureLines = (e: TextLayoutEvent) => setOverflows(e.nativeEvent.lines.length > POST_FOLD_LINES);
+  // A pixel of slack: rounding can put a column a hair over the fold.
+  const onMeasureColumn = (e: LayoutChangeEvent) => setOverflows(e.nativeEvent.layout.height > foldHeight + 1);
+
   const textStyle = [styles.text, { fontSize: size.fontSize, lineHeight: size.lineHeight }];
+  // Plain runs only: emoji a size up. FormattedText never passes code here.
+  const renderText = useCallback(
+    (text: string): ReactNode =>
+      splitEmoji(text).map((part, j) =>
+        part.emoji ? (
+          <AppText key={j} style={{ fontSize: size.emoji }}>
+            {part.text}
+          </AppText>
+        ) : (
+          part.text
+        ),
+      ),
+    [size.emoji],
+  );
+  const drawn = (more?: { numberOfLines?: number; onTextLayout?: (e: TextLayoutEvent) => void }) => (
+    <FormattedText
+      content={content}
+      style={textStyle}
+      linkStyle={styles.link}
+      onOpenLink={openLink}
+      renderText={renderText}
+      codeBackground={colors.formatCodeTheirs}
+      quoteBar={colors.formatQuoteBarTheirs}
+      {...more}
+    />
+  );
 
   return (
     <View>
-      {overflows === null ? (
-        <AppText
-          style={[textStyle, styles.twin]}
-          onTextLayout={onMeasure}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          {content}
-        </AppText>
-      ) : null}
-      <AppText style={textStyle} numberOfLines={expanded ? undefined : POST_FOLD_LINES}>
-        <Runs text={content} emojiSize={size.emoji} />
-      </AppText>
+      {oneText ? (
+        <>
+          {overflows === null ? (
+            <View style={styles.twin} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {drawn({ onTextLayout: onMeasureLines })}
+            </View>
+          ) : null}
+          {drawn({ numberOfLines: expanded ? undefined : POST_FOLD_LINES })}
+        </>
+      ) : (
+        <View style={expanded ? null : { maxHeight: foldHeight, overflow: 'hidden' }}>
+          <View onLayout={variant === 'page' ? undefined : onMeasureColumn}>{drawn()}</View>
+        </View>
+      )}
       {overflows && !expanded ? (
         <Pressable
           onPress={() => setExpanded(true)}

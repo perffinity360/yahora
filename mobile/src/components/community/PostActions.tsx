@@ -1,4 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
+import * as Clipboard from 'expo-clipboard';
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, type StyleProp, type ViewInstance, type ViewStyle } from 'react-native';
 import Reanimated from 'react-native-reanimated';
@@ -12,6 +13,7 @@ import { ReactionBreakdownSheet } from './ReactionBreakdownSheet';
 import { REPORT_TEXT, ReportSheet } from './ReportSheet';
 import { useDeletePost } from '../../hooks/useCommunity';
 import { POPOVER_ENTER } from '../../lib/motion';
+import { WEBSITE_URL } from '../../lib/share';
 import { colors, font, shadows } from '../../theme';
 import type { PostItem } from '../../types';
 
@@ -21,8 +23,12 @@ import type { PostItem } from '../../types';
  * Community tab, a post's page, the Posts tabs), and the cards reach it with
  * usePostActions(). Without a provider those buttons do nothing.
  *
- *   ⋯         a small menu under the button: Report for everyone but the
- *             author (spec §7), Delete for the author only (spec §3)
+ *   ⋯         a small menu under the button: Copy text (when there is text),
+ *             Copy link, then Report for everyone but the author (spec §7),
+ *             Delete for the author only (spec §3)
+ *   Copy      the text as typed, symbols and all, or the post's website link
+ *             (a reply's: its parent post's); toast `Text copied`, `Link
+ *             copied` or `Couldn't copy` (TEXT_FORMAT_SPEC §6)
  *   Report    ReportSheet → POST /api/reports → the toast; the post leaves this
  *             student's lists (useReportPost)
  *   Delete    ConfirmDialog with the spec's words → DELETE /api/posts/:id → it
@@ -83,6 +89,20 @@ export function PostActionsProvider({
     [showToast],
   );
 
+  const copy = useCallback(
+    async (text: string, done: string) => {
+      setMenu(null);
+      let copied = false;
+      try {
+        copied = await Clipboard.setStringAsync(text);
+      } catch {
+        copied = false;
+      }
+      showToast(copied ? done : "Couldn't copy");
+    },
+    [showToast],
+  );
+
   const confirmDelete = useCallback(() => {
     const post = deleting;
     setDeleting(null);
@@ -102,6 +122,8 @@ export function PostActionsProvider({
           post={menu.post}
           anchor={menu.anchor}
           onClose={() => setMenu(null)}
+          onCopyText={() => void copy(menu.post.content, 'Text copied')}
+          onCopyLink={() => void copy(postLink(menu.post), 'Link copied')}
           onReport={() => {
             setMenu(null);
             setReporting(menu.post);
@@ -178,10 +200,16 @@ export function PostActionsProvider({
   );
 }
 
-/** The ⋯ menu: one row, under the button, kept on screen. */
+/** A post's link on the website; a reply's is its parent post's. */
+function postLink(post: PostItem) {
+  return `${WEBSITE_URL}/post/${post.parent_post_id ?? post.id}`;
+}
+
+/** The ⋯ menu: its rows, under the button, kept on screen. */
 const MENU_W = 168;
-/** One 44-tall item and the menu's padding. */
-const MENU_H = 52;
+/** One row's height; the menu adds its padding (4 above and below). */
+const ITEM_H = 44;
+const MENU_PAD = 8;
 /** From the centre of the ⋯ dots to the menu's edge. */
 const MENU_GAP = 9;
 
@@ -189,15 +217,22 @@ function PostMenu({
   post,
   anchor,
   onClose,
+  onCopyText,
+  onCopyLink,
   onReport,
   onDelete,
 }: {
   post: PostItem;
   anchor: Anchor;
   onClose: () => void;
+  onCopyText: () => void;
+  onCopyLink: () => void;
   onReport: () => void;
   onDelete: () => void;
 }) {
+  // Copy text only when there is text (a GIF or photos alone have none).
+  const hasText = !!post.content?.trim();
+  const MENU_H = (hasText ? 3 : 2) * ITEM_H + MENU_PAD;
   return (
     <AnchoredModal anchor={anchor} onClose={onClose}>
       {(button, layer) => {
@@ -216,6 +251,24 @@ function PostMenu({
             style={[styles.menu, { left, top, transformOrigin: above ? 'bottom right' : 'top right' }]}
             accessibilityRole="menu"
           >
+            {hasText ? (
+              <Pressable
+                onPress={onCopyText}
+                accessibilityRole="menuitem"
+                style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+              >
+                <Feather name="copy" size={15} color={colors.blackSoft} />
+                <AppText style={styles.itemText}>Copy text</AppText>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={onCopyLink}
+              accessibilityRole="menuitem"
+              style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+            >
+              <Feather name="link" size={15} color={colors.blackSoft} />
+              <AppText style={styles.itemText}>Copy link</AppText>
+            </Pressable>
             {post.is_mine ? (
               <Pressable
                 onPress={onDelete}
@@ -251,7 +304,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     boxShadow: shadows.quickBar,
   },
-  item: { height: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  item: { height: ITEM_H, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   itemPressed: { backgroundColor: colors.reactionMineBg },
   itemText: { fontFamily: font.family.medium, fontSize: font.sizes.bodyLg, color: colors.blackSoft },
   danger: { color: colors.errorText },

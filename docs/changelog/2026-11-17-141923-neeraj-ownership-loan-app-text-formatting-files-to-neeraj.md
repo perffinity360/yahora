@@ -20,6 +20,14 @@ title: "Ownership loan: app text-formatting files to Neeraj"
 - `mobile/src/components/FormattedText.tsx`
 - `mobile/src/theme/index.ts`
 
+**Added for TF-8 (21 Nov), the app's community formatting:**
+
+- `mobile/src/components/community/PostText.tsx` (post and reply text, through FormattedText)
+- `mobile/src/components/community/PostActions.tsx` (the ⋯ menu: Copy text, Copy link)
+- `mobile/app/compose.tsx` (the composer and reply box: FormattedInput and the selection tools)
+- `mobile/src/lib/share.ts` (a new `WEBSITE_URL` export) and `mobile/.env.example`
+  (`EXPO_PUBLIC_WEBSITE_URL`, commented)
+
 **Until:** `v-text-formatting` merges into `main`. The entry that reports that merge hands them back.
 
 **The rules:**
@@ -27,8 +35,8 @@ title: "Ownership loan: app text-formatting files to Neeraj"
 1. Vishwajeet doesn't edit these files until then. If he must, he says so in his changelog entry and
    Neeraj merges.
 2. Neeraj **doesn't change any `OWNER:` banner**. This entry is the record of the loan.
-3. Nothing else in `mobile/`: not `app/compose.tsx`, `app/post/[id].tsx`, `app/(tabs)/community.tsx`
-   or `src/components/community/*`.
+3. Nothing else in `mobile/`: not `app/post/[id].tsx`, `app/(tabs)/community.tsx`, nor any other file in
+   `src/components/community/` than the two named above.
 4. No new libraries in `mobile/package.json`.
 
 **Already done before this entry:** `mobile/src/lib/textFormat.ts` got double symbols and

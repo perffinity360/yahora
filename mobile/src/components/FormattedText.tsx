@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode, useMemo } from 'react';
-import { StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type TextLayoutEvent, type TextStyle } from 'react-native';
 
 import { parseFormatted, type FormatNode } from '../lib/textFormat';
 import { font } from '../theme';
@@ -36,6 +36,11 @@ interface Props {
   codeBackground: string;
   /** A quote's bar: the text's colour at 45% (colors.formatQuoteBar*). */
   quoteBar: string;
+  /** Text with no bullets, numbers or quotes only (it is one Text): clamp it to
+   *  this many lines, and report its layout. A column of rows ignores both;
+   *  its owner folds it by height (community PostText). */
+  numberOfLines?: number;
+  onTextLayout?: (e: TextLayoutEvent) => void;
 }
 
 interface Marks {
@@ -111,6 +116,8 @@ export function FormattedText({
   renderText = asIs,
   codeBackground,
   quoteBar,
+  numberOfLines,
+  onTextLayout,
 }: Props) {
   const lines = useMemo(() => parseFormatted(content), [content]);
   // Code is a size smaller than the text around it, as on the web (0.9em).
@@ -126,7 +133,7 @@ export function FormattedText({
 
   if (lines.every((line) => line.kind === 'text')) {
     return (
-      <AppText style={style}>
+      <AppText style={style} numberOfLines={numberOfLines} onTextLayout={onTextLayout}>
         {lines.map((line, i) => (
           <Fragment key={i}>
             {i > 0 ? '\n' : null}

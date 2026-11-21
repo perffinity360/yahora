@@ -17,11 +17,23 @@ import { AppTextInput } from './AppTextInput';
  * the value is exactly what was typed: only its look changes.
  *
  *   symbols  the text colour at 45% (colors.formatSymbolInput)
- *   bold     Inter_700Bold · italic Inter_400Regular_Italic · both Inter_700Bold_Italic
+ *   bold     Inter_700Bold
+ *   italic   the text colour at 70% (colors.formatItalicInput), as on the
+ *            website, NOT the italic font: Android leaves out a pasted line
+ *            drawn in Inter's italic font (TF-8, 21 Nov; typed was fine).
+ *            Sent posts and messages keep the real italic (FormattedText).
  *   strike   line-through · links underlined
  *   code and monospace  font.family.mono, on colors.formatCode* (codeBackground)
  *
  * Sizes never change, so a line never grows or shrinks while typing.
+ *
+ * ON ANDROID, ONE LINE ONLY (owner's choice, 21 Nov). Once the text has a line
+ * break, the Android box shows it plain, exactly as typed. A multi-line text
+ * that arrived in one go (a paste) came out of Android's layout with its line
+ * breaks in the wrong places once it was drawn in styled pieces, although the
+ * pieces joined to exactly the right text; emptying the box first didn't help.
+ * Typing one line keeps live formatting; iOS keeps it at any length. Sent
+ * posts and messages are always fully formatted (FormattedText).
  *
  * LIVE_FORMAT turns the look off on one platform (the text is then one plain
  * child) if it ever proves unreliable there; spec §5.4 must say so.
@@ -33,39 +45,57 @@ const LIVE_FORMAT = Platform.select({
   default: true,
 });
 
+/** Android: no live formatting once the text has a line break (see the top). */
+const PLAIN_WHEN_MULTILINE = Platform.OS === 'android';
+
 type Props = TextInputProps & {
   /** Inline code's tint (colors.formatCode*). */
   codeBackground?: string;
   /** The symbols' colour: the box's text colour at 45%. */
   symbolColor?: string;
+  /** Italic's colour: the box's text colour at 70%. */
+  italicColor?: string;
 };
 
 function familyFor(span: FormatSpan): string | undefined {
   if (span.code || span.mono) return font.family.mono;
-  if (span.bold && span.italic) return font.family.boldItalic;
+  // Italic is a colour here, never the italic font (see the top).
   if (span.bold) return font.family.bold;
-  if (span.italic) return font.family.italic;
   return undefined;
 }
 
-function lookOf(span: FormatSpan, codeBackground: string, symbolColor: string): TextStyle | undefined {
+function lookOf(
+  span: FormatSpan,
+  codeBackground: string,
+  symbolColor: string,
+  italicColor: string,
+): TextStyle | undefined {
   const lines = [span.strike && 'line-through', span.link && 'underline'].filter(Boolean);
   const look: TextStyle = {
     ...(familyFor(span) ? { fontFamily: familyFor(span) } : null),
     ...(lines.length ? { textDecorationLine: lines.join(' ') as TextStyle['textDecorationLine'] } : null),
     ...(span.code ? { backgroundColor: codeBackground } : null),
-    ...(span.symbol ? { color: symbolColor } : null),
+    // The symbols' 45% wins over italic's 70%.
+    ...(span.symbol ? { color: symbolColor } : span.italic ? { color: italicColor } : null),
   };
   return Object.keys(look).length ? look : undefined;
 }
 
 export const FormattedInput = forwardRef<React.ComponentRef<typeof AppTextInput>, Props>(
   function FormattedInput(
-    { value, codeBackground = colors.formatCodeTheirs, symbolColor = colors.formatSymbolInput, ...rest },
+    {
+      value,
+      codeBackground = colors.formatCodeTheirs,
+      symbolColor = colors.formatSymbolInput,
+      italicColor = colors.formatItalicInput,
+      ...rest
+    },
     ref,
   ) {
     const text = value ?? '';
-    const spans = useMemo(() => (LIVE_FORMAT ? formatSpans(text) : null), [text]);
+
+    const live = LIVE_FORMAT && !(PLAIN_WHEN_MULTILINE && text.includes('\n'));
+    const spans = useMemo(() => (live ? formatSpans(text) : null), [live, text]);
     // The plain run in the box's font: no look of its own.
     const base = StyleSheet.flatten(rest.style);
     const { fontFamily, fontSize, lineHeight, color, letterSpacing } = base ?? {};
@@ -81,14 +111,14 @@ export const FormattedInput = forwardRef<React.ComponentRef<typeof AppTextInput>
         <AppText style={{ fontFamily, fontSize, lineHeight, color, letterSpacing }}>
           {spans
             ? spans.map((span, i) => (
-                <AppText key={i} style={lookOf(span, codeBackground, symbolColor)}>
+                <AppText key={i} style={lookOf(span, codeBackground, symbolColor, italicColor)}>
                   {span.text}
                 </AppText>
               ))
             : text}
         </AppText>
       ),
-      [spans, text, codeBackground, symbolColor, fontFamily, fontSize, lineHeight, color, letterSpacing],
+      [spans, text, codeBackground, symbolColor, italicColor, fontFamily, fontSize, lineHeight, color, letterSpacing],
     );
 
     return (
