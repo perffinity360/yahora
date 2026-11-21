@@ -18,7 +18,7 @@
 // for your own. Your own held or covered post carries its label (spec §3.1);
 // nobody else is ever sent one.
 
-import React, { memo, useCallback, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { GraduationCap, MessageCircle } from "lucide-react";
@@ -33,6 +33,7 @@ import PostText from "./PostText";
 import PostThread, { PostPageThread } from "./PostThread";
 import PostMenu from "../PostMenu/PostMenu";
 import { formatCount, formatPostTime } from "../../../utils/community";
+import { hasMouse, NOT_BLANK, onBlank } from "../../../utils/doubleClickReply";
 import styles from "./PostCard.module.css";
 
 /* The stagger stops here, so a long page doesn't keep arriving for a second. */
@@ -42,6 +43,13 @@ const STAGGER_MAX = 6;
 const STATUS_LABELS = { pending: "Being checked", under_review: "Under review" };
 /* Each label's colour says its state (owner, 15 Nov): amber waiting, orange reported. */
 const STATUS_CLASSES = { pending: styles.statusPending, under_review: styles.statusReview };
+
+/* Where a mouse can double-click to reply (spec §3, §4), a click waits this
+   long before opening the post's page, so a double-click isn't taken for it. */
+const DOUBLE_CLICK_MS = 300;
+/* What a double-click must not start on: utils/doubleClickReply's list, the
+   text blocks (double-clicking text selects a word) and the media. */
+const NOT_BLANK_HERE = `${NOT_BLANK}, .${styles.text}, .${styles.gif}, .${styles.carousel}`;
 
 function PostCard({
   post,
@@ -79,14 +87,36 @@ function PostCard({
   // not from a menu or picker drawn in a portal (its clicks still bubble here
   // through React), and not when the click ended a text selection. Ctrl or Cmd
   // opens it in a new tab. The time stays the keyboard's way in.
+  // Where a mouse can double-click to reply, a plain click waits
+  // DOUBLE_CLICK_MS first; a second click cancels it (spec §3).
+  const openTimer = useRef(null);
+  useEffect(() => () => clearTimeout(openTimer.current), []);
+  const waitsForDouble = () => canReply && !!onReply && hasMouse();
+
   const openPost = (e) => {
     if (onPage || e.defaultPrevented || e.button !== 0) return;
     if (!e.currentTarget.contains(e.target)) return;
     if (e.target.closest("a, button, input, textarea, select, label, video, [role='button'], [role='menu'], [role='dialog']")) return;
+    clearTimeout(openTimer.current);
+    if (e.detail > 1) return; // the second click of a double-click
     if (window.getSelection()?.toString()) return;
     const to = `/post/${post.id}`;
     if (e.metaKey || e.ctrlKey) window.open(to, "_blank", "noopener");
-    else navigate(to);
+    else if (waitsForDouble()) {
+      openTimer.current = setTimeout(() => {
+        // A double-click on text selects a word: then it isn't a click.
+        if (!window.getSelection()?.toString()) navigate(to);
+      }, DOUBLE_CLICK_MS);
+    } else navigate(to);
+  };
+
+  // Double-click an empty part of the post, or of one of its replies (they
+  // sit inside this card): the reply box for this post, as 💬 opens it.
+  const replyOnDoubleClick = (e) => {
+    if (e.button !== 0 || !canReply || !onReply || !hasMouse()) return;
+    if (!e.currentTarget.contains(e.target) || !onBlank(e, NOT_BLANK_HERE)) return;
+    clearTimeout(openTimer.current);
+    onReply(post);
   };
 
   const onReplyPress = () => {
@@ -103,6 +133,7 @@ function PostCard({
       style={{ "--post-i": Math.min(index, STAGGER_MAX), "--arrive-i": Math.min(arriving ?? 0, STAGGER_MAX) }}
       aria-label={`Post by @${post.author_username}`}
       onClick={openPost}
+      onDoubleClick={replyOnDoubleClick}
     >
       {/* Resting on the avatar opens the profile glimpse too, as on the
           username (owner, 10 Nov). */}

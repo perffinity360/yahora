@@ -103,6 +103,10 @@ export const colors = {
   // The symbols themselves (* _ ~ `) while typing in a text box (spec §5.4):
   // the box's text colour, blackSoft, at 45%.
   formatSymbolInput: 'rgba(26,26,26,0.45)',
+  // _Italic_ while typing in a text box (spec §5.4): the box's text colour at 70%,
+  // as on the website, not the italic font. Android drops a pasted line drawn in
+  // Inter's italic font from a text box (TF-8, 21 Nov).
+  formatItalicInput: 'rgba(26,26,26,0.70)',
   sheetHandle: 'rgba(128,0,128,0.15)',
   // The spec calls this one `scrim`, but `scrim` below (0.55) already backs
   // nine other sheets and modals. Renaming keeps them as they are.

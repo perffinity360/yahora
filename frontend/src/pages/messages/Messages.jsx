@@ -72,6 +72,7 @@ import {
   formatInboxTime,
   isGroupedWith,
 } from "../../utils/messageFormat";
+import { hasMouse, NOT_BLANK, onBlank } from "../../utils/doubleClickReply";
 
 /**
  * 🔒 Every /api/messages/* route went behind `requireAuth` in Phase 4 Block V-A
@@ -80,6 +81,10 @@ import {
  * and a stale token is a 401 that shows up as an empty inbox, not as an error.
  */
 const authHeaderToken = () => localStorage.getItem("yahora_session");
+
+/* §10.4 double-click to reply: never from the quote (a click on it jumps to
+   the original) nor a sticker or GIF, on top of utils/doubleClickReply's list. */
+const MESSAGE_NOT_BLANK = `${NOT_BLANK}, .${styles.quote}`;
 
 
 /* Which conversation this student had open last. Written on every chat select,
@@ -3099,6 +3104,16 @@ export default function Messages() {
                                   if (g?.mode === "swipe") return;
                                   if (g) g.mode = "ignore";
                                   openActionsMenu(msg);
+                                },
+                                // §10.4: with a mouse, double-clicking an empty
+                                // part of the row (not its text, the quote,
+                                // media or a button) replies to it, as the
+                                // menu's Reply does. Not a tombstone, not while
+                                // selecting.
+                                onDoubleClick: (e) => {
+                                  if (!swipeable || selecting || e.button !== 0 || !hasMouse()) return;
+                                  if (!onBlank(e, MESSAGE_NOT_BLANK)) return;
+                                  startReply(msg);
                                 },
                                 // Capture: decided before a link, the quote or
                                 // the bubble's own tap handler sees the click.

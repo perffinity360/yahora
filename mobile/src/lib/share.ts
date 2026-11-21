@@ -30,6 +30,16 @@ const SHARE_BASE_URL = (process.env.EXPO_PUBLIC_SHARE_BASE_URL ?? API_BASE_URL)
   .trim()
   .replace(/\/+$/, '');
 
+/**
+ * The website's address, for links people open in a browser: a post's
+ * `<WEBSITE_URL>/post/<id>` (Copy link in the ⋯ menu, COMMUNITY_SPEC §3).
+ * EXPO_PUBLIC_WEBSITE_URL sets it (a staging site, say); otherwise the live
+ * website. Never a trailing slash.
+ */
+export const WEBSITE_URL = (process.env.EXPO_PUBLIC_WEBSITE_URL || 'https://yahora.netlify.app')
+  .trim()
+  .replace(/\/+$/, '');
+
 /** Shape shared by MarketplaceProduct, ProductListing, PublicListing and the detail payload. */
 export type ShareableProduct = {
   id: string;

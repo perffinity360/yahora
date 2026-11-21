@@ -207,16 +207,28 @@ invalid, so the bar had no shadow at all.
 ### 5.4 App: formatting while typing
 
 Real formatting inside the text box (styled text children of the `TextInput`): `Inter_700Bold`,
-`Inter_400Regular_Italic`, `Inter_700Bold_Italic`, line-through, the mono font, and the symbols at 45%.
+line-through, the mono font, and the symbols at 45%. **Italic is the text colour at 70%**
+(`formatItalicInput`, as on the website, §5.1), **not the italic font** (owner's test, 21 Nov): Android
+leaves out a whole pasted line that has italic drawn in `Inter_400Regular_Italic` (typed, it showed;
+bold, also a font of its own, pasted fine). Sent posts and messages keep the real italic font.
 
 If a platform proves unreliable (the cursor jumps, keyboard suggestions break), live formatting is off
 on that platform only, and this section says so.
 
-Built in TF-7 as `mobile/src/components/FormattedInput.tsx`, used by the chat box. Sizes never change
+Built in TF-7 as `mobile/src/components/FormattedInput.tsx`, used by the chat box and (TF-8) the
+community's composer and reply box. Sizes never change
 (code and monospace keep the box's size, unlike a sent message's 0.9), so a line never grows while
 typing. The symbols use `formatSymbolInput` (`blackSoft` at 45%), code `formatCodeTheirs`.
-**Live formatting is on on both iOS and Android.** It has not yet been checked on a phone; if it
-proves unreliable on one, `LIVE_FORMAT` in that file turns it off there, and this line says so.
+**Live formatting is on on both iOS and Android.** On an Android phone (21 Nov) every look showed when
+typed, in the chat and the community; pasted, only italic failed, hence the colour above.
+
+**On Android, live formatting is for one line only (owner's choice, 21 Nov).** Once the text in the box
+has a line break, the Android box shows it plain, exactly as typed or pasted; one-line text keeps live
+formatting, and iOS keeps it at any length. Why: a multi-line text that arrived in one go (a paste) came out
+of Android's text layout with its line breaks in the wrong places once it was drawn in styled pieces (`1.
+_italic_ x 2. ~strike~` on one line, then ` x 3. …`), although the pieces joined to exactly the right
+text, in the chat and the community alike. Emptying the box and refilling it after a paste didn't help.
+Sent posts and messages are always fully formatted, with their numbered and bulleted lists.
 
 ### 5.5 App: selection tools and the chat limit
 
@@ -240,6 +252,13 @@ is up), the ☺ button beside the box turns into an **Aa** button: purple on `de
   long-press the text, which closes our bar too. Android keeps the same selection and shows its menu.
 - **Our bar closes**, and ☺ comes back, when the box loses focus, the keyboard closes, or the user types or
   taps in the text.
+
+**The community's composer and reply box** (`mobile/app/compose.tsx`, TF-8, 21 Nov) **have the same
+tools:** the text box shows the formatting while typing (`FormattedInput`), and with text selected the ☺ in
+the tools at the bottom turns into **Aa** (the zone's colour on its tint, filled while open). Aa swaps the
+phone's menu for the same pill, just above the tools, far from the selection at the top; the same collapse
+and reselect, the same kept selection, `contextMenuHidden` while open. The rules are shared as
+`useSelectionTools` in `mobile/src/components/FormatToolbar.tsx` (the chat keeps its own copy inline).
 
 **What was tried before.** 17 Nov: our bar opened straight away, above or below the box, and the phone's
 menu (which Android places above or below the selection) covered it. Hiding the phone's menu for good

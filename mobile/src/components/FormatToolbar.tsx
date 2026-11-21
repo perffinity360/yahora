@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as Haptics from 'expo-haptics';
-import { Fragment } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
@@ -364,5 +364,161 @@ const styles = StyleSheet.create({
     backgroundColor: colors.messagesBarBorder,
   },
 });
+
+/* ── useSelectionTools: the selection the bar acts on (TEXT_FORMAT_SPEC §5.5) ──
+   The chat's rules (app/chat/[contactId].tsx, which has them inline), for any
+   other box drawn with FormattedInput: the community's composer and reply box.
+
+   - `kept` is the last NON-EMPTY selection; the buttons always use it. A
+     collapsed selection ends it only after a touch in the box (a tap); typing
+     and the box going inactive end it too. A long-press inside the selection
+     reports nothing, so it keeps it.
+   - Aa (toggle) swaps the phone's Cut / Copy menu for our bar: the selection
+     collapses for a moment (Android ends its menu when nothing is selected) and
+     RESELECT_AFTER_MS later the same characters are selected again, which
+     brings the highlight back but not the menu. While the bar is open the box
+     sets contextMenuHidden, so the phone's menu can't come back over it.
+   - After a change the box is held to the new selection (its `selection`
+     prop) until it reports it back, at most 600 ms.
+
+     active          the box has focus (and the keyboard, not a panel, is up)
+     text, setText   the box's text
+   Returns:
+     inputProps      for the FormattedInput: selection, contextMenuHidden,
+                     onSelectionChange, onChangeText, onPressIn
+     selected        text is selected: show Aa in place of ☺
+     open, toggle    our bar is open (Aa pressed)
+     format(kind)    B · I · S · code · mono on the kept selection */
+const RESELECT_AFTER_MS = 60;
+
+export function useSelectionTools({
+  active,
+  text,
+  setText,
+}: {
+  active: boolean;
+  text: string;
+  setText: (text: string) => void;
+}) {
+  const [kept, setKept] = useState<Selection | null>(null);
+  const keptRef = useRef<Selection | null>(null);
+  const [held, setHeld] = useState<Selection | null>(null);
+  const heldRef = useRef<Selection | null>(null);
+  const heldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reselectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchedBox = useRef(false);
+  const [open, setOpen] = useState(false);
+
+  const keep = useCallback((next: Selection | null) => {
+    keptRef.current = next;
+    setKept(next);
+  }, []);
+  const release = useCallback(() => {
+    if (heldTimer.current) clearTimeout(heldTimer.current);
+    heldTimer.current = null;
+    heldRef.current = null;
+    setHeld(null);
+  }, []);
+  const hold = useCallback(
+    (next: Selection) => {
+      if (heldTimer.current) clearTimeout(heldTimer.current);
+      heldRef.current = next;
+      setHeld(next);
+      heldTimer.current = setTimeout(release, 600);
+    },
+    [release],
+  );
+  const cancelReselect = () => {
+    if (reselectTimer.current) clearTimeout(reselectTimer.current);
+    reselectTimer.current = null;
+  };
+  useEffect(
+    () => () => {
+      if (heldTimer.current) clearTimeout(heldTimer.current);
+      if (reselectTimer.current) clearTimeout(reselectTimer.current);
+    },
+    [],
+  );
+
+  const selected = active && !!kept && Math.max(kept.start, kept.end) <= text.length;
+  useEffect(() => {
+    if (!active) keep(null);
+  }, [active, keep]);
+  useEffect(() => {
+    if (!selected) setOpen(false);
+  }, [selected]);
+
+  const onSelectionChange = (e: { nativeEvent: { selection: Selection } }) => {
+    const next = e.nativeEvent.selection;
+    const h = heldRef.current;
+    if (h) {
+      // Reports on the way there (the text being replaced) are passing states.
+      if (next.start !== h.start || next.end !== h.end) return;
+      release();
+    }
+    const touched = touchedBox.current;
+    touchedBox.current = false;
+    // Our own collapse (toggle) never ends the kept selection; a tap does.
+    if (next.start !== next.end) keep(next);
+    else if (touched) keep(null);
+  };
+
+  const toggle = () => {
+    cancelReselect();
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const sel = keptRef.current;
+    if (!sel) return;
+    touchedBox.current = false;
+    setOpen(true);
+    // Collapse, then the same selection again a few frames later. Android
+    // refreshes its menu on a frame, so the two must not land on the same one.
+    const end = Math.max(sel.start, sel.end);
+    hold({ start: end, end });
+    reselectTimer.current = setTimeout(() => {
+      reselectTimer.current = null;
+      if (keptRef.current === sel) hold(sel);
+    }, RESELECT_AFTER_MS);
+  };
+
+  const format = (kind: FormatKind) => {
+    const sel = keptRef.current;
+    if (!sel) return;
+    cancelReselect();
+    const result = applyFormat(text, sel, kind);
+    // The same words stay selected, so the same button takes it off again.
+    keep(result.selection);
+    hold(result.selection);
+    setText(result.value);
+  };
+
+  const isOpen = selected && open;
+  return {
+    inputProps: {
+      selection: held ?? undefined,
+      contextMenuHidden: isOpen,
+      onSelectionChange,
+      onChangeText: (next: string) => {
+        if (next !== text) keep(null);
+        setText(next);
+      },
+      // A tap ends the kept selection (once the box reports the caret); a
+      // long-press inside it keeps it and brings the phone's menu back, so our
+      // bar closes now.
+      onPressIn: () => {
+        touchedBox.current = true;
+        cancelReselect();
+        setOpen(false);
+        release();
+      },
+    },
+    selected,
+    open: isOpen,
+    toggle,
+    format,
+  };
+}
 
 export default FormatToolbar;

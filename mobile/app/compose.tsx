@@ -20,7 +20,8 @@ import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../src/components/AppText';
-import { AppTextInput } from '../src/components/AppTextInput';
+import { FormattedInput } from '../src/components/FormattedInput';
+import { FormatToolbar, useSelectionTools } from '../src/components/FormatToolbar';
 import { AppToast, useToast } from '../src/components/AppToast';
 import { Avatar } from '../src/components/Avatar';
 import { ConfirmDialog } from '../src/components/ConfirmDialog';
@@ -47,6 +48,9 @@ import { colors, font } from '../src/theme';
  *   · your avatar, then a text box that grows; no "Posting as" line (spec §2.2);
  *   · the destination chip in the top bar (checkpoint V-D4b), or "Replying to
  *     @username" for a reply. Where the post goes can't be changed here;
+ *   · the text box shows WhatsApp's formatting while you type (FormattedInput,
+ *     TEXT_FORMAT_SPEC §5.4); with text selected, ☺ turns into Aa, which opens
+ *     B · I · S · code · mono above the tools, as in the chat (§5.5);
  *   · at the bottom, over the keyboard: photo, GIF, the counter (at 100 or
  *     fewer left) and Post. A reply has no photo button;
  *   · a button that can't be used says why when pressed (photos or a GIF,
@@ -141,6 +145,12 @@ export default function ComposeScreen() {
   const focusInput = () => {
     inputRef.current?.focus();
   };
+  /* The selection tools (TEXT_FORMAT_SPEC §5.5), as in the chat: while text is
+     selected, ☺ is Aa; Aa opens the bar above the tools. Only while the box
+     has focus and the keyboard, not the emoji panel, is up. */
+  const [inputFocused, setInputFocused] = useState(false);
+  const tools = useSelectionTools({ active: inputFocused && !emojiOpen, text: c.text, setText: c.setText });
+
   const insertEmoji = (emoji: string) => {
     const t = textNow.current;
     const start = Math.min(selection.current.start, t.length);
@@ -247,14 +257,25 @@ export default function ComposeScreen() {
           >
             <View style={styles.writeRow}>
               <Avatar name={profile?.full_name} uri={profile?.avatar_url} size={36} />
-              <AppTextInput
+              <FormattedInput
                 ref={inputRef}
                 value={c.text}
-                onChangeText={c.setText}
+                onChangeText={tools.inputProps.onChangeText}
+                selection={tools.inputProps.selection}
+                // While our bar is open the phone's menu stays shut (useSelectionTools).
+                contextMenuHidden={tools.inputProps.contextMenuHidden}
+                onPressIn={tools.inputProps.onPressIn}
                 onSelectionChange={(e) => {
                   selection.current = e.nativeEvent.selection;
+                  tools.inputProps.onSelectionChange(e);
                 }}
-                onFocus={onInputFocus}
+                onFocus={() => {
+                  setInputFocused(true);
+                  onInputFocus();
+                }}
+                onBlur={() => setInputFocused(false)}
+                codeBackground={colors.formatCodeTheirs}
+                symbolColor={colors.formatSymbolInput}
                 placeholder={placeholder}
                 placeholderTextColor={colors.mutedLabel}
                 multiline
@@ -288,6 +309,14 @@ export default function ComposeScreen() {
             <Pressable style={styles.writeSpace} onPress={focusInput} accessible={false} />
           </ScrollView>
 
+          {/* B · I · S · code · mono, opened by Aa (spec §5.5): above the tools,
+              far from the selection, where the phone's own menu floats. */}
+          {tools.open ? (
+            <View style={styles.formatBar}>
+              <FormatToolbar onFormat={tools.format} />
+            </View>
+          ) : null}
+
           {inline ? (
             <AppText style={styles.inline} accessibilityLiveRegion="polite">
               {inline}
@@ -318,7 +347,24 @@ export default function ComposeScreen() {
               />
             ) : null}
             <ToolButton gif label="Add a GIF" blocked={!!c.gifBlocked} color={accent} onPress={onGifPress} />
-            {emojiOpen ? (
+            {tools.selected ? (
+              // Text selected: ☺ is Aa, which opens the formatting bar.
+              <Pressable
+                onPressIn={tools.toggle}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={tools.open ? 'Hide formatting' : 'Format the selected text'}
+                accessibilityState={{ expanded: tools.open }}
+                style={({ pressed }) => [
+                  styles.tool,
+                  styles.formatToggle,
+                  tools.open && { backgroundColor: accent },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <AppText style={[styles.formatToggleText, { color: tools.open ? colors.white : accent }]}>Aa</AppText>
+              </Pressable>
+            ) : emojiOpen ? (
               <ToolButton keyboard label="Show the keyboard" blocked={false} color={accent} onPress={focusInput} />
             ) : (
               <ToolButton icon="smile" label="Add an emoji" blocked={false} color={accent} onPress={onEmojiPress} />
@@ -572,6 +618,12 @@ const styles = StyleSheet.create({
     borderTopColor: colors.communityRail,
   },
   tool: { width: 40, height: 36, alignItems: 'center', justifyContent: 'center' },
+  /* ☺ as Aa while text is selected (TEXT_FORMAT_SPEC §5.5): the zone's colour
+     on its light tint, filled while the bar is open. */
+  formatToggle: { borderRadius: 18, backgroundColor: colors.demoCardPurpleBg },
+  formatToggleText: { fontFamily: font.family.bold, fontSize: 15, lineHeight: 18 },
+  /* The bar's place, above the tools: the pill centred. */
+  formatBar: { alignItems: 'center', paddingVertical: 4 },
   toolBlocked: { opacity: 0.35 },
   gifGlyph: { paddingHorizontal: 3, borderWidth: 1.5, borderRadius: 4 },
   gifGlyphText: { fontFamily: font.family.bold, fontSize: 10, lineHeight: 13 },
