@@ -202,10 +202,9 @@
   flex: 0 0 auto;
 }
 
+/* No underline on hover (owner, 21 Nov): the colour says it's a link. */
 a.time:hover {
   color: var(--purple);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .moreBtn {

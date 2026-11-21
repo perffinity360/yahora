@@ -1,6 +1,10 @@
 # Community — design spec (Phase 7)
 
-**Version 3.17 · 20 November 2026 · for the website and the app**
+**Version 3.18 · 21 November 2026 · for the website and the app**
+
+> **Changed in version 3.18 (owner, 21 Nov), the website only:** **the time no longer underlines on
+> hover** (it still turns `purple`, §3). **With a mouse, double-clicking the empty part of a post or a reply
+> opens the reply box** for that post, as 💬 does (§3, §4); double-clicking text still selects a word.
 
 > **Changed in version 3.17 (owner, 20 Nov), the website only:** **the composer's ring counter comes first
 > among the tools**, to the left of Add photos (and of GIF in a reply); it still opens with them (§2.2).
@@ -592,7 +596,8 @@ into the replies when there are any.
   draws many of them smaller than the letters around them.
 - **Links in a post say their own hover colour** (website): the name and the @username turn `purple`, with
   no underline, and resting on them opens the profile glimpse (§4.1);
-  the time turns `purple` and underlines, a link in the text turns `purpleDark`. `footer.module.css` has a bare
+  the time turns `purple`, with **no underline** (owner, 21 Nov), and keeps its focus ring for the
+  keyboard; a link in the text turns `purpleDark`. `footer.module.css` has a bare
   `a:hover` that turns every link on the site `pinkLight`, which nearly vanishes on the wallpaper.
 - **Actions: icons in pills, no words,** 24 px tall, with 4 px between them:
   - **The reaction summary** (§5.3), when there are reactions.
@@ -600,6 +605,16 @@ into the replies when there are any.
     if you haven't reacted (§5).
   - **💬 count:** where you can reply, it opens the composer in reply mode (§4). In a view-only feed
     it loads more replies.
+- **Double-click to reply (website, with a mouse only; owner, 21 Nov).** On a device with a fine pointer
+  and hover (`(hover: hover) and (pointer: fine)`), never on a touch screen, double-clicking an **empty
+  part** of a post card (its blank space, not its text) opens the reply box for that post and puts the
+  cursor in it, exactly as 💬 does. A double-click that starts on text, a link, a button, an input, a
+  photo, a GIF, the avatar, the name, the reaction pills or ⋯ is left alone, so double-clicking text still
+  selects a word. Nothing happens where you can't reply (another country's feed, the API's `can_reply`
+  false, a profile's Posts tab). No visual change to the card. **So that a double-click is not taken for
+  a click that opens the post's page,** where you can reply a single click with the mouse waits 300 ms
+  (`DOUBLE_CLICK_MS`) before opening it; a second click within that time cancels it. Ctrl or Cmd click
+  still opens the page in a new tab at once.
   - **⋯ menu, on posts and replies, in this order:** **Copy text** (only when the post or reply has
     text; the text as typed, with its symbols), **Copy link** (`https://<website>/post/<id>`; a reply
     copies its parent post's link), then Report (§7), or Delete for your own posts, with confirm text
@@ -622,6 +637,11 @@ into the replies when there are any.
 ## 4. Replies, and a post's page
 
 Replies now show **under each post in the feed,** as well as on the post's page.
+
+- **Double-click to reply (website, with a mouse only; owner, 21 Nov):** double-clicking the empty part of
+  a reply opens the reply box of **its parent post** (replies are one level only), with the same rules as a
+  post (§3): never on text, links, buttons, the name, the avatar, a GIF, ♡ or ⋯; never on a touch screen;
+  nothing where you can't reply.
 
 ```
 (av) Post author …

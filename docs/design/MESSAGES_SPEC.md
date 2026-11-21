@@ -875,6 +875,15 @@ Starting a reply (from the menu, the sheet or a swipe) shows a **reply bar** ins
 
 *First name* = the first word of the contact's name as the header shows it; with no name, `Yahora student`.
 
+**Double-click to reply (website, with a mouse only; owner, 21 Nov).** On a device with a fine pointer and
+hover (`(hover: hover) and (pointer: fine)`), never on a touch screen, double-clicking an **empty part** of a
+message's row (the bubble's padding or the space beside it, not its text) starts a reply to that message,
+exactly as **Reply** in its menu does: the reply bar opens and the input takes focus. A double-click that
+starts on text, a link, the quote, a photo, a GIF or sticker, a button or the tick box is left alone, so
+double-clicking text still selects a word. Never on a message that can't be replied to (deleted, sending,
+failed), and not in selection mode. Nothing changes on screen otherwise. The same rule as a post or reply in
+the community (COMMUNITY_SPEC §3, §4; `utils/doubleClickReply.js`).
+
 ### 10.5 The quote inside a reply
 
 A reply shows the message it answers at the **top of its own bubble**, above its text, inside the bubble's padding.
